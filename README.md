@@ -24,8 +24,11 @@ Frontend of KOC Project built with:
 
 Develop inside the Vite project (frontend/). Edit src/home.jsx (or any component files there); that’s the source before bundling.
 
-1. Install dependencies (first time only)
+### 1 Install dependencies (first time only)
+```bash
 npm install
-
-2. Start development server 
+```
+### 2 Start development server
+```bash
 npm run dev
+```
