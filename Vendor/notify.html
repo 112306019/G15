@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOCMART — 通知設定</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.notify-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+
+.notify-group { margin-bottom: 8px; }
+.notify-group-title {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--text2); padding: 18px 22px 8px; font-weight: 500;
+}
+
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 22px; border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .15s;
+}
+.toggle-row:hover { background: rgba(255,255,255,.02); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-info { flex: 1; }
+.toggle-label { font-size: 13px; font-weight: 500; }
+.toggle-desc { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.toggle-channels { display: flex; gap: 6px; margin-top: 6px; }
+.toggle-channel {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--text2); cursor: pointer;
+  transition: all .15s; user-select: none;
+}
+.toggle-channel.on { background: rgba(124,92,252,.15); border-color: rgba(124,92,252,.4); color: var(--accent); }
+
+.toggle {
+  width: 44px; height: 24px; border-radius: 12px; background: var(--border);
+  position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0; margin-left: 16px;
+}
+.toggle.on { background: var(--accent); }
+.toggle-thumb {
+  width: 18px; height: 18px; border-radius: 50%; background: #fff;
+  position: absolute; top: 3px; left: 3px; transition: left .2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.toggle.on .toggle-thumb { left: 23px; }
+
+/* NOTIFICATION FEED */
+.notif-item {
+  display: flex; gap: 12px; padding: 14px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  animation: fadeUp .3s ease both; transition: background .15s;
+  cursor: pointer;
+}
+.notif-item:hover { background: rgba(255,255,255,.025); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item.unread { background: rgba(124,92,252,.05); }
+.notif-dot {
+  width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+}
+.notif-icon { font-size: 20px; flex-shrink: 0; }
+.notif-body { flex: 1; }
+.notif-title { font-size: 13px; font-weight: 500; line-height: 1.4; }
+.notif-title strong { color: var(--accent); }
+.notif-time { font-size: 11px; color: var(--text2); margin-top: 3px; font-family: 'Space Mono', monospace; }
+.unread-badge {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent2); flex-shrink: 0; margin-top: 6px;
+}
+</style>
+</head>
+<body>
+<aside class="sidebar" id="sidebar-mount"></aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="page-title">🔔 通知設定</div>
+    <div class="topbar-actions">
+      <div class="notif-btn" onclick="showToast('已標記全部已讀')">🔔<span class="notif-dot"></span></div>
+      <button class="btn-primary" onclick="showToast('✅ 通知設定已儲存')">儲存設定</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="notify-layout">
+
+      <!-- LEFT: SETTINGS -->
+      <div class="card" style="animation-delay:.0s;align-self:start">
+        <div class="card-header">
+          <div class="card-title">通知偏好設定</div>
+          <div class="card-action" onclick="showToast('已全部開啟')">全部開啟</div>
+        </div>
+
+        <div class="notify-group">
+          <div class="notify-group-title">訂單通知</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">新訂單成立</div>
+              <div class="toggle-desc">每筆透過 KOC 優惠碼的新訂單</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">訂單退款申請</div>
+              <div class="toggle-desc">買家申請退款時通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+        </div>
+
+        <div class="notify-group">
+          <div class="notify-group-title">KOC 通知</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">KOC 申請加入</div>
+              <div class="toggle-desc">有新 KOC 送出申請時通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">KOC 業績里程碑</div>
+              <div class="toggle-desc">KOC 達成訂單數里程碑時通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">KOC 收到新訊息</div>
+              <div class="toggle-desc">KOC 透過平台傳送訊息時通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+        </div>
+
+        <div class="notify-group">
+          <div class="notify-group-title">庫存與商品</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">庫存偏低警示</div>
+              <div class="toggle-desc">商品庫存低於安全水位時通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">優惠碼即將到期</div>
+              <div class="toggle-desc">優惠碼到期前 3 天提醒</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+        </div>
+
+        <div class="notify-group">
+          <div class="notify-group-title">財務</div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">傭金結算提醒</div>
+              <div class="toggle-desc">每月傭金結算日前 2 天提醒</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <div class="toggle-label">月報表產出</div>
+              <div class="toggle-desc">每月報表產出時 Email 通知</div>
+              <div class="toggle-channels">
+                <div class="toggle-channel on" onclick="this.classList.toggle('on')">Email</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">推播</div>
+                <div class="toggle-channel" onclick="this.classList.toggle('on')">LINE</div>
+              </div>
+            </div>
+            <div class="toggle" onclick="toggleSwitch(this)"><div class="toggle-thumb"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: NOTIFICATION FEED -->
+      <div>
+        <div class="card" style="animation-delay:.15s">
+          <div class="card-header">
+            <div class="card-title">🔔 最新通知</div>
+            <div class="card-action" onclick="showToast('已標記全部已讀')">全部已讀</div>
+          </div>
+          <div>
+            <div class="notif-item unread" style="animation-delay:.0s" onclick="this.classList.remove('unread')">
+              <div class="notif-icon">💬</div>
+              <div class="notif-body"><div class="notif-title"><strong>林小萱</strong> 傳送了新訊息給您</div><div class="notif-time">剛剛</div></div>
+              <div class="unread-badge"></div>
+            </div>
+            <div class="notif-item unread" style="animation-delay:.04s" onclick="this.classList.remove('unread')">
+              <div class="notif-icon">🌟</div>
+              <div class="notif-body"><div class="notif-title">新 KOC <strong>周美玲</strong> 申請加入，待審核</div><div class="notif-time">5 分鐘前</div></div>
+              <div class="unread-badge"></div>
+            </div>
+            <div class="notif-item unread" style="animation-delay:.08s" onclick="this.classList.remove('unread')">
+              <div class="notif-icon">🛍</div>
+              <div class="notif-body"><div class="notif-title"><strong>MEIYAN30</strong> 透過訂單 #ORD-8841 帶來 $3,840</div><div class="notif-time">12 分鐘前</div></div>
+              <div class="unread-badge"></div>
+            </div>
+            <div class="notif-item" style="animation-delay:.12s">
+              <div class="notif-icon">⚠️</div>
+              <div class="notif-body"><div class="notif-title">「水潤防曬霜」庫存剩 23 件，低於安全水位</div><div class="notif-time">1 小時前</div></div>
+            </div>
+            <div class="notif-item" style="animation-delay:.16s">
+              <div class="notif-icon">🎟</div>
+              <div class="notif-body"><div class="notif-title">優惠碼 <strong>LUNA15</strong> 將於 3 天後到期</div><div class="notif-time">3 小時前</div></div>
+            </div>
+            <div class="notif-item" style="animation-delay:.2s">
+              <div class="notif-icon">🏆</div>
+              <div class="notif-body"><div class="notif-title"><strong>陳雅君</strong> 本月訂單突破 300 筆里程碑！</div><div class="notif-time">5 小時前</div></div>
+            </div>
+            <div class="notif-item" style="animation-delay:.24s">
+              <div class="notif-icon">💰</div>
+              <div class="notif-body"><div class="notif-title">本月傭金結算日為 4/1，共 $13,360 待發放</div><div class="notif-time">昨天</div></div>
+            </div>
+            <div class="notif-item" style="animation-delay:.28s">
+              <div class="notif-icon">🛍</div>
+              <div class="notif-body"><div class="notif-title"><strong>VIP2024</strong> 優惠碼已達使用上限，自動停用</div><div class="notif-time">2天前</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+renderSidebar('notify');
+function toggleSwitch(el) {
+  el.classList.toggle('on');
+  showToast(el.classList.contains('on') ? '✅ 已開啟通知' : '🔕 已關閉通知');
+}
+</script>
+</body>
+</html>

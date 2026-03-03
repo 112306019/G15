@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOCMART — 庫存管理</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+.sum-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 20px; position: relative; overflow: hidden;
+  animation: fadeUp .4s ease both;
+}
+.sum-card::before {
+  content: ''; position: absolute; top: -10px; right: -10px;
+  width: 60px; height: 60px; border-radius: 50%; filter: blur(24px); opacity: .25;
+}
+.sum-card:nth-child(1)::before { background: var(--accent); }
+.sum-card:nth-child(2)::before { background: var(--red); }
+.sum-card:nth-child(3)::before { background: var(--gold); }
+.sum-card:nth-child(4)::before { background: var(--green); }
+.sum-card:nth-child(1){animation-delay:.0s}
+.sum-card:nth-child(2){animation-delay:.07s}
+.sum-card:nth-child(3){animation-delay:.14s}
+.sum-card:nth-child(4){animation-delay:.21s}
+.sum-label { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.sum-value { font-family: 'Space Mono', monospace; font-size: 26px; font-weight: 700; }
+
+.filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 200px; padding: 9px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text); font-size: 13px; font-family: 'Noto Sans TC', sans-serif;
+  outline: none; transition: border-color .2s;
+}
+.search-input:focus { border-color: var(--accent); }
+
+/* STOCK LEVEL BAR */
+.stock-bar { width: 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.stock-fill { height: 100%; border-radius: 3px; }
+.stock-high   { background: var(--green); }
+.stock-mid    { background: var(--gold); }
+.stock-low    { background: var(--red); }
+
+/* ALERT ROW */
+.alert-banner {
+  background: linear-gradient(135deg, rgba(255,77,106,.1), rgba(245,200,66,.08));
+  border: 1px solid rgba(255,77,106,.3); border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.alert-icon { font-size: 20px; }
+.alert-text { font-size: 13px; flex: 1; }
+.alert-text strong { color: var(--red); }
+
+.restock-qty { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 600; }
+.restock-date { font-size: 11px; color: var(--text2); }
+
+.prod-img { width: 42px; height: 42px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+
+/* HISTORY SECTION */
+.history-item {
+  display: flex; align-items: center; gap: 14px; padding: 13px 22px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.history-item:last-child { border-bottom: none; }
+.history-tag { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 500; flex-shrink: 0; }
+.history-tag.in  { background: rgba(46,204,138,.15); color: var(--green); }
+.history-tag.out { background: rgba(255,77,106,.12); color: var(--red); }
+.history-tag.adj { background: rgba(124,92,252,.15); color: var(--accent); }
+.history-name { font-size: 13px; font-weight: 500; flex: 1; }
+.history-meta { font-size: 11px; color: var(--text2); }
+.history-qty { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 600; }
+.history-time { font-size: 11px; color: var(--text2); font-family: 'Space Mono', monospace; min-width: 90px; text-align: right; }
+</style>
+</head>
+<body>
+<aside class="sidebar" id="sidebar-mount"></aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="page-title">📋 庫存管理</div>
+    <div class="topbar-actions">
+      <div class="notif-btn" onclick="showToast('您有 3 則新通知')">🔔<span class="notif-dot"></span></div>
+      <button class="btn-secondary" onclick="showToast('✅ 庫存報表已匯出')">↓ 匯出</button>
+      <button class="btn-primary" onclick="openModal('restockModal')">＋ 補貨入庫</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- SUMMARY -->
+    <div class="summary-grid">
+      <div class="sum-card"><div class="sum-label">總 SKU 數</div><div class="sum-value" style="color:var(--accent)">24</div></div>
+      <div class="sum-card"><div class="sum-label">庫存偏低商品</div><div class="sum-value" style="color:var(--red)">3</div></div>
+      <div class="sum-card"><div class="sum-label">待入庫數量</div><div class="sum-value" style="color:var(--gold)">480</div></div>
+      <div class="sum-card"><div class="sum-label">本月出庫件數</div><div class="sum-value" style="color:var(--green)">1,940</div></div>
+    </div>
+
+    <!-- ALERT -->
+    <div class="alert-banner">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-text"><strong>3 個商品庫存偏低</strong>，建議儘快補貨以避免斷貨影響 KOC 推廣</div>
+      <button class="btn-primary" style="font-size:12px;padding:7px 14px;justify-content:center" onclick="openModal('restockModal')">一鍵補貨</button>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <input class="search-input" placeholder="🔍 搜尋商品名稱 / SKU...">
+      <select class="form-select" style="width:auto">
+        <option>所有分類</option>
+        <option>精華液</option>
+        <option>防曬</option>
+        <option>面膜</option>
+        <option>保健品</option>
+      </select>
+      <select class="form-select" style="width:auto">
+        <option>所有狀態</option>
+        <option>⚠️ 庫存偏低</option>
+        <option>✅ 庫存充足</option>
+        <option>🚫 已售罄</option>
+      </select>
+    </div>
+
+    <!-- INVENTORY TABLE -->
+    <div class="card" style="margin-bottom:20px;animation-delay:.25s">
+      <div class="card-header">
+        <div class="card-title">📦 庫存總覽</div>
+        <div class="card-action" onclick="showToast('已重新整理')">重新整理</div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>商品名稱</th>
+            <th>SKU</th>
+            <th>現有庫存</th>
+            <th>庫存狀態</th>
+            <th>本月出庫</th>
+            <th>安全庫存</th>
+            <th>預計補貨</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="prod-img" style="background:rgba(252,92,160,.1)">🧴</div></td>
+            <td><div style="font-weight:500">玫瑰胜肽精華液 50ml</div><div style="font-size:11px;color:var(--text2)">精華液</div></td>
+            <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">MYB-001</td>
+            <td>
+              <div style="font-size:14px;font-weight:600">180 件</div>
+              <div class="stock-bar" style="margin-top:4px"><div class="stock-fill stock-high" style="width:60%"></div></div>
+            </td>
+            <td><span class="pill pill-green">充足</span></td>
+            <td>648 件</td>
+            <td style="color:var(--text2)">50 件</td>
+            <td style="color:var(--text2)">—</td>
+            <td><div class="action-icons">
+              <div class="icon-btn" onclick="openModal('adjustModal')" title="調整庫存">✏️</div>
+              <div class="icon-btn" onclick="openModal('restockModal')" title="補貨">📦</div>
+            </div></td>
+          </tr>
+          <tr>
+            <td><div class="prod-img" style="background:rgba(124,92,252,.1)">💊</div></td>
+            <td><div style="font-weight:500">膠原蛋白飲 30包/盒</div><div style="font-size:11px;color:var(--text2)">保健品</div></td>
+            <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">MYC-023</td>
+            <td>
+              <div style="font-size:14px;font-weight:600">240 件</div>
+              <div class="stock-bar" style="margin-top:4px"><div class="stock-fill stock-high" style="width:80%"></div></div>
+            </td>
+            <td><span class="pill pill-green">充足</span></td>
+            <td>412 件</td>
+            <td style="color:var(--text2)">60 件</td>
+            <td style="color:var(--text2)">—</td>
+            <td><div class="action-icons">
+              <div class="icon-btn" onclick="openModal('adjustModal')">✏️</div>
+              <div class="icon-btn" onclick="openModal('restockModal')">📦</div>
+            </div></td>
+          </tr>
+          <tr style="background:rgba(255,77,106,.04)">
+            <td><div class="prod-img" style="background:rgba(245,200,66,.1)">☀️</div></td>
+            <td><div style="font-weight:500">水潤防曬霜 SPF50+</div><div style="font-size:11px;color:var(--red)">⚠️ 防曬</div></td>
+            <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">MYS-015</td>
+            <td>
+              <div style="font-size:14px;font-weight:600;color:var(--red)">23 件</div>
+              <div class="stock-bar" style="margin-top:4px"><div class="stock-fill stock-low" style="width:8%"></div></div>
+            </td>
+            <td><span class="pill pill-red">偏低</span></td>
+            <td>381 件</td>
+            <td style="color:var(--text2)">80 件</td>
+            <td><div class="restock-qty" style="color:var(--gold)">+300 件</div><div class="restock-date">建議本週</div></td>
+            <td><div class="action-icons">
+              <div class="icon-btn" onclick="openModal('adjustModal')">✏️</div>
+              <div class="icon-btn" onclick="openModal('restockModal')" style="border-color:var(--red)">📦</div>
+            </div></td>
+          </tr>
+          <tr>
+            <td><div class="prod-img" style="background:rgba(46,204,138,.1)">🌿</div></td>
+            <td><div style="font-weight:500">積雪草修護面膜 10片</div><div style="font-size:11px;color:var(--text2)">面膜</div></td>
+            <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">MYM-008</td>
+            <td>
+              <div style="font-size:14px;font-weight:600">310 件</div>
+              <div class="stock-bar" style="margin-top:4px"><div class="stock-fill stock-high" style="width:90%"></div></div>
+            </td>
+            <td><span class="pill pill-green">充足</span></td>
+            <td>295 件</td>
+            <td style="color:var(--text2)">40 件</td>
+            <td style="color:var(--text2)">—</td>
+            <td><div class="action-icons">
+              <div class="icon-btn" onclick="openModal('adjustModal')">✏️</div>
+              <div class="icon-btn" onclick="openModal('restockModal')">📦</div>
+            </div></td>
+          </tr>
+          <tr style="background:rgba(255,77,106,.04)">
+            <td><div class="prod-img" style="background:rgba(252,92,160,.08)">🌸</div></td>
+            <td><div style="font-weight:500">玫瑰花水噴霧 100ml</div><div style="font-size:11px;color:var(--red)">⚠️ 保濕</div></td>
+            <td style="font-family:'Space Mono',monospace;font-size:12px;color:var(--text2)">MYT-044</td>
+            <td>
+              <div style="font-size:14px;font-weight:600;color:var(--red)">15 件</div>
+              <div class="stock-bar" style="margin-top:4px"><div class="stock-fill stock-low" style="width:5%"></div></div>
+            </td>
+            <td><span class="pill pill-red">偏低</span></td>
+            <td>210 件</td>
+            <td style="color:var(--text2)">50 件</td>
+            <td><div class="restock-qty" style="color:var(--gold)">+200 件</div><div class="restock-date">建議本週</div></td>
+            <td><div class="action-icons">
+              <div class="icon-btn" onclick="openModal('adjustModal')">✏️</div>
+              <div class="icon-btn" onclick="openModal('restockModal')" style="border-color:var(--red)">📦</div>
+            </div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="card" style="animation-delay:.3s">
+      <div class="card-header">
+        <div class="card-title">🕐 異動紀錄</div>
+        <div class="card-action">查看全部 →</div>
+      </div>
+      <div>
+        <div class="history-item">
+          <span class="history-tag out">出庫</span>
+          <div style="flex:1"><div class="history-name">玫瑰胜肽精華液 50ml</div><div class="history-meta">訂單 #ORD-8841</div></div>
+          <div class="history-qty" style="color:var(--red)">−1</div>
+          <div class="history-time">今天 14:23</div>
+        </div>
+        <div class="history-item">
+          <span class="history-tag out">出庫</span>
+          <div style="flex:1"><div class="history-name">膠原蛋白飲 30包/盒</div><div class="history-meta">訂單 #ORD-8840</div></div>
+          <div class="history-qty" style="color:var(--red)">−1</div>
+          <div class="history-time">今天 13:11</div>
+        </div>
+        <div class="history-item">
+          <span class="history-tag in">入庫</span>
+          <div style="flex:1"><div class="history-name">積雪草修護面膜 10片</div><div class="history-meta">補貨單 #PO-2089</div></div>
+          <div class="history-qty" style="color:var(--green)">+200</div>
+          <div class="history-time">昨天 10:00</div>
+        </div>
+        <div class="history-item">
+          <span class="history-tag adj">調整</span>
+          <div style="flex:1"><div class="history-name">水潤防曬霜 SPF50+</div><div class="history-meta">盤點調整，備註：實際盤點數</div></div>
+          <div class="history-qty" style="color:var(--accent)">−5</div>
+          <div class="history-time">2天前 15:30</div>
+        </div>
+        <div class="history-item">
+          <span class="history-tag in">入庫</span>
+          <div style="flex:1"><div class="history-name">玫瑰胜肽精華液 50ml</div><div class="history-meta">補貨單 #PO-2081</div></div>
+          <div class="history-qty" style="color:var(--green)">+300</div>
+          <div class="history-time">3天前 09:15</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- RESTOCK MODAL -->
+<div class="modal-overlay" id="restockModal" onclick="if(event.target===this)closeModal('restockModal')">
+  <div class="modal">
+    <div class="modal-title">📦 補貨入庫</div>
+    <div class="modal-sub">新增庫存入庫紀錄</div>
+    <div class="form-group">
+      <label class="form-label">商品</label>
+      <select class="form-select">
+        <option>水潤防曬霜 SPF50+ (MYS-015) — 現有 23 件 ⚠️</option>
+        <option>玫瑰花水噴霧 100ml (MYT-044) — 現有 15 件 ⚠️</option>
+        <option>玫瑰胜肽精華液 50ml (MYB-001)</option>
+        <option>膠原蛋白飲 30包/盒 (MYC-023)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">入庫數量</label>
+        <input class="form-input" type="number" placeholder="例：300" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">預計到貨日</label>
+        <input class="form-input" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">備註（可選）</label>
+      <input class="form-input" placeholder="例：供應商發貨單號 SH-20250301">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('restockModal')">取消</button>
+      <button class="btn-primary" onclick="closeModal('restockModal');showToast('✅ 補貨單已建立！')">建立補貨單</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADJUST MODAL -->
+<div class="modal-overlay" id="adjustModal" onclick="if(event.target===this)closeModal('adjustModal')">
+  <div class="modal">
+    <div class="modal-title">✏️ 調整庫存</div>
+    <div class="modal-sub">手動調整庫存數量（適用盤點差異、損耗等）</div>
+    <div class="form-group">
+      <label class="form-label">調整類型</label>
+      <select class="form-select">
+        <option>增加庫存</option>
+        <option>減少庫存</option>
+        <option>設定為指定數量</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">調整數量</label>
+      <input class="form-input" type="number" placeholder="例：10" min="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">調整原因</label>
+      <select class="form-select">
+        <option>盤點差異</option>
+        <option>商品損耗</option>
+        <option>促銷樣品</option>
+        <option>其他</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">備註</label>
+      <input class="form-input" placeholder="詳細說明...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('adjustModal')">取消</button>
+      <button class="btn-primary" onclick="closeModal('adjustModal');showToast('✅ 庫存已調整！')">確認調整</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>renderSidebar('inventory');</script>
+</body>
+</html>
