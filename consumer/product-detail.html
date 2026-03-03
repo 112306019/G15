@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商品詳情 — SHOP</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=DM+Serif+Display:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #F5F0E8;
+    --ink: #1A1A18;
+    --warm-gray: #8C8880;
+    --accent: #C8522A;
+    --accent-light: #E8C4B4;
+    --card-bg: #FDFAF6;
+    --border: #E2DDD4;
+    --gold: #B89B6A;
+    --white: #FFFFFF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Noto Serif TC', serif;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    background: var(--cream);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 48px;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    gap: 32px;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px; letter-spacing: 0.08em;
+    border: 1.5px solid var(--ink);
+    padding: 6px 16px; border-radius: 40px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .logo:hover { background: var(--ink); color: var(--cream); }
+
+  .nav-divider { width: 1px; height: 24px; background: var(--border); }
+
+  .nav-links { display: flex; gap: 28px; }
+  .nav-link {
+    font-size: 13px; letter-spacing: 0.05em;
+    color: var(--warm-gray); cursor: pointer; transition: color 0.2s;
+  }
+  .nav-link:hover { color: var(--ink); }
+
+  .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+
+  .cart-btn {
+    position: relative; cursor: pointer;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cart-btn svg { width: 22px; height: 22px; }
+  .cart-badge {
+    position: absolute; top: -2px; right: -2px;
+    background: var(--accent); color: white;
+    font-family: 'Space Mono', monospace; font-size: 9px;
+    width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+  .user-btn { cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .user-btn svg { width: 22px; height: 22px; }
+
+  /* ── FILTERS ── */
+  .filters {
+    background: white;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 48px;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .filter-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--warm-gray); cursor: pointer;
+    padding: 6px 14px; border-radius: 6px; transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  .filter-item:hover { border-color: var(--border); color: var(--ink); }
+  .filter-item svg { width: 16px; height: 16px; }
+  .filter-chevron { width: 14px !important; height: 14px !important; margin-left: 2px; }
+  .search-box {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    background: var(--cream); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 16px;
+  }
+  .search-box svg { width: 16px; height: 16px; color: var(--warm-gray); flex-shrink: 0; }
+  .search-box input {
+    border: none; background: transparent;
+    font-family: 'Noto Serif TC', serif; font-size: 13px;
+    color: var(--ink); width: 100%; outline: none;
+  }
+  .search-box input::placeholder { color: var(--warm-gray); }
+  .filter-btn {
+    background: var(--ink); color: var(--cream); border: none;
+    width: 40px; height: 40px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+  }
+  .filter-btn:hover { background: var(--accent); }
+  .filter-btn svg { width: 18px; height: 18px; }
+
+  /* ── PRODUCT DETAIL ── */
+  .product-detail {
+    padding: 48px 48px 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* Image */
+  .product-image-wrap {
+    position: relative;
+  }
+  .product-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: linear-gradient(135deg, #C8C4BC 0%, #A8A49C 100%);
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .product-image svg { width: 72px; height: 72px; color: rgba(255,255,255,0.55); }
+
+  /* Thumbnails */
+  .thumbnails {
+    display: flex; gap: 10px; margin-top: 14px;
+  }
+  .thumb {
+    width: 60px; height: 60px;
+    background: linear-gradient(135deg, #D4D0C8, #B8B4AC);
+    border-radius: 8px; cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb.active { border-color: var(--ink); }
+  .thumb svg { width: 22px; height: 22px; color: rgba(255,255,255,0.5); }
+  .thumb:nth-child(2) { background: linear-gradient(135deg, #C4C8D0, #A8ACB4); }
+  .thumb:nth-child(3) { background: linear-gradient(135deg, #C8D0C4, #ACB4A8); }
+
+  /* Info */
+  .product-info-wrap { padding-top: 4px; }
+
+  .product-title-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .product-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px; line-height: 1.1; color: var(--ink);
+  }
+  .wishlist-btn {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: white;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    color: var(--warm-gray);
+  }
+  .wishlist-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .wishlist-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .wishlist-btn svg { width: 18px; height: 18px; }
+
+  .product-price {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px; font-weight: 700;
+    color: var(--ink); margin-bottom: 16px;
+  }
+
+  .product-desc {
+    font-size: 13px; color: var(--warm-gray);
+    line-height: 1.75; margin-bottom: 16px;
+    padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+
+  .rating-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .rating-star { color: var(--gold); font-size: 16px; }
+  .rating-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; font-weight: 700; color: var(--ink);
+  }
+  .rating-count { font-size: 13px; color: var(--warm-gray); }
+
+  /* Quantity */
+  .qty-section { margin-bottom: 28px; }
+  .qty-label { font-size: 12px; letter-spacing: 0.1em; color: var(--warm-gray); margin-bottom: 10px; text-transform: uppercase; }
+  .qty-control {
+    display: flex; align-items: center; gap: 0;
+    border: 1.5px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    width: fit-content; background: white;
+  }
+  .qty-btn {
+    width: 40px; height: 40px;
+    border: none; background: transparent;
+    font-size: 18px; cursor: pointer;
+    color: var(--ink); transition: background 0.2s;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace;
+  }
+  .qty-btn:hover { background: var(--cream); }
+  .qty-value {
+    width: 48px; text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 15px; font-weight: 700;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    height: 40px; display: flex; align-items: center; justify-content: center;
+    color: var(--ink);
+  }
+
+  /* CTA buttons */
+  .cta-row { display: flex; gap: 12px; }
+  .btn-buy {
+    flex: 1; background: var(--ink); color: var(--cream);
+    border: none; padding: 14px 24px;
+    border-radius: 40px; font-family: 'Noto Serif TC', serif;
+    font-size: 15px; letter-spacing: 0.05em;
+    cursor: pointer; transition: all 0.25s;
+  }
+  .btn-buy:hover { background: var(--accent); transform: translateY(-1px); }
+
+  .btn-cart {
+    display: flex; align-items: center; gap: 8px;
+    background: white; color: var(--ink);
+    border: 1.5px solid var(--border);
+    padding: 14px 24px; border-radius: 40px;
+    font-family: 'Noto Serif TC', serif; font-size: 15px;
+    letter-spacing: 0.05em; cursor: pointer; transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .btn-cart:hover { border-color: var(--ink); background: var(--cream); }
+  .btn-cart svg { width: 16px; height: 16px; }
+
+  /* ── TABS ── */
+  .tabs-section {
+    padding: 0 48px 0;
+    max-width: 900px; margin: 0 auto;
+  }
+  .tab-bar {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+  }
+  .tab {
+    padding: 14px 24px;
+    font-size: 13px; letter-spacing: 0.05em;
+    cursor: pointer; color: var(--warm-gray);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: all 0.2s;
+  }
+  .tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+  .tab:hover { color: var(--ink); }
+
+  .tab-content {
+    background: white;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    padding: 32px;
+    display: none;
+    animation: fadeIn 0.25s ease;
+  }
+  .tab-content.active { display: flex; gap: 48px; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .tab-main { flex: 1; }
+  .tab-main-title { font-size: 13px; color: var(--warm-gray); margin-bottom: 8px; }
+  .tab-main-desc {
+    font-size: 13px; color: var(--warm-gray);
+    line-height: 1.8;
+  }
+
+  .tab-sidebar {
+    width: 220px; flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    padding-left: 32px;
+  }
+  .tab-sidebar-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--ink); margin-bottom: 16px;
+    letter-spacing: 0.04em;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 12px; font-size: 13px; color: var(--warm-gray);
+  }
+  .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--gold); }
+
+  /* ── YOU MAY ALSO LIKE ── */
+  .also-like {
+    padding: 48px 0 48px;
+    max-width: 900px; margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+  }
+  .also-like-inner { padding: 0 48px; }
+  .also-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px; margin-bottom: 28px;
+    position: relative; display: inline-block; color: var(--ink);
+  }
+  .also-title::after {
+    content: ''; position: absolute; left: 0; bottom: -4px;
+    width: 32px; height: 2px; background: var(--accent); border-radius: 2px;
+  }
+
+  .also-carousel { position: relative; }
+  .also-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    overflow: hidden;
+  }
+
+  .carousel-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: white; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s; color: var(--ink);
+    z-index: 2;
+  }
+  .carousel-arrow:hover { border-color: var(--ink); background: var(--ink); color: var(--cream); }
+  .carousel-arrow svg { width: 16px; height: 16px; }
+  .carousel-prev { left: 4px; }
+  .carousel-next { right: 4px; }
+
+  /* ── PRODUCT CARD ── */
+  .product-card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; cursor: pointer;
+    transition: all 0.3s; position: relative;
+  }
+  .product-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(26,26,24,0.1); border-color: var(--accent-light); }
+
+  .product-img {
+    width: 100%; aspect-ratio: 1/1;
+    background: linear-gradient(135deg, #D8D4CC 0%, #C4BDB4 100%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .product-img svg { width: 36px; height: 36px; color: rgba(255,255,255,0.6); }
+  .product-img-overlay {
+    position: absolute; inset: 0;
+    background: rgba(26,26,24,0);
+    transition: background 0.3s;
+  }
+  .product-card:hover .product-img-overlay { background: rgba(26,26,24,0.05); }
+
+  .card-info { padding: 12px 14px 14px; }
+  .card-name { font-size: 13px; color: var(--ink); margin-bottom: 8px; }
+  .card-bottom { display: flex; align-items: center; justify-content: space-between; }
+  .card-price-col {}
+  .card-price { font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700; color: var(--ink); }
+  .card-rating { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--warm-gray); margin-top: 3px; }
+  .stars { color: var(--gold); font-size: 11px; letter-spacing: -1px; }
+
+  .add-cart-btn {
+    width: 34px; height: 34px; background: var(--ink); color: var(--cream);
+    border: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+  }
+  .add-cart-btn:hover { background: var(--accent); transform: scale(1.1); }
+  .add-cart-btn svg { width: 15px; height: 15px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo"><span>★</span> LOGO</div>
+  <div class="nav-divider"></div>
+  <div class="nav-links">
+    <span class="nav-link">Home</span>
+    <span class="nav-link">Discover</span>
+    <span class="nav-link">Blog</span>
+    <span class="nav-link">About Us</span>
+    <span class="nav-link">Contact</span>
+  </div>
+  <div class="nav-actions">
+    <div class="cart-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span class="cart-badge" id="cartBadge">2</span>
+    </div>
+    <div class="user-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</nav>
+
+<!-- FILTERS -->
+<div class="filters">
+  <div class="filter-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+    城市
+    <svg class="filter-chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+  </div>
+  <div class="filter-item">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    價格由低到高
+    <svg class="filter-chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+  </div>
+  <div class="search-box">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="text" placeholder="搜尋">
+  </div>
+  <button class="filter-btn">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+  </button>
+</div>
+
+<!-- PRODUCT DETAIL -->
+<div class="product-detail">
+  <!-- Left: Image -->
+  <div class="product-image-wrap">
+    <div class="product-image">
+      <svg fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    </div>
+    <div class="thumbnails">
+      <div class="thumb active"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+      <div class="thumb"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+      <div class="thumb"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+    </div>
+  </div>
+
+  <!-- Right: Info -->
+  <div class="product-info-wrap">
+    <div class="product-title-row">
+      <h1 class="product-title">商品名稱</h1>
+      <button class="wishlist-btn" id="wishlistBtn" onclick="toggleWishlist()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+      </button>
+    </div>
+
+    <div class="product-price">$20.99</div>
+
+    <p class="product-desc">商品敘述。這是一件高品質的商品，採用優質材料製成，舒適耐用。適合日常穿著，多種顏色可供選擇，簡約設計百搭各種場合。</p>
+
+    <div class="rating-row">
+      <span class="rating-star">★</span>
+      <span class="rating-score">4.8</span>
+      <span class="rating-count">(1,873)</span>
+    </div>
+
+    <div class="qty-section">
+      <div class="qty-label">數量</div>
+      <div class="qty-control">
+        <button class="qty-btn" onclick="changeQty(-1)">−</button>
+        <div class="qty-value" id="qtyValue">1</div>
+        <button class="qty-btn" onclick="changeQty(1)">+</button>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <button class="btn-buy" onclick="handleBuy()">立即訂購</button>
+      <button class="btn-cart" onclick="handleCart()">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        加入購物車
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-section">
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab(0, this)">商品描述</div>
+    <div class="tab" onclick="switchTab(1, this)">商品評價</div>
+    <div class="tab" onclick="switchTab(2, this)">廠商資訊（任務）</div>
+  </div>
+
+  <!-- Tab 0: 商品描述 -->
+  <div class="tab-content active" id="tab0">
+    <div class="tab-main">
+      <p class="tab-main-title">任務內容概覽</p>
+      <p class="tab-main-desc">任務內容概述（發文組鏈等等）<br><br>這裡可以填入詳細的商品說明，包括材質、尺寸規格、保養方式等資訊。優質棉料，透氣舒適，機洗不變形。</p>
+    </div>
+    <div class="tab-sidebar">
+      <div class="tab-sidebar-title">廠商資訊</div>
+      <div class="sidebar-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        廠商名稱
+      </div>
+      <div class="sidebar-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        提供的優惠項目
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 1: 商品評價 -->
+  <div class="tab-content" id="tab1">
+    <div class="tab-main">
+      <p class="tab-main-title">用戶評價</p>
+      <p class="tab-main-desc" style="margin-bottom:20px">4.8 / 5 ・ 共 1,873 則評價</p>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="padding:16px;background:var(--cream);border-radius:10px">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <span style="color:var(--gold);font-size:13px">★★★★★</span>
+            <span style="font-size:12px;color:var(--warm-gray)">2024.12.01</span>
+          </div>
+          <p style="font-size:13px;color:var(--ink);line-height:1.7">商品品質非常好，穿起來很舒適，顏色也很漂亮，非常滿意！</p>
+        </div>
+        <div style="padding:16px;background:var(--cream);border-radius:10px">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <span style="color:var(--gold);font-size:13px">★★★★☆</span>
+            <span style="font-size:12px;color:var(--warm-gray)">2024.11.28</span>
+          </div>
+          <p style="font-size:13px;color:var(--ink);line-height:1.7">材質很好，尺寸準確，快遞速度也很快，下次還會再購買。</p>
+        </div>
+      </div>
+    </div>
+    <div class="tab-sidebar">
+      <div class="tab-sidebar-title">評分分佈</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--warm-gray)">
+          <span style="width:16px">5★</span>
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:78%;height:100%;background:var(--gold);border-radius:3px"></div></div>
+          <span>78%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--warm-gray)">
+          <span style="width:16px">4★</span>
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:15%;height:100%;background:var(--gold);border-radius:3px;opacity:0.7"></div></div>
+          <span>15%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--warm-gray)">
+          <span style="width:16px">3★</span>
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:5%;height:100%;background:var(--gold);border-radius:3px;opacity:0.5"></div></div>
+          <span>5%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--warm-gray)">
+          <span style="width:16px">2★</span>
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:1%;height:100%;background:var(--gold);border-radius:3px;opacity:0.4"></div></div>
+          <span>1%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--warm-gray)">
+          <span style="width:16px">1★</span>
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:1%;height:100%;background:var(--gold);border-radius:3px;opacity:0.3"></div></div>
+          <span>1%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: 廠商資訊 -->
+  <div class="tab-content" id="tab2">
+    <div class="tab-main">
+      <p class="tab-main-title">廠商簡介</p>
+      <p class="tab-main-desc">專注於高品質服裝製造超過 15 年，我們的每一件產品都經過嚴格品質控管，確保消費者獲得最佳體驗。支持可持續發展，所有棉料均來自有機農場。</p>
+    </div>
+    <div class="tab-sidebar">
+      <div class="tab-sidebar-title">廠商資訊</div>
+      <div class="sidebar-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        廠商名稱
+      </div>
+      <div class="sidebar-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        提供的優惠項目
+      </div>
+      <div class="sidebar-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        配送時間 3-5 天
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- YOU MAY ALSO LIKE -->
+<div class="also-like">
+  <div class="also-like-inner">
+    <h2 class="also-title">您可能也會喜歡...</h2>
+    <div class="also-carousel">
+      <button class="carousel-arrow carousel-prev">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="also-grid">
+        <div class="product-card">
+          <div class="product-img"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><div class="product-img-overlay"></div></div>
+          <div class="card-info"><div class="card-name">Shirt</div><div class="card-bottom"><div class="card-price-col"><div class="card-price">$20.99</div><div class="card-rating"><span class="stars">★★★★★</span> <span>(120)</span></div></div><button class="add-cart-btn" onclick="addToCart()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></button></div></div>
+        </div>
+        <div class="product-card">
+          <div class="product-img" style="background:linear-gradient(135deg,#C4C8D4,#A8AEBB)"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><div class="product-img-overlay"></div></div>
+          <div class="card-info"><div class="card-name">Shirt</div><div class="card-bottom"><div class="card-price-col"><div class="card-price">$20.99</div><div class="card-rating"><span class="stars">★★★★★</span> <span>(120)</span></div></div><button class="add-cart-btn" onclick="addToCart()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></button></div></div>
+        </div>
+        <div class="product-card">
+          <div class="product-img" style="background:linear-gradient(135deg,#C8D4C4,#B0BBA8)"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><div class="product-img-overlay"></div></div>
+          <div class="card-info"><div class="card-name">Shirt</div><div class="card-bottom"><div class="card-price-col"><div class="card-price">$20.99</div><div class="card-rating"><span class="stars">★★★★★</span> <span>(120)</span></div></div><button class="add-cart-btn" onclick="addToCart()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></button></div></div>
+        </div>
+        <div class="product-card">
+          <div class="product-img" style="background:linear-gradient(135deg,#D4C8C4,#BBA8A0)"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><div class="product-img-overlay"></div></div>
+          <div class="card-info"><div class="card-name">Shirt</div><div class="card-bottom"><div class="card-price-col"><div class="card-price">$20.99</div><div class="card-rating"><span class="stars">★★★★★</span> <span>(120)</span></div></div><button class="add-cart-btn" onclick="addToCart()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></button></div></div>
+        </div>
+      </div>
+      <button class="carousel-arrow carousel-next">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tabs
+  function switchTab(index, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab' + index).classList.add('active');
+  }
+
+  // Qty
+  let qty = 1;
+  function changeQty(delta) {
+    qty = Math.max(1, qty + delta);
+    document.getElementById('qtyValue').textContent = qty;
+  }
+
+  // Wishlist
+  let wishlisted = false;
+  function toggleWishlist() {
+    wishlisted = !wishlisted;
+    const btn = document.getElementById('wishlistBtn');
+    btn.classList.toggle('active', wishlisted);
+    const path = btn.querySelector('path');
+    path.setAttribute('fill', wishlisted ? 'currentColor' : 'none');
+  }
+
+  // Cart
+  let cartCount = 2;
+  function addToCart() {
+    cartCount++;
+    const badge = document.getElementById('cartBadge');
+    badge.textContent = cartCount;
+    badge.style.transform = 'scale(1.5)';
+    setTimeout(() => badge.style.transform = '', 200);
+  }
+
+  function handleCart() {
+    for (let i = 0; i < qty; i++) cartCount++;
+    const badge = document.getElementById('cartBadge');
+    badge.textContent = cartCount;
+    badge.style.transform = 'scale(1.5)';
+    setTimeout(() => badge.style.transform = '', 200);
+    const btn = document.querySelector('.btn-cart');
+    btn.textContent = '已加入！';
+    setTimeout(() => { btn.innerHTML = '<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16" height="16"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> 加入購物車'; }, 1200);
+  }
+
+  function handleBuy() {
+    const btn = document.querySelector('.btn-buy');
+    btn.textContent = '處理中...';
+    setTimeout(() => btn.textContent = '立即訂購', 1200);
+  }
+
+  // Thumbnails
+  document.querySelectorAll('.thumb').forEach((t, i) => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.thumb').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我想成為KOC — SHOP</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=DM+Serif+Display:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #F5F0E8;
+    --ink: #1A1A18;
+    --warm-gray: #8C8880;
+    --accent: #C8522A;
+    --border: #E2DDD4;
+    --field-bg: #F5F5F5;
+    --white: #FFFFFF;
+    --green: #6BBF6B;
+    --blue: #4A7DB5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--cream); color: var(--ink); font-family: 'Noto Serif TC', serif; min-height: 100vh; }
+
+  /* NAV */
+  nav { background: var(--cream); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 48px; height: 60px; position: sticky; top: 0; z-index: 100; gap: 32px; }
+  .logo { display: flex; align-items: center; gap: 8px; font-family: 'DM Serif Display', serif; font-size: 18px; letter-spacing: 0.08em; border: 1.5px solid var(--ink); padding: 6px 20px; border-radius: 40px; cursor: pointer; transition: all 0.2s; white-space: nowrap; background: var(--ink); color: #fff; }
+  .logo:hover { background: var(--accent); border-color: var(--accent); }
+  .nav-divider { width: 1px; height: 24px; background: var(--border); }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-link { font-size: 13px; color: var(--warm-gray); cursor: pointer; transition: color 0.2s; letter-spacing: 0.05em; }
+  .nav-link:hover { color: var(--ink); }
+  .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+  .cart-btn { position: relative; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .cart-btn svg { width: 22px; height: 22px; }
+  .cart-badge { position: absolute; top: -2px; right: -2px; background: var(--accent); color: white; font-family: 'Space Mono', monospace; font-size: 9px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .user-btn { cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .user-btn svg { width: 22px; height: 22px; }
+
+  /* PAGE */
+  .page { max-width: 1000px; margin: 0 auto; padding: 48px 24px 80px; display: grid; grid-template-columns: 220px 1fr; gap: 40px; align-items: start; }
+
+  /* SIDEBAR */
+  .sidebar { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 8px 0; position: sticky; top: 80px; }
+  .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 13px 20px; font-size: 14px; color: var(--warm-gray); cursor: pointer; transition: all 0.2s; position: relative; }
+  .sidebar-item:hover { color: var(--ink); background: var(--cream); }
+  .sidebar-item.active { color: var(--ink); font-weight: 700; }
+  .sidebar-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--ink); border-radius: 0 2px 2px 0; }
+  .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* CONTENT */
+  .content {}
+  .page-title { font-family: 'DM Serif Display', serif; font-size: 36px; color: var(--ink); margin-bottom: 40px; }
+
+  /* Section label */
+  .section-label { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 20px; letter-spacing: 0.02em; }
+  .section-hint { font-size: 12px; color: var(--warm-gray); margin-bottom: 20px; margin-top: -12px; }
+
+  /* Form grid */
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+
+  /* Field */
+  .field-label { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warm-gray); margin-bottom: 8px; }
+  .field-wrap { position: relative; display: flex; align-items: center; }
+  .field-input { width: 100%; background: var(--field-bg); border: 1.5px solid transparent; border-radius: 10px; padding: 13px 16px; font-family: 'Noto Serif TC', serif; font-size: 14px; color: var(--ink); outline: none; transition: all 0.2s; }
+  .field-input::placeholder { color: #C0C0C0; font-size: 13px; }
+  .field-input:focus { border-color: var(--ink); background: white; }
+  .field-input.valid { border-color: var(--green); background: white; }
+  .field-input.error { border-color: var(--accent); background: #FEF5F3; }
+
+  /* Verify button inside field */
+  .verify-btn { position: absolute; right: 8px; background: var(--ink); color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: 'Noto Serif TC', serif; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .verify-btn:hover { background: var(--accent); }
+  .verify-btn.verified { background: var(--green); cursor: default; }
+  .field-input.has-verify { padding-right: 72px; }
+
+  /* Checkbox */
+  .checkbox-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; cursor: pointer; }
+  .checkbox { width: 20px; height: 20px; min-width: 20px; border-radius: 5px; border: 1.5px solid var(--border); background: white; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .checkbox.checked { background: var(--ink); border-color: var(--ink); }
+  .checkbox svg { width: 11px; height: 11px; color: white; display: none; }
+  .checkbox.checked svg { display: block; }
+  .checkbox-label { font-size: 13px; color: var(--warm-gray); }
+  .checkbox-label a { color: var(--ink); font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+  .divider { height: 1px; background: var(--border); margin-bottom: 28px; }
+
+  /* Submit */
+  .update-btn { background: var(--ink); color: white; border: none; padding: 13px 32px; border-radius: 40px; font-family: 'Noto Serif TC', serif; font-size: 15px; letter-spacing: 0.04em; cursor: pointer; transition: all 0.25s; }
+  .update-btn:hover { background: var(--accent); transform: translateY(-1px); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--ink); color: white; padding: 12px 24px; border-radius: 40px; font-size: 13px; opacity: 0; transition: all 0.3s; z-index: 999; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">★ LOGO</div>
+  <div class="nav-divider"></div>
+  <div class="nav-links">
+    <span class="nav-link">Home</span>
+    <span class="nav-link">Discover</span>
+    <span class="nav-link">Blog</span>
+    <span class="nav-link">About Us</span>
+    <span class="nav-link">Contact</span>
+  </div>
+  <div class="nav-actions">
+    <div class="cart-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span class="cart-badge">2</span>
+    </div>
+    <div class="user-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+
+  <aside class="sidebar">
+    <div class="sidebar-item active">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>個人資訊
+    </div>
+    <div class="sidebar-item">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>登入與安全性
+    </div>
+    <div class="sidebar-item">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>我的點數
+    </div>
+    <div class="sidebar-item">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>我的訂單
+    </div>
+  </aside>
+
+  <div class="content">
+    <h1 class="page-title">我想成為KOC</h1>
+
+    <!-- Basic info -->
+    <p class="section-label">申請成為KOC</p>
+    <div class="form-grid-2">
+      <div>
+        <label class="field-label">顯示名稱</label>
+        <input class="field-input" type="text" id="displayName" placeholder="顯示名稱" oninput="validateField(this)">
+      </div>
+      <div>
+        <label class="field-label">電子郵件</label>
+        <input class="field-input" type="email" id="email" placeholder="電子郵件" oninput="validateEmail(this)">
+      </div>
+    </div>
+
+    <!-- Social accounts -->
+    <p class="section-label">社群帳號</p>
+    <p class="section-hint">*請至少填入一項（須為公開帳號）</p>
+
+    <div class="form-grid-3">
+      <!-- FB -->
+      <div>
+        <label class="field-label">FB</label>
+        <div class="field-wrap">
+          <input class="field-input" type="url" id="fbUrl" placeholder="Your site URL" oninput="validateSocial()">
+        </div>
+      </div>
+
+      <!-- IG -->
+      <div>
+        <label class="field-label">IG</label>
+        <div class="field-wrap">
+          <input class="field-input has-verify" type="text" id="igUsername" placeholder="@IG username" oninput="validateSocial()">
+          <button class="verify-btn" id="igVerify" onclick="verifySocial('ig')">驗證</button>
+        </div>
+      </div>
+
+      <!-- Threads -->
+      <div>
+        <label class="field-label">THREADS</label>
+        <div class="field-wrap">
+          <input class="field-input has-verify" type="text" id="threadsUsername" placeholder="@threads username" oninput="validateSocial()">
+          <button class="verify-btn" id="threadsVerify" onclick="verifySocial('threads')">驗證</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terms -->
+    <div class="checkbox-row" onclick="toggleTerms()">
+      <div class="checkbox" id="termsCheck">
+        <svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <span class="checkbox-label">申請成為KOC代表同意<a>KOC條款</a></span>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="update-btn" onclick="handleSubmit()">更新</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let termsAccepted = false;
+
+  function validateField(el) {
+    el.classList.toggle('valid', el.value.trim().length >= 2);
+    el.classList.remove('error');
+  }
+
+  function validateEmail(el) {
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el.value);
+    el.classList.toggle('valid', valid);
+    el.classList.toggle('error', el.value.length > 0 && !valid);
+  }
+
+  function validateSocial() {
+    // at least one social field filled
+  }
+
+  function verifySocial(platform) {
+    const inputId = platform === 'ig' ? 'igUsername' : 'threadsUsername';
+    const btnId = platform === 'ig' ? 'igVerify' : 'threadsVerify';
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+
+    if (!input.value.trim()) {
+      input.classList.add('error');
+      showToast('請先填入帳號');
+      return;
+    }
+
+    btn.textContent = '驗證中...';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = '✓ 已驗證';
+      btn.classList.add('verified');
+      input.classList.add('valid');
+      showToast(`✓ ${platform.toUpperCase()} 帳號驗證成功`);
+    }, 1200);
+  }
+
+  function toggleTerms() {
+    termsAccepted = !termsAccepted;
+    document.getElementById('termsCheck').classList.toggle('checked', termsAccepted);
+  }
+
+  function handleSubmit() {
+    const name = document.getElementById('displayName');
+    const email = document.getElementById('email');
+    const fb = document.getElementById('fbUrl').value.trim();
+    const ig = document.getElementById('igUsername').value.trim();
+    const threads = document.getElementById('threadsUsername').value.trim();
+    let ok = true;
+
+    if (name.value.trim().length < 2) { name.classList.add('error'); ok = false; }
+    if (!email.classList.contains('valid')) { email.classList.add('error'); ok = false; }
+    if (!fb && !ig && !threads) {
+      ['fbUrl','igUsername','threadsUsername'].forEach(id => document.getElementById(id).classList.add('error'));
+      showToast('請至少填入一個社群帳號');
+      ok = false;
+    }
+    if (!termsAccepted) {
+      showToast('請同意 KOC 條款');
+      ok = false;
+    }
+    if (!ok) return;
+
+    const btn = document.querySelector('.update-btn');
+    btn.textContent = '提交中...';
+    btn.style.opacity = '0.7';
+    setTimeout(() => {
+      btn.textContent = '✓ 申請已送出';
+      btn.style.background = 'var(--green)';
+      btn.style.opacity = '1';
+      showToast('✓ KOC 申請已送出，請等待審核通知');
+    }, 1200);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

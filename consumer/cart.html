@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>購物車 — SHOP</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=DM+Serif+Display:ital@0;1&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #F5F0E8;
+    --ink: #1A1A18;
+    --warm-gray: #8C8880;
+    --accent: #C8522A;
+    --accent-light: #E8C4B4;
+    --card-bg: #FDFAF6;
+    --border: #E2DDD4;
+    --gold: #B89B6A;
+    --white: #FFFFFF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Noto Serif TC', serif;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  nav {
+    background: var(--cream);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 48px; height: 60px;
+    position: sticky; top: 0; z-index: 100; gap: 32px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px; letter-spacing: 0.08em;
+    border: 1.5px solid var(--ink);
+    padding: 6px 20px; border-radius: 40px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    background: var(--ink); color: var(--cream);
+  }
+  .logo:hover { background: var(--accent); border-color: var(--accent); }
+  .nav-divider { width: 1px; height: 24px; background: var(--border); }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-link { font-size: 13px; letter-spacing: 0.05em; color: var(--warm-gray); cursor: pointer; transition: color 0.2s; }
+  .nav-link:hover { color: var(--ink); }
+  .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+  .cart-btn { position: relative; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .cart-btn svg { width: 22px; height: 22px; }
+  .cart-badge {
+    position: absolute; top: -2px; right: -2px;
+    background: var(--accent); color: white;
+    font-family: 'Space Mono', monospace; font-size: 9px;
+    width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .user-btn { cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .user-btn svg { width: 22px; height: 22px; }
+
+  /* ── MAIN ── */
+  .main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── HEADING ── */
+  .cart-heading {
+    display: flex; align-items: baseline; gap: 16px;
+    margin-bottom: 28px;
+  }
+  .cart-heading h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px; color: var(--ink);
+  }
+  .cart-count {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; color: var(--warm-gray);
+  }
+
+  /* ── CART TABLE ── */
+  .cart-table {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+
+  .cart-table-head {
+    display: grid;
+    grid-template-columns: 1fr 100px 160px 100px 56px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--cream);
+  }
+  .col-head {
+    font-size: 12px; letter-spacing: 0.1em;
+    color: var(--warm-gray); text-transform: uppercase;
+  }
+  .col-head.center { text-align: center; }
+  .col-head.right { text-align: right; }
+
+  /* Row */
+  .cart-row {
+    display: grid;
+    grid-template-columns: 1fr 100px 160px 100px 56px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    transition: background 0.2s;
+  }
+  .cart-row:last-child { border-bottom: none; }
+  .cart-row:hover { background: #FDFAF6; }
+
+  .item-col { display: flex; align-items: center; gap: 16px; }
+
+  .item-thumb {
+    width: 56px; height: 56px; flex-shrink: 0;
+    background: linear-gradient(135deg, #C8C4BC, #A8A49C);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .item-thumb svg { width: 24px; height: 24px; color: rgba(255,255,255,0.55); }
+
+  .item-name { font-size: 14px; color: var(--ink); }
+
+  .price-col {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; color: var(--ink);
+    text-align: center;
+  }
+
+  /* Qty stepper */
+  .qty-col { display: flex; justify-content: center; }
+  .qty-stepper {
+    display: flex; align-items: center;
+    border: 1.5px solid var(--border);
+    border-radius: 40px; overflow: hidden;
+    background: var(--cream);
+  }
+  .qty-btn {
+    width: 32px; height: 32px;
+    border: none; background: transparent;
+    font-size: 16px; cursor: pointer; color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    font-family: 'Space Mono', monospace;
+  }
+  .qty-btn:hover { background: var(--border); }
+  .qty-num {
+    min-width: 28px; text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px; color: var(--ink);
+    padding: 0 4px;
+  }
+
+  .total-col {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--ink); text-align: right;
+  }
+
+  .actions-col {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 10px;
+  }
+  .icon-btn {
+    width: 28px; height: 28px;
+    background: transparent; border: none;
+    cursor: pointer; color: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; transition: all 0.2s;
+  }
+  .icon-btn:hover { color: var(--warm-gray); background: var(--cream); }
+  .icon-btn.wish:hover { color: var(--accent); }
+  .icon-btn.wish.active { color: var(--accent); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  /* ── COUPON + POINTS ── */
+  .extras { margin-bottom: 28px; display: flex; flex-direction: column; gap: 20px; }
+
+  .coupon-row { display: flex; align-items: center; gap: 16px; }
+  .coupon-label { font-size: 13px; color: var(--ink); letter-spacing: 0.03em; min-width: 48px; }
+
+  .coupon-input-wrap {
+    display: flex; align-items: center;
+    border: 1.5px solid var(--border);
+    border-radius: 40px; overflow: hidden;
+    background: white;
+    transition: border-color 0.2s;
+  }
+  .coupon-input-wrap.valid { border-color: #6BBF6B; }
+  .coupon-input {
+    border: none; background: transparent; outline: none;
+    font-family: 'Space Mono', monospace; font-size: 13px;
+    color: var(--ink); padding: 8px 16px; width: 140px;
+    letter-spacing: 0.08em;
+  }
+  .coupon-check {
+    width: 36px; height: 36px;
+    border: none; background: transparent;
+    cursor: pointer; color: var(--warm-gray);
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s;
+  }
+  .coupon-check.valid { color: #6BBF6B; }
+  .coupon-check svg { width: 18px; height: 18px; }
+
+  .coupon-msg { font-size: 13px; color: #6BBF6B; font-weight: 700; display: none; }
+  .coupon-msg.show { display: block; }
+
+  /* Points row */
+  .points-row {
+    display: flex; align-items: center; gap: 16px;
+    flex-wrap: wrap;
+  }
+  .points-label { font-size: 13px; color: var(--ink); min-width: 120px; }
+
+  /* Toggle */
+  .toggle-wrap { display: flex; align-items: center; gap: 10px; }
+  .toggle {
+    width: 40px; height: 22px; border-radius: 11px;
+    background: var(--border); position: relative;
+    cursor: pointer; transition: background 0.25s;
+    border: none; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--ink); }
+  .toggle-knob {
+    position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: white;
+    transition: transform 0.25s;
+    pointer-events: none;
+  }
+  .toggle.on .toggle-knob { transform: translateX(18px); }
+  .toggle-text { font-size: 13px; color: var(--warm-gray); }
+
+  .discount-row {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; color: var(--warm-gray);
+  }
+  .discount-amount {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px; font-weight: 700; color: var(--ink);
+  }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--border); margin-bottom: 28px; }
+
+  /* ── FOOTER ROW ── */
+  .cart-footer {
+    display: flex; align-items: center; gap: 24px;
+  }
+
+  .back-link {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--warm-gray); cursor: pointer;
+    transition: color 0.2s; text-decoration: none;
+    letter-spacing: 0.03em;
+  }
+  .back-link:hover { color: var(--ink); }
+  .back-link svg { width: 16px; height: 16px; }
+
+  .total-section {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .total-label { font-size: 13px; color: var(--warm-gray); }
+  .total-amount {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px; font-weight: 700; color: var(--ink);
+  }
+
+  .checkout-btn {
+    background: var(--ink); color: var(--cream);
+    border: none; padding: 14px 32px;
+    border-radius: 40px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 15px; letter-spacing: 0.05em;
+    cursor: pointer; transition: all 0.25s;
+    white-space: nowrap;
+  }
+  .checkout-btn:hover { background: var(--accent); transform: translateY(-1px); }
+
+  /* Removed item animation */
+  .cart-row.removing {
+    opacity: 0; transform: translateX(20px);
+    transition: all 0.3s ease;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo"><span>★</span> LOGO</div>
+  <div class="nav-divider"></div>
+  <div class="nav-links">
+    <span class="nav-link">Home</span>
+    <span class="nav-link">Discover</span>
+    <span class="nav-link">Blog</span>
+    <span class="nav-link">About Us</span>
+    <span class="nav-link">Contact</span>
+  </div>
+  <div class="nav-actions">
+    <div class="cart-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span class="cart-badge" id="cartBadge">3</span>
+    </div>
+    <div class="user-btn">
+      <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- Heading -->
+  <div class="cart-heading">
+    <h1>購物車</h1>
+    <span class="cart-count" id="cartCount">3</span>
+  </div>
+
+  <!-- Table -->
+  <div class="cart-table">
+    <div class="cart-table-head">
+      <div class="col-head">項目</div>
+      <div class="col-head center">價格</div>
+      <div class="col-head center">數量</div>
+      <div class="col-head right">總計</div>
+      <div></div>
+    </div>
+
+    <!-- Row 1 -->
+    <div class="cart-row" id="row0">
+      <div class="item-col">
+        <div class="item-thumb" style="background:linear-gradient(135deg,#C8C4BC,#A8A49C)">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <span class="item-name">商品名</span>
+      </div>
+      <div class="price-col">$33.9</div>
+      <div class="qty-col">
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="changeQty(0, -1)">−</button>
+          <span class="qty-num" id="qty0">1</span>
+          <button class="qty-btn" onclick="changeQty(0, 1)">+</button>
+        </div>
+      </div>
+      <div class="total-col" id="total0">$33.90</div>
+      <div class="actions-col">
+        <button class="icon-btn wish" onclick="toggleWish(this)">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="removeRow('row0')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 2 -->
+    <div class="cart-row" id="row1">
+      <div class="item-col">
+        <div class="item-thumb" style="background:linear-gradient(135deg,#C4C8D4,#A4AABB)">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <span class="item-name">商品名</span>
+      </div>
+      <div class="price-col">$14.9</div>
+      <div class="qty-col">
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="changeQty(1, -1)">−</button>
+          <span class="qty-num" id="qty1">1</span>
+          <button class="qty-btn" onclick="changeQty(1, 1)">+</button>
+        </div>
+      </div>
+      <div class="total-col" id="total1">$14.90</div>
+      <div class="actions-col">
+        <button class="icon-btn wish" onclick="toggleWish(this)">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="removeRow('row1')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 3 -->
+    <div class="cart-row" id="row2">
+      <div class="item-col">
+        <div class="item-thumb" style="background:linear-gradient(135deg,#C8D4C4,#A8B8A4)">
+          <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <span class="item-name">商品名</span>
+      </div>
+      <div class="price-col">$16.9</div>
+      <div class="qty-col">
+        <div class="qty-stepper">
+          <button class="qty-btn" onclick="changeQty(2, -1)">−</button>
+          <span class="qty-num" id="qty2">1</span>
+          <button class="qty-btn" onclick="changeQty(2, 1)">+</button>
+        </div>
+      </div>
+      <div class="total-col" id="total2">$16.90</div>
+      <div class="actions-col">
+        <button class="icon-btn wish" onclick="toggleWish(this)">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="removeRow('row2')">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coupon + Points -->
+  <div class="extras">
+    <!-- Coupon -->
+    <div class="coupon-row">
+      <span class="coupon-label">優惠碼</span>
+      <div class="coupon-input-wrap valid" id="couponWrap">
+        <input class="coupon-input" type="text" id="couponInput" value="HAPPY" placeholder="輸入優惠碼">
+        <button class="coupon-check valid" id="couponBtn" onclick="applyCoupon()">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>
+      <span class="coupon-msg show" id="couponMsg">已獲得優惠！</span>
+    </div>
+
+    <!-- Points -->
+    <div class="points-row">
+      <span class="points-label">可抵用點數：30 點</span>
+      <div class="toggle-wrap">
+        <button class="toggle" id="pointsToggle" onclick="togglePoints()">
+          <div class="toggle-knob"></div>
+        </button>
+        <span class="toggle-text">抵用點數</span>
+      </div>
+      <div class="discount-row" id="discountRow" style="opacity:0.4">
+        <span>總共折抵：</span>
+        <span class="discount-amount" id="discountAmt">$7.66</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Footer -->
+  <div class="cart-footer">
+    <a class="back-link" href="#">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      繼續購物
+    </a>
+    <div class="total-section">
+      <span class="total-label">總付款金額：</span>
+      <span class="total-amount" id="grandTotal">$68.94</span>
+      <button class="checkout-btn">結帳</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const prices = [33.9, 14.9, 16.9];
+  const qtys = [1, 1, 1];
+  const COUPON_DISCOUNT = 0.05; // 5%
+  const POINTS_DISCOUNT = 7.66;
+  let couponApplied = true;
+  let pointsApplied = false;
+
+  function fmt(n) {
+    return '$' + n.toFixed(2);
+  }
+
+  function calcSubtotal() {
+    return qtys.reduce((sum, q, i) => sum + prices[i] * q, 0);
+  }
+
+  function updateTotals() {
+    let sub = calcSubtotal();
+    let discount = 0;
+    if (couponApplied) discount += sub * COUPON_DISCOUNT;
+    if (pointsApplied) discount += POINTS_DISCOUNT;
+    const grand = Math.max(0, sub - discount);
+    document.getElementById('grandTotal').textContent = fmt(grand);
+    document.getElementById('discountAmt').textContent = fmt(POINTS_DISCOUNT);
+  }
+
+  function changeQty(idx, delta) {
+    qtys[idx] = Math.max(1, qtys[idx] + delta);
+    document.getElementById('qty' + idx).textContent = qtys[idx];
+    document.getElementById('total' + idx).textContent = fmt(prices[idx] * qtys[idx]);
+    updateTotals();
+  }
+
+  function removeRow(id) {
+    const row = document.getElementById(id);
+    const idx = parseInt(id.replace('row', ''));
+    row.classList.add('removing');
+    setTimeout(() => {
+      row.remove();
+      qtys[idx] = 0;
+      updateTotals();
+      // Update count
+      const rows = document.querySelectorAll('.cart-row');
+      const cnt = rows.length;
+      document.getElementById('cartCount').textContent = cnt;
+      document.getElementById('cartBadge').textContent = cnt;
+    }, 300);
+  }
+
+  function toggleWish(btn) {
+    btn.classList.toggle('active');
+    const path = btn.querySelector('path');
+    if (btn.classList.contains('active')) {
+      path.setAttribute('fill', 'currentColor');
+    } else {
+      path.setAttribute('fill', 'none');
+    }
+  }
+
+  function applyCoupon() {
+    const val = document.getElementById('couponInput').value.trim().toUpperCase();
+    const wrap = document.getElementById('couponWrap');
+    const btn = document.getElementById('couponBtn');
+    const msg = document.getElementById('couponMsg');
+    if (val === 'HAPPY') {
+      couponApplied = true;
+      wrap.classList.add('valid');
+      btn.classList.add('valid');
+      msg.classList.add('show');
+      msg.textContent = '已獲得優惠！';
+      msg.style.color = '#6BBF6B';
+    } else {
+      couponApplied = false;
+      wrap.classList.remove('valid');
+      btn.classList.remove('valid');
+      msg.classList.add('show');
+      msg.textContent = '優惠碼無效';
+      msg.style.color = '#C8522A';
+    }
+    updateTotals();
+  }
+
+  function togglePoints() {
+    pointsApplied = !pointsApplied;
+    const toggle = document.getElementById('pointsToggle');
+    const row = document.getElementById('discountRow');
+    toggle.classList.toggle('on', pointsApplied);
+    row.style.opacity = pointsApplied ? '1' : '0.4';
+    updateTotals();
+  }
+
+  updateTotals();
+</script>
+</body>
+</html>
