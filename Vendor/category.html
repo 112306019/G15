@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOCMART — 商品分類</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.page-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+
+/* CATEGORY TREE */
+.cat-tree { display: flex; flex-direction: column; gap: 4px; padding: 14px; }
+.cat-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 9px;
+  cursor: pointer; transition: background .15s;
+  border: 1px solid transparent;
+}
+.cat-item:hover { background: var(--surface2); }
+.cat-item.active { background: rgba(124,92,252,.12); border-color: rgba(124,92,252,.3); }
+.cat-emoji { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.cat-info { flex: 1; }
+.cat-name { font-size: 13px; font-weight: 500; }
+.cat-count { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.cat-arrow { font-size: 12px; color: var(--text2); }
+
+.sub-items { padding-left: 28px; display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.sub-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 7px; cursor: pointer;
+  font-size: 13px; color: var(--text2); transition: all .15s;
+}
+.sub-item:hover { background: var(--surface2); color: var(--text); }
+.sub-item.active { color: var(--accent); background: rgba(124,92,252,.08); }
+.sub-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+.sub-item.active .sub-dot { background: var(--accent); }
+
+/* DETAIL PANEL */
+.detail-header { display: flex; align-items: center; gap: 14px; padding: 20px 22px; border-bottom: 1px solid var(--border); }
+.detail-icon { font-size: 32px; }
+.detail-name { font-size: 17px; font-weight: 700; }
+.detail-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+.product-row {
+  display: flex; align-items: center; gap: 14px; padding: 13px 22px;
+  border-bottom: 1px solid rgba(255,255,255,.04); transition: background .15s;
+}
+.product-row:last-child { border-bottom: none; }
+.product-row:hover { background: rgba(255,255,255,.025); }
+.prod-thumb { width: 40px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.prod-name { font-size: 13px; font-weight: 500; flex: 1; }
+.prod-price { font-size: 13px; font-weight: 600; font-family: 'Space Mono', monospace; }
+.prod-status { margin-left: 10px; }
+
+/* STATS ROW */
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.stat-box { background: var(--surface2); border-radius: 9px; padding: 12px 14px; }
+.stat-box-label { font-size: 10px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+.stat-box-value { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; }
+
+.add-cat-btn {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  padding: 10px; margin: 12px 14px 4px;
+  border: 1.5px dashed var(--border); border-radius: 9px;
+  color: var(--text2); font-size: 13px; cursor: pointer; transition: all .2s;
+}
+.add-cat-btn:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<aside class="sidebar" id="sidebar-mount"></aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="page-title">🗂 商品分類</div>
+    <div class="topbar-actions">
+      <div class="notif-btn" onclick="showToast('您有 3 則新通知')">🔔<span class="notif-dot"></span></div>
+      <button class="btn-primary" onclick="openModal('addCatModal')">＋ 新增分類</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-grid">
+
+      <!-- LEFT: CATEGORY TREE -->
+      <div class="card" style="animation-delay:.0s;align-self:start">
+        <div class="card-header">
+          <div class="card-title">分類結構</div>
+          <div class="card-action" onclick="showToast('已儲存排序')">儲存排序</div>
+        </div>
+
+        <div class="cat-tree">
+          <div class="cat-item active" onclick="selectCat(this,'精華液')">
+            <div class="cat-emoji">🧴</div>
+            <div class="cat-info"><div class="cat-name">精華液</div><div class="cat-count">6 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+          <div class="sub-items">
+            <div class="sub-item active"><span class="sub-dot"></span>保濕精華</div>
+            <div class="sub-item"><span class="sub-dot"></span>美白精華</div>
+            <div class="sub-item"><span class="sub-dot"></span>修護精華</div>
+          </div>
+
+          <div class="cat-item" onclick="selectCat(this,'防曬')">
+            <div class="cat-emoji">☀️</div>
+            <div class="cat-info"><div class="cat-name">防曬</div><div class="cat-count">4 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+
+          <div class="cat-item" onclick="selectCat(this,'面膜')">
+            <div class="cat-emoji">🌿</div>
+            <div class="cat-info"><div class="cat-name">面膜</div><div class="cat-count">5 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+          <div class="sub-items" style="display:none" id="sub-面膜">
+            <div class="sub-item"><span class="sub-dot"></span>保濕面膜</div>
+            <div class="sub-item"><span class="sub-dot"></span>修護面膜</div>
+          </div>
+
+          <div class="cat-item" onclick="selectCat(this,'保健品')">
+            <div class="cat-emoji">💊</div>
+            <div class="cat-info"><div class="cat-name">保健品</div><div class="cat-count">3 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+
+          <div class="cat-item" onclick="selectCat(this,'保濕')">
+            <div class="cat-emoji">🫧</div>
+            <div class="cat-info"><div class="cat-name">保濕</div><div class="cat-count">4 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+
+          <div class="cat-item" onclick="selectCat(this,'清潔')">
+            <div class="cat-emoji">🚿</div>
+            <div class="cat-info"><div class="cat-name">清潔</div><div class="cat-count">2 個商品</div></div>
+            <div class="cat-arrow">›</div>
+          </div>
+        </div>
+
+        <div class="add-cat-btn" onclick="openModal('addCatModal')">＋ 新增主分類</div>
+        <div style="height:12px"></div>
+      </div>
+
+      <!-- RIGHT: DETAIL -->
+      <div>
+        <div class="card" style="animation-delay:.1s">
+          <div class="detail-header">
+            <div class="detail-icon">🧴</div>
+            <div>
+              <div class="detail-name" id="detailName">精華液</div>
+              <div class="detail-meta">6 個商品 · 本月銷售 1,060 件</div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn-secondary" style="font-size:12px;padding:7px 14px" onclick="openModal('editCatModal')">編輯分類</button>
+              <button class="btn-primary" style="font-size:12px;padding:7px 14px;justify-content:center" onclick="openModal('addSubModal')">＋ 子分類</button>
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-box"><div class="stat-box-label">分類商品</div><div class="stat-box-value">6</div></div>
+            <div class="stat-box"><div class="stat-box-label">本月銷售</div><div class="stat-box-value" style="color:var(--accent)">1,060</div></div>
+            <div class="stat-box"><div class="stat-box-label">分類收入</div><div class="stat-box-value" style="color:var(--gold)">$201K</div></div>
+          </div>
+
+          <div>
+            <div class="product-row">
+              <div class="prod-thumb" style="background:rgba(252,92,160,.1)">🧴</div>
+              <div class="prod-name">玫瑰胜肽精華液 50ml</div>
+              <div class="prod-price">$1,280</div>
+              <div class="prod-status"><span class="pill pill-green">上架中</span></div>
+              <div class="icon-btn" onclick="showToast('已從分類移除')">✕</div>
+            </div>
+            <div class="product-row">
+              <div class="prod-thumb" style="background:rgba(124,92,252,.1)">✨</div>
+              <div class="prod-name">玻尿酸保濕精華 30ml</div>
+              <div class="prod-price">$960</div>
+              <div class="prod-status"><span class="pill pill-green">上架中</span></div>
+              <div class="icon-btn" onclick="showToast('已從分類移除')">✕</div>
+            </div>
+            <div class="product-row">
+              <div class="prod-thumb" style="background:rgba(46,204,138,.1)">🌱</div>
+              <div class="prod-name">積雪草修護精華 20ml</div>
+              <div class="prod-price">$1,100</div>
+              <div class="prod-status"><span class="pill pill-green">上架中</span></div>
+              <div class="icon-btn" onclick="showToast('已從分類移除')">✕</div>
+            </div>
+            <div class="product-row">
+              <div class="prod-thumb" style="background:rgba(245,200,66,.1)">💛</div>
+              <div class="prod-name">維他命 C 亮白精華 15ml</div>
+              <div class="prod-price">$1,580</div>
+              <div class="prod-status"><span class="pill pill-red">已下架</span></div>
+              <div class="icon-btn" onclick="showToast('已從分類移除')">✕</div>
+            </div>
+          </div>
+
+          <div style="padding:14px 22px;border-top:1px solid var(--border)">
+            <button class="btn-secondary" style="width:100%;font-size:13px" onclick="showToast('請選擇要加入的商品')">＋ 加入商品到此分類</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal-overlay" id="addCatModal" onclick="if(event.target===this)closeModal('addCatModal')">
+  <div class="modal">
+    <div class="modal-title">🗂 新增分類</div>
+    <div class="modal-sub">建立新的商品分類，幫助 KOC 更快找到推廣商品</div>
+    <div class="form-group">
+      <label class="form-label">分類名稱</label>
+      <input class="form-input" placeholder="例：抗老系列">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Emoji 圖示</label>
+      <input class="form-input" placeholder="例：🌸" maxlength="2">
+    </div>
+    <div class="form-group">
+      <label class="form-label">上層分類（可選）</label>
+      <select class="form-select">
+        <option>— 作為主分類 —</option>
+        <option>精華液</option>
+        <option>防曬</option>
+        <option>面膜</option>
+        <option>保健品</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('addCatModal')">取消</button>
+      <button class="btn-primary" onclick="closeModal('addCatModal');showToast('✅ 分類已建立！')">建立分類</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT CATEGORY MODAL -->
+<div class="modal-overlay" id="editCatModal" onclick="if(event.target===this)closeModal('editCatModal')">
+  <div class="modal">
+    <div class="modal-title">✏️ 編輯分類</div>
+    <div class="modal-sub">修改「精華液」分類設定</div>
+    <div class="form-group">
+      <label class="form-label">分類名稱</label>
+      <input class="form-input" value="精華液">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Emoji 圖示</label>
+      <input class="form-input" value="🧴" maxlength="2">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('editCatModal')">取消</button>
+      <button class="btn-secondary" style="color:var(--red);border-color:var(--red)" onclick="closeModal('editCatModal');showToast('⚠️ 分類已刪除')">刪除分類</button>
+      <button class="btn-primary" onclick="closeModal('editCatModal');showToast('✅ 已儲存變更')">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD SUB MODAL -->
+<div class="modal-overlay" id="addSubModal" onclick="if(event.target===this)closeModal('addSubModal')">
+  <div class="modal">
+    <div class="modal-title">＋ 新增子分類</div>
+    <div class="modal-sub">在「精華液」下新增子分類</div>
+    <div class="form-group">
+      <label class="form-label">子分類名稱</label>
+      <input class="form-input" placeholder="例：抗老精華">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('addSubModal')">取消</button>
+      <button class="btn-primary" onclick="closeModal('addSubModal');showToast('✅ 子分類已建立！')">建立</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+renderSidebar('category');
+
+function selectCat(el, name) {
+  document.querySelectorAll('.cat-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('detailName').textContent = name;
+}
+</script>
+</body>
+</html>

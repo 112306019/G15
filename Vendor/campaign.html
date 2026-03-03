@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOCMART — 活動企劃</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.campaign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+.campaign-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden; animation: fadeUp .4s ease both; transition: border-color .2s, transform .2s;
+}
+.campaign-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+.campaign-banner {
+  height: 90px; display: flex; align-items: center; justify-content: center;
+  font-size: 36px; position: relative; overflow: hidden;
+}
+.campaign-banner::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.4));
+}
+.campaign-body { padding: 16px 18px; }
+.campaign-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.campaign-desc { font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.5; }
+.campaign-meta { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.campaign-meta-item { font-size: 11px; color: var(--text2); }
+.campaign-meta-item strong { color: var(--text); }
+.campaign-progress { margin-bottom: 14px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+.progress-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.campaign-actions { display: flex; gap: 8px; }
+
+/* TIMELINE */
+.timeline-section { margin-bottom: 24px; }
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.timeline-item { position: relative; margin-bottom: 20px; }
+.timeline-dot {
+  position: absolute; left: -20px; top: 4px;
+  width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg);
+}
+.timeline-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.timeline-desc { font-size: 12px; color: var(--text2); }
+.timeline-date { font-size: 11px; color: var(--text2); font-family: 'Space Mono', monospace; margin-top: 4px; }
+
+/* KPI MINI */
+.mini-kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 24px; }
+.mini-kpi {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; animation: fadeUp .4s ease both;
+}
+.mini-kpi-label { font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+.mini-kpi-value { font-family: 'Space Mono', monospace; font-size: 18px; font-weight: 700; }
+</style>
+</head>
+<body>
+<aside class="sidebar" id="sidebar-mount"></aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="page-title">🚀 活動企劃</div>
+    <div class="topbar-actions">
+      <div class="notif-btn" onclick="showToast('您有 3 則新通知')">🔔<span class="notif-dot"></span></div>
+      <button class="btn-primary" onclick="openModal('createCampaignModal')">＋ 新增活動</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="mini-kpi-row">
+      <div class="mini-kpi" style="animation-delay:.0s"><div class="mini-kpi-label">進行中活動</div><div class="mini-kpi-value" style="color:var(--green)">3</div></div>
+      <div class="mini-kpi" style="animation-delay:.07s"><div class="mini-kpi-label">規劃中活動</div><div class="mini-kpi-value" style="color:var(--accent)">2</div></div>
+      <div class="mini-kpi" style="animation-delay:.14s"><div class="mini-kpi-label">本季參與 KOC</div><div class="mini-kpi-value">42</div></div>
+      <div class="mini-kpi" style="animation-delay:.21s"><div class="mini-kpi-label">活動帶動營收</div><div class="mini-kpi-value" style="color:var(--gold)">$218K</div></div>
+    </div>
+
+    <div class="campaign-grid">
+
+      <div class="campaign-card" style="animation-delay:.25s">
+        <div class="campaign-banner" style="background:linear-gradient(135deg,#fc5ca0,#f5c842)">🌸</div>
+        <div class="campaign-body">
+          <div class="campaign-name">春季美肌節</div>
+          <div class="campaign-desc">春季主打美白保濕系列，邀請所有 KOC 分享護膚心得，使用專屬優惠碼享最高 30% 折扣。</div>
+          <div class="campaign-meta">
+            <div class="campaign-meta-item">📅 <strong>2025/03/01 – 03/31</strong></div>
+            <div class="campaign-meta-item">👥 KOC <strong>18 人</strong></div>
+            <div class="campaign-meta-item">🎟 優惠碼 <strong>4 個</strong></div>
+          </div>
+          <div class="campaign-progress">
+            <div class="progress-label"><span>活動進度</span><span>68%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:68%"></div></div>
+          </div>
+          <div class="campaign-actions">
+            <span class="pill pill-green" style="flex-shrink:0">進行中</span>
+            <button class="btn-secondary" style="flex:1;font-size:12px;padding:7px" onclick="openModal('campaignDetailModal')">查看詳情</button>
+            <button class="btn-primary" style="flex:1;font-size:12px;padding:7px;justify-content:center" onclick="showToast('已複製活動連結')">分享活動</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="campaign-card" style="animation-delay:.32s">
+        <div class="campaign-banner" style="background:linear-gradient(135deg,#7c5cfc,#fc5ca0)">☀️</div>
+        <div class="campaign-body">
+          <div class="campaign-name">夏日防曬特輯</div>
+          <div class="campaign-desc">夏季主打防曬系列，搭配 KOC 推廣 SPF50+ 防曬霜，目標帶動 500 筆訂單。</div>
+          <div class="campaign-meta">
+            <div class="campaign-meta-item">📅 <strong>2025/05/01 – 06/30</strong></div>
+            <div class="campaign-meta-item">👥 KOC <strong>12 人</strong></div>
+            <div class="campaign-meta-item">🎟 優惠碼 <strong>2 個</strong></div>
+          </div>
+          <div class="campaign-progress">
+            <div class="progress-label"><span>報名進度</span><span>50%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:50%"></div></div>
+          </div>
+          <div class="campaign-actions">
+            <span class="pill pill-accent" style="flex-shrink:0">規劃中</span>
+            <button class="btn-secondary" style="flex:1;font-size:12px;padding:7px">查看詳情</button>
+            <button class="btn-primary" style="flex:1;font-size:12px;padding:7px;justify-content:center" onclick="showToast('✅ 活動已啟動！')">啟動活動</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="campaign-card" style="animation-delay:.39s">
+        <div class="campaign-banner" style="background:linear-gradient(135deg,#2ecc8a,#5ca0fc)">💚</div>
+        <div class="campaign-body">
+          <div class="campaign-name">天然草本保養週</div>
+          <div class="campaign-desc">主打積雪草、蘆薈等天然成分系列，強調無添加純淨保養概念。</div>
+          <div class="campaign-meta">
+            <div class="campaign-meta-item">📅 <strong>2025/04/14 – 04/21</strong></div>
+            <div class="campaign-meta-item">👥 KOC <strong>8 人</strong></div>
+            <div class="campaign-meta-item">🎟 優惠碼 <strong>2 個</strong></div>
+          </div>
+          <div class="campaign-progress">
+            <div class="progress-label"><span>活動進度</span><span>15%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:15%"></div></div>
+          </div>
+          <div class="campaign-actions">
+            <span class="pill pill-green" style="flex-shrink:0">進行中</span>
+            <button class="btn-secondary" style="flex:1;font-size:12px;padding:7px">查看詳情</button>
+            <button class="btn-primary" style="flex:1;font-size:12px;padding:7px;justify-content:center" onclick="showToast('已複製活動連結')">分享活動</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="campaign-card" style="animation-delay:.46s">
+        <div class="campaign-banner" style="background:linear-gradient(135deg,#f5c842,#fc5ca0)">🎁</div>
+        <div class="campaign-body">
+          <div class="campaign-name">週年慶 VIP 限定</div>
+          <div class="campaign-desc">品牌三週年活動，老顧客限定優惠，搭配 VIP KOC 限量優惠碼。</div>
+          <div class="campaign-meta">
+            <div class="campaign-meta-item">📅 <strong>2025/09/01 – 09/07</strong></div>
+            <div class="campaign-meta-item">👥 KOC <strong>規劃中</strong></div>
+            <div class="campaign-meta-item">🎟 優惠碼 <strong>未建立</strong></div>
+          </div>
+          <div class="campaign-progress">
+            <div class="progress-label"><span>規劃進度</span><span>20%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:20%;background:var(--gold)"></div></div>
+          </div>
+          <div class="campaign-actions">
+            <span class="pill pill-gold" style="flex-shrink:0">草稿</span>
+            <button class="btn-secondary" style="flex:1;font-size:12px;padding:7px">繼續編輯</button>
+            <button class="btn-primary" style="flex:1;font-size:12px;padding:7px;justify-content:center" onclick="showToast('✅ 已發佈活動！')">發佈活動</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📅 活動時程總覽</div>
+      </div>
+      <div style="padding: 22px">
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-dot" style="background:var(--green)"></div>
+            <div class="timeline-title">春季美肌節 — 進行中</div>
+            <div class="timeline-desc">18 位 KOC 參與，4 組優惠碼，目前達成率 68%</div>
+            <div class="timeline-date">2025/03/01 – 03/31</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot" style="background:var(--green)"></div>
+            <div class="timeline-title">天然草本保養週 — 進行中</div>
+            <div class="timeline-desc">8 位 KOC 參與，主打天然成分系列</div>
+            <div class="timeline-date">2025/04/14 – 04/21</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot" style="background:var(--accent)"></div>
+            <div class="timeline-title">夏日防曬特輯 — 規劃中</div>
+            <div class="timeline-desc">12 位 KOC 報名中，優惠碼建立完成，等待啟動</div>
+            <div class="timeline-date">2025/05/01 – 06/30</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-dot" style="background:var(--gold)"></div>
+            <div class="timeline-title">週年慶 VIP 限定 — 草稿</div>
+            <div class="timeline-desc">尚未確認 KOC 名單，需建立優惠碼</div>
+            <div class="timeline-date">2025/09/01 – 09/07</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CREATE CAMPAIGN MODAL -->
+<div class="modal-overlay" id="createCampaignModal" onclick="if(event.target===this)closeModal('createCampaignModal')">
+  <div class="modal">
+    <div class="modal-title">🚀 新增活動</div>
+    <div class="modal-sub">建立 KOC 行銷活動，設定目標與優惠碼</div>
+    <div class="form-group">
+      <label class="form-label">活動名稱</label>
+      <input class="form-input" placeholder="例：夏日美肌特輯">
+    </div>
+    <div class="form-group">
+      <label class="form-label">活動描述</label>
+      <textarea class="form-input" rows="2" placeholder="簡短描述活動目標與內容..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">開始日期</label>
+        <input class="form-input" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">結束日期</label>
+        <input class="form-input" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">套用優惠碼</label>
+      <select class="form-select">
+        <option>— 選擇已有優惠碼 —</option>
+        <option>MEIYAN30</option>
+        <option>SUMMER20</option>
+        <option>BELLE10</option>
+        <option>＋ 活動結束後建立新優惠碼</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">目標訂單數</label>
+      <input class="form-input" type="number" placeholder="例：500">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('createCampaignModal')">儲存草稿</button>
+      <button class="btn-primary" onclick="closeModal('createCampaignModal');showToast('✅ 活動已發佈！')">立即發佈</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>renderSidebar('campaign');</script>
+</body>
+</html>
