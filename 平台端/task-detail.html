@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任務詳細內容 - KOC 平台後台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen">
+
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-8">
+      <div class="text-xl font-bold tracking-wider">LOGO</div>
+      <nav class="flex space-x-4">
+        <a href="index.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">總覽</a>
+        <a href="vendor.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">廠商管理</a>
+        <a href="koc.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">KOC管理</a>
+        <a href="user.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">一般用戶管理</a>
+        <a href="task.html" class="px-3 py-2 rounded-md text-sm font-medium bg-black text-white">任務管理</a>
+        <a href="finance.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">金流管理</a>
+        <a href="cs.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">客服</a>      </nav>
+    </div>
+  </header>
+
+  <main class="p-8 max-w-7xl mx-auto space-y-6">
+    <button onclick="window.location.href='task.html'" class="text-gray-500 hover:text-black flex items-center text-sm font-medium mb-4">
+      <span class="mr-2">←</span> 返回任務列表
+    </button>
+
+    <h1 class="text-3xl font-bold">任務詳細內容</h1>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-8 space-y-8 relative">
+        <div id="loadingOverlay" class="absolute inset-0 bg-white/80 z-10 flex items-center justify-center rounded-xl">
+          <p class="text-gray-500 font-medium">資料讀取中...</p>
+        </div>
+
+        <h2 class="text-xl font-bold border-b pb-4">任務資訊</h2>
+        
+        <div class="space-y-4 text-sm">
+          <p><span class="text-gray-500 inline-block w-24">任務名稱：</span> <span id="taskName" class="font-medium text-lg">-</span></p>
+          <p><span class="text-gray-500 inline-block w-24">發布廠商：</span> <span id="vendorName">-</span></p>
+          <p><span class="text-gray-500 inline-block w-24">指定平台：</span> <span id="platform">-</span></p>
+          <p><span class="text-gray-500 inline-block w-24">KOC標籤：</span> <span id="tags">-</span></p>
+        </div>
+
+        <hr class="border-gray-100">
+
+        <div class="space-y-4 text-sm">
+          <p class="font-semibold text-gray-700">預算與人數</p>
+          <div class="flex space-x-16">
+            <p><span class="text-gray-500 inline-block w-20">預算金額：</span> <span id="budget" class="text-blue-600 font-bold">-</span></p>
+            <p><span class="text-gray-500 inline-block w-20">徵求人數：</span> <span id="kocCount">-</span></p>
+          </div>
+        </div>
+
+        <hr class="border-gray-100">
+
+        <div class="space-y-4 text-sm">
+          <p class="font-semibold text-gray-700">任務說明</p>
+          <div class="bg-gray-50 p-4 rounded-lg border border-gray-100 text-gray-600 whitespace-pre-wrap leading-relaxed" id="description">
+            -
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 h-fit space-y-8">
+        <h2 class="text-xl font-bold border-b pb-4">任務進度</h2>
+        
+        <div class="space-y-4 text-sm">
+          <p><span class="text-gray-500 inline-block w-20">目前狀態：</span> <span id="statusBadge" class="font-semibold px-3 py-1 rounded-full bg-gray-100">-</span></p>
+          <p><span class="text-gray-500 inline-block w-20">上架時間：</span> <span id="publishTime">-</span></p>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    async function fetchTaskDetail() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const taskId = urlParams.get('id');
+
+        setTimeout(() => {
+          // 模擬資料庫 (進行中與已結案的任務)
+          const mockDatabase = {
+            'T002': { 
+              name: '信義區新開幕拉麵試吃特派員', vendor: '美味餐飲企業', platform: 'Instagram, Facebook', 
+              tags: '美食、探店', budget: '$5,000', count: '5人', publishTime: '2026/02/20 12:00', 
+              description: '誠摯邀請美食KOC來品嚐我們位於信義區新開幕的拉麵店！\n包含雙人套餐試吃，需撰寫至少300字食記並搭配短影音發布。',
+              status: 'active'
+            },
+            'T003': { 
+              name: '環保隨行杯開箱評測', vendor: '綠能生活圈', platform: 'YouTube', 
+              tags: '3C、生活', budget: '$8,000', count: '20人', publishTime: '2026/01/15 09:00', 
+              description: '徵求20位喜愛環保生活小物的創作者，為我們的新款隨行杯拍攝開箱評測影片。\n影片長度需大於3分鐘，並附上專屬購買連結。',
+              status: 'completed'
+            },
+            'T005': { 
+              name: '隱藏版甜點店探店打卡', vendor: '美味餐飲企業', platform: 'Instagram', 
+              tags: '美食、網美', budget: '$3,000', count: '3人', publishTime: '2026/02/10 15:00', 
+              description: '尋找愛吃甜點的你！提供指定下午茶套餐乙份，需在店內網美牆拍照打卡。',
+              status: 'active'
+            }
+          };
+
+          const taskData = mockDatabase[taskId];
+
+          if (!taskData) {
+            alert("找不到這筆任務資料！");
+            window.location.href = 'task.html';
+            return;
+          }
+
+          document.getElementById('taskName').innerText = taskData.name;
+          document.getElementById('vendorName').innerText = taskData.vendor;
+          document.getElementById('platform').innerText = taskData.platform;
+          document.getElementById('tags').innerText = taskData.tags;
+          document.getElementById('budget').innerText = taskData.budget;
+          document.getElementById('kocCount').innerText = taskData.count;
+          document.getElementById('description').innerText = taskData.description;
+          document.getElementById('publishTime').innerText = taskData.publishTime;
+
+          // 根據狀態設定標籤顏色
+          const badge = document.getElementById('statusBadge');
+          if (taskData.status === 'active') {
+            badge.innerText = '進行中';
+            badge.classList.add('text-green-600', 'bg-green-50');
+          } else if (taskData.status === 'completed') {
+            badge.innerText = '已結案';
+            badge.classList.add('text-gray-600', 'bg-gray-100');
+          }
+
+          document.getElementById('loadingOverlay').style.display = 'none';
+        }, 500);
+      } catch (error) {
+        console.error("載入失敗");
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchTaskDetail);
+  </script>
+</body>
+</html>

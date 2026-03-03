@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>金流管理 - KOC 平台後台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen">
+
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-8">
+      <div class="text-xl font-bold tracking-wider">LOGO</div>
+      <nav class="flex space-x-4">
+        <a href="index.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">總覽</a>
+        <a href="vendor.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">廠商管理</a>
+        <a href="koc.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">KOC管理</a>
+        <a href="user.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">一般用戶管理</a>
+        <a href="task.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">任務管理</a>
+        <a href="finance.html" class="px-3 py-2 rounded-md text-sm font-medium bg-black text-white">金流管理</a>
+        <a href="cs.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">客服</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="p-8 max-w-7xl mx-auto space-y-6">
+    <h1 class="text-3xl font-bold">金流管理</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm">
+        <h3 class="text-gray-500 text-sm mb-2">本月平台入帳</h3>
+        <p id="totalIncome" class="text-3xl font-semibold text-green-600 mb-2">載入中...</p>
+        <p class="text-xs text-gray-400">來自廠商任務款項</p>
+      </div>
+      <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm border-l-4 border-l-orange-500">
+        <h3 class="text-gray-500 text-sm mb-2">待撥款總額</h3>
+        <p id="pendingPayout" class="text-3xl font-semibold text-orange-500 mb-2">載入中...</p>
+        <p class="text-xs text-gray-400">需支付給 KOC 的酬勞</p>
+      </div>
+      <div class="bg-white border border-gray-200 p-6 rounded-xl shadow-sm">
+        <h3 class="text-gray-500 text-sm mb-2">本月已撥款</h3>
+        <p id="completedPayout" class="text-3xl font-semibold text-gray-800 mb-2">載入中...</p>
+        <p class="text-xs text-gray-400">已成功匯出款項</p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between bg-white p-4 rounded-t-xl border border-gray-200 border-b-0">
+      
+      <div class="relative w-80">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
+        <input id="searchInput" type="text" placeholder="搜尋交易單號、對象名稱、任務" class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black">
+      </div>
+      
+      <div class="flex space-x-3">
+        <select id="typeFilter" class="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer">
+          <option value="all">所有類型</option>
+          <option value="income">入帳 (廠商付款)</option>
+          <option value="payout">出帳 (KOC撥款)</option>
+        </select>
+
+        <select id="statusFilter" class="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer">
+          <option value="all">所有狀態</option>
+          <option value="pending">待處理/待撥款</option>
+          <option value="completed">已完成</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+          <tr>
+            <th class="py-4 px-6 font-medium">交易單號 / 時間</th>
+            <th class="py-4 px-6 font-medium">交易對象</th>
+            <th class="py-4 px-6 font-medium">關聯任務</th>
+            <th class="py-4 px-6 font-medium">類型</th>
+            <th class="py-4 px-6 font-medium">金額</th>
+            <th class="py-4 px-6 font-medium">狀態</th>
+            <th class="py-4 px-6 font-medium text-center">操作</th>
+          </tr>
+        </thead>
+        <tbody id="financeTableBody" class="text-sm divide-y divide-gray-100">
+          <tr>
+            <td colspan="7" class="py-8 text-center text-gray-500">資料載入中...</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="py-4 text-center border-t border-gray-100">
+        <button class="text-sm text-gray-500 hover:text-black">Load more 100+</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let allFinanceData = [];
+    let currentSearchTerm = '';
+    let currentTypeFilter = 'all';
+    let currentStatusFilter = 'all';
+
+    async function fetchFinanceData() {
+      try {
+        setTimeout(() => {
+          // 模擬頂部統計數字
+          document.getElementById('totalIncome').innerText = '$125,000';
+          document.getElementById('pendingPayout').innerText = '$45,000';
+          document.getElementById('completedPayout').innerText = '$32,000';
+
+          // 模擬交易紀錄資料庫
+          allFinanceData = [
+            { id: 'TX260228001', date: '2026/02/28 10:15', target: '極速科技公司', task: '春季彩妝新品體驗', type: 'income', amount: 15000, status: 'completed' },
+            { id: 'TX260228002', date: '2026/02/28 11:30', target: '王美美', task: '春季彩妝新品體驗', type: 'payout', amount: 3000, status: 'pending' },
+            { id: 'TX260227005', date: '2026/02/27 15:00', target: '吃貨阿翔', task: '信義區新開幕拉麵', type: 'payout', amount: 1500, status: 'pending' },
+            { id: 'TX260225010', date: '2026/02/25 09:00', target: '美味餐飲企業', task: '信義區新開幕拉麵', type: 'income', amount: 5000, status: 'completed' },
+            { id: 'TX260220012', date: '2026/02/20 14:20', target: '愛玩客小林', task: '隱藏版甜點店探店', type: 'payout', amount: 2000, status: 'completed' }
+          ];
+          
+          applyFilters();
+        }, 600);
+      } catch (error) {
+        document.getElementById('financeTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-500">載入失敗</td></tr>';
+      }
+    }
+
+    function applyFilters() {
+      let filteredData = allFinanceData;
+
+      // 篩選類型
+      if (currentTypeFilter !== 'all') {
+        filteredData = filteredData.filter(tx => tx.type === currentTypeFilter);
+      }
+
+      // 篩選狀態
+      if (currentStatusFilter !== 'all') {
+        filteredData = filteredData.filter(tx => tx.status === currentStatusFilter);
+      }
+
+      // 搜尋關鍵字
+      if (currentSearchTerm.trim() !== '') {
+        const keyword = currentSearchTerm.toLowerCase();
+        filteredData = filteredData.filter(tx => 
+          tx.id.toLowerCase().includes(keyword) ||
+          tx.target.toLowerCase().includes(keyword) ||
+          tx.task.toLowerCase().includes(keyword)
+        );
+      }
+
+      renderTable(filteredData);
+    }
+
+    function renderTable(dataArray) {
+      const tbody = document.getElementById('financeTableBody');
+      tbody.innerHTML = ''; 
+
+      if (dataArray.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500">找不到符合的交易紀錄</td></tr>';
+        return;
+      }
+
+      dataArray.forEach(tx => {
+        // 設定類型標籤
+        const typeText = tx.type === 'income' ? '<span class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">入帳</span>' : '<span class="text-purple-600 bg-purple-50 px-2 py-1 rounded text-xs">出帳</span>';
+        
+        // 設定金額顏色 (+ 代表入帳, - 代表出帳)
+        const amountDisplay = tx.type === 'income' ? `<span class="text-green-600 font-medium">+$${tx.amount.toLocaleString()}</span>` : `<span class="text-red-500 font-medium">-$${tx.amount.toLocaleString()}</span>`;
+
+        // 設定狀態與按鈕
+        let statusHtml = '';
+        let buttonHtml = '';
+
+        if (tx.status === 'pending') {
+          statusHtml = '<span class="text-orange-500 font-semibold">待處理</span>';
+          if (tx.type === 'payout') {
+             buttonHtml = `<button onclick="handlePayout('${tx.id}')" class="bg-black text-white px-4 py-1.5 rounded-md hover:bg-gray-800 transition-colors text-sm">執行撥款</button>`;
+          } else {
+             // 🌟 加上跳轉連結
+             buttonHtml = `<button onclick="window.location.href='finance-detail.html?id=${tx.id}'" class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm">查看</button>`;
+          }
+        } else if (tx.status === 'completed') {
+          statusHtml = '<span class="text-gray-500 font-semibold">已完成</span>';
+          // 🌟 加上跳轉連結
+          buttonHtml = `<button onclick="window.location.href='finance-detail.html?id=${tx.id}'" class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm">明細</button>`;
+        }
+
+        const rowHtml = `
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="py-4 px-6">
+              <p class="font-medium text-gray-800">${tx.id}</p>
+              <p class="text-xs text-gray-400">${tx.date}</p>
+            </td>
+            <td class="py-4 px-6 font-medium">${tx.target}</td>
+            <td class="py-4 px-6 text-gray-500 truncate max-w-[150px]">${tx.task}</td>
+            <td class="py-4 px-6">${typeText}</td>
+            <td class="py-4 px-6">${amountDisplay}</td>
+            <td class="py-4 px-6">${statusHtml}</td>
+            <td class="py-4 px-6 text-center">${buttonHtml}</td>
+          </tr>
+        `;
+        tbody.innerHTML += rowHtml;
+      });
+    }
+
+    // 模擬撥款動作
+    function handlePayout(txId) {
+      const isConfirmed = confirm(`您即將執行單號 ${txId} 的撥款作業，確定要匯出款項嗎？`);
+      if (isConfirmed) {
+        alert("撥款成功！資金已匯入 KOC 帳戶。");
+        // 實際開發中，這裡會打 API 改變狀態並重新 fetch 資料
+      }
+    }
+
+    // --- 監聽器綁定 ---
+    document.getElementById('typeFilter').addEventListener('change', function(event) {
+      currentTypeFilter = event.target.value;
+      applyFilters(); 
+    });
+
+    document.getElementById('statusFilter').addEventListener('change', function(event) {
+      currentStatusFilter = event.target.value;
+      applyFilters(); 
+    });
+
+    document.getElementById('searchInput').addEventListener('input', function(event) {
+      currentSearchTerm = event.target.value;
+      applyFilters(); 
+    });
+
+    document.addEventListener('DOMContentLoaded', fetchFinanceData);
+  </script>
+
+</body>
+</html>

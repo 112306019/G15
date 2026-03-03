@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>一般用戶管理 - KOC 平台後台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen">
+
+  <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-8">
+      <div class="text-xl font-bold tracking-wider">LOGO</div>
+      <nav class="flex space-x-4">
+        <a href="index.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">總覽</a>
+        <a href="vendor.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">廠商管理</a>
+        <a href="koc.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">KOC管理</a>
+        <a href="user.html" class="px-3 py-2 rounded-md text-sm font-medium bg-black text-white">一般用戶管理</a>
+        <a href="task.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">任務管理</a>
+        <a href="finance.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">金流管理</a>
+        <a href="cs.html" class="px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-black hover:bg-gray-100">客服</a>      </nav>
+    </div>
+  </header>
+
+  <main class="p-8 max-w-7xl mx-auto space-y-6">
+    <h1 class="text-3xl font-bold">一般用戶管理</h1>
+
+    <div class="flex items-center justify-between bg-white p-4 rounded-t-xl border border-gray-200 border-b-0">
+      
+      <div class="relative w-72">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
+        <input id="searchInput" type="text" placeholder="搜尋姓名、電話、Email" class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black">
+      </div>
+      
+      <select id="statusFilter" class="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer">
+        <option value="all">狀態篩選 (全部)</option>
+        <option value="applying">KOC申請中</option>
+        <option value="active">已啟用</option>
+        <option value="suspended">已停權</option>
+      </select>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+          <tr>
+            <th class="py-4 px-6 font-medium">姓名</th>
+            <th class="py-4 px-6 font-medium">電話號碼</th>
+            <th class="py-4 px-6 font-medium">註冊日期</th>
+            <th class="py-4 px-6 font-medium">Email</th>
+            <th class="py-4 px-6 font-medium">狀態</th>
+            <th class="py-4 px-6 font-medium text-center">操作</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody" class="text-sm divide-y divide-gray-100">
+          <tr>
+            <td colspan="6" class="py-8 text-center text-gray-500">資料載入中...</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="py-4 text-center border-t border-gray-100">
+        <button class="text-sm text-gray-500 hover:text-black">Load more 500+</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // 儲存從資料庫抓回來的完整用戶資料
+    let allUsersData = [];
+
+    // 記錄目前的篩選狀態
+    let currentSearchTerm = '';
+    let currentStatusFilter = 'all';
+
+    // 1. 模擬去後端抓資料
+    async function fetchUserList() {
+      try {
+        setTimeout(() => {
+          // 模擬資料庫回傳的用戶陣列
+          allUsersData = [
+            { id: 'U001', name: '陳曉明', phone: '0912-345-678', date: '2026/01/05', email: 'xiaoming@gmail.com', status: 'applying' },
+            { id: 'U002', name: '林心如', phone: '0922-333-444', date: '2026/01/12', email: 'ruby_lin@yahoo.com.tw', status: 'active' },
+            { id: 'U003', name: '張建國', phone: '0933-111-222', date: '2025/11/20', email: 'jk_zhang@hotmail.com', status: 'suspended' },
+            { id: 'U004', name: '李阿惠', phone: '0988-777-666', date: '2026/02/18', email: 'ahui_lee@gmail.com', status: 'active' },
+            { id: 'U005', name: '王大寶', phone: '0955-444-555', date: '2026/02/26', email: 'dabao_w@gmail.com', status: 'applying' }
+          ];
+          // 抓到資料後，開始渲染
+          applyFilters();
+        }, 600);
+      } catch (error) {
+        document.getElementById('userTableBody').innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500">載入失敗</td></tr>';
+      }
+    }
+
+    // 2. 綜合篩選邏輯 (支援 狀態 + 搜尋)
+    function applyFilters() {
+      let filteredData = allUsersData;
+
+      // 第一關：狀態篩選
+      if (currentStatusFilter !== 'all') {
+        filteredData = filteredData.filter(user => user.status === currentStatusFilter);
+      }
+
+      // 第二關：關鍵字搜尋 (搜姓名、電話或 Email)
+      if (currentSearchTerm.trim() !== '') {
+        const keyword = currentSearchTerm.toLowerCase();
+        filteredData = filteredData.filter(user => 
+          user.name.toLowerCase().includes(keyword) ||
+          user.phone.includes(keyword) ||
+          user.email.toLowerCase().includes(keyword)
+        );
+      }
+
+      // 畫表格
+      renderTable(filteredData);
+    }
+
+    // 3. 畫出 HTML 表格
+    function renderTable(dataArray) {
+      const tbody = document.getElementById('userTableBody');
+      tbody.innerHTML = ''; 
+
+      if (dataArray.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500">找不到符合的用戶資料</td></tr>';
+        return;
+      }
+
+      dataArray.forEach(user => {
+        let statusConfig = { text: '', colorClass: '', buttonHtml: '' };
+        
+        // 判斷狀態，設定文字與顏色
+        // 判斷狀態，設定文字與顏色
+      if (user.status === 'applying') {
+        statusConfig.text = 'KOC申請中';
+        statusConfig.colorClass = 'text-orange-500';
+        statusConfig.buttonHtml = `<button onclick="window.location.href='user-detail.html?id=${user.id}'" class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm">查看詳情</button>`;
+      } else if (user.status === 'active') {
+        statusConfig.text = '已啟用';
+        statusConfig.colorClass = 'text-green-500';
+        statusConfig.buttonHtml = `<button onclick="window.location.href='user-detail.html?id=${user.id}'" class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm">查看詳情</button>`;
+      } else if (user.status === 'suspended') {
+        statusConfig.text = '已停權';
+        statusConfig.colorClass = 'text-red-500';
+        statusConfig.buttonHtml = `<button onclick="window.location.href='user-detail.html?id=${user.id}'" class="border border-gray-300 text-gray-700 px-4 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm">查看詳情</button>`;
+      }
+
+        const rowHtml = `
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="py-4 px-6 font-medium">${user.name}</td>
+            <td class="py-4 px-6 text-gray-500">${user.phone}</td>
+            <td class="py-4 px-6">${user.date}</td>
+            <td class="py-4 px-6 text-gray-500">${user.email}</td>
+            <td class="py-4 px-6 font-semibold ${statusConfig.colorClass}">${statusConfig.text}</td>
+            <td class="py-4 px-6 text-center">${statusConfig.buttonHtml}</td>
+          </tr>
+        `;
+        tbody.innerHTML += rowHtml;
+      });
+    }
+
+    // --- 監聽器綁定 ---
+
+    // 4. 監聽下拉選單 (狀態)
+    document.getElementById('statusFilter').addEventListener('change', function(event) {
+      currentStatusFilter = event.target.value;
+      applyFilters(); 
+    });
+
+    // 5. 監聽搜尋框 (關鍵字)
+    document.getElementById('searchInput').addEventListener('input', function(event) {
+      currentSearchTerm = event.target.value;
+      applyFilters(); 
+    });
+
+    // 啟動！
+    document.addEventListener('DOMContentLoaded', fetchUserList);
+  </script>
+
+</body>
+</html>
