@@ -14,4 +14,18 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# KOC layout
+
+<!-- 每次修改前端之前都要跑 -->
+# KOC layout 
+Frontend of KOC Project built with:
+- React (Vite)
+- TailwindCSS
+- Node.js v22
+
+Develop inside the Vite project (frontend/). Edit src/home.jsx (or any component files there); that’s the source before bundling.
+
+1. Install dependencies (first time only)
+npm install
+
+2. Start development server 
+npm run dev
