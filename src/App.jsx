@@ -7,7 +7,20 @@ import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
 import PendingEarningsPage from './koc/PendingEarningsPage';
+import WelcomePage from './koc/WelcomePage';
+import ShopPage from './koc/ShopPage';
+import SecurityPage from './koc/SecurityPage';
+import RegisterPage from './koc/RegisterPage';
+import ProfilePage from './koc/ProfilePage';
+import ProductDetailPage from './koc/ProductDetailPage';
+import OrderDetailPage from './koc/OrderDetailPage';
+import OrdersPage from './koc/OrdersPage';
+import LoginPage from './koc/LoginPage';
+import CheckoutPage from "./shop/CheckoutPage";
+import CartPage from "./shop/CartPage";
+import ApplyKOCPage from "./shop/ApplyKOCPage";
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp } from 'lucide-react';
+
 
 function Sidebar({ currentView, onNavigate }) {
   const menuItems = [
@@ -24,12 +37,11 @@ function Sidebar({ currentView, onNavigate }) {
     <aside className="w-64 bg-white rounded-3xl shadow-lg p-6 h-fit shrink-0">
       <nav className="space-y-4">
         {menuItems.map((item, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             onClick={() => onNavigate(item.view)}
-            className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all ${
-              currentView === item.view ? 'text-black font-bold bg-gray-50' : 'text-gray-400 hover:text-black'
-            }`}
+            className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all ${currentView === item.view ? 'text-black font-bold bg-gray-50' : 'text-gray-400 hover:text-black'
+              }`}
           >
             {item.icon} <span className="text-sm">{item.label}</span>
           </div>
@@ -40,38 +52,118 @@ function Sidebar({ currentView, onNavigate }) {
 }
 
 export default function App() {
-  const [view, setView] = useState('home');
+  const [view, setView] = useState('welcome');
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-slate-800">
-      <Header />
-      
-      {/* 🟢 全螢幕頁面判斷 */}
-      {view === 'review' && <ReviewPage onBack={() => setView('home')} />}
-      {view === 'analysis' && <AnalysisPage onBack={() => setView('home')} />}
-      {view === 'task_detail' && <TaskDetailPage onBack={() => setView('home')} />}
-
-      {/* 🟢 帶側邊欄頁面判斷 (移除那行錯誤的註解文字) */}
-      {(view === 'home' || view === 'earnings' || view === 'earnings_detail' || view === 'pending_detail') && (
-      <div className="flex p-8 max-w-7xl mx-auto">
-        <Sidebar 
-          currentView={['earnings_detail', 'pending_detail'].includes(view) ? 'earnings' : view} 
-          onNavigate={setView} 
+      {view !== 'welcome' && <Header />}
+      {view === 'welcome' && (
+        <WelcomePage
+          onSelectSeller={() => setView('home')}
+          onSelectKoc={() => setView('shop')}
         />
-        
-        <main className="flex-1 ml-12">
-          {view === 'home' && <HomePage onNavigate={setView} />}
-          {view === 'earnings' && (
-            <EarningsPage 
-              onDetail={() => setView('earnings_detail')} 
-              onTrack={() => setView('pending_detail')} // 🟢 增加追蹤點擊事件
+      )}
+      {view === 'shop' && <ShopPage />}
+
+      {view === 'register' && (
+        <RegisterPage
+          onGoLogin={() => setView('welcome')}   // 你之後有 login view 再換
+          onRegisterSuccess={() => setView('home')}
+        />
+      )}
+
+      {view === 'product_detail' && <ProductDetailPage />}
+
+      {view === 'login' && (
+        <LoginPage
+          onLoginSuccess={() => setView('home')}
+          onGoRegister={() => setView('register')}
+        />
+      )}
+
+      {view === "checkout" && (
+        <CheckoutPage
+          onPaid={() => setView("orders")} // 或 setView("orderSuccess")
+        />
+      )}
+
+      {view === "cart" && (
+        <CartPage
+          onContinueShopping={() => setView("home")}
+          onCheckout={() => setView("checkout")}
+        />
+      )}
+
+      {view === "applyKoc" && (
+        <ApplyKOCPage
+          onSubmit={(payload) => {
+            console.log("KOC 신청 payload:", payload);
+            // 你可以在這裡呼叫 API
+            // await api.applyKoc(payload)
+            // 成功後導回 profile / 顯示審核狀態
+            setView("profile");
+          }}
+        />
+      )}
+
+      {[
+        'home',
+        'earnings',
+        'earnings_detail',
+        'pending_detail',
+        'profile',
+        'security',
+        'coupons',
+        'points',
+        'orders',
+      ].includes(view) && (
+          <div className="flex p-8 max-w-7xl mx-auto">
+            <Sidebar
+              currentView={['earnings_detail', 'pending_detail'].includes(view) ? 'earnings' : view}
+              onNavigate={setView}
             />
-          )}
-          {view === 'earnings_detail' && <EarningsDetailPage onBack={() => setView('earnings')} />}
-          {view === 'pending_detail' && <PendingEarningsPage onBack={() => setView('earnings')} />}
-        </main>
-      </div>
-    )}
+
+            <main className="flex-1 ml-12">
+              {view === 'home' && <HomePage onNavigate={setView} />}
+              {view === 'profile' && <ProfilePage />}
+              {view === 'security' && <SecurityPage />}
+              {view === 'order_detail' && <OrderDetailPage onBack={() => setView('orders')} />}
+              {view === 'earnings' && (
+                <EarningsPage
+                  onDetail={() => setView('earnings_detail')}
+                  onTrack={() => setView('pending_detail')}
+                />
+              )}
+              {view === 'earnings_detail' && <EarningsDetailPage onBack={() => setView('earnings')} />}
+              {view === 'pending_detail' && <PendingEarningsPage onBack={() => setView('earnings')} />}
+
+              {/* 先留空頁也行，避免點了沒反應 */}
+              {view === 'coupons' && <div className="p-6 text-slate-500">Coupons page（待補）</div>}
+              import PointsPage from './koc/PointsPage';
+
+              // ...
+              {view === 'points' && (
+                <PointsPage
+                  points={30}
+                  expiringPoints={5}
+                  onRedeemDetail={() => setView('redeem')} // 你要不要做兌換頁都行
+                />
+              )}
+              {view === 'orders' && (
+                <OrdersPage
+                  onTrackOrder={(orderId) => {
+                    // 你想直接跳到訂單細節頁的 view
+                    // 也可以把 orderId 存 state（例如 selectedOrderId）
+                    setView('order_detail');
+                  }}
+                  onOpenOrderDetail={(orderId) => {
+                    setView('order_detail');
+                  }}
+                />
+              )}
+            </main>
+          </div>
+        )}
     </div>
   );
 }
