@@ -1,26 +1,29 @@
 import React, { useState } from 'react';
+
 import Header from './koc/Header';
 import HomePage from './koc/HomePage';
-import ReviewPage from './shopping/Pages/ReviewPage';
 import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
 import PendingEarningsPage from './koc/PendingEarningsPage';
-import WelcomePage from './koc/WelcomePage';
-import ShopPage from './koc/ShopPage';
-import SecurityPage from './koc/SecurityPage';
-import RegisterPage from './koc/RegisterPage';
-import ProfilePage from './koc/ProfilePage';
+import ApplyKOCPage from './koc/ApplyKOCPage';
 import ProductDetailPage from './koc/ProductDetailPage';
-import OrderDetailPage from './shopping/Pages/OrderDetailPage';
-import OrdersPage from './shopping/Pages/OrdersPage';
-import LoginPage from './authentication/Pages/LoginPage';
-import CheckoutPage from "./shop/CheckoutPage";
-import CartPage from "./shop/CartPage";
-import ApplyKOCPage from "./shop/ApplyKOCPage";
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp } from 'lucide-react';
 
+import ReviewPage from './shopping/Pages/ReviewPage';
+import WelcomePage from './shopping/Pages/WelcomePage';
+import ShopPage from './shopping/Pages/ShopPage';
+import CartPage from './shopping/Pages/CartPage';
+import CheckoutPage from './shopping/Pages/CheckoutPage';
+import OrdersPage from './shopping/Pages/OrdersPage';
+import OrderDetailPage from './shopping/Pages/OrderDetailPage';
+
+import LoginPage from './authentication/Pages/LoginPage';
+import RegisterPage from './authentication/Pages/RegisterPage';
+import ProfilePage from './authentication/Pages/ProfilePage';
+import SecurityPage from './authentication/Pages/SecurityPage';
+
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp } from 'lucide-react';
 
 function Sidebar({ currentView, onNavigate }) {
   const menuItems = [
