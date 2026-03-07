@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* 確保背景色與字體預設正確 */
+body {
+  margin: 0;
+  background-color: #f9fafb; /* gray-50 */
+  font-family: sans-serif;
+}

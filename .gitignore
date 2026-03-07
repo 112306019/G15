@@ -1,0 +1,15 @@
+# 絕對不能傳上去的套件資料夾
+node_modules/
+.vite/
+
+# 編譯產生的成品
+dist/
+build/
+
+# 本地環境變數
+.env
+.env.local
+
+# 系統產生的雜物
+.DS_Store
+Thumbs.db
