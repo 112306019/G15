@@ -1,105 +1,96 @@
 import React, { useState, useEffect } from 'react';
 
-export default function FinanceManagement() {
+export default function FinanceManagement({ setCurrentPage, setSelectedFinance }) {
   const [finances, setFinances] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
+  // 模擬金流請款資料
   useEffect(() => {
     setTimeout(() => {
       setFinances([
-        { id: 'TX260228001', date: '2026/02/28 10:15', target: '極速科技公司', task: '春季彩妝新品體驗', type: 'income', amount: 15000, status: 'completed' },
-        { id: 'TX260228002', date: '2026/02/28 11:30', target: '王美美', task: '春季彩妝新品體驗', type: 'payout', amount: 3000, status: 'pending' },
-        { id: 'TX260227005', date: '2026/02/27 15:00', target: '吃貨阿翔', task: '信義區新開幕拉麵', type: 'payout', amount: 1500, status: 'pending' },
-        { id: 'TX260225010', date: '2026/02/25 09:00', target: '美味餐飲企業', task: '信義區新開幕拉麵', type: 'income', amount: 5000, status: 'completed' }
+        { id: 'F260301', kocName: '林心如', taskName: '春季粉底液 IG 推廣', amount: 8000, date: '2026/03/05', bank: '國泰世華 (013)', account: '****-****-1234', status: 'pending' },
+        { id: 'F260302', kocName: '張偉', taskName: '美食探店打卡', amount: 3500, date: '2026/03/07', bank: '中國信託 (822)', account: '****-****-5678', status: 'pending' },
+        { id: 'F260215', kocName: '李小美', taskName: '面膜開箱短影音', amount: 12000, date: '2026/02/28', bank: '玉山銀行 (808)', account: '****-****-9012', status: 'completed' },
       ]);
       setIsLoading(false);
     }, 500);
   }, []);
 
-  const filteredFinances = finances.filter(tx => {
-    const matchType = typeFilter === 'all' || tx.type === typeFilter;
-    const matchStatus = statusFilter === 'all' || tx.status === statusFilter;
-    const matchSearch = tx.id.toLowerCase().includes(searchTerm.toLowerCase()) || tx.target.includes(searchTerm);
-    return matchType && matchStatus && matchSearch;
-  });
+  const filteredFinances = finances.filter(f => statusFilter === 'all' || f.status === statusFilter);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold">金流管理</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm">
-          <h3 className="text-gray-500 text-sm mb-2">本月平台入帳</h3>
-          <p className="text-3xl font-semibold text-green-600 mb-2">$125,000</p>
-        </div>
-        <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm border-l-4 border-l-orange-500">
-          <h3 className="text-gray-500 text-sm mb-2">待撥款總額</h3>
-          <p className="text-3xl font-semibold text-orange-500 mb-2">$45,000</p>
-        </div>
-        <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm">
-          <h3 className="text-gray-500 text-sm mb-2">本月已撥款</h3>
-          <p className="text-3xl font-semibold text-gray-800 mb-2">$32,000</p>
-        </div>
-      </div>
-
+      <h1 className="text-3xl font-bold text-gray-800">金流與撥款管理</h1>
+      
       <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-gray-200 border-b-0">
-        <div className="relative w-80">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">🔍</span>
-          <input type="text" placeholder="搜尋交易單號、對象名稱" className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-            value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <div className="flex gap-4">
+          <select 
+            className="border border-gray-300 px-4 py-2 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-500" 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">所有提款申請</option>
+            <option value="pending">待撥款 (審核中)</option>
+            <option value="completed">已撥款完成</option>
+          </select>
         </div>
-        <div className="flex space-x-3">
-          <select className="border border-gray-300 px-4 py-2 rounded-lg text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="all">所有類型</option>
-            <option value="income">入帳 (廠商付款)</option>
-            <option value="payout">出帳 (KOC撥款)</option>
-          </select>
-          <select className="border border-gray-300 px-4 py-2 rounded-lg text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">所有狀態</option>
-            <option value="pending">待處理/待撥款</option>
-            <option value="completed">已完成</option>
-          </select>
+        <div className="text-sm text-gray-500">
+          待處理總金額：<span className="text-red-500 font-bold text-lg">$11,500</span>
         </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+          <thead className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500 whitespace-nowrap">
             <tr>
-              <th className="py-4 px-6 font-medium">單號 / 時間</th>
-              <th className="py-4 px-6 font-medium">交易對象</th>
-              <th className="py-4 px-6 font-medium">類型</th>
-              <th className="py-4 px-6 font-medium">金額</th>
-              <th className="py-4 px-6 font-medium">狀態</th>
-              <th className="py-4 px-6 font-medium text-center">操作</th>
+              <th className="py-4 px-6 font-medium align-middle">申請單號 / 日期</th>
+              <th className="py-4 px-6 font-medium align-middle">KOC / 任務名稱</th>
+              <th className="py-4 px-6 font-medium align-middle">收款銀行</th>
+              <th className="py-4 px-6 font-medium align-middle text-right">請款金額</th>
+              <th className="py-4 px-6 font-medium align-middle text-center">狀態</th>
+              <th className="py-4 px-6 font-medium align-middle text-center">操作</th>
             </tr>
           </thead>
           <tbody className="text-sm divide-y divide-gray-100">
-            {isLoading ? <tr><td colSpan="6" className="py-8 text-center text-gray-500">載入中...</td></tr> :
-              filteredFinances.map(tx => (
-                <tr key={tx.id} className="hover:bg-gray-50">
-                  <td className="py-4 px-6"><p className="font-medium">{tx.id}</p><p className="text-xs text-gray-400">{tx.date}</p></td>
-                  <td className="py-4 px-6 font-medium">{tx.target}</td>
-                  <td className="py-4 px-6">
-                    {tx.type === 'income' ? <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">入帳</span> : <span className="text-purple-600 bg-purple-50 px-2 py-1 rounded text-xs">出帳</span>}
+            {isLoading ? (
+              <tr><td colSpan="6" className="py-8 text-center text-gray-500">載入中...</td></tr>
+            ) : (
+              filteredFinances.map(f => (
+                <tr key={f.id} className="hover:bg-blue-50/50 transition-colors">
+                  <td className="py-4 px-6 align-middle">
+                    <p className="font-bold text-gray-700">{f.id}</p>
+                    <p className="text-xs text-gray-400">{f.date}</p>
                   </td>
-                  <td className={`py-4 px-6 font-medium ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
-                    {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                  <td className="py-4 px-6 align-middle">
+                    <p className="font-bold">{f.kocName}</p>
+                    <p className="text-xs text-blue-500">{f.taskName}</p>
                   </td>
-                  <td className={`py-4 px-6 font-semibold ${tx.status === 'pending' ? 'text-orange-500' : 'text-gray-500'}`}>
-                    {tx.status === 'pending' ? '待處理' : '已完成'}
+                  <td className="py-4 px-6 align-middle text-gray-600">{f.bank}</td>
+                  <td className="py-4 px-6 align-middle text-right font-bold text-lg text-gray-800">
+                    ${f.amount.toLocaleString()}
                   </td>
-                  <td className="py-4 px-6 text-center">
-                    <button className={`${tx.status === 'pending' && tx.type === 'payout' ? 'bg-black text-white' : 'border border-gray-300 text-gray-700'} px-4 py-1.5 rounded-md text-sm hover:bg-gray-800 hover:text-white transition-colors`}>
-                      {tx.status === 'pending' && tx.type === 'payout' ? '執行撥款' : '查看明細'}
+                  <td className="py-4 px-6 align-middle text-center">
+                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
+                      f.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {f.status === 'completed' ? '已撥款' : '待撥款'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-6 align-middle text-center">
+                    <button 
+                      onClick={() => {
+                        setSelectedFinance(f);
+                        setCurrentPage('financeDetail');
+                      }} 
+                      className="border border-blue-200 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-600 hover:text-white text-xs font-bold transition-colors"
+                    >
+                      {f.status === 'pending' ? '審核與撥款' : '查看明細'}
                     </button>
                   </td>
                 </tr>
               ))
-            }
+            )}
           </tbody>
         </table>
       </div>
