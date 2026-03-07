@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function TaskDetail({ setCurrentPage, task }) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -23,36 +24,22 @@ export default function TaskDetail({ setCurrentPage, task }) {
   return (
     <div className="relative p-8 max-w-6xl mx-auto space-y-6">
       
-      {/* 🌟 強制下架確認彈窗 */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl transform transition-all">
-            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-2xl mb-4 mx-auto">
-              🚨
-            </div>
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-2xl mb-4 mx-auto">🚨</div>
             <h3 className="text-xl font-bold text-gray-800 text-center mb-2">確認強制下架此任務？</h3>
             <p className="text-gray-600 text-center text-sm mb-6">
               強制下架後，該任務將立即對所有 KOC 隱藏，且無法恢復。<br/>系統將記錄此違規操作並通知廠商。
             </p>
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-bold transition-colors"
-              >
-                取消
-              </button>
-              <button 
-                onClick={handleForceClose}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors"
-              >
-                確認下架
-              </button>
+              <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-bold transition-colors">取消</button>
+              <button onClick={handleForceClose} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors">確認下架</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 頂部返回按鈕與標題區塊 */}
       <button onClick={() => setCurrentPage('task')} className="text-gray-500 hover:text-black mb-4 flex items-center">⬅️ 返回任務列表</button>
       
       <div className="flex items-center justify-between mb-4">
@@ -60,20 +47,15 @@ export default function TaskDetail({ setCurrentPage, task }) {
           <h2 className="text-3xl font-bold text-gray-800">{task.title}</h2>
           <p className="text-indigo-500 font-medium mt-1">發布廠商：{task.vendor}</p>
         </div>
-        <span className={`px-4 py-2 rounded-full text-sm font-bold shadow-sm ${
-          task.status === 'recruiting' ? 'bg-blue-100 text-blue-600' : 
-          task.status === 'ongoing' ? 'bg-orange-100 text-orange-600' : 
-          task.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-        }`}>
+        {/* 🌟 替換成 StatusBadge */}
+        <StatusBadge type={task.status === 'recruiting' ? 'info' : task.status === 'ongoing' ? 'warning' : task.status === 'completed' ? 'success' : 'danger'}>
           {task.status === 'recruiting' ? '📣 招募中' : task.status === 'ongoing' ? '🏃 進行中' : task.status === 'completed' ? '✅ 已結案' : '🚫 已取消 / 下架'}
-        </span>
+        </StatusBadge>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* 左側：任務詳細設定 */}
         <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-6">
           <h3 className="font-bold text-lg border-l-4 border-indigo-500 pl-3">任務設定與要求</h3>
-          
           <div className="grid grid-cols-2 gap-6">
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
               <p className="text-xs text-gray-500 font-bold mb-1">推廣平台</p>
@@ -97,41 +79,19 @@ export default function TaskDetail({ setCurrentPage, task }) {
           </div>
         </div>
 
-        {/* 右側：招募數據與管理員操作 */}
         <div className="col-span-1 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 flex flex-col justify-between">
           <div className="space-y-6">
             <h3 className="font-bold text-lg border-l-4 border-indigo-500 pl-3">招募與執行數據</h3>
-            
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-bold text-gray-600">目標招募人數</span>
-                  <span className="font-bold text-gray-800">{task.quota} 人</span>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-bold text-gray-600">已報名 KOC</span>
-                  <span className="font-bold text-indigo-600">{task.applicants} 人</span>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-bold text-gray-600">已完成並撥款</span>
-                  <span className="font-bold text-green-600">{task.status === 'completed' ? task.quota : '0'} 人</span>
-                </div>
-              </div>
+              <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-600">目標招募人數</span><span className="font-bold text-gray-800">{task.quota} 人</span></div>
+              <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-600">已報名 KOC</span><span className="font-bold text-indigo-600">{task.applicants} 人</span></div>
+              <div className="flex justify-between text-sm mb-1"><span className="font-bold text-gray-600">已完成並撥款</span><span className="font-bold text-green-600">{task.status === 'completed' ? task.quota : '0'} 人</span></div>
             </div>
           </div>
-
-          {/* 管理員專屬操作區塊 (只有尚未結案/取消的任務才顯示) */}
           {(task.status === 'recruiting' || task.status === 'ongoing') && (
             <div className="mt-8 pt-6 border-t border-gray-100">
               <p className="text-xs text-gray-400 font-bold mb-3">平台管理員選項</p>
-              <button 
-                onClick={() => setShowConfirmModal(true)}
-                className="w-full bg-white border border-red-200 text-red-600 py-3 rounded-lg font-bold hover:bg-red-50 transition-colors flex justify-center items-center gap-2"
-              >
+              <button onClick={() => setShowConfirmModal(true)} className="w-full bg-white border border-red-200 text-red-600 py-3 rounded-lg font-bold hover:bg-red-50 transition-colors flex justify-center items-center gap-2">
                 🚨 強制下架此任務
               </button>
             </div>

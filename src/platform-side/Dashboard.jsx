@@ -1,4 +1,5 @@
 import React from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入我們做好的標籤
 
 // 🌟 關鍵 1：在這裡的括號加上 { setCurrentPage }，接住客廳傳來的遙控器
 export default function Dashboard({ setCurrentPage }) {
@@ -87,7 +88,10 @@ export default function Dashboard({ setCurrentPage }) {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-bold text-gray-800">最新待辦審核</h2>
-            <span className="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-1 rounded-full">3 筆急件</span>
+            
+            {/* 🌟 完美替換：把你原本手刻的橘色 span，換成共用元件 StatusBadge */}
+            <StatusBadge type="warning">3 筆急件</StatusBadge>
+            
           </div>
           
           <div className="space-y-3 flex-1">

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function FinanceManagement({ setCurrentPage, setSelectedFinance }) {
   const [finances, setFinances] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // 預設所有
   const [isLoading, setIsLoading] = useState(true);
 
-  // 模擬金流請款資料
   useEffect(() => {
     setTimeout(() => {
       setFinances([
@@ -71,18 +71,14 @@ export default function FinanceManagement({ setCurrentPage, setSelectedFinance }
                     ${f.amount.toLocaleString()}
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
-                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
-                      f.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                    }`}>
+                    {/* 🌟 替換成 StatusBadge */}
+                    <StatusBadge type={f.status === 'completed' ? 'success' : 'warning'}>
                       {f.status === 'completed' ? '已撥款' : '待撥款'}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
                     <button 
-                      onClick={() => {
-                        setSelectedFinance(f);
-                        setCurrentPage('financeDetail');
-                      }} 
+                      onClick={() => { setSelectedFinance(f); setCurrentPage('financeDetail'); }} 
                       className="border border-blue-200 text-blue-700 px-3 py-1.5 rounded-md hover:bg-blue-600 hover:text-white text-xs font-bold transition-colors"
                     >
                       {f.status === 'pending' ? '審核與撥款' : '查看明細'}

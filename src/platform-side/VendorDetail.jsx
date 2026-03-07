@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function VendorDetail({ setCurrentPage, vendor }) {
-  // 控制確認彈窗的開關與當前準備執行的動作 (核准、退回、停權等)
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [actionType, setActionType] = useState(''); 
 
@@ -14,13 +14,11 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
     );
   }
 
-  // 點擊操作按鈕時，打開彈窗並記錄動作類型
   const handleActionClick = (type) => {
     setActionType(type);
     setShowConfirmModal(true);
   };
 
-  // 模擬執行動作
   const executeAction = () => {
     setShowConfirmModal(false);
     setTimeout(() => {
@@ -31,14 +29,13 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
       if (actionType === 'reactivate') message = `✅ 已恢復【${vendor.brandName}】的帳號權限。`;
       
       alert(message);
-      setCurrentPage('vendor'); // 執行完畢後自動跳回列表
+      setCurrentPage('vendor');
     }, 500);
   };
 
   return (
     <div className="relative p-8 max-w-5xl mx-auto space-y-6">
       
-      {/* 🌟 動態操作確認彈窗 */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl transform transition-all">
@@ -57,18 +54,10 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
               即將對 <span className="font-bold text-black">{vendor.brandName}</span> 執行此操作，系統將會同步發送 Email 通知該廠商聯絡人。
             </p>
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-bold transition-colors"
-              >
-                取消
-              </button>
-              <button 
-                onClick={executeAction}
-                className={`flex-1 px-4 py-2.5 text-white rounded-lg font-bold transition-colors ${
-                  actionType === 'suspend' || actionType === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
+              <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg font-bold transition-colors">取消</button>
+              <button onClick={executeAction} className={`flex-1 px-4 py-2.5 text-white rounded-lg font-bold transition-colors ${
+                actionType === 'suspend' || actionType === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}>
                 確認執行
               </button>
             </div>
@@ -76,12 +65,10 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
         </div>
       )}
 
-      {/* 頂部返回按鈕與標題區塊 */}
       <button onClick={() => setCurrentPage('vendor')} className="text-gray-500 hover:text-black mb-4 flex items-center">⬅️ 返回廠商列表</button>
       
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
         
-        {/* 廠商頭像與狀態標籤 */}
         <div className="flex items-center justify-between mb-8 pb-8 border-b border-gray-100">
           <div className="flex items-center space-x-6">
             <div className="w-24 h-24 bg-blue-900 rounded-xl flex items-center justify-center text-4xl text-white font-bold shadow-inner">
@@ -91,17 +78,14 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
               <h2 className="text-3xl font-bold text-gray-800">{vendor.brandName}</h2>
               <p className="text-gray-500 font-medium mt-1">廠商 ID: {vendor.id}</p>
               <div className="mt-3">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  vendor.status === 'active' ? 'bg-green-100 text-green-600' : 
-                  vendor.status === 'applying' ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'
-                }`}>
+                {/* 🌟 替換成 StatusBadge */}
+                <StatusBadge type={vendor.status === 'active' ? 'success' : vendor.status === 'applying' ? 'warning' : 'danger'}>
                   {vendor.status === 'active' ? '✅ 已啟用' : vendor.status === 'applying' ? '⏳ 入駐審核中' : '🚫 已停權'}
-                </span>
+                </StatusBadge>
               </div>
             </div>
           </div>
 
-          {/* 右上角：根據狀態顯示不同的操作按鈕 */}
           <div className="flex flex-col gap-2">
             {vendor.status === 'applying' && (
               <>
@@ -118,7 +102,6 @@ export default function VendorDetail({ setCurrentPage, vendor }) {
           </div>
         </div>
 
-        {/* 下方資訊網格 */}
         <div className="grid grid-cols-2 gap-8">
           <div className="space-y-4">
             <h3 className="font-bold text-lg border-l-4 border-blue-600 pl-3">聯絡資訊</h3>

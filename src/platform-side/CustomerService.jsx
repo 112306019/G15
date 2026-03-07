@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入共用標籤
 
 // 模擬資料庫
 const initialContacts = [
@@ -72,6 +73,7 @@ export default function CustomerService() {
                     </div>
                     <div className="flex justify-between items-center">
                       <p className="text-xs text-gray-500 truncate pr-2">{lastMsg}</p>
+                      {/* 這裡的未讀紅點保留你原本的設計，不套用 StatusBadge，避免過大 */}
                       {contact.unread > 0 && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{contact.unread}</span>}
                     </div>
                   </div>
@@ -95,7 +97,16 @@ export default function CustomerService() {
             <div className="p-4 border-b border-gray-100 shrink-0 flex justify-between items-center bg-white rounded-t-xl z-0">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">{activeContact.avatar}</div>
-                <div><h3 className="font-bold text-gray-800">{activeContact.name}</h3><p className="text-xs text-blue-500 font-medium">{activeContact.role}</p></div>
+                <div>
+                  <h3 className="font-bold text-gray-800 mb-0.5">{activeContact.name}</h3>
+                  {/* 🌟 完美替換：根據 role 顯示紫色 KOC 或藍色廠商標籤，並縮小 Padding */}
+                  <StatusBadge 
+                    type={activeContact.role === 'KOC' ? 'purple' : 'info'} 
+                    className="!px-2 !py-0.5 !text-[10px]"
+                  >
+                    {activeContact.role}
+                  </StatusBadge>
+                </div>
               </div>
               <button className="text-sm text-gray-500 border border-gray-200 px-3 py-1 rounded hover:bg-gray-50">結案</button>
             </div>

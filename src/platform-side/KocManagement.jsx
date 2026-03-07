@@ -1,49 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
-// 🌟 接收 setSelectedKoc 和 setCurrentPage
 export default function KocManagement({ setCurrentPage, setSelectedKoc }) {
   const [kocs, setKocs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  // 模擬從後端抓取 KOC 資料
   useEffect(() => {
     setTimeout(() => {
       setKocs([
-        { 
-          id: 'K001', 
-          name: '林心如', 
-          igHandle: 'ruby_lin_daily', 
-          followers: '5.2W', 
-          engagement: '4.8%', 
-          completedTasks: 15,
-          status: 'active' 
-        },
-        { 
-          id: 'K002', 
-          name: '張偉', 
-          igHandle: 'wei_foodie', 
-          followers: '1.2W', 
-          engagement: '6.5%', 
-          completedTasks: 3,
-          status: 'active' 
-        },
-        { 
-          id: 'K003', 
-          name: '李小美', 
-          igHandle: 'mei_makeup', 
-          followers: '8.9W', 
-          engagement: '2.1%', 
-          completedTasks: 42,
-          status: 'suspended' 
-        }
+        { id: 'K001', name: '林心如', igHandle: 'ruby_lin_daily', followers: '5.2W', engagement: '4.8%', completedTasks: 15, status: 'active' },
+        { id: 'K002', name: '張偉', igHandle: 'wei_foodie', followers: '1.2W', engagement: '6.5%', completedTasks: 3, status: 'active' },
+        { id: 'K003', name: '李小美', igHandle: 'mei_makeup', followers: '8.9W', engagement: '2.1%', completedTasks: 42, status: 'suspended' }
       ]);
       setIsLoading(false);
     }, 500);
   }, []);
 
-  // 搜尋與狀態過濾邏輯
   const filteredKocs = kocs.filter(koc => {
     const matchStatus = statusFilter === 'all' || koc.status === statusFilter;
     const matchSearch = koc.name.includes(searchTerm) || koc.igHandle.includes(searchTerm);
@@ -54,19 +28,15 @@ export default function KocManagement({ setCurrentPage, setSelectedKoc }) {
     <div className="p-8 max-w-7xl mx-auto space-y-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold text-gray-800">KOC 管理</h1>
       
-      {/* 頂部搜尋與過濾區 */}
       <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-gray-200 border-b-0">
         <input 
-          type="text" 
-          placeholder="搜尋姓名、IG 帳號..." 
+          type="text" placeholder="搜尋姓名、IG 帳號..." 
           className="pl-4 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm w-80 focus:outline-none focus:border-purple-500"
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
+          value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
         />
         <select 
           className="border border-gray-300 px-4 py-2 rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500" 
-          value={statusFilter} 
-          onChange={(e) => setStatusFilter(e.target.value)}
+          value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="all">所有狀態</option>
           <option value="active">接案中</option>
@@ -74,7 +44,6 @@ export default function KocManagement({ setCurrentPage, setSelectedKoc }) {
         </select>
       </div>
 
-      {/* 列表區塊 */}
       <div className="bg-white border border-gray-200 rounded-b-xl overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500 whitespace-nowrap">
@@ -101,19 +70,14 @@ export default function KocManagement({ setCurrentPage, setSelectedKoc }) {
                   <td className="py-4 px-6 align-middle text-center font-medium text-gray-600">{koc.engagement}</td>
                   <td className="py-4 px-6 align-middle text-center font-medium text-gray-600">{koc.completedTasks} 件</td>
                   <td className="py-4 px-6 align-middle text-center">
-                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
-                      koc.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
+                    {/* 🌟 替換成 StatusBadge */}
+                    <StatusBadge type={koc.status === 'active' ? 'success' : 'danger'}>
                       {koc.status === 'active' ? '接案中' : '已停權'}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
-                    {/* 🌟 關鍵點擊事件：先存資料，再跳轉 */}
                     <button 
-                      onClick={() => {
-                        setSelectedKoc(koc);
-                        setCurrentPage('kocDetail');
-                      }} 
+                      onClick={() => { setSelectedKoc(koc); setCurrentPage('kocDetail'); }} 
                       className="border border-purple-200 text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-600 hover:text-white text-xs font-bold transition-colors"
                     >
                       查看詳情

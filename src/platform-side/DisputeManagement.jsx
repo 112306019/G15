@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function DisputeManagement({ setCurrentPage, setSelectedDispute }) {
   const [disputes, setDisputes] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // 預設所有案件
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -62,19 +63,14 @@ export default function DisputeManagement({ setCurrentPage, setSelectedDispute }
                     <p className="text-gray-600">被申訴：{d.respondent}</p>
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
-                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
-                      d.status === 'resolved' ? 'bg-gray-100 text-gray-600' : 
-                      d.status === 'processing' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'
-                    }`}>
+                    {/* 🌟 替換成 StatusBadge */}
+                    <StatusBadge type={d.status === 'resolved' ? 'default' : d.status === 'processing' ? 'danger' : 'warning'}>
                       {d.status === 'resolved' ? '已結案' : d.status === 'processing' ? '處理中' : '待處理'}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
                     <button 
-                      onClick={() => {
-                        setSelectedDispute(d);
-                        setCurrentPage('disputeDetail');
-                      }} 
+                      onClick={() => { setSelectedDispute(d); setCurrentPage('disputeDetail'); }} 
                       className="border border-red-200 text-red-700 px-3 py-1.5 rounded-md hover:bg-red-600 hover:text-white text-xs font-bold transition-colors"
                     >
                       介入與詳情

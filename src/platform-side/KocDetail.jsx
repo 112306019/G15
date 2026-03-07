@@ -1,4 +1,5 @@
 import React from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function KocDetail({ setCurrentPage, koc }) {
   if (!koc) {
@@ -23,10 +24,11 @@ export default function KocDetail({ setCurrentPage, koc }) {
             <h2 className="text-3xl font-bold text-gray-800">{koc.name}</h2>
             <p className="text-purple-500 font-medium mt-1">@ {koc.igHandle || '未綁定 IG'}</p>
             <div className="mt-3 flex gap-2">
-              <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-bold">已認證 KOC</span>
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${koc.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+              {/* 🌟 替換成 StatusBadge */}
+              <StatusBadge type="purple">已認證 KOC</StatusBadge>
+              <StatusBadge type={koc.status === 'active' ? 'success' : 'danger'}>
                 {koc.status === 'active' ? '接案中' : '已停權'}
-              </span>
+              </StatusBadge>
             </div>
           </div>
         </div>

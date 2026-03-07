@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+// 🌟 1. 引入共用標籤
+import StatusBadge from '../components/StatusBadge';
 
 export default function VendorManagement({ setCurrentPage, setSelectedVendor }) {
   const [vendors, setVendors] = useState([]);
@@ -18,10 +20,9 @@ export default function VendorManagement({ setCurrentPage, setSelectedVendor }) 
     }, 500);
   }, []);
 
-  // 🌟 快速搜尋與狀態過濾邏輯
+  // 快速搜尋與狀態過濾邏輯
   const filteredVendors = vendors.filter(v => {
     const matchStatus = statusFilter === 'all' || v.status === statusFilter;
-    // 支援搜尋品牌名、聯絡人姓名、電話
     const matchSearch = v.brandName.includes(searchTerm) || v.contact.includes(searchTerm) || v.phone.includes(searchTerm);
     return matchStatus && matchSearch;
   });
@@ -76,12 +77,14 @@ export default function VendorManagement({ setCurrentPage, setSelectedVendor }) 
                   </td>
                   <td className="py-4 px-6 align-middle text-center font-medium text-gray-600">{v.date}</td>
                   <td className="py-4 px-6 align-middle text-center">
-                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
-                      v.status === 'active' ? 'bg-green-100 text-green-600' : 
-                      v.status === 'applying' ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'
-                    }`}>
+                    
+                    {/* 🌟 2. 替換成 StatusBadge */}
+                    <StatusBadge 
+                      type={v.status === 'active' ? 'success' : v.status === 'applying' ? 'warning' : 'danger'}
+                    >
                       {v.status === 'active' ? '已啟用' : v.status === 'applying' ? '審核中' : '已停權'}
-                    </span>
+                    </StatusBadge>
+
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
                     <button 

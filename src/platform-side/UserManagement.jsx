@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 1. 引入剛剛做好的共用標籤
 
 export default function UserManagement({ setCurrentPage, setSelectedUser }) {
   const [users, setUsers] = useState([]);
@@ -6,12 +7,11 @@ export default function UserManagement({ setCurrentPage, setSelectedUser }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  // 模擬從後端抓取用戶資料 (包含 isKoc 標記)
+  // 模擬從後端抓取用戶資料
   useEffect(() => {
     setTimeout(() => {
       setUsers([
         { id: 'U001', name: '陳曉明', phone: '0912-345-678', date: '2026/01/05', email: 'xiaoming@gmail.com', status: 'applying', isKoc: false },
-        // 🌟 林心如是 KOC，所以 isKoc 為 true
         { id: 'U002', name: '林心如', phone: '0922-333-444', date: '2026/01/12', email: 'ruby_lin@yahoo.com.tw', status: 'active', isKoc: true },
         { id: 'U003', name: '張建國', phone: '0933-111-222', date: '2025/11/20', email: 'jk_zhang@hotmail.com', status: 'suspended', isKoc: false }
       ]);
@@ -19,7 +19,7 @@ export default function UserManagement({ setCurrentPage, setSelectedUser }) {
     }, 500);
   }, []);
 
-  // 🌟 升級版搜尋邏輯：同時比對姓名、Email 與 電話
+  // 搜尋邏輯：比對姓名、Email 與電話
   const filteredUsers = users.filter(user => {
     const matchStatus = statusFilter === 'all' || user.status === statusFilter;
     const matchSearch = user.name.includes(searchTerm) || 
@@ -73,9 +73,10 @@ export default function UserManagement({ setCurrentPage, setSelectedUser }) {
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 px-6 align-middle font-bold flex items-center gap-2">
                     {u.name}
-                    {/* 🌟 判斷如果他同時也是 KOC，就顯示紫色小徽章 */}
+                    
+                    {/* 🌟 2. 用 StatusBadge 取代原本落落長的 Tailwind 寫法 */}
                     {u.isKoc && (
-                      <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-xs">KOC</span>
+                      <StatusBadge type="purple" className="px-2 py-0.5">KOC</StatusBadge>
                     )}
                   </td>
                   <td className="py-4 px-6 align-middle">
@@ -84,15 +85,16 @@ export default function UserManagement({ setCurrentPage, setSelectedUser }) {
                   </td>
                   <td className="py-4 px-6 align-middle text-center">{u.date}</td>
                   <td className="py-4 px-6 align-middle text-center">
-                    <span className={`px-3 py-1.5 rounded-full font-bold text-xs whitespace-nowrap inline-block ${
-                      u.status === 'active' ? 'bg-green-100 text-green-600' : 
-                      u.status === 'applying' ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'
-                    }`}>
+                    
+                    {/* 🌟 3. 動態傳入 type 來決定顏色 */}
+                    <StatusBadge 
+                      type={u.status === 'active' ? 'success' : u.status === 'applying' ? 'warning' : 'danger'}
+                    >
                       {u.status === 'active' ? '已啟用' : u.status === 'applying' ? '申請中' : '已停權'}
-                    </span>
+                    </StatusBadge>
+                    
                   </td>
                   <td className="py-4 px-6 align-middle text-center">
-                    {/* 點擊時，同時記憶選中的用戶並切換到詳情頁 */}
                     <button 
                       onClick={() => {
                         setSelectedUser(u);

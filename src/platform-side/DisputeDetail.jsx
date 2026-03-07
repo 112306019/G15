@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
 
 export default function DisputeDetail({ setCurrentPage, dispute }) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -24,7 +25,6 @@ export default function DisputeDetail({ setCurrentPage, dispute }) {
   return (
     <div className="relative p-8 max-w-6xl mx-auto space-y-6">
       
-      {/* 結案確認彈出視窗 */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
@@ -45,28 +45,20 @@ export default function DisputeDetail({ setCurrentPage, dispute }) {
       
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-2xl font-bold text-gray-800">案件詳情：{dispute.id}</h2>
-        <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${
-          dispute.status === 'resolved' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-600'
-        }`}>
+        {/* 🌟 替換成 StatusBadge */}
+        <StatusBadge type={dispute.status === 'resolved' ? 'default' : 'danger'}>
           {dispute.status === 'resolved' ? '✅ 已結案' : '🚨 平台處理中'}
-        </span>
+        </StatusBadge>
       </div>
 
       <div className="grid grid-cols-5 gap-6">
-        {/* 左側：爭議內容與證據 */}
         <div className="col-span-3 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-6">
           <h3 className="font-bold text-lg border-l-4 border-red-500 pl-3">申訴內容</h3>
           
           <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-100">
-            <div>
-              <p className="text-xs text-red-500 font-bold mb-1">申訴方</p>
-              <p className="font-bold text-gray-800">{dispute.initiator}</p>
-            </div>
+            <div><p className="text-xs text-red-500 font-bold mb-1">申訴方</p><p className="font-bold text-gray-800">{dispute.initiator}</p></div>
             <div className="text-gray-400 font-bold text-xl">VS</div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500 font-bold mb-1">被申訴方</p>
-              <p className="font-bold text-gray-800">{dispute.respondent}</p>
-            </div>
+            <div className="text-right"><p className="text-xs text-gray-500 font-bold mb-1">被申訴方</p><p className="font-bold text-gray-800">{dispute.respondent}</p></div>
           </div>
 
           <div className="space-y-4 pt-2">
@@ -78,17 +70,9 @@ export default function DisputeDetail({ setCurrentPage, dispute }) {
               <p className="text-sm font-bold text-gray-700 mb-2">事件描述</p>
               <p className="text-gray-600 bg-gray-50 p-4 rounded-lg text-sm leading-relaxed">{dispute.description}</p>
             </div>
-            <div>
-              <p className="text-sm font-bold text-gray-700 mb-2">雙方對話紀錄 / 證據截圖</p>
-              <div className="flex gap-4">
-                <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center text-xs text-gray-500">圖片 1</div>
-                <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center text-xs text-gray-500">圖片 2</div>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* 右側：平台介入與裁決面板 */}
         <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-red-200 p-8 flex flex-col">
           <h3 className="font-bold text-lg border-l-4 border-black pl-3 mb-6">平台介入處理</h3>
           
@@ -124,10 +108,7 @@ export default function DisputeDetail({ setCurrentPage, dispute }) {
           </div>
 
           {dispute.status !== 'resolved' && (
-            <button 
-              onClick={() => setShowConfirmModal(true)}
-              className="w-full mt-6 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition-colors"
-            >
+            <button onClick={() => setShowConfirmModal(true)} className="w-full mt-6 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition-colors">
               發布裁決並結案
             </button>
           )}
