@@ -29,7 +29,7 @@ export function Sidebar() {
 
   return (
     <aside className={cn(
-      'sticky top-0 z-20 flex flex-col bg-ink h-screen transition-all duration-300 ease-in-out shrink-0',
+      'sticky top-0 z-30 flex flex-col bg-ink h-screen transition-all duration-300 ease-in-out shrink-0',
       collapsed ? 'w-16' : 'w-56',
     )}>
       {/* Logo */}
