@@ -1,7 +1,7 @@
 import React from 'react';
-import { Star, ShoppingCart, User } from 'lucide-react';
+import { Star, ShoppingCart, User, Store } from 'lucide-react';
 
-export default function Header() {
+export default function Header({onSwitchRole}) {
   return (
     <header className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center">
       <div className="flex items-center gap-8">
@@ -11,10 +11,10 @@ export default function Header() {
           <span className="font-bold tracking-widest text-gray-700 uppercase">Logo</span>
         </div>
         {/* 頁面標題與分隔線 */}
-        <div className="h-6 w-[1px] bg-gray-200"></div> 
+        <div className="h-6 w-[1px] bg-gray-200"></div>
         <span className="text-gray-500 font-medium">購物頁面</span>
       </div>
-      
+
       {/* 右側功能圖示 */}
       <div className="flex items-center gap-6">
         <div className="relative cursor-pointer">
@@ -23,6 +23,16 @@ export default function Header() {
         </div>
         <div className="cursor-pointer"><User size={24} className="text-gray-400" /></div>
       </div>
+      {/* 切換至廠商後台 */}
+      {onSwitchRole && (
+        <button
+          onClick={onSwitchRole}
+          className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-400 px-4 py-1.5 rounded-full transition-all"
+        >
+          <Store size={15} />
+          身分切換
+        </button>
+      )}
     </header>
   );
 }
