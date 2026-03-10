@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-// 🌟 引入剛剛做好的統一大排版
+// 🌟 引入統一大排版
 import Layout from './components/Layout';
 
 // 引入所有的分頁組件
