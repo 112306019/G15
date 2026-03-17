@@ -44,11 +44,10 @@ function Sidebar({ currentView, onNavigate }) {
           <div
             key={index}
             onClick={() => onNavigate(item.view)}
-            className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all ${
-              currentView === item.view
+            className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all ${currentView === item.view
                 ? 'text-black font-bold bg-gray-50'
                 : 'text-gray-400 hover:text-black'
-            }`}
+              }`}
           >
             {item.icon}
             <span className="text-sm">{item.label}</span>
@@ -109,7 +108,11 @@ export default function App() {
       )}
 
       {view === 'product_detail' && (
-        <ProductDetailPage />
+        <ProductDetailPage
+          onBack={() => setView('shop')}
+          onGoCart={() => setView('cart')}
+          onBuyNow={() => setView('checkout')}
+        />
       )}
 
       {view === 'cart' && (
@@ -149,7 +152,7 @@ export default function App() {
               <PointsPage
                 points={30}
                 expiringPoints={5}
-                onRedeemDetail={() => setView('redeem')}
+                onRedeemDetail={() => console.log('redeem page not ready')}
               />
             )}
 
