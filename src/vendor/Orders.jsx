@@ -3,8 +3,8 @@ import { orders } from './mock'
 import { Card, Badge } from './components/ui'
 import { formatCurrency, cn } from './lib/utils'
 
-const statusFilters = ['全部', 'paid', 'processing', 'refunded']
-const statusLabels = { 全部: '全部', paid: '已付款', processing: '處理中', refunded: '已退款' }
+const statusFilters = ['全部','paid','processing','refunded']
+const statusLabels  = { 全部:'全部', paid:'已付款', processing:'處理中', refunded:'已退款' }
 
 export default function Orders() {
   const [filter, setFilter] = useState('全部')
@@ -33,7 +33,7 @@ export default function Orders() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100">
-                {['訂單編號', 'KOC', '優惠碼', '商品', '金額', '日期', '狀態'].map(h => (
+                {['訂單編號','KOC','優惠碼','商品','金額','日期','狀態'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
@@ -44,7 +44,7 @@ export default function Orders() {
                   <td className="px-4 py-3 text-xs font-mono text-gray-400">{o.id}</td>
                   <td className="px-4 py-3 text-sm font-semibold text-slate-800">{o.kocName}</td>
                   <td className="px-4 py-3 text-xs font-mono text-amber-600 font-semibold">{o.code}</td>
-                  <td className="px-4 py-3 text-xs text-slate-700">{o.product}</td>
+                  <td className="px-4 py-3 text-xs text-slate-700">{o.productName}</td>
                   <td className="px-4 py-3 text-sm font-bold text-slate-800">{formatCurrency(o.amount)}</td>
                   <td className="px-4 py-3 text-xs text-gray-400">{o.date}</td>
                   <td className="px-4 py-3"><Badge status={o.status} /></td>

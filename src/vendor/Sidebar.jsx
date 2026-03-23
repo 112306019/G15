@@ -5,7 +5,7 @@ import {
   BarChart3, FileSearch, MessageCircle, Settings, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { cn } from './lib/utils'
-import { contentSubmissions, chatConversations } from './mock'
+import { kocApplications, chatConversations } from './mock'
 
 const navItems = [
   { to: '/vendor', label: '總覽', icon: LayoutDashboard },
@@ -14,7 +14,7 @@ const navItems = [
   { to: '/vendor/koc', label: 'KOC 管理', icon: Users },
   { to: '/vendor/orders', label: '訂單追蹤', icon: ShoppingBag },
   { to: '/vendor/analytics', label: '數據分析', icon: BarChart3 },
-  { to: '/vendor/review', label: '文案審核', icon: FileSearch, badgeKey: 'review' },
+  { to: '/vendor/review', label: '任務審核', icon: FileSearch, badgeKey: 'review' },
   { to: '/vendor/chat', label: '聊天室', icon: MessageCircle, badgeKey: 'chat' },
   { to: '/vendor/settings', label: '設定', icon: Settings },
 ]
@@ -23,7 +23,11 @@ export default function VendorSidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
 
-  const reviewBadge = contentSubmissions.filter(s => s.status === 'pending' || s.status === 'revision').length
+  const reviewBadge = kocApplications.filter(a =>
+    a.qualificationStatus === 'pending_qualification' ||
+    a.contentStatus === 'submitted' ||
+    a.contentStatus === 'content_revision'
+  ).length
   const chatBadge = Object.values(chatConversations).reduce((s, c) => s + (c.unread || 0), 0)
   const badges = { review: reviewBadge, chat: chatBadge }
 
