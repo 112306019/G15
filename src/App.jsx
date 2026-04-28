@@ -9,8 +9,8 @@ import VendorManagement from './platform-side/VendorManagement';
 import VendorDetail from './platform-side/VendorDetail';
 import UserManagement from './platform-side/UserManagement';
 import UserDetail from './platform-side/UserDetail';
-import KocManagement from './platform-side/KocManagement';
-import KocDetail from './platform-side/KocDetail';
+// ⚠️ 注意：這裡把 KocManagement 刪除了，但保留了 KocDetail
+import KocDetail from './platform-side/KocDetail'; 
 import TaskManagement from './platform-side/TaskManagement';
 import TaskDetail from './platform-side/TaskDetail';
 import FinanceManagement from './platform-side/FinanceManagement';
@@ -42,12 +42,17 @@ export default function App() {
       {currentPage === 'vendor' && <VendorManagement setCurrentPage={setCurrentPage} setSelectedVendor={setSelectedVendor} />}
       {currentPage === 'vendorDetail' && <VendorDetail setCurrentPage={setCurrentPage} vendor={selectedVendor} />}
 
-      {/* 一般用戶與詳情 */}
-      {currentPage === 'user' && <UserManagement setCurrentPage={setCurrentPage} setSelectedUser={setSelectedUser} />}
+      {/* 🟢 一般用戶與詳情 (把 setSelectedKoc 也傳進去，這樣點擊 KOC 時才有反應！) */}
+      {currentPage === 'user' && (
+        <UserManagement 
+          setCurrentPage={setCurrentPage} 
+          setSelectedUser={setSelectedUser} 
+          setSelectedKoc={setSelectedKoc} 
+        />
+      )}
       {currentPage === 'userDetail' && <UserDetail setCurrentPage={setCurrentPage} user={selectedUser} />}
 
-      {/* KOC 管理與詳情 */}
-      {currentPage === 'koc' && <KocManagement setCurrentPage={setCurrentPage} setSelectedKoc={setSelectedKoc} />}
+      {/* 🟢 移除原本的 koc 管理頁面，只保留 kocDetail */}
       {currentPage === 'kocDetail' && <KocDetail setCurrentPage={setCurrentPage} koc={selectedKoc} />}
 
       {/* 任務管理與詳情 */}

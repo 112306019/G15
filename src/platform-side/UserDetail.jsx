@@ -1,5 +1,5 @@
 import React from 'react';
-import StatusBadge from '../components/StatusBadge'; // 🌟 引入標籤
+import StatusBadge from '../components/StatusBadge';
 
 export default function UserDetail({ setCurrentPage, user }) {
   if (!user) {
@@ -24,7 +24,7 @@ export default function UserDetail({ setCurrentPage, user }) {
             <h2 className="text-3xl font-bold text-gray-800">{user.name}</h2>
             <p className="text-blue-500 font-medium mt-1">用戶 ID: {user.id}</p>
             <div className="mt-3 flex gap-2">
-              {/* 🌟 替換成 StatusBadge */}
+
               {user.isKoc && <StatusBadge type="purple">KOC</StatusBadge>}
               <StatusBadge type={user.status === 'active' ? 'success' : user.status === 'applying' ? 'warning' : 'danger'}>
                 {user.status === 'active' ? '✅ 已啟用' : user.status === 'applying' ? '⏳ 申請中' : '🚫 已停權'}

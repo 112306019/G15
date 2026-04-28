@@ -5,8 +5,7 @@ export default function Topbar({ currentPage, setCurrentPage }) {
   const navItems = [
     { id: 'dashboard', label: '總覽' },
     { id: 'vendor', label: '廠商管理' },
-    { id: 'user', label: '一般用戶' },
-    { id: 'koc', label: 'KOC管理' },
+    { id: 'user', label: '用戶管理' },
     { id: 'task', label: '任務管理' },
     { id: 'finance', label: '金流管理' },
     { id: 'customerService', label: '客服系統' },
