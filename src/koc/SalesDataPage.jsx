@@ -2,8 +2,8 @@ import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 export default function SalesDataPage({ product, onBack }) {
-  // 模擬 PDF 第 27 頁的折線圖數據
-  const chartValues = [7, 12, 8, 15, 10, 18, 22, 14, 20, 25];
+
+    const chartValues = [7, 12, 8, 15, 10, 18, 22, 14, 20, 25];
 
   return (
     <div className="p-12 max-w-7xl mx-auto animate-in fade-in zoom-in-95 duration-500">
