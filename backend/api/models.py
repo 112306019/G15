@@ -1,10 +1,8 @@
 from django.db import models
 import uuid
 
-
 # ══════════════════════════════════════
-# 組員版本（主幹）── User / KOC / Campaigns / Order / OrderItem
-# 已對應 Supabase 上既有的 migration (0001_initial.py, 0002_campaigns_order_orderitem.py)
+# 1. 核心主幹表 ── User / KOC / Campaigns / Order / OrderItem
 # ══════════════════════════════════════
 
 class User(models.Model):
@@ -15,6 +13,9 @@ class User(models.Model):
     password = models.CharField(max_length=128)
     phone = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'User'
 
     def __str__(self):
         return f"[{self.role}] {self.name}"
@@ -27,6 +28,9 @@ class KOC(models.Model):
     bank_number = models.CharField(max_length=50)
     bank_account = models.CharField(max_length=50)
     address = models.TextField(blank=True, null=True)
+
+    class Meta:
+        db_table = 'Koc'  # 改為首字大寫
 
     def __str__(self):
         return f"KOC: {self.user.name}"
@@ -46,7 +50,7 @@ class Campaigns(models.Model):
     Status = models.CharField(max_length=50, default='active')
 
     class Meta:
-        db_table = 'api_campaigns'
+        db_table = 'Campaigns'  # 去除 api_ 並改為首字大寫
 
     def __str__(self):
         return self.Name
@@ -66,7 +70,7 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'api_order'
+        db_table = 'Order'  # 去除 api_ 並改為首字大寫
 
     def __str__(self):
         return f"Order {self.Order_id} by {self.User_id}"
@@ -83,14 +87,77 @@ class OrderItem(models.Model):
     apply_status = models.IntegerField(default=0)
 
     class Meta:
-        db_table = 'api_order_item'
+        db_table = 'OrderItem'  # 去除 api_ 並改為大寫駝峰
 
     def __str__(self):
         return f"Item {self.Product_id} in Order {self.order.Order_id}"
 
 
 # ══════════════════════════════════════
-# 你新增的其他表（依三張 ER 圖核對過）
+# 2. 截圖全新需求 ── Application / KOC_Misson / Submissions / Coupon
+# ══════════════════════════════════════
+
+class Application(models.Model):
+    application_id = models.AutoField(primary_key=True, db_column='Application_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
+    campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='Campaign_id')
+    status = models.CharField(max_length=50, db_column='Status')
+
+    class Meta:
+        db_table = 'Application'  # 去除 api_ 並改為首字大寫
+
+    def __str__(self):
+        return f"Application {self.application_id} by {self.user.user_id}"
+
+
+class KOCMissionNew(models.Model):
+    kocmission_id = models.AutoField(primary_key=True, db_column='KOCMisson_id')
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, db_column='Application_id')
+    stage = models.CharField(max_length=50, db_column='Stage')
+
+    class Meta:
+        db_table = 'KOC_Misson'  # 保持原樣
+
+    def __str__(self):
+        return f"KOCMission {self.kocmission_id} (Stage: {self.stage})"
+
+
+class Submissions(models.Model):
+    submission_id = models.AutoField(primary_key=True, db_column='Submission_id')
+    kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='KOCMisson_id')
+    submission_type = models.CharField(max_length=50, db_column='Submission_type')
+    content_url = models.CharField(max_length=500, blank=True, null=True, db_column='content_url')
+    text_content = models.TextField(blank=True, null=True, db_column='text_content')
+    status = models.CharField(max_length=50, db_column='Status')
+    vendor_feedback = models.TextField(blank=True, null=True, db_column='vendor_feedback')
+    submitted_time = models.DateTimeField(blank=True, null=True, db_column='submitted_time')
+    reviewed_time = models.DateTimeField(blank=True, null=True, db_column='reviewed_time')
+
+    class Meta:
+        db_table = 'Submissions'  # 保持原樣
+
+    def __str__(self):
+        return f"Submission {self.submission_id}"
+
+
+class CouponNew(models.Model):
+    coupon_id = models.AutoField(primary_key=True, db_column='Coupon_id')
+    kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='KOCMisson_id')
+    promotion_code = models.CharField(max_length=100, unique=True, db_column='Promotion_code')
+    discount_value = models.IntegerField(db_column='Discount_value')
+    status = models.CharField(max_length=50, db_column='Status')
+    usage_count = models.IntegerField(default=0, db_column='usage_count')
+    total_commission = models.IntegerField(default=0, db_column='total_commission')
+
+    class Meta:
+        db_table = 'Coupon'  # 保持原樣
+
+    def __str__(self):
+        return self.promotion_code
+
+
+# ══════════════════════════════════════
+# 3. 其他電商與後台模組（全面拿掉 api_ 並改為首字大寫）
 # ══════════════════════════════════════
 
 class Product(models.Model):
@@ -105,6 +172,9 @@ class Product(models.Model):
     image_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=50)
 
+    class Meta:
+        db_table = 'Product'  # 新增：指定大寫名稱
+
     def __str__(self):
         return self.product_name
 
@@ -115,6 +185,9 @@ class Cart(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = 'Cart'  # 新增：指定大寫名稱
 
     def __str__(self):
         return f"Cart {self.cart_id}"
@@ -128,6 +201,9 @@ class CartItem(models.Model):
     unit_price = models.IntegerField()
     subtotal = models.IntegerField()
 
+    class Meta:
+        db_table = 'CartItem'  # 新增：指定大寫名稱
+
     def __str__(self):
         return f"CartItem {self.cart_item_id}"
 
@@ -137,6 +213,9 @@ class Wishlist(models.Model):
     user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
     product_id = models.ForeignKey(Product, on_delete=models.CASCADE, db_column='product_id')
 
+    class Meta:
+        db_table = 'Wishlist'  # 新增：指定大寫名稱
+
     def __str__(self):
         return f"Wishlist {self.wishlist_id}"
 
@@ -144,6 +223,9 @@ class Wishlist(models.Model):
 class Guest(models.Model):
     guest_id = models.AutoField(primary_key=True)
     order_id = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='Order_id')
+
+    class Meta:
+        db_table = 'Guest'  # 新增：指定大寫名稱
 
     def __str__(self):
         return f"Guest {self.guest_id}"
@@ -159,17 +241,11 @@ class Address(models.Model):
     postal_code = models.CharField(max_length=20, blank=True, null=True)
     is_default = models.BooleanField(default=False)
 
+    class Meta:
+        db_table = 'Address'  # 新增：指定大寫名稱
+
     def __str__(self):
         return f"Address {self.address_id}"
-
-
-class Coupon(models.Model):
-    promotion_code = models.CharField(max_length=100, primary_key=True)
-    campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
-    status = models.CharField(max_length=50)
-
-    def __str__(self):
-        return self.promotion_code
 
 
 class Wallets(models.Model):
@@ -178,6 +254,9 @@ class Wallets(models.Model):
     balance_available = models.IntegerField(default=0)
     balance_frozen = models.IntegerField(default=0)
     updated_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'Wallets'  # 新增：指定大寫名稱
 
     def __str__(self):
         return f"Wallets {self.wallets_id}"
@@ -192,7 +271,7 @@ class Transactions(models.Model):
     reference_id = models.CharField(max_length=100, db_column='Reference_id')
 
     class Meta:
-        db_table = 'Transactions'
+        db_table = 'Transactions'  # 保持原樣
 
     def __str__(self):
         return f"Transactions {self.transaction_id}"
@@ -205,6 +284,9 @@ class Payment(models.Model):
     payment_status = models.CharField(max_length=50, blank=True, null=True)
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
     promotion_code = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        db_table = 'Payment'  # 新增：指定大寫名稱
 
     def __str__(self):
         return f"Payment {self.payment_id}"
@@ -219,6 +301,9 @@ class Admins(models.Model):
     status = models.CharField(max_length=50)
     last_login_at = models.DateTimeField(blank=True, null=True)
 
+    class Meta:
+        db_table = 'Admins'  # 新增：指定大寫名稱
+
     def __str__(self):
         return self.name
 
@@ -232,6 +317,9 @@ class Vendor(models.Model):
     tax_id = models.CharField(max_length=50, db_column='Tax_ID')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        db_table = 'Vendor'  # 新增：指定大寫名稱
+
     def __str__(self):
         return self.company_name
 
@@ -244,7 +332,7 @@ class VendorWallet(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'Vendor_Wallet'
+        db_table = 'Vendor_Wallet'  # 保持原樣
 
     def __str__(self):
         return f"VendorWallet {self.wallet_id}"
@@ -258,7 +346,7 @@ class CampaignApplications(models.Model):
     applied_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'Campaign_applications'
+        db_table = 'Campaign_Applications'  # 改為大寫駝峰
 
     def __str__(self):
         return f"CampaignApplication {self.application_id}"
@@ -272,7 +360,7 @@ class CampaignParticipants(models.Model):
     status = models.CharField(max_length=50)
 
     class Meta:
-        db_table = 'Campaign_Participants'
+        db_table = 'Campaign_Participants'  # 保持原樣
 
     def __str__(self):
         return f"CampaignParticipants {self.participants_id}"
@@ -282,12 +370,12 @@ class TrackingLogs(models.Model):
     tracking_id = models.AutoField(primary_key=True)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='Order_id')
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
-    coupon = models.ForeignKey(Coupon, on_delete=models.SET_NULL, db_column='Promotion_code', to_field='promotion_code', null=True, blank=True)
+    promotion_code = models.CharField(max_length=100, db_column='Promotion_code', null=True, blank=True)
     click_id = models.CharField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'Tracking_logs'
+        db_table = 'Tracking_Logs'  # 改為大寫駝峰
 
     def __str__(self):
         return f"TrackingLogs {self.tracking_id}"
@@ -301,6 +389,9 @@ class Commissions(models.Model):
     status = models.CharField(max_length=50)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        db_table = 'Commissions'  # 新增：指定大寫名稱
+
     def __str__(self):
         return f"Commission {self.commission_id}"
 
@@ -312,95 +403,21 @@ class Payouts(models.Model):
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
 
+    class Meta:
+        db_table = 'Payouts'  # 新增：指定大寫名稱
+
     def __str__(self):
         return f"Payout {self.payout_id}"
-
-
-class MissionApplication(models.Model):
-    application_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
-    brand_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='Brand_id')
-    mission_id = models.CharField(max_length=100, db_column='Mission_id')
-    status = models.CharField(max_length=50)
-
-    class Meta:
-        db_table = 'Mission_Application'
-
-    def __str__(self):
-        return f"MissionApplication {self.application_id}"
-
-
-class KOCMission(models.Model):
-    kocmission_id = models.AutoField(primary_key=True, db_column='KOCMission_id')
-    mission_id = models.CharField(max_length=100, db_column='Mission_id')
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
-    brand_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='Brand_id')
-    product_id = models.ForeignKey(Product, on_delete=models.SET_NULL, db_column='Product_id', null=True, blank=True)
-    promotion_code = models.ForeignKey(Coupon, on_delete=models.SET_NULL, db_column='Promotion_code', to_field='promotion_code', null=True, blank=True)
-    stage = models.CharField(max_length=50)
-
-    class Meta:
-        db_table = 'KOC_Mission'
-
-    def __str__(self):
-        return f"KOCMission {self.kocmission_id}"
-
-
-class MissionTasks(models.Model):
-    tasks_id = models.AutoField(primary_key=True)
-    kocmission_id = models.ForeignKey(KOCMission, on_delete=models.CASCADE, db_column='KOCMission_id')
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
-    deadline = models.DateTimeField()
-    status = models.CharField(max_length=50)
-    stage = models.CharField(max_length=50)
-
-    class Meta:
-        db_table = 'Mission_Tasks'
-
-    def __str__(self):
-        return f"MissionTasks {self.tasks_id}"
-
-
-class WorkSubmissions(models.Model):
-    submission_id = models.AutoField(primary_key=True)
-    kocmission_id = models.ForeignKey(KOCMission, on_delete=models.CASCADE, db_column='KOCMission_id')
-    tasks_id = models.ForeignKey(MissionTasks, on_delete=models.CASCADE, db_column='Tasks_id')
-    version_number = models.IntegerField()
-    content_url = models.CharField(max_length=500, blank=True, null=True)
-    status = models.CharField(max_length=50)
-    brand_feedback = models.TextField(blank=True, null=True)
-    submitted_time = models.DateTimeField(blank=True, null=True)
-    reviewed_time = models.DateTimeField(blank=True, null=True)
-
-    class Meta:
-        db_table = 'Work_Submissions'
-
-    def __str__(self):
-        return f"WorkSubmission {self.submission_id}"
-
-
-class Drafts(models.Model):
-    drafts_id = models.AutoField(primary_key=True)
-    kocmission_id = models.ForeignKey(KOCMission, on_delete=models.CASCADE, db_column='KOCMission_id')
-    tasks_id = models.ForeignKey(MissionTasks, on_delete=models.CASCADE, db_column='Tasks_id')
-    version_number = models.IntegerField()
-    text_content = models.TextField(blank=True, null=True)
-    media_urls = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=50)
-    brand_feedback = models.TextField(blank=True, null=True)
-    submitted_time = models.DateTimeField(blank=True, null=True)
-    reviewed_time = models.DateTimeField(blank=True, null=True)
-
-    def __str__(self):
-        return f"Draft {self.drafts_id}"
 
 
 class Earnings(models.Model):
     earnings_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='User_id')
-    kocmission_id = models.ForeignKey(KOCMission, on_delete=models.CASCADE, db_column='KOCMission_id')
     amount = models.IntegerField()
     status = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = 'Earnings'  # 新增：指定大寫名稱
 
     def __str__(self):
         return f"Earnings {self.earnings_id}"
@@ -412,7 +429,6 @@ class ServiceTickets(models.Model):
     influencer_id = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='Influencer_id', related_name='tickets_as_influencer', null=True, blank=True)
     consumer_id = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='Consumer_id', related_name='tickets_as_consumer', null=True, blank=True)
     vendor_id = models.ForeignKey(Vendor, on_delete=models.SET_NULL, db_column='Vendor_id', null=True, blank=True)
-    kocmission_id = models.ForeignKey(KOCMission, on_delete=models.SET_NULL, db_column='KOCMission_id', null=True, blank=True)
     order_id = models.ForeignKey(Order, on_delete=models.SET_NULL, db_column='Order_id', null=True, blank=True)
     category = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
@@ -422,7 +438,7 @@ class ServiceTickets(models.Model):
     update_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'Service_Tickets'
+        db_table = 'Service_Tickets'  # 保持原樣
 
     def __str__(self):
         return f"Ticket {self.ticket_id}"
@@ -440,7 +456,7 @@ class AdminAuditLogs(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'Admin_Audit_Logs'
+        db_table = 'Admin_Audit_Logs'  # 保持原樣
 
     def __str__(self):
         return f"AuditLog {self.log_id}"
