@@ -5,10 +5,20 @@ from .models import (
     KOCTask, KOCApplication, TaskExecution,
     PromoCode, EarningsRecord,
 )
+from .models import Influencer
 
 User = get_user_model()
 
+class InfluencerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Influencer
+        fields = '__all__'  # 代表把 models 裡定義的所有欄位都轉成 JSON
 
+class KOCProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KOCProfile
+        # 剛好對齊你圖片中 Request 要求的 7 個參數
+        fields = ['user_id', 'name', 'phone', 'email', 'bank_account', 'bank_number', 'address']
 # ──────────────────────────────────────────────
 # Auth / User
 # ──────────────────────────────────────────────
