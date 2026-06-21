@@ -1,9 +1,9 @@
 from django.db import models
 import uuid
 
-# ══════════════════════════════════════
+# ==============================================================================
 # 1. 核心主幹表 ── User / KOC / Campaigns / Order / OrderItem
-# ══════════════════════════════════════
+# ==============================================================================
 
 class User(models.Model):
     user_id = models.CharField(max_length=50, unique=True, primary_key=True)
@@ -93,9 +93,9 @@ class OrderItem(models.Model):
         return f"Item {self.product_id} in Order {self.order.order_id}"
 
 
-# ══════════════════════════════════════
-# 2. 截圖全新需求 ── Application / KOC_Misson / Submissions / Coupon
-# ══════════════════════════════════════
+# ==============================================================================
+# 2. Application / KOC_Misson / Submissions / Coupon
+# ==============================================================================
 
 class Application(models.Model):
     application_id = models.AutoField(primary_key=True, db_column='application_id')
@@ -156,9 +156,73 @@ class CouponNew(models.Model):
         return self.promotion_code
 
 
-# ══════════════════════════════════════
-# 3. 其他電商與後台模組
-# ══════════════════════════════════════
+# ==============================================================================
+# 3. 金流模組 ── BaseWallet(抽象) / KocWallet / VendorWallet / Transactions(合併)
+# ==============================================================================
+
+class BaseWallet(models.Model):
+    """抽象錢包基礎範本（不單獨建表）"""
+    wallet_id = models.AutoField(primary_key=True)
+    balance_available = models.IntegerField(default=0)
+    balance_frozen = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class KocWallet(BaseWallet):
+    """KOC 網紅個人錢包"""
+    koc = models.OneToOneField(KOC, on_delete=models.CASCADE, related_name='wallet', db_column='koc_id')
+
+    class Meta:
+        db_table = 'Koc_Wallet'
+
+    def __str__(self):
+        return f"KocWallet for {self.koc_id}"
+
+
+class VendorWallet(BaseWallet):
+    """Vendor 廠商企業錢包"""
+    vendor = models.OneToOneField('Vendor', on_delete=models.CASCADE, related_name='wallet', db_column='vendor_id')
+
+    class Meta:
+        db_table = 'Vendor_Wallet'
+
+    def __str__(self):
+        return f"VendorWallet for {self.vendor_id}"
+
+
+class Transactions(models.Model):
+    """統一資金交易流水帳總表"""
+    transaction_id = models.AutoField(primary_key=True)
+    
+    # 區分錢包類型：'koc' 或 'vendor'
+    wallet_type = models.CharField(max_length=20, default='koc')  
+    # 記錄對應錢包的 ID 數字
+    wallet_id = models.IntegerField()  
+    
+    # 金流種類，例如：'deposit'(儲值), 'withdraw'(提領), 'reward'(分潤), 'pay'(付活動費)
+    type = models.CharField(max_length=50) 
+    # 交易金額
+    amount = models.IntegerField()
+    
+    # 關聯業務軌跡（例如：reference_type='order', reference_id='訂單UUID'）
+    reference_type = models.CharField(max_length=50, blank=True, null=True)
+    reference_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Transactions'
+
+    def __str__(self):
+        return f"[{self.wallet_type.upper()}] Trans {self.transaction_id}: {self.type} ({self.amount})"
+
+
+# ==============================================================================
+# 4. 其他電商與基本模組
+# ==============================================================================
 
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
@@ -248,35 +312,6 @@ class Address(models.Model):
         return f"Address {self.address_id}"
 
 
-class Wallets(models.Model):
-    wallets_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
-    balance_available = models.IntegerField(default=0)
-    balance_frozen = models.IntegerField(default=0)
-    updated_time = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'Wallets'
-
-    def __str__(self):
-        return f"Wallets {self.wallets_id}"
-
-
-class Transactions(models.Model):
-    transaction_id = models.AutoField(primary_key=True, db_column='transaction_id')
-    wallets_id = models.ForeignKey(Wallets, on_delete=models.CASCADE, db_column='wallets_id')
-    type = models.CharField(max_length=50, db_column='type')
-    amount = models.IntegerField(db_column='amount')
-    reference_type = models.CharField(max_length=50, db_column='reference_type')
-    reference_id = models.CharField(max_length=100, db_column='reference_id')
-
-    class Meta:
-        db_table = 'Transactions'
-
-    def __str__(self):
-        return f"Transactions {self.transaction_id}"
-
-
 class Payment(models.Model):
     payment_id = models.AutoField(primary_key=True)
     order_id = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
@@ -322,20 +357,6 @@ class Vendor(models.Model):
 
     def __str__(self):
         return self.company_name
-
-
-class VendorWallet(models.Model):
-    wallet_id = models.AutoField(primary_key=True, db_column='wallet_id')
-    vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
-    balance = models.IntegerField(default=0)
-    history = models.TextField(blank=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'Vendor_Wallet'
-
-    def __str__(self):
-        return f"VendorWallet {self.wallet_id}"
 
 
 class CampaignApplications(models.Model):
