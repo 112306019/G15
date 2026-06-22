@@ -111,15 +111,22 @@ class Application(models.Model):
 
 
 class KOCMissionNew(models.Model):
-    kocmission_id = models.AutoField(primary_key=True, db_column='kocmisson_id')
-    application = models.ForeignKey(Application, on_delete=models.CASCADE, db_column='application_id')
+    """KOC 任務表（優化版：全面小寫規範 + 減少 JOIN 效能優化）"""
+    kocmission_id = models.AutoField(primary_key=True, db_column='kocmission_id')
+    
+    # 1. 依然保留與申請表的關聯（為了追蹤當初是哪一次申請通過的）
+    application = models.ForeignKey('Application',  on_delete=models.CASCADE, db_column='application_id')
+    
+    # 🌟 2. 新增冗餘欄位：直接綁定 koc_id（對應 User 表）
+    # 這樣網紅打開 App 看任務清單時，直接查這張表，完全不需要 JOIN Application 表！
+    koc_id = models.CharField(max_length=50, db_column='koc_id', db_index=True, null=True, blank=True)
     stage = models.CharField(max_length=50, db_column='stage')
 
     class Meta:
-        db_table = 'KOC_Misson'
+        db_table = 'Koc_Mission'  
 
     def __str__(self):
-        return f"KOCMission {self.kocmission_id} (Stage: {self.stage})"
+        return f"Mission {self.koc_mission_id} for KOC {self.koc_id} (Stage: {self.stage})"
 
 
 class Submissions(models.Model):
@@ -162,7 +169,6 @@ class CouponNew(models.Model):
 
 class BaseWallet(models.Model):
     """抽象錢包基礎範本（不單獨建表）"""
-    wallet_id = models.AutoField(primary_key=True)
     balance_available = models.IntegerField(default=0)
     balance_frozen = models.IntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
@@ -359,20 +365,6 @@ class Vendor(models.Model):
         return self.company_name
 
 
-class CampaignApplications(models.Model):
-    application_id = models.AutoField(primary_key=True)
-    campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
-    influencer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='influencer_id')
-    status = models.CharField(max_length=50)
-    applied_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'Campaign_Applications'
-
-    def __str__(self):
-        return f"CampaignApplication {self.application_id}"
-
-
 class CampaignParticipants(models.Model):
     participants_id = models.AutoField(primary_key=True)
     campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
@@ -387,39 +379,9 @@ class CampaignParticipants(models.Model):
         return f"CampaignParticipants {self.participants_id}"
 
 
-class TrackingLogs(models.Model):
-    tracking_id = models.AutoField(primary_key=True)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
-    promotion_code = models.CharField(max_length=100, db_column='promotion_code', null=True, blank=True)
-    click_id = models.CharField(max_length=100, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'Tracking_Logs'
-
-    def __str__(self):
-        return f"TrackingLogs {self.tracking_id}"
-
-
-class Commissions(models.Model):
-    commission_id = models.AutoField(primary_key=True)
-    influencer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='influencer_id')
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
-    amount = models.IntegerField()
-    status = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'Commissions'
-
-    def __str__(self):
-        return f"Commission {self.commission_id}"
-
-
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
-    influencer_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='influencer_id')
+    koc_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
     amount = models.IntegerField()
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
@@ -447,7 +409,7 @@ class Earnings(models.Model):
 class ServiceTickets(models.Model):
     ticket_id = models.AutoField(primary_key=True)
     admin_id = models.ForeignKey(Admins, on_delete=models.SET_NULL, db_column='admin_id', null=True, blank=True)
-    influencer_id = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='influencer_id', related_name='tickets_as_influencer', null=True, blank=True)
+    koc_id = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='koc_id', related_name='tickets_as_koc', null=True, blank=True)
     consumer_id = models.ForeignKey(User, on_delete=models.SET_NULL, db_column='consumer_id', related_name='tickets_as_consumer', null=True, blank=True)
     vendor_id = models.ForeignKey(Vendor, on_delete=models.SET_NULL, db_column='vendor_id', null=True, blank=True)
     order_id = models.ForeignKey(Order, on_delete=models.SET_NULL, db_column='order_id', null=True, blank=True)
@@ -471,7 +433,7 @@ class AdminAuditLogs(models.Model):
     action_type = models.CharField(max_length=100)
     submission_id = models.CharField(max_length=100, blank=True, null=True)
     tasks_id = models.CharField(max_length=100, blank=True, null=True)
-    influencer_id = models.CharField(max_length=100, blank=True, null=True)
+    koc_id = models.CharField(max_length=100, blank=True, null=True)
     vendor_id = models.CharField(max_length=100, blank=True, null=True)
     action_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
