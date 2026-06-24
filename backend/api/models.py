@@ -39,7 +39,6 @@ class KOC(models.Model):
 class Campaigns(models.Model):
     """代言活動表"""
     campaign_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.CharField(max_length=100, db_index=True)
     vendor_id = models.CharField(max_length=100)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -55,6 +54,32 @@ class Campaigns(models.Model):
     def __str__(self):
         return self.name
 
+class CampaignProduct(models.Model):
+    """活動與商品的交叉關聯表（多對多中介表）"""
+    campaign_product_id = models.AutoField(primary_key=True, db_column='campaign_product_id')
+    
+    # 1. 關聯到活動表 (假設你的活動表類別叫 Campaign，主鍵或欄位叫 campaign_id)
+    campaign = models.ForeignKey(
+        'Campaigns', 
+        on_delete=models.CASCADE, 
+        db_column='campaign_id',
+        related_name='campaign_products'
+    )
+    # 2. 關聯到商品表 (假設你的商品表類別叫 Product，主鍵或欄位叫 product_id)
+    product = models.ForeignKey(
+        'Product', 
+        on_delete=models.CASCADE, 
+        db_column='product_id',
+        related_name='product_campaigns'
+    )
+    # 💡 擴充小撇步：未來如果想記錄「某個商品在這個活動裡的限定活動價」或「分潤比例」，可以直接加欄位在這裡！
+    # activity_price = models.IntegerField(blank=True, null=True, db_column='activity_price'
+    class Meta:
+        db_table = 'Campaign_Product'  # 統一全小寫加底線命名規範
+        # 🌟 加上聯合唯一限制，防止同一個活動重複綁定同一個商品
+        unique_together = ('campaign', 'product')
+    def __str__(self):
+        return f"Campaign: {self.campaign_id} - Product: {self.product_id}"
 
 class Order(models.Model):
     """訂單主表"""
