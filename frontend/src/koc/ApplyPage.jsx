@@ -33,7 +33,7 @@ export default function ApplyPage() {
   const currentList = activeTab === 'pending' ? pendingProducts : appliedProducts;
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-5xl mx-auto py-12">
+    <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
       <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">代言申請區</h2>
 
       <div className="flex gap-4 mb-10">

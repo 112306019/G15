@@ -13,7 +13,6 @@ import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyPage from './koc/ApplyPage';
 import ApplyKOCPage from './koc/ApplyKOCPage'; 
-import KocReviewPage from './koc/ReviewPage'; 
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage'; 
@@ -189,7 +188,6 @@ function MainSystem() {
             {view === 'home' && <HomePage onNavigate={handleNavigate} />}
             {view === 'apply' && <ApplyPage />} 
             
-            {view === 'review' && <KocReviewPage onBack={() => handleNavigate('home')} />}
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
             
