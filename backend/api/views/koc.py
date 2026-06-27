@@ -1,9 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny   # 引入「允許任何人」
-# ⚠️ 請確保有引入這三張 Model (名字請對照你們的 models.py)
-# from api.models import Order, OrderItem, Campaigns
-from api.models import User, Order, OrderItem, Campaigns
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC
 
 # 修改KOC資料 
 @api_view(['POST'])
@@ -28,14 +26,12 @@ def update_koc_profile(request):
         user_instance.phone = phone
         user_instance.email = email
         user_instance.save() # 存入 User 表
-
         # 3. 接著，透過一對一關聯找到該 User 的 KOC 擴充表資料
         # 如果該 User 還沒有 KOC 擴充資料，就幫他自動建立一個
         koc_instance, created = KOC.objects.get_or_create(
             user=user_instance,
             defaults={'koc_id': f"koc_{user_id}"} # 預設一個 koc_id
         )
-        
         # 4. 更新 KOC 表的專屬欄位
         koc_instance.bank_account = bank_account
         koc_instance.bank_number = bank_number
@@ -68,42 +64,44 @@ def update_koc_profile(request):
 @permission_classes([AllowAny])
 def get_available_campaign_list(request):
     # 1. 從網址後面取得 User_id (例如: ?User_id=test_koc_001)
-    user_id = request.query_params.get('User_id')
+    user_id = request.query_params.get('user_id')
     
     if not user_id:
         return Response({
             "success": False,
-            "err": "缺少必要參數: User_id",
+            "err": "缺少必要參數: user_id",
             "campaigns": []
         }, status=400)
         
     try:
-        # 2. 終極連連看：我們直接去查 Order_Item (訂單明細)
-        # 條件是：這筆明細所屬的訂單 (Order)，它的 User_id 必須等於前端傳過來的 user_id
-        # Django ORM 語法：order__User_id (透過外鍵連到 Order 表的 User_id)
-        order_items = OrderItem.objects.filter(order__User_id=user_id)
-        
+        # 2. 直接去查 Order_Item (訂單明細)
+        order_items = OrderItem.objects.filter(order__user_id=user_id)
         campaigns_data = []
         
-        # 3. 跑迴圈，把買過的每個品項對應的活動撈出來
+        # 3. 跑迴圈，處理使用者購買的每個品項
         for item in order_items:
-            # 利用明細裡的 Product_id，去 Campaigns 表撈出對應的活動
-            # 根據截圖，Campaigns 表的欄位叫 product_id
-            campaign = Campaigns.objects.filter(product_id=item.Product_id).first()
+            # 💡 修改重點：透過中間表 campaign_product 查詢該商品對應的活動
+            # 使用 select_related('campaign') 可以順便把活動內容撈出來，不用再查一次
+            campaign_products = CampaignProduct.objects.filter(
+                product_id=item.product_id
+            ).select_related('campaign')
             
-            # 如果這個商品剛好有對應的代言活動，我們才放進列表
-            if campaign:
-                campaigns_data.append({
-                    "order_id": str(item.Order_id),              # 來自 Order_Item 的 Order_id
-                    "campaign_id": str(campaign.Campaign_id),    # 來自 Campaigns 的 Campaign_id
-                    "campaign_name": str(campaign.Name),         # 來自 Campaigns 的 Name
-                    
-                    # 💡 代言申請狀態：如果目前沒開這欄位，先預設給 0 (尚未申請)
-                    # 未來如果有獨立的申請表，可以再透過 order_id 和 campaign_id 去查狀態
-                    "apply_status": getattr(item, 'apply_status', 0) 
-                })
+            # 因為一個商品可能會對應到多個代言活動（多對多關係）
+            # 所以跑迴圈把該商品所有對應的活動都塞進去
+            for cp in campaign_products:
+                campaign = cp.campaign  # 取得關聯的 Campaigns 物件
                 
-        # 4. 回傳符合規格書的完美 JSON 格式
+                if campaign:
+                    campaigns_data.append({
+                        "order_id": str(item.order_id),              # 來自 Order_Item 的 Order_id
+                        "campaign_id": str(campaign.campaign_id),    # 來自 Campaigns 的 Campaign_id
+                        "campaign_name": str(campaign.name),         # 來自 Campaigns 的 Name
+                        
+                        # 代言申請狀態：先預設給 0 (尚未申請)
+                        "apply_status": getattr(item, 'apply_status', 0) 
+                    })
+                
+        # 4. 回傳符合規格書的 JSON 格式
         return Response({
             "success": True,
             "err": "",
@@ -115,4 +113,96 @@ def get_available_campaign_list(request):
             "success": False,
             "err": f"伺服器發生錯誤: {str(e)}",
             "campaigns": []
+        }, status=500)
+    
+# 代言申請 
+# api/views/koc.py
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def apply_mission(request):
+    """
+    URL: /koc/application/applyMission
+    """
+    koc_id = request.data.get('koc_id')
+    order_id = request.data.get('order_id')
+    campaign_id = request.data.get('campaign_id')
+    
+    if not all([koc_id, order_id, campaign_id]):
+        return Response({
+            "success": False,
+            "err": "缺少必要參數: koc_id, order_id 或 campaign_id",
+            "application_id": "",
+            "status": "pending" 
+        }, status=400)
+        
+    try:
+        koc_profile = KOC.objects.filter(koc_id=koc_id).first()
+        if not koc_profile:
+            return Response({
+                "success": False,
+                "err": "找不到該 KOC 帳號，請確認是否已轉換身份",
+                "application_id": "",
+                "status": "pending"
+            }, status=400)
+            
+        order_items = OrderItem.objects.filter(order_id=order_id)
+        if not order_items.exists():
+            return Response({
+                "success": False,
+                "err": "找不到該筆訂單明細",
+                "application_id": "",
+                "status": "pending"
+            }, status=400)
+            
+        purchased_products = [item.product for item in order_items]
+        
+        is_valid_campaign = CampaignProduct.objects.filter(
+            campaign_id=campaign_id,
+            product__in=purchased_products
+        ).exists()
+        
+        if not is_valid_campaign:
+            return Response({
+                "success": False,
+                "err": "該訂單商品並未參與此代言活動，無法申請",
+                "application_id": "",
+                "status": "pending"
+            }, status=400)
+            
+        # 確保 filter 後面都加上 _id 精準比對外鍵值
+        existing_app = Application.objects.filter(
+            koc_id=koc_id,
+            order_id=order_id,
+            campaign_id=campaign_id
+        ).first()
+        
+        if existing_app:
+            return Response({
+                "success": True,
+                "err": "此訂單已申請過該活動",
+                "application_id": str(existing_app.application_id),
+                "status": str(existing_app.status)  
+            })
+            
+        # 確保 create 後面也加上 _id
+        new_application = Application.objects.create(
+            koc_id=koc_id,          
+            order_id=order_id,      
+            campaign_id=campaign_id,
+            status="pending"             
+        )
+        
+        return Response({
+            "success": True,
+            "err": "",
+            "application_id": str(new_application.application_id),
+            "status": "pending"           
+        })
+        
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": f"伺服器發生錯誤: {str(e)}",
+            "application_id": "",
+            "status": "pending"
         }, status=500)

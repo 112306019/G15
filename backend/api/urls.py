@@ -13,4 +13,5 @@ urlpatterns = [
     # 對齊你們規格書要求的路徑
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
+    path('koc/application/applyMission', views.apply_mission, name='apply_mission'),
 ]
