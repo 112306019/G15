@@ -38,13 +38,13 @@ class ApplicationAdmin(admin.ModelAdmin):
 
 @admin.register(KOC)
 class KOCAdmin(admin.ModelAdmin):
-    # 對齊你的圖片欄位：KOC_id, User_id, Social_Account, Bank_Account
-    list_display = ('koc_id', 'user_id', 'social_account', 'bank_account')
+    readonly_fields = ('koc_id',)
+    list_display = ('koc_id', 'user', 'social_account', 'bank_account')
     search_fields = ('koc_id', 'user__name', 'social_account')
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    # 對齊你的圖片欄位：User_id, Role, Name, Email, Phone, Created_At
+    readonly_fields = ('user_id',)
     list_display = ('user_id', 'name', 'email', 'role', 'phone', 'created_at')
     list_filter = ('role',)
     search_fields = ('user_id', 'name', 'email', 'phone')
