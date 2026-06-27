@@ -10,8 +10,10 @@ from . import views
 # urlpatterns = router.urls
 
 urlpatterns = [
-    # 對齊你們規格書要求的路徑
-    path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
+    path('koc/profile/updateProfile', views.update_koc_profile, name='koc-update-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
     path('koc/application/applyMission', views.apply_mission, name='apply_mission'),
+    path('koc/mission/submit', views.mission_submit, name='koc-mission-submit'),
+    path('koc/application/getlist', views.get_application_list, name='get-application-list'),
+    path('koc/mission/getDetail', views.mission_get_detail, name='koc-mission-get-detail'),
 ]

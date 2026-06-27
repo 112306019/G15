@@ -1,64 +1,79 @@
+from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny   # 引入「允許任何人」
-from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC
+from rest_framework import status as http_status
+from ..serializers import MissionSubmitSerializer, UpdateKOCProfileSerializer
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew
+from .constants import (
+    APPLICATION_STATUS_REVERSE_MAP,
+    APPLICATION_STATUS_CODE_MAP,
+    STAGE_CODE_MAP,
+    COUPON_STATUS_CODE_MAP,
+)
+
+
+# submission_type 對外(API文件: 0/1) <-> 對內(資料庫: 有意義字串)
+SUBMISSION_TYPE_MAP = {
+    '0': 'text',   # 文案
+    '1': 'link',   # 作品連結
+}
+
+# status 對內(資料庫字串) <-> 對外(API文件: integer)
+STATUS_CODE_MAP = {
+    'pending': 0,    # 審核中
+    'revising': 1,   # 修改中
+    'approved': 2,   # 審核通過
+}
+
 
 # 修改KOC資料 
 @api_view(['POST'])
-@permission_classes([AllowAny])  # 引入「允許任何人」，登入驗證完成後刪除
+@permission_classes([AllowAny])
 def update_koc_profile(request):
-    # 1. 取得前端傳過來的參數
-    user_id = request.data.get('user_id')
-    user_name = request.data.get('user_name')
-    phone = request.data.get('phone')
-    email = request.data.get('email')
-    bank_account = request.data.get('bank_account')
-    bank_number = request.data.get('bank_number')
-    address = request.data.get('address')
+    serializer = UpdateKOCProfileSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": "; ".join(str(e) for e in serializer.errors.values())
+        }, status=http_status.HTTP_400_BAD_REQUEST)
 
-    if not user_id:
-        return Response({"success": False, "err": "缺少必要的 user_id 參數", "user_id": None}, status=400)
+    data = serializer.validated_data
 
     try:
-        # 2. 首先，去 User 表找到這個使用者，並更新基礎資料
-        user_instance = User.objects.get(user_id=user_id)
-        user_instance.name = user_name
-        user_instance.phone = phone
-        user_instance.email = email
-        user_instance.save() # 存入 User 表
-        # 3. 接著，透過一對一關聯找到該 User 的 KOC 擴充表資料
-        # 如果該 User 還沒有 KOC 擴充資料，就幫他自動建立一個
-        koc_instance, created = KOC.objects.get_or_create(
-            user=user_instance,
-            defaults={'koc_id': f"koc_{user_id}"} # 預設一個 koc_id
-        )
-        # 4. 更新 KOC 表的專屬欄位
-        koc_instance.bank_account = bank_account
-        koc_instance.bank_number = bank_number
-        koc_instance.address = address
-        koc_instance.save() # 存入 KOC 表
-
-        # 5. 完全成功，回傳符合規格書的 Response
-        return Response({
-            "success": True,
-            "err": "",
-            "user_id": user_id
-        }, status=200)
-
+        user = User.objects.get(pk=data['user_id'])
     except User.DoesNotExist:
         return Response({
             "success": False,
-            "err": "找不到該 user_id 的使用者，請先確保使用者已存在",
-            "user_id": user_id
-        }, status=404)
-        
-    except Exception as e:
+            "err": "找不到對應的使用者"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    try:
+        koc = user.koc_profile  # User model 裡 OneToOneField 的 related_name
+    except KOC.DoesNotExist:
         return Response({
             "success": False,
-            "err": f"系統錯誤: {str(e)}",
-            "user_id": user_id
-        }, status=500)
-    
+            "err": "此使用者沒有對應的 KOC 資料"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    # 更新 User 表欄位
+    user.name = data['user_name']
+    user.phone = data['phone']
+    user.email = data['email']
+    user.save()
+
+    # 更新 KOC 表欄位
+    koc.bank_account = data['bank_account']
+    koc.bank_number = data['bank_number']
+    koc.address = data['address']
+    koc.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "user_id": user.user_id
+    }, status=http_status.HTTP_200_OK)
+
 # 獲取可申請代言列表    
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -120,9 +135,6 @@ def get_available_campaign_list(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def apply_mission(request):
-    """
-    URL: /koc/application/applyMission
-    """
     koc_id = request.data.get('koc_id')
     order_id = request.data.get('order_id')
     campaign_id = request.data.get('campaign_id')
@@ -206,3 +218,144 @@ def apply_mission(request):
             "application_id": "",
             "status": "pending"
         }, status=500)
+    
+#繳交、修改文案/作品
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def mission_submit(request):
+    serializer = MissionSubmitSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": "; ".join(str(e) for e in serializer.errors.values())
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    try:
+        mission = KOCMissionNew.objects.get(pk=data['KOCMission_id'])
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC 任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    # 防止重複提交：審核中或已通過時不可再次提交
+    existing = Submissions.objects.filter(
+        kocmission=mission,
+        status__in=['pending', 'approved']
+    ).exists()
+    if existing:
+        return Response({
+            "success": False,
+            "err": "請勿重複提交"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    submission = Submissions.objects.create(
+        kocmission=mission,
+        submission_type=SUBMISSION_TYPE_MAP[data['submission_type']],
+        text_content=data.get('text_content'),
+        content_url=data.get('content_url'),
+        status='pending',
+        submitted_time=timezone.now(),
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submission_id": str(submission.submission_id),
+        "status": STATUS_CODE_MAP[submission.status]
+    }, status=http_status.HTTP_200_OK)
+
+
+
+# TODO: 目前系統尚未接上登入驗證機制，以下 GET API 暫時不檢查請求者身份是否與資料歸屬一致。
+# 等登入/Token 機制完成後，需要補上「只能查自己任務」的權限檢查。
+#顯示審核狀態
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_application_list(request):
+    user_id = request.query_params.get('User_id')
+    status_param = request.query_params.get('status', '0')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "User_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        koc = KOC.objects.get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    try:
+        db_status = APPLICATION_STATUS_REVERSE_MAP[int(status_param)]
+    except (ValueError, KeyError):
+        return Response({
+            "success": False,
+            "err": "status 參數不正確"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    applications = Application.objects.filter(koc=koc, status=db_status).select_related('campaign')
+
+    result = []
+    for app in applications:
+        # 取得活動關聯的第一個商品圖片
+        campaign_product = CampaignProduct.objects.filter(campaign=app.campaign).select_related('product').first()
+        campaign_image = campaign_product.product.image_url if campaign_product else None
+
+        coupon = CouponNew.objects.filter(kocmission__application=app).order_by('-coupon_id').first()
+        coupon_status = COUPON_STATUS_CODE_MAP[coupon.status] if coupon else None
+
+        result.append({
+            "application_id": str(app.application_id),
+            "campaign_name": app.campaign.name,
+            "campaign_image": campaign_image,
+            "status": APPLICATION_STATUS_CODE_MAP[app.status],
+            "promotion_code": coupon.promotion_code if coupon else None,
+            "coupon_status": coupon_status,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "application": result
+    }, status=http_status.HTTP_200_OK)
+
+#獲取任務狀態
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def mission_get_detail(request):
+    mission_id = request.query_params.get('KOCMission_id')
+
+    if not mission_id:
+        return Response({
+            "success": False,
+            "err": "KOCMission_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = KOCMissionNew.objects.select_related('application__campaign').get(pk=mission_id)
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    latest_submission = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time').first()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "KOCMission_id": str(mission.kocmission_id),
+        "campaign_name": mission.application.campaign.name,
+        "campaign_description": mission.application.campaign.description,
+        "stage": STAGE_CODE_MAP[mission.stage],
+        "text_content": latest_submission.text_content if latest_submission else None,
+        "file_url": latest_submission.content_url if latest_submission else None,
+        "vendor_feedback": latest_submission.vendor_feedback if latest_submission else None,
+    }, status=http_status.HTTP_200_OK)

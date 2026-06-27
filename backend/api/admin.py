@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application, User
+from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor
 # 例如：from .models import Product
 # admin.site.register(Product)
 
@@ -48,3 +48,22 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ('user_id', 'name', 'email', 'role', 'phone', 'created_at')
     list_filter = ('role',)
     search_fields = ('user_id', 'name', 'email', 'phone')
+
+@admin.register(KOCMissionNew)
+class KOCMissionNewAdmin(admin.ModelAdmin):
+    list_display = ('kocmission_id', 'koc', 'application', 'stage')
+    list_filter = ('stage',)
+    search_fields = ('kocmission_id', 'koc__koc_id')
+
+
+@admin.register(Submissions)
+class SubmissionsAdmin(admin.ModelAdmin):
+    list_display = ('submission_id', 'kocmission', 'submission_type', 'status', 'submitted_time')
+    list_filter = ('status', 'submission_type')
+    search_fields = ('submission_id', 'kocmission__kocmission_id')
+    readonly_fields = ('submitted_time', 'reviewed_time')
+
+@admin.register(Vendor)
+class VendorAdmin(admin.ModelAdmin):
+    list_display = ('vendor_id', 'company_name', 'contact_name', 'email', 'tax_id', 'created_at')
+    search_fields = ('company_name', 'contact_name', 'email', 'tax_id')

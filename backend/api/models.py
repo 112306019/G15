@@ -184,12 +184,30 @@ class KOCMissionNew(models.Model):
 
 
 class Submissions(models.Model):
+    SUBMISSION_TYPE_CHOICES = [
+        ('text', '文案'),
+        ('link', '作品連結'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', '審核中'),
+        ('revising', '修改中'),
+        ('approved', '審核通過'),
+    ]
     submission_id = models.AutoField(primary_key=True, db_column='submission_id')
     kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='kocmisson_id')
-    submission_type = models.CharField(max_length=50, db_column='submission_type')
+    submission_type = models.CharField(
+        max_length=50,
+        choices=SUBMISSION_TYPE_CHOICES,
+        db_column='submission_type'
+    )
     content_url = models.CharField(max_length=500, blank=True, null=True, db_column='content_url')
     text_content = models.TextField(blank=True, null=True, db_column='text_content')
-    status = models.CharField(max_length=50, db_column='status')
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
     vendor_feedback = models.TextField(blank=True, null=True, db_column='vendor_feedback')
     submitted_time = models.DateTimeField(blank=True, null=True, db_column='submitted_time')
     reviewed_time = models.DateTimeField(blank=True, null=True, db_column='reviewed_time')
@@ -202,11 +220,16 @@ class Submissions(models.Model):
 
 
 class CouponNew(models.Model):
+    STATUS_CHOICES = [
+        ('inactive', '未啟用'),
+        ('active', '啟用中'),
+        ('expired', '已過期'),
+    ]
     coupon_id = models.AutoField(primary_key=True, db_column='coupon_id')
     kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='kocmisson_id')
     promotion_code = models.CharField(max_length=100, unique=True, db_column='promotion_code')
     discount_value = models.IntegerField(db_column='discount_value')
-    status = models.CharField(max_length=50, db_column='status')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='inactive', db_column='status')
     usage_count = models.IntegerField(default=0, db_column='usage_count')
     total_commission = models.IntegerField(default=0, db_column='total_commission')
 

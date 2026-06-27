@@ -1,213 +1,51 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from .models import (
-    Category, Product, Order, OrderItem,
-    KOCTask, KOCApplication, TaskExecution,
-    PromoCode, EarningsRecord,
+    User, Order, OrderItem, Campaigns, CampaignProduct, Product,
+    Application, KOCMissionNew, Submissions, KOC
 )
-from .models import Influencer
+
 
 User = get_user_model()
-
+# ──────────────────────────────────────────────
+# KOC部分
+# ──────────────────────────────────────────────
 class InfluencerSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Influencer
-        fields = '__all__'  # 代表把 models 裡定義的所有欄位都轉成 JSON
-
-class KOCProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = KOCProfile
-        # 剛好對齊你圖片中 Request 要求的 7 個參數
-        fields = ['user_id', 'name', 'phone', 'email', 'bank_account', 'bank_number', 'address']
-# ──────────────────────────────────────────────
-# Auth / User
-# ──────────────────────────────────────────────
-
-class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
-
-    class Meta:
         model = User
-        fields = ["id", "username", "email", "password", "role", "phone"]
+        fields = '__all__'
 
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        return user
+class UpdateKOCProfileSerializer(serializers.Serializer):
+    user_id = serializers.CharField(required=True)
+    user_name = serializers.CharField(required=True)
+    phone = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
+    bank_account = serializers.CharField(required=True)
+    bank_number = serializers.CharField(required=True)
+    address = serializers.CharField(required=True)
+  
+class MissionSubmitSerializer(serializers.Serializer):
+    KOCMission_id = serializers.IntegerField(required=True)
+    submission_type = serializers.ChoiceField(choices=['0', '1'], required=True)
+    text_content = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    content_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
+    def validate(self, data):
+        submission_type = data.get('submission_type')
+        if submission_type == '0' and not data.get('text_content'):
+            raise serializers.ValidationError("submission_type=0 (文案) 時，text_content 為必填")
+        if submission_type == '1' and not data.get('content_url'):
+            raise serializers.ValidationError("submission_type=1 (作品連結) 時，content_url 為必填")
+        return data
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = [
-            "id", "username", "email", "role", "phone", "avatar",
-            "points", "display_name", "ig_username", "fb_url",
-            "threads_username", "koc_approved", "company_name",
-            "company_address", "created_at",
-        ]
-        read_only_fields = ["id", "role", "koc_approved", "points", "created_at"]
-
-
-class UserPublicSerializer(serializers.ModelSerializer):
-    """給其他人看的精簡版（不含私人資料）"""
-    class Meta:
-        model = User
-        fields = ["id", "display_name", "ig_username", "avatar"]
-
-
-# ──────────────────────────────────────────────
-# 商品
-# ──────────────────────────────────────────────
-
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = ["id", "name", "slug"]
+class ApplicationListItemSerializer(serializers.Serializer):
+    application_id = serializers.CharField()
+    campaign_name = serializers.CharField()
+    campaign_image = serializers.CharField(allow_null=True)
+    status = serializers.IntegerField()
+    promotion_code = serializers.CharField(allow_null=True)
+    coupon_status = serializers.IntegerField(allow_null=True)
 
 
-class ProductSerializer(serializers.ModelSerializer):
-    vendor_name = serializers.CharField(source="vendor.company_name", read_only=True)
-    category_name = serializers.CharField(source="category.name", read_only=True)
-
-    class Meta:
-        model = Product
-        fields = [
-            "id", "vendor", "vendor_name", "category", "category_name",
-            "name", "description", "price", "stock", "image",
-            "is_active", "created_at",
-        ]
-        read_only_fields = ["id", "vendor", "created_at"]
-
-
-# ──────────────────────────────────────────────
-# 訂單
-# ──────────────────────────────────────────────
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_image = serializers.ImageField(source="product.image", read_only=True)
-    subtotal = serializers.DecimalField(
-        max_digits=10, decimal_places=2, read_only=True
-    )
-
-    class Meta:
-        model = OrderItem
-        fields = ["id", "product", "product_name", "product_image",
-                  "quantity", "unit_price", "subtotal"]
-
-
-class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
-    buyer_username = serializers.CharField(source="buyer.username", read_only=True)
-
-    class Meta:
-        model = Order
-        fields = [
-            "id", "buyer", "buyer_username", "status", "total_price",
-            "shipping_address", "promo_code", "discount_amount",
-            "items", "created_at", "updated_at",
-        ]
-        read_only_fields = ["id", "buyer", "total_price", "created_at", "updated_at"]
-
-
-class OrderCreateSerializer(serializers.Serializer):
-    """建立訂單時的輸入格式"""
-    shipping_address = serializers.CharField()
-    promo_code = serializers.CharField(required=False, allow_blank=True)
-    items = serializers.ListField(
-        child=serializers.DictField()  # [{product_id, quantity}, ...]
-    )
-
-
-# ──────────────────────────────────────────────
-# 優惠碼
-# ──────────────────────────────────────────────
-
-class PromoCodeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PromoCode
-        fields = [
-            "id", "code", "discount_type", "discount_value",
-            "koc", "vendor", "valid_from", "valid_until",
-            "max_uses", "used_count", "is_active", "created_at",
-        ]
-        read_only_fields = ["id", "vendor", "used_count", "created_at"]
-
-
-class PromoCodeValidateSerializer(serializers.Serializer):
-    """前端查優惠碼是否有效"""
-    code = serializers.CharField()
-
-
-# ──────────────────────────────────────────────
-# KOC 任務
-# ──────────────────────────────────────────────
-
-class KOCTaskSerializer(serializers.ModelSerializer):
-    vendor_name = serializers.CharField(
-        source="vendor.company_name", read_only=True
-    )
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    product_image = serializers.ImageField(source="product.image", read_only=True)
-    applicant_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = KOCTask
-        fields = [
-            "id", "vendor", "vendor_name", "product", "product_name",
-            "product_image", "title", "description", "reward_amount",
-            "max_koc_count", "deadline", "is_active", "applicant_count",
-            "created_at",
-        ]
-        read_only_fields = ["id", "vendor", "created_at"]
-
-    def get_applicant_count(self, obj):
-        return obj.applications.count()
-
-
-class KOCApplicationSerializer(serializers.ModelSerializer):
-    koc_display_name = serializers.CharField(
-        source="koc.display_name", read_only=True
-    )
-    task_title = serializers.CharField(source="task.title", read_only=True)
-
-    class Meta:
-        model = KOCApplication
-        fields = [
-            "id", "task", "task_title", "koc", "koc_display_name",
-            "status", "applied_at", "reviewed_at", "reject_reason",
-        ]
-        read_only_fields = ["id", "koc", "applied_at", "reviewed_at"]
-
-
-class TaskExecutionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TaskExecution
-        fields = [
-            "id", "application", "status", "promo_code",
-            "content_draft", "content_file",
-            "post_url", "post_screenshot",
-            "reject_reason", "created_at", "updated_at",
-        ]
-        read_only_fields = ["id", "application", "created_at", "updated_at"]
-
-
-# ──────────────────────────────────────────────
-# 收益
-# ──────────────────────────────────────────────
-
-class EarningsRecordSerializer(serializers.ModelSerializer):
-    task_title = serializers.CharField(
-        source="task_execution.application.task.title", read_only=True
-    )
-
-    class Meta:
-        model = EarningsRecord
-        fields = [
-            "id", "koc", "task_execution", "task_title",
-            "order", "amount", "status",
-            "transaction_id", "paid_at", "created_at",
-        ]
-        read_only_fields = ["id", "koc", "created_at"]
+class MissionDetailSerializer(serializers.Serializer):
+    KOCMission_id = serializers.IntegerField(required=True)
