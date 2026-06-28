@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket } from 'lucide-react';
 
 const STAGES = [
   { id: 1, label: '資格審核', icon: Clock, desc: '等待廠商確認' },
@@ -9,13 +9,13 @@ const STAGES = [
   { id: 5, label: '已結案', icon: CheckCircle2, desc: '任務完成' },
 ];
 
-// 預設的假資料
+// 🟢 假資料更新：為階段二、階段三的任務都補上 promoCode
 const defaultTasks = [
   { id: 'T001', productName: 'SanDisk 128GB Extreme PRO', vendor: 'SanDisk 官方', stage: 1, deadline: '2026-05-18' },
   { id: 'T006', productName: '夏季控油保濕化妝水', vendor: '某專櫃品牌', stage: 1, deadline: '2026-05-10', isRejected: true, rejectReason: '粉絲受眾類型較不符' },
-  { id: 'T002', productName: '樂扣樂扣嚼對FUN飲吸管杯', vendor: 'LocknLock', stage: 2, deadline: '2026-05-20' },
-  { id: 'T003', productName: '夏季控油防曬乳 SPF50+', vendor: '專科', stage: 3, status: 'reviewing', deadline: '2026-05-22' },
-  { id: 'T007', productName: 'SAMSUNG 256GB 記憶卡', vendor: '三星', stage: 3, status: 'rejected', rejectReason: '未提及防水功能，請補充。', deadline: '2026-05-23' },
+  { id: 'T002', productName: '樂扣樂扣嚼對FUN飲吸管杯', vendor: 'LocknLock', stage: 2, deadline: '2026-05-20', promoCode: '#LOCK2026' },
+  { id: 'T003', productName: '夏季控油防曬乳 SPF50+', vendor: '專科', stage: 3, status: 'reviewing', deadline: '2026-05-22', promoCode: '#SUN50PLUS' },
+  { id: 'T007', productName: 'SAMSUNG 256GB 記憶卡', vendor: '三星', stage: 3, status: 'rejected', rejectReason: '未提及防水功能，請補充。', deadline: '2026-05-23', promoCode: '#SAMSUNG88' },
   { id: 'T004', productName: '極致保濕修護精華', vendor: '理膚寶水', stage: 4, deadline: '2026-05-25', promoCode: '#WATER2026' },
   { id: 'T005', productName: 'Transcend 行動固態硬碟', vendor: '創見', stage: 5, deadline: '2026-05-10', reward: 1500 },
 ];
@@ -25,7 +25,6 @@ export default function HomePage({ onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [allTasks, setAllTasks] = useState([]);
 
-  // 🟢 進入頁面時，從 localStorage 讀取資料 (如果沒有才用預設資料)
   useEffect(() => {
     const savedTasks = localStorage.getItem('koc_tasks');
     if (savedTasks) {
@@ -36,16 +35,15 @@ export default function HomePage({ onNavigate }) {
     }
   }, []);
 
-  // 輔助函式：跳轉前先把當前任務存進 localStorage
   const handleGoToDetail = (task) => {
     localStorage.setItem('currentSelectedTask', JSON.stringify(task));
-    onNavigate('task_detail', task); // 依然傳遞，以防你的父元件有用到
+    onNavigate('task_detail', task);
   };
 
-  // 重置假資料 (方便你無限次測試流程)
   const handleResetData = () => {
     localStorage.setItem('koc_tasks', JSON.stringify(defaultTasks));
     setAllTasks(defaultTasks);
+    alert('測試資料已重新整理！請查看卡片與內頁是否出現優惠碼。');
   };
 
   const filteredTasks = allTasks.filter(task => task.stage === activeStage && task.productName.includes(searchQuery));
@@ -79,36 +77,58 @@ export default function HomePage({ onNavigate }) {
         );
       case 2:
         return (
-          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
-            <Edit3 size={16}/> 前往撰寫文案
-          </button>
+          <div className="flex flex-col gap-3">
+            {/* 🟢 撰寫文案階段：顯示優惠碼 */}
+            {task.promoCode && (
+              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+                <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
+              </div>
+            )}
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+              <Edit3 size={16}/> 前往撰寫文案
+            </button>
+          </div>
         );
       case 3:
         if (task.status === 'rejected') {
           return (
-            <div className="flex flex-col gap-2">
-              <div className="text-xs font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-2 rounded-xl flex items-center gap-1.5 border border-[#C8522A]/20">
-                <AlertCircle size={14} /> 需修改：{task.rejectReason}
+            <div className="flex flex-col gap-3">
+              {/* 🟢 退件重寫階段：顯示優惠碼 */}
+              {task.promoCode && (
+                <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+                  <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
+                </div>
+              )}
+              <div className="text-xs font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-2.5 rounded-xl flex items-center gap-1.5 border border-[#C8522A]/20 leading-snug">
+                <AlertCircle size={16} className="shrink-0" /> 需修改：{task.rejectReason}
               </div>
-              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-2.5 rounded-xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
                 <Edit3 size={16}/> 修改草稿並重新送出
               </button>
             </div>
           );
         }
         return (
-          <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
-            <Search size={16}/> 查看審核進度
-          </button>
+          <div className="flex flex-col gap-3">
+             {/* 🟢 廠商審核中階段：顯示優惠碼 */}
+             {task.promoCode && (
+              <div className="bg-[#F8F9FA] border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+                <Ticket size={14} /> 綁定優惠碼：{task.promoCode}
+              </div>
+            )}
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+              <Search size={16}/> 查看審核進度
+            </button>
+          </div>
         );
       case 4:
         return (
           <div className="flex gap-3">
-             <div className="flex-1 bg-[#FDF0ED] border border-[#FDF0ED] text-[#C8522A] py-3.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center leading-tight">
+             <div className="flex-[0.8] bg-[#FDF0ED] border border-[#FDF0ED] text-[#C8522A] py-3.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center leading-tight">
                <span>專屬優惠碼</span>
                <span className="text-sm font-black tracking-wider">{task.promoCode}</span>
              </div>
-             <button onClick={() => handleGoToDetail(task)} className="flex-1 bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+             <button onClick={() => handleGoToDetail(task)} className="flex-[1.2] bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
                <Upload size={16}/> 提交貼文連結
              </button>
           </div>
@@ -130,8 +150,7 @@ export default function HomePage({ onNavigate }) {
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] flex items-center gap-4">
           任務管理
-          {/* 測試按鈕：讓你可以隨時還原假資料 */}
-          <button onClick={handleResetData} className="text-[#8C8880] hover:text-[#C8522A] text-xs font-bold flex items-center gap-1 bg-[#F8F9FA] px-3 py-1.5 rounded-lg border border-[#E2DDD4] transition-colors">
+          <button onClick={handleResetData} className="text-[#8C8880] hover:text-[#C8522A] text-xs font-bold flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-[#E2DDD4] transition-colors shadow-sm">
             <RotateCcw size={12} /> 重新整理測試資料
           </button>
         </h2>
@@ -143,11 +162,8 @@ export default function HomePage({ onNavigate }) {
         </button>
       </div>
 
-      {/* 🟢 新手指南 (Onboarding Banner) */}
       <div className="bg-[#1A1A18] rounded-[2rem] p-8 mb-10 flex items-center justify-between shadow-xl relative overflow-hidden border border-[#E2DDD4]">
-         {/* 裝飾背景 */}
          <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
-         
          <div className="relative z-10">
             <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
               <span className="text-[#C8522A]">💡</span> 賺取分潤超簡單，跟著進度走！
@@ -175,7 +191,7 @@ export default function HomePage({ onNavigate }) {
             <button 
               key={stage.id}
               onClick={() => setActiveStage(stage.id)}
-              className={`flex-1 min-w-[140px] flex flex-col items-center justify-center py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#F5F0E8]' : 'hover:bg-[#F8F9FA]'}`}
+              className={`flex-1 min-w-[140px] flex flex-col items-center justify-center py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
             >
               {taskCount > 0 && (
                 <span className="absolute top-3 right-8 w-5 h-5 bg-[#C8522A] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">

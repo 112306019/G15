@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar } from 'lucide-react';
+import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket } from 'lucide-react';
 
 export default function TaskDetailPage({ onBack }) {
   const [currentTask, setCurrentTask] = useState(() => {
@@ -44,7 +44,7 @@ export default function TaskDetailPage({ onBack }) {
     <div className="flex h-[calc(100vh-80px)] max-w-[1400px] mx-auto animate-in fade-in duration-300 gap-8 pb-8">
       
       {/* =========================================
-          左側：主要內容區 (改為上下佈局，視覺更寬敞)
+          左側：主要內容區
       ========================================== */}
       <div className="flex-1 flex flex-col min-w-0">
         
@@ -54,7 +54,7 @@ export default function TaskDetailPage({ onBack }) {
           返回任務中心
         </button>
 
-        {/* 🌟 1. 全新標題與橫向資訊列 */}
+        {/* 標題與橫向資訊列 */}
         <div className="mb-6">
           <div className="flex justify-between items-end mb-4">
             <div>
@@ -70,7 +70,7 @@ export default function TaskDetailPage({ onBack }) {
             </div>
           </div>
 
-          {/* 橫向黑色 Banner：不佔垂直空間，又保有質感 */}
+          {/* 橫向黑色 Banner */}
           <div className="bg-[#1A1A18] rounded-3xl p-6 flex justify-between items-center shadow-lg border border-[#E2DDD4]/20">
             <div className="flex items-center gap-8 text-[#F5F0E8]">
               <div>
@@ -91,19 +91,38 @@ export default function TaskDetailPage({ onBack }) {
           </div>
         </div>
         
-        {/* 🌟 2. 獨立的主視覺操作卡片 */}
+        {/* 獨立的主視覺操作卡片 */}
         <div className="flex-1 bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm p-10 flex flex-col overflow-y-auto">
           
           {/* 🟢 情境 1：可以填寫/修改文案 */}
           {isEditable && (
             <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-4">
-              <div className="flex items-center gap-3 mb-8">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center text-[#1A1A18]"><Edit3 size={18} /></div>
                 <h3 className="text-2xl font-bold text-[#1A1A18]">撰寫文案草稿</h3>
               </div>
+
+              {/* 🌟 修改：優惠碼配發提示區塊 (強調審核後才生效) */}
+              {currentTask.promoCode && (
+                <div className="mb-6 bg-[#FDF0ED]/40 border border-[#C8522A]/20 rounded-2xl p-5 flex items-center gap-5 shadow-sm">
+                  <div className="bg-white text-[#C8522A] px-4 py-2.5 rounded-xl font-black text-lg tracking-wider border border-[#C8522A]/30 shadow-sm flex items-center gap-2">
+                    <Ticket size={18} />
+                    {currentTask.promoCode}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[#1A1A18] font-bold text-sm mb-1 flex items-center gap-1.5">
+                      <Info size={16} className="text-[#C8522A]" /> 專屬優惠碼已配發
+                    </p>
+                    <p className="text-[#8C8880] text-xs font-medium leading-relaxed">
+                      請務必將此優惠碼加入下方的文案草稿中。<strong>待廠商審核通過後，該優惠碼即會正式開通生效</strong>，用於追蹤並計算您的分潤收益。
+                    </p>
+                  </div>
+                </div>
+              )}
               
+              {/* 被退件時的提示 */}
               {currentTask.status === 'rejected' && (
-                <div className="mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-2xl px-6 py-5 flex gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
+                <div className="mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-2xl px-6 py-5 flex gap-3 shadow-sm">
                   <AlertCircle size={20} className="text-[#C8522A] shrink-0 mt-0.5" />
                   <div>
                     <span className="text-[#C8522A] font-black text-xs uppercase tracking-wider mb-1 block">廠商要求修改</span>
@@ -148,7 +167,7 @@ export default function TaskDetailPage({ onBack }) {
               
               <div className="bg-[#F8F9FA] rounded-2xl p-8 border border-[#E2DDD4]">
                 <p className="text-[#1A1A18] font-bold mb-6 flex items-center gap-2">
-                  <Info size={16} className="text-[#C8522A]" /> 請將完成的貼文發佈至您的社群平台，並提交連結。
+                  <Info size={16} className="text-[#C8522A]" /> 優惠碼已生效！請將完成的貼文發佈至社群，並提交連結。
                 </p>
                 
                 <div className="flex flex-col gap-4">
@@ -170,7 +189,7 @@ export default function TaskDetailPage({ onBack }) {
       </div>
 
       {/* =========================================
-          右側：聊天室 (微調寬度與內距，讓整體更協調)
+          右側：聊天室
       ========================================== */}
       <div className="w-[380px] bg-[#F5F0E8] rounded-[2rem] p-4 flex flex-col relative shrink-0 shadow-sm border border-[#E2DDD4]">
         <div className="bg-white rounded-t-[1.5rem] p-5 border-b border-[#E2DDD4] flex items-center gap-4 shadow-sm z-10">
