@@ -124,7 +124,8 @@ class OrderItem(models.Model):
 
 class Application(models.Model):
     application_id = models.AutoField(primary_key=True, db_column='application_id')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    koc_id = models.CharField(max_length=100, db_column='koc_id')
+    order_id = models.UUIDField(db_column='order_id', blank=True, null=True)
     campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
     status = models.CharField(max_length=50, db_column='status')
 
