@@ -1,3 +1,4 @@
+import random, string
 from django.contrib.auth.hashers import make_password, check_password
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -5,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from django.db.models import Sum, Count
+
 
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew
 from api.vendor_serializers import (
@@ -531,6 +533,17 @@ def vendor_application_getlist(request):
         "applications": application_list
     }, status=status.HTTP_200_OK)
 
+# 產生優惠碼
+def generate_promotion_code(koc_id):
+    while True:
+        random_part = ''.join(
+            random.choices(string.digits, k=3)
+        )
+        code = f"{koc_id}-{random_part}"
+
+        if not CouponNew.objects.filter(promotion_code=code).exists():
+            return code
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -570,13 +583,48 @@ def vendor_application_review(request):
     application.status = review_result
     application.save()
 
+    created_mission = None
+    created_coupon = None
+
+    if review_result == "approved":
+        mission, mission_created = KOCMissionNew.objects.get_or_create(
+            application=application,
+            defaults={
+                "koc_id": application.koc_id,
+                "stage": "pending"
+            }
+        )
+
+        coupon = CouponNew.objects.filter(
+            kocmission=mission
+        ).first()
+
+        if not coupon:
+            promotion_code = generate_promotion_code(
+                application.koc_id
+            )
+
+            coupon = CouponNew.objects.create(
+                kocmission=mission,
+                promotion_code=promotion_code,
+                discount_value=50,
+                status="active",
+                usage_count=0,
+                total_commission=0
+            )
+
+        created_mission = mission
+        created_coupon = coupon
+
     return Response({
         "success": True,
         "err": "",
         "application_id": application.application_id,
         "status": application.status,
-        "promotion_code": ""
+        "kocmission_id": created_mission.kocmission_id if created_mission else None,
+        "promotion_code": created_coupon.promotion_code if created_coupon else None
     }, status=status.HTTP_200_OK)
+
 
 
 # ──────────────────────────────────────────────
