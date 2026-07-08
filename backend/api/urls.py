@@ -33,4 +33,21 @@ urlpatterns = [
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),
     path('vendor/application/review', vendor.vendor_application_review, name='vendor-application-review'),
+
+    # Vendor 投稿 / 任務成果審核 API
+    path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
+    path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
+
+    # Vendor 訂單 API
+    path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
+    path('vendor/order/getDetail', vendor.vendor_order_get_detail, name='vendor-order-get-detail'),
+    path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
+
+    # Vendor 優惠碼 API
+    path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),
+    path('vendor/coupon/updateStatus', vendor.vendor_coupon_update_status, name='vendor-coupon-update-status'),
+
+    # Vendor 分析 API
+    path('vendor/analytics/overview', vendor.vendor_analytics_overview, name='vendor-analytics-overview'),
+    path('vendor/analytics/productPerformance', vendor.vendor_product_performance, name='vendor-product-performance'),
 ]

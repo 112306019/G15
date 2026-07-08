@@ -105,7 +105,11 @@ class OrderItem(models.Model):
     """訂單明細表"""
     order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items', db_column='order_id')
-    product_id = models.CharField(max_length=100, db_index=True)
+    product = models.ForeignKey(
+        'Product',
+        on_delete=models.CASCADE,
+        db_column='product_id'
+    )
     quantity = models.IntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
@@ -469,3 +473,5 @@ class AdminAuditLogs(models.Model):
 
     def __str__(self):
         return f"AuditLog {self.log_id}"
+    
+

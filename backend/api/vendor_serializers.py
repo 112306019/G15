@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Vendor, Product, Campaigns, CampaignProduct, Application
+from .models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions
 
 class VendorRegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -142,3 +142,14 @@ class VendorApplicationReviewSerializer(serializers.Serializer):
     vendor_id = serializers.IntegerField()
     application_id = serializers.IntegerField()
     status = serializers.CharField()
+
+
+# ──────────────────────────────────────────────
+# Vendor 投稿 / 任務成果審核
+# ──────────────────────────────────────────────
+
+class VendorSubmissionReviewSerializer(serializers.Serializer):
+    vendor_id = serializers.IntegerField()
+    submission_id = serializers.IntegerField()
+    status = serializers.CharField()
+    vendor_feedback = serializers.CharField(required=False, allow_blank=True)

@@ -3,8 +3,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
+from django.db.models import Sum, Count
 
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -15,6 +17,7 @@ from api.vendor_serializers import (
     VendorCampaignCreateSerializer,
     VendorCampaignUpdateSerializer,
     VendorApplicationReviewSerializer,
+    VendorSubmissionReviewSerializer,
 )
 
 
@@ -573,4 +576,589 @@ def vendor_application_review(request):
         "application_id": application.application_id,
         "status": application.status,
         "promotion_code": ""
+    }, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# Vendor 投稿 / 任務成果審核
+# ──────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_mission_get_submission_detail(request):
+    vendor_id = request.GET.get("vendor_id")
+    submission_id = request.GET.get("submission_id")
+    kocmission_id = request.GET.get("kocmission_id")
+    submission_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    submissions = Submissions.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    )
+
+    if submission_id:
+        submissions = submissions.filter(submission_id=submission_id)
+
+    if kocmission_id:
+        submissions = submissions.filter(kocmission__kocmission_id=kocmission_id)
+
+    if submission_status:
+        submissions = submissions.filter(status=submission_status)
+
+    submission_list = []
+
+    for submission in submissions:
+        mission = submission.kocmission
+        application = mission.application
+        campaign = application.campaign
+
+        submission_list.append({
+            "submission_id": submission.submission_id,
+            "submission_type": submission.submission_type,
+            "content_url": submission.content_url,
+            "text_content": submission.text_content,
+            "status": submission.status,
+            "vendor_feedback": submission.vendor_feedback,
+            "submitted_time": submission.submitted_time,
+            "reviewed_time": submission.reviewed_time,
+
+            "kocmission_id": mission.kocmission_id,
+            "stage": mission.stage,
+            "koc_id": mission.koc_id,
+
+            "application_id": application.application_id,
+            "campaign_id": campaign.campaign_id,
+            "campaign_name": campaign.name,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submissions": submission_list
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_mission_review_submission(request):
+    serializer = VendorSubmissionReviewSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data["vendor_id"]
+    submission_id = serializer.validated_data["submission_id"]
+    review_result = serializer.validated_data["status"]
+    vendor_feedback = serializer.validated_data.get("vendor_feedback", "")
+
+    if review_result not in ["approved", "rejected"]:
+        return Response({
+            "success": False,
+            "err": "Invalid review result"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        submission = Submissions.objects.get(submission_id=submission_id)
+    except Submissions.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Submission not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = submission.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This submission does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    submission.status = review_result
+    submission.vendor_feedback = vendor_feedback
+    submission.reviewed_time = timezone.now()
+    submission.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submission_id": submission.submission_id,
+        "status": submission.status,
+        "vendor_feedback": submission.vendor_feedback,
+        "reviewed_time": submission.reviewed_time,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_order_getlist(request):
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    order_map = {}
+
+    for item in order_items:
+        order = item.order
+
+        if order.order_id not in order_map:
+            order_map[order.order_id] = {
+                "order_id": str(order.order_id),
+                "user_id": order.user_id,
+                "guest_id": order.guest_id,
+                "promotion_code": order.promotion_code,
+                "total_amount": str(order.total_amount),
+                "order_status": order.order_status,
+                "payment_status": order.payment_status,
+                "shipping_status": order.shipping_status,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "items": []
+            }
+
+        order_map[order.order_id]["items"].append({
+            "order_item_id": str(item.order_item_id),
+            "product_id": item.product.product_id,
+            "product_name": item.product.product_name,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+            "subtotal": str(item.subtotal),
+            "apply_status": item.apply_status
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "orders": list(order_map.values())
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_order_get_detail(request):
+    vendor_id = request.GET.get("vendor_id")
+    order_id = request.GET.get("order_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not order_id:
+        return Response({
+            "success": False,
+            "err": "order_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        order_id=order_id,
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if not order_items.exists():
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order = order_items[0].order
+
+    payment = Payment.objects.filter(order_id=order_id).first()
+
+    items = []
+    for item in order_items:
+        items.append({
+            "order_item_id": str(item.order_item_id),
+            "product_id": item.product.product_id,
+            "product_name": item.product.product_name,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+            "subtotal": str(item.subtotal),
+            "apply_status": item.apply_status
+        })
+
+    payment_data = None
+    if payment:
+        payment_data = {
+            "payment_id": payment.payment_id,
+            "payment_method": payment.payment_method,
+            "payment_status": payment.payment_status,
+            "transaction_id": payment.transaction_id,
+            "promotion_code": payment.promotion_code
+        }
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order": {
+            "order_id": str(order.order_id),
+            "user_id": order.user_id,
+            "guest_id": order.guest_id,
+            "promotion_code": order.promotion_code,
+            "total_amount": str(order.total_amount),
+            "order_status": order.order_status,
+            "payment_status": order.payment_status,
+            "shipping_status": order.shipping_status,
+            "address_id": order.address_id,
+            "created_at": order.created_at.isoformat() if order.created_at else None,
+            "items": items,
+            "payment": payment_data
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_update_shipping(request):
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+    shipping_status = request.data.get("shipping_status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not order_id:
+        return Response({
+            "success": False,
+            "err": "order_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not shipping_status:
+        return Response({
+            "success": False,
+            "err": "shipping_status is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_status = ["unshipped", "preparing", "shipped", "delivered", "cancelled"]
+
+    if shipping_status not in valid_status:
+        return Response({
+            "success": False,
+            "err": "Invalid shipping_status"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        order_id=order_id,
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if not order_items.exists():
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order = order_items[0].order
+    order.shipping_status = shipping_status
+    order.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order_id": str(order.order_id),
+        "shipping_status": order.shipping_status
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_coupon_get_usage_list(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
+    status_filter = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    coupons = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).select_related(
+        "kocmission",
+        "kocmission__application",
+        "kocmission__application__campaign"
+    )
+
+    if campaign_id:
+        coupons = coupons.filter(
+            kocmission__application__campaign__campaign_id=campaign_id
+        )
+
+    if status_filter:
+        coupons = coupons.filter(status=status_filter)
+
+    coupon_list = []
+
+    for coupon in coupons:
+        mission = coupon.kocmission
+        application = mission.application
+        campaign = application.campaign
+
+        coupon_list.append({
+            "coupon_id": coupon.coupon_id,
+            "promotion_code": coupon.promotion_code,
+            "discount_value": coupon.discount_value,
+            "status": coupon.status,
+            "usage_count": coupon.usage_count,
+            "total_commission": coupon.total_commission,
+
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "stage": mission.stage,
+
+            "application_id": application.application_id,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "vendor_id": campaign.vendor_id
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "coupons": coupon_list
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_coupon_update_status(request):
+    vendor_id = request.data.get("vendor_id")
+    coupon_id = request.data.get("coupon_id")
+    coupon_status = request.data.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not coupon_id:
+        return Response({
+            "success": False,
+            "err": "coupon_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not coupon_status:
+        return Response({
+            "success": False,
+            "err": "status is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_status = ["active", "inactive", "disabled"]
+
+    if coupon_status not in valid_status:
+        return Response({
+            "success": False,
+            "err": "Invalid status"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        coupon = CouponNew.objects.select_related(
+            "kocmission__application__campaign"
+        ).get(coupon_id=coupon_id)
+    except CouponNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Coupon not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = coupon.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This coupon does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    coupon.status = coupon_status
+    coupon.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "coupon_id": coupon.coupon_id,
+        "promotion_code": coupon.promotion_code,
+        "status": coupon.status
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_analytics_overview(request):
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 1. 活動總數
+    total_campaigns = Campaigns.objects.filter(
+        vendor_id=vendor_id
+    ).count()
+
+    # 2. 這個廠商商品相關的訂單明細
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    # 3. 訂單總數，不重複計算同一張訂單
+    total_orders = order_items.values("order_id").distinct().count()
+
+    # 4. 商品銷售金額：用 OrderItem subtotal 加總
+    revenue_result = order_items.aggregate(
+        total_revenue=Sum("subtotal")
+    )
+    total_revenue = revenue_result["total_revenue"] or 0
+
+    # 5. 優惠碼資料
+    coupons = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    )
+
+    coupon_usage_result = coupons.aggregate(
+        total_coupon_usage=Sum("usage_count"),
+        total_commission=Sum("total_commission")
+    )
+
+    total_coupon_usage = coupon_usage_result["total_coupon_usage"] or 0
+    total_commission = coupon_usage_result["total_commission"] or 0
+
+    # 6. KOC 報名數
+    total_applications = Application.objects.filter(
+        campaign__vendor_id=vendor_id
+    ).count()
+
+    # 7. 投稿數
+    total_submissions = Submissions.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).count()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "analytics": {
+            "vendor_id": vendor_id,
+            "total_campaigns": total_campaigns,
+            "total_applications": total_applications,
+            "total_submissions": total_submissions,
+            "total_orders": total_orders,
+            "total_revenue": str(total_revenue),
+            "total_coupon_usage": total_coupon_usage,
+            "total_commission": total_commission
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_product_performance(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if start_date:
+        order_items = order_items.filter(order__created_at__date__gte=start_date)
+
+    if end_date:
+        order_items = order_items.filter(order__created_at__date__lte=end_date)
+
+    if campaign_id:
+        campaign_product_ids = CampaignProduct.objects.filter(
+            campaign_id=campaign_id
+        ).values_list("product_id", flat=True)
+
+        order_items = order_items.filter(
+            product_id__in=campaign_product_ids
+        )
+
+    product_data = (
+        order_items
+        .values(
+            "product__product_id",
+            "product__product_name"
+        )
+        .annotate(
+            quantity_sold=Sum("quantity"),
+            total_sales=Sum("subtotal"),
+            total_orders=Count("order", distinct=True),
+        )
+        .order_by("-total_sales")
+    )
+
+    products = []
+
+    for item in product_data:
+        product_id = item["product__product_id"]
+
+        product_order_items = order_items.filter(
+            product__product_id=product_id
+        )
+
+        coupon_codes = product_order_items.filter(
+            order__promotion_code__isnull=False
+        ).exclude(
+            order__promotion_code=""
+        ).values_list(
+            "order__promotion_code",
+            flat=True
+        ).distinct()
+
+        coupon_orders = product_order_items.filter(
+            order__promotion_code__in=coupon_codes
+        ).values(
+            "order_id"
+        ).distinct().count()
+
+        coupon_result = CouponNew.objects.filter(
+            promotion_code__in=coupon_codes
+        ).aggregate(
+            total_commission=Sum("total_commission")
+        )
+
+        products.append({
+            "product_id": str(product_id),
+            "product_name": item["product__product_name"],
+            "quantity_sold": item["quantity_sold"] or 0,
+            "total_sales": int(item["total_sales"] or 0),
+            "total_orders": item["total_orders"] or 0,
+            "coupon_orders": coupon_orders,
+            "total_commission": coupon_result["total_commission"] or 0
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "products": products
     }, status=status.HTTP_200_OK)
