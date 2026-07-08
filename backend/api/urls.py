@@ -1,5 +1,6 @@
 from django.urls import path
-from .views import koc, vendor
+
+from .views import koc, vendor, platform_admin
 
 # 之後在這裡加 API 路由
 # 例如：
@@ -50,4 +51,12 @@ urlpatterns = [
     # Vendor 分析 API
     path('vendor/analytics/overview', vendor.vendor_analytics_overview, name='vendor-analytics-overview'),
     path('vendor/analytics/productPerformance', vendor.vendor_product_performance, name='vendor-product-performance'),
+
+    # Admin API
+    # Platform Admin 平台端 API
+    path('platform_admin/vendors', platform_admin.admin_vendor_list, name='admin-vendor-list'),
+    path('platform_admin/vendor/detail', platform_admin.admin_vendor_detail, name='admin-vendor-detail'),
+    path('platform_admin/vendor/audit', platform_admin.admin_vendor_audit, name='admin-vendor-audit'),
+    path('platform_admin/vendor/review', platform_admin.admin_vendor_review, name='admin-vendor-review'),
+    path('platform_admin/overview', platform_admin.admin_overview, name='admin-overview'),
 ]
