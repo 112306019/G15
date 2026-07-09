@@ -164,18 +164,8 @@ class CouponNew(models.Model):
 
 
 # ==============================================================================
-# 3. 金流模組 ── BaseWallet(抽象) / KocWallet / VendorWallet / Transactions(合併)
+# 3. 金流模組 ── KocWallet / VendorWallet / Transactions(合併)
 # ==============================================================================
-
-class BaseWallet(models.Model):
-    """抽象錢包基礎範本（不單獨建表）"""
-    balance_available = models.IntegerField(default=0)
-    balance_frozen = models.IntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
-
 
 class KocWallet(BaseWallet):
     """KOC 網紅個人錢包"""
