@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from .views.auth import user_signup, user_login
-from .views.admin import (
+from .views.platform import (
     admin_login,
     get_consumers,
     get_consumer_orders,
@@ -35,13 +35,13 @@ urlpatterns = [
     # auth
     path('user/signUp', user_signup, name='user-signup'),
     path('user/login', user_login, name='user-login'),
-    # admin
-    path('admin/login', admin_login, name='admin-login'),
-    path('admin/consumers', get_consumers, name='admin-consumers'),
-    path('admin/consumer/orders', get_consumer_orders, name='admin-consumer-orders'),
-    path('admin/payments', get_payments, name='admin-payments'),
-    path('admin/transactions', get_transactions, name='admin-transactions'),
-    path('admin/audit/logs', get_audit_logs, name='admin-audit-logs'),
+    # platform
+    path('platform/login', admin_login, name='platform-login'),
+    path('platform/consumers', get_consumers, name='platform-consumers'),
+    path('platform/consumer/orders', get_consumer_orders, name='platform-consumer-orders'),
+    path('platform/payments', get_payments, name='platform-payments'),
+    path('platform/transactions', get_transactions, name='platform-transactions'),
+    path('platform/audit/logs', get_audit_logs, name='platform-audit-logs'),
     # consumer - 商品
     path('consumer/products', get_products, name='get-products'),
     path('consumer/product/detail', get_product_detail, name='get-product-detail'),
