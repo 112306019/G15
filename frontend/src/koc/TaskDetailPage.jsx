@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket } from 'lucide-react';
+import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2 } from 'lucide-react';
 
 export default function TaskDetailPage({ onBack }) {
   const [currentTask, setCurrentTask] = useState(() => {
@@ -10,6 +10,16 @@ export default function TaskDetailPage({ onBack }) {
   const [showModal, setShowModal] = useState(false);
   const [copyText, setCopyText] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [isSaving, setIsSaving] = useState(false); // 新增：控制儲存草稿時的 Loading 狀態
+
+  // 🌟 新增：當 currentTask 改變或開啟 Modal 時，從後端或任務資料中載入草稿
+  useEffect(() => {
+    if (currentTask) {
+      // 假設後端回傳的任務資料中已經有 draftCopy 欄位
+      // 如果你想在開啟 Modal 時才發 fetch 去 GET 也可以
+      setCopyText(currentTask.draftCopy || '');
+    }
+  }, [currentTask]);
 
   if (!currentTask) return null; 
 
@@ -19,9 +29,43 @@ export default function TaskDetailPage({ onBack }) {
     localStorage.setItem('koc_tasks', JSON.stringify(newGlobalTasks));
   };
 
-  const handleSubmitCopy = () => {
+  // 🌟 新增：儲存草稿至後端的函數
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      // 替換成你的真實後端 API URL
+      // const response = await fetch(`/api/tasks/${currentTask.id}/draft`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ copyText }),
+      // });
+      // const data = await response.json();
+
+      // 模擬 API 延遲效果
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // 同步更新本地 state 保持畫面一致
+      const updatedTask = { ...currentTask, draftCopy: copyText };
+      setCurrentTask(updatedTask);
+      updateGlobalTasks(updatedTask);
+
+      alert('草稿已成功儲存！');
+    } catch (error) {
+      console.error('儲存草稿失敗:', error);
+      alert('草稿儲存失敗，請稍後再試。');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmitCopy = async () => {
+    // 這裡通常也要打 API 送出審核，更新任務狀態
+    // try {
+    //   await fetch(`/api/tasks/${currentTask.id}/submit`, { method: 'POST', body: JSON.stringify({ copyText }) });
+    // } catch ...
+
     setShowModal(false);
-    const updatedTask = { ...currentTask, stage: 3, status: 'reviewing', rejectReason: '' };
+    const updatedTask = { ...currentTask, stage: 3, status: 'reviewing', rejectReason: '', draftCopy: copyText };
     setCurrentTask(updatedTask);
     updateGlobalTasks(updatedTask);
   };
@@ -63,7 +107,6 @@ export default function TaskDetailPage({ onBack }) {
                 {currentTask.productName}
               </h2>
             </div>
-            {/* 任務狀態小標籤 */}
             <div className="bg-[#FDF0ED] text-[#C8522A] px-4 py-1.5 rounded-full text-sm font-bold border border-[#FDF0ED] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#C8522A] animate-pulse"></span>
               執行中
@@ -102,7 +145,6 @@ export default function TaskDetailPage({ onBack }) {
                 <h3 className="text-2xl font-bold text-[#1A1A18]">撰寫文案草稿</h3>
               </div>
 
-              {/* 🌟 修改：優惠碼配發提示區塊 (強調審核後才生效) */}
               {currentTask.promoCode && (
                 <div className="mb-6 bg-[#FDF0ED]/40 border border-[#C8522A]/20 rounded-2xl p-5 flex items-center gap-5 shadow-sm">
                   <div className="bg-white text-[#C8522A] px-4 py-2.5 rounded-xl font-black text-lg tracking-wider border border-[#C8522A]/30 shadow-sm flex items-center gap-2">
@@ -120,7 +162,6 @@ export default function TaskDetailPage({ onBack }) {
                 </div>
               )}
               
-              {/* 被退件時的提示 */}
               {currentTask.status === 'rejected' && (
                 <div className="mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-2xl px-6 py-5 flex gap-3 shadow-sm">
                   <AlertCircle size={20} className="text-[#C8522A] shrink-0 mt-0.5" />
@@ -131,15 +172,22 @@ export default function TaskDetailPage({ onBack }) {
                 </div>
               )}
               
-              {/* 偽裝成輸入框的按鈕，引導使用者點擊 */}
+              {/* 顯示目前是否有暫存草稿的提示 */}
               <div 
                 onClick={() => setShowModal(true)} 
                 className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-6 min-h-[160px] cursor-pointer hover:border-[#C8522A] hover:bg-white transition-all group flex flex-col justify-center items-center gap-3 shadow-sm"
               >
                 <Edit3 size={24} className="text-[#8C8880] group-hover:text-[#C8522A] transition-colors" />
                 <span className="text-[#8C8880] font-bold group-hover:text-[#1A1A18] transition-colors">
-                  {currentTask.status === 'rejected' ? '點此修改您的文案草稿...' : '點擊開始撰寫您的文案草稿...'}
+                  {currentTask.draftCopy 
+                    ? '偵測到您有儲存的草稿，點此繼續編輯...' 
+                    : (currentTask.status === 'rejected' ? '點此修改您的文案草稿...' : '點擊開始撰寫您的文案草稿...')}
                 </span>
+                {currentTask.draftCopy && (
+                  <span className="text-xs text-[#8C8880] bg-[#F5F0E8] px-3 py-1 rounded-md line-clamp-1 max-w-md">
+                    目前內容：{currentTask.draftCopy}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -157,7 +205,7 @@ export default function TaskDetailPage({ onBack }) {
             </div>
           )}
 
-          {/* 🟢 情境 3：待發佈 (上傳連結) */}
+          {/* 🟢 情境 3：待發佈 */}
           {isWaitPublish && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-4">
               <div className="flex items-center gap-3 mb-8">
@@ -248,11 +296,30 @@ export default function TaskDetailPage({ onBack }) {
               </div>
             </div>
 
+            {/* 🌟 修改：底部按鈕區加入「儲存草稿」 */}
             <div className="flex gap-4">
-              <button onClick={() => setShowModal(false)} className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-xl font-bold hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all text-sm">
+              <button 
+                onClick={() => setShowModal(false)} 
+                disabled={isSaving}
+                className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-xl font-bold hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all text-sm disabled:opacity-50"
+              >
                 取消
               </button>
-              <button onClick={handleSubmitCopy} className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-sm tracking-widest">
+              
+              <button 
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="flex-1 bg-white border-2 border-[#1A1A18] text-[#1A1A18] py-3.5 rounded-xl font-bold hover:bg-[#1A1A18] hover:text-[#F5F0E8] transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
+                {isSaving ? '儲存中...' : '儲存草稿'}
+              </button>
+
+              <button 
+                onClick={handleSubmitCopy} 
+                disabled={isSaving}
+                className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-sm tracking-widest disabled:opacity-50"
+              >
                 確認送出審核
               </button>
             </div>

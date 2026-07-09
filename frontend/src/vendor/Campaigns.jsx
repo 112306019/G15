@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Loader2, Timer } from 'lucide-react'
 import { campaigns as initialCampaigns, products as initialProducts } from './mock'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
+
+// 🟢 取得今天的日期字串 (YYYY-MM-DD)，用於防呆與排程判斷
+const getTodayString = () => new Date().toISOString().slice(0,10)
 
 // 🟢 內建客製化 UI 元件
 function Card({ children, className = "", hoverable, onClick }) {
@@ -11,8 +14,11 @@ function Card({ children, className = "", hoverable, onClick }) {
 function Badge({ status }) {
   const cfg = {
     active: { label: '招募中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
+    // 🌟 新增：排程中的視覺樣式
+    scheduled: { label: '排程中', cls: 'bg-[#F8F9FA] border border-[#E2DDD4] text-[#1A1A18]', dot: 'bg-[#B89B6A]' },
     promo:  { label: '推廣中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
-    closed: { label: '已結案 (已下架)', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+    closed: { label: '已結案 (已失效)', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+    draft:  { label: '草稿', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#8C8880]' },
   }[status] || { label: status, cls: 'bg-gray-100 text-gray-500', dot: 'bg-gray-500' }
   
   return (
@@ -25,7 +31,7 @@ function Badge({ status }) {
 function Button({ variant = 'default', className, disabled, children, ...props }) {
   const variants = {
     brand: 'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] shadow-sm',
-    outline: 'border border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18]',
+    outline: 'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F8F9FA]',
     ghost: 'text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA]',
     default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
   }
@@ -38,9 +44,9 @@ function Button({ variant = 'default', className, disabled, children, ...props }
 
 function Input({ label, ...props }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 w-full">
       <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">{label}</label>
-      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50" {...props} />
+      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50 disabled:opacity-60 disabled:cursor-not-allowed" {...props} />
     </div>
   )
 }
@@ -58,14 +64,13 @@ function ProgressBar({ value }) {
   )
 }
 
-// 🟢 修正後的共用 Modal 結構 (支援內部滾動與自訂標題列)
+// 🟢 共用 Modal 結構
 function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="absolute inset-0 bg-[#1A1A18]/60 backdrop-blur-sm" onClick={onClose} />
       <div className={cn("relative w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-[#E2DDD4] animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]", maxWidth)}>
-        {/* 如果有傳入 title，才渲染預設標題列 */}
         {title && (
           <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] flex justify-between items-center shrink-0">
             <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">{title}</h2>
@@ -81,16 +86,31 @@ function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
 const STEPS = ['任務與時程', '推廣商品', '分潤與折扣', '確認發佈']
 
 // ─── 發佈任務精靈 ────────────────────────────────────────────────────────
-function CampaignWizard({ open, onClose, onComplete }) {
+function CampaignWizard({ open, onClose, onComplete, initialData }) {
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
+  const [isSaving, setIsSaving] = useState(false)
   
-  const [form, setForm] = useState({ 
-    name: '', budget: '', recruitEndDate: '', promoDays: '7', 
-    prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦',
-    kocDiscount: ''
-  })
+  // 🌟 修改：加入 startDate，作為排程發佈日期
+  const defaultForm = { 
+    id: '', name: '', budget: '', startDate: getTodayString(), recruitEndDate: '', promoDays: '7', 
+    prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦', kocDiscount: ''
+  }
+  const [form, setForm] = useState(defaultForm)
   
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setForm(initialData)
+        setProdMode(initialData.prodId ? 'existing' : (initialData.prodName ? 'new' : 'existing'))
+      } else {
+        setForm(defaultForm)
+        setProdMode('existing')
+      }
+      setStep(0)
+    }
+  }, [open, initialData])
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
   const existingProducts = [
@@ -106,30 +126,49 @@ function CampaignWizard({ open, onClose, onComplete }) {
       setForm(f => ({ ...f, prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦' }))
     }
   }
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800)) 
+      onComplete({ 
+        ...form, 
+        id: form.id || `draft_${Date.now()}`, 
+        status: 'draft', 
+        spent: form.spent || 0, kocCount: form.kocCount || 0, orders: form.orders || 0, gmv: form.gmv || 0
+      })
+      onClose()
+    } catch (error) {
+      alert("儲存草稿失敗")
+    } finally {
+      setIsSaving(false)
+    }
+  }
   
-  function finish() { 
-    onComplete({ 
-      ...form, 
-      id: `c${Date.now()}`, 
-      status: 'active', 
-      spent: 0, kocCount: 0, orders: 0, gmv: 0,
-      startDate: new Date().toISOString().slice(0,10),
-      endDate: form.recruitEndDate || '待定'
-    })
-    setStep(0); setProdMode('existing');
-    setForm({ name: '', budget: '', recruitEndDate: '', promoDays: '7', prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦', kocDiscount: '' })
-    onClose() 
+  const finish = async () => { 
+    setIsSaving(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800))
+      onComplete({ 
+        ...form, 
+        id: form.id && form.id.startsWith('draft_') ? `c${Date.now()}` : (form.id || `c${Date.now()}`), 
+        status: 'active', // 後續在列表中會根據 startDate 判斷是否為排程中
+        spent: form.spent || 0, kocCount: form.kocCount || 0, orders: form.orders || 0, gmv: form.gmv || 0
+      })
+      onClose() 
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (!open) return null
   return (
-    // 移除 Modal 預設 title，並將 maxWidth 加寬至 xl
     <Modal open={open} onClose={onClose} maxWidth="max-w-xl">
-      
-      {/* 🌟 客製化 Header：將標題與步驟條完美融合 */}
       <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] shrink-0">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">發佈 KOC 專屬任務</h2>
+          <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">
+            {initialData && initialData.status === 'draft' ? '編輯任務草稿' : '發佈 KOC 專屬任務'}
+          </h2>
           <button onClick={onClose} className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] transition-colors"><X size={18}/></button>
         </div>
         <div className="flex items-center gap-1">
@@ -146,20 +185,43 @@ function CampaignWizard({ open, onClose, onComplete }) {
         </div>
       </div>
 
-      {/* 步驟內容區 (支援內部滾動) */}
       <div className="px-8 py-6 overflow-y-auto flex-1 space-y-5">
         
         {step === 0 && <>
           <Input label="任務名稱 *" value={form.name} onChange={set('name')} placeholder="例：夏季防曬大作戰" />
           <Input label="總預算 (NT$) *" type="number" value={form.budget} onChange={set('budget')} placeholder="50000" />
+          
+          {/* 🌟 修改：排程發佈日期與截止日期 */}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="接案截止日期 *" type="date" value={form.recruitEndDate} onChange={set('recruitEndDate')} />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">接案後推廣天數 *</label>
-              <select value={form.promoDays} onChange={set('promoDays')} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
-                {[...Array(8).keys()].map(d => <option key={d} value={d}>{d} 天 (自動下架)</option>)}
-              </select>
-            </div>
+            <Input 
+              label="排程發佈日期 *" 
+              type="date" 
+              value={form.startDate} 
+              onChange={set('startDate')} 
+              min={getTodayString()} // 防呆：不能選過去的時間
+            />
+            <Input 
+              label="申請截止日期 *" 
+              type="date" 
+              value={form.recruitEndDate} 
+              onChange={set('recruitEndDate')} 
+              min={form.startDate || getTodayString()} // 防呆：截止日不能早於發佈日
+              disabled={!form.startDate} // 防呆：必須先選發佈日
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-2">
+            <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">優惠碼有效天數 (接案截止後) *</label>
+            <select 
+              value={form.promoDays} 
+              onChange={set('promoDays')} 
+              className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none"
+            >
+              {[1, 2, 3, 4, 5, 6, 7].map(d => (
+                <option key={d} value={d}>{d} 天 (到期自動失效)</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-[#8C8880] mt-0.5 ml-1">接案任務截止後，消費者仍可使用該折扣碼下單的天數</p>
           </div>
         </>}
 
@@ -217,19 +279,35 @@ function CampaignWizard({ open, onClose, onComplete }) {
         {step === 3 && (
           <div className="space-y-4">
             <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-5">
-              <h4 className="text-xs font-black text-[#C8522A] uppercase tracking-wider mb-3 flex items-center gap-2"><Calendar size={14}/> 任務生命週期</h4>
-              <div className="space-y-3 relative before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-[#C8522A]/20">
+              <h4 className="text-xs font-black text-[#C8522A] uppercase tracking-wider mb-3 flex items-center gap-2"><Calendar size={14}/> 任務週期預覽</h4>
+              <div className="space-y-4 relative before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-[#C8522A]/20">
+                
+                {/* 🌟 修改：根據設定的開始日期顯示動態文字 */}
+                <div className="flex items-start gap-3 relative z-10">
+                  <div className={cn("w-4 h-4 rounded-full border-4 border-[#FDF0ED] shrink-0 mt-0.5", form.startDate > getTodayString() ? "bg-[#B89B6A]" : "bg-[#C8522A]")} />
+                  <div>
+                    <div className="text-sm font-bold text-[#1A1A18] flex items-center gap-2">
+                      {form.startDate === getTodayString() ? '今日起' : form.startDate}
+                      {form.startDate > getTodayString() && <span className="bg-[#F5F0E8] text-[#1A1A18] px-1.5 py-0.5 rounded text-[10px]"><Timer size={10} className="inline mr-1 mb-0.5"/>排程</span>}
+                    </div>
+                    <div className="text-xs text-[#8C8880]">任務上架，開放 KOC 申請接案</div>
+                  </div>
+                </div>
+                
                 <div className="flex items-start gap-3 relative z-10">
                   <div className="w-4 h-4 rounded-full bg-[#C8522A] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-bold text-[#1A1A18]">今日起</div><div className="text-xs text-[#8C8880]">開放 KOC 申請接案</div></div>
+                  <div>
+                    <div className="text-sm font-bold text-[#1A1A18]">{form.recruitEndDate || '未設定'}</div>
+                    <div className="text-xs text-[#8C8880]">停止接案申請，優惠碼進入 {form.promoDays} 天最後效期</div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-3 relative z-10">
-                  <div className="w-4 h-4 rounded-full bg-[#C8522A] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-bold text-[#1A1A18]">{form.recruitEndDate || '未設定'}</div><div className="text-xs text-[#8C8880]">停止招募，開始 {form.promoDays} 天推廣期</div></div>
-                </div>
+                
                 <div className="flex items-start gap-3 relative z-10">
                   <div className="w-4 h-4 rounded-full bg-[#1A1A18] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-black text-[#1A1A18]">推廣期結束後</div><div className="text-xs font-bold text-[#C8522A]">商品退回草稿狀態，優惠碼失效</div></div>
+                  <div>
+                    <div className="text-sm font-black text-[#1A1A18]">優惠效期結束</div>
+                    <div className="text-xs font-bold text-[#C8522A]">任務關閉，商品下架，專屬優惠碼正式失效</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -237,16 +315,42 @@ function CampaignWizard({ open, onClose, onComplete }) {
         )}
       </div>
 
-      {/* Footer 區塊固定在底部 */}
-      <div className="px-8 py-5 border-t border-[#E2DDD4] flex gap-4 bg-[#F8F9FA] shrink-0">
+      <div className="px-8 py-5 border-t border-[#E2DDD4] flex justify-between bg-[#F8F9FA] shrink-0">
         <Button variant="ghost" onClick={() => step > 0 ? setStep(s=>s-1) : onClose()} className="gap-1.5 px-6">
           <ChevronLeft size={14}/>{step === 0 ? '取消' : '上一步'}
         </Button>
-        <div className="flex-1"/>
-        {step < STEPS.length-1
-          ? <Button variant="brand" onClick={() => setStep(s=>s+1)} disabled={step === 1 && !form.prodName} className="gap-1.5 px-8">下一步<ChevronRight size={14}/></Button>
-          : <Button variant="brand" onClick={finish} className="gap-2 px-8"><Plus size={14}/>確認發佈任務</Button>
-        }
+        
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={handleSaveDraft} 
+            disabled={isSaving || !form.name} 
+            className="gap-2 px-6"
+          >
+            {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
+            {isSaving ? '儲存中...' : '儲存草稿'}
+          </Button>
+
+          {step < STEPS.length-1
+            ? <Button 
+                variant="brand" 
+                onClick={() => setStep(s=>s+1)} 
+                // 🌟 修改：補上完整的防呆，第一關一定要有名字跟日期才能下一步
+                disabled={(step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) || (step === 1 && !form.prodName) || isSaving} 
+                className="gap-1.5 px-8"
+              >
+                下一步<ChevronRight size={14}/>
+              </Button>
+            : <Button 
+                variant="brand" 
+                onClick={finish} 
+                disabled={isSaving || !form.name} 
+                className="gap-2 px-8"
+              >
+                <Plus size={14}/>確認發佈任務
+              </Button>
+          }
+        </div>
       </div>
     </Modal>
   )
@@ -263,11 +367,35 @@ const mockKocList = [
 export default function Campaigns() {
   const [items, setItems] = useState(initialCampaigns)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [editingDraft, setEditingDraft] = useState(null)
   
   const [selectedTask, setSelectedTask] = useState(null)
   const [showKocList, setShowKocList] = useState(false)
 
-  const handleCreate = (newTask) => setItems(prev => [newTask, ...prev])
+  const handleCreateOrUpdate = (taskData) => {
+    setItems(prev => {
+      const isExisting = prev.find(t => t.id === taskData.id)
+      if (isExisting) {
+        return prev.map(t => t.id === taskData.id ? taskData : t)
+      } else {
+        return [taskData, ...prev]
+      }
+    })
+  }
+
+  const handleOpenWizard = () => {
+    setEditingDraft(null)
+    setWizardOpen(true)
+  }
+
+  const handleCardClick = (c) => {
+    if (c.status === 'draft') {
+      setEditingDraft(c)
+      setWizardOpen(true)
+    } else {
+      setSelectedTask(c)
+    }
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -277,7 +405,7 @@ export default function Campaigns() {
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           任務與商品總覽
         </h2>
-        <Button variant="brand" onClick={() => setWizardOpen(true)} className="gap-2 px-6">
+        <Button variant="brand" onClick={handleOpenWizard} className="gap-2 px-6">
           <Plus size={16} /> 發佈 KOC 任務
         </Button>
       </div>
@@ -285,30 +413,39 @@ export default function Campaigns() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {items.map(c => {
           const pct = budgetUsedPct(c.spent, c.budget)
+          
+          // 🌟 核心邏輯：判斷目前任務的真實狀態 (是否為排程中)
+          let displayStatus = c.status;
+          if (c.status === 'active' && c.startDate > getTodayString()) {
+            displayStatus = 'scheduled';
+          }
+
           return (
-            <Card key={c.id} hoverable onClick={() => setSelectedTask(c)} className="p-8 flex flex-col gap-6">
+            <Card key={c.id} hoverable onClick={() => handleCardClick(c)} className="p-8 flex flex-col gap-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-bold text-lg text-[#1A1A18] mb-1">{c.name}</h3>
+                  <h3 className={cn("font-bold text-lg mb-1", c.status === 'draft' ? "text-[#8C8880]" : "text-[#1A1A18]")}>
+                    {c.name || '未命名任務'}
+                  </h3>
                   <div className="text-xs font-bold text-[#8C8880] flex items-center gap-2">
-                    <Package size={14} /> 綁定：{c.prodName || '預設活動商品'}
+                    <Package size={14} /> 綁定：{c.prodName || '尚未選擇商品'}
                   </div>
                 </div>
-                <Badge status={c.status || 'active'} />
+                <Badge status={displayStatus} />
               </div>
 
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-3 gap-4 text-center opacity-90">
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">GMV</div>
-                  <div className="font-black text-sm text-[#1A1A18]">{formatCurrency(c.gmv)}</div>
+                  <div className="font-black text-sm text-[#1A1A18]">{c.status === 'draft' ? '—' : formatCurrency(c.gmv)}</div>
                 </div>
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">訂單</div>
-                  <div className="font-black text-sm text-[#1A1A18]">{c.orders}</div>
+                  <div className="font-black text-sm text-[#1A1A18]">{c.status === 'draft' ? '—' : c.orders}</div>
                 </div>
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">進度</div>
-                  <div className="font-black text-sm text-[#C8522A]">{pct}%</div>
+                  <div className="font-black text-sm text-[#C8522A]">{c.status === 'draft' ? '—' : `${pct}%`}</div>
                 </div>
               </div>
             </Card>
@@ -316,20 +453,32 @@ export default function Campaigns() {
         })}
       </div>
 
-      <CampaignWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={handleCreate} />
+      <CampaignWizard 
+        open={wizardOpen} 
+        onClose={() => { setWizardOpen(false); setEditingDraft(null); }} 
+        onComplete={handleCreateOrUpdate} 
+        initialData={editingDraft} 
+      />
 
       {/* 任務詳細資料 Modal */}
       {selectedTask && !showKocList && (
         <Modal open={!!selectedTask} onClose={() => setSelectedTask(null)} title="任務詳細資訊" maxWidth="max-w-2xl">
           <div className="px-8 py-6 space-y-6 overflow-y-auto flex-1">
+            
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-black text-[#1A1A18] mb-2">{selectedTask.name}</h3>
-                <div className="flex items-center gap-3 text-xs font-bold text-[#8C8880]">
-                   <span className="flex items-center gap-1.5"><Calendar size={14}/> {selectedTask.startDate} ~ {selectedTask.endDate}</span>
+                <h3 className="text-xl font-black text-[#1A1A18] mb-3">{selectedTask.name}</h3>
+                
+                <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+                   <span className="flex items-center gap-1.5 bg-[#F8F9FA] text-[#8C8880] px-3 py-1.5 rounded-lg border border-[#E2DDD4]">
+                     <Calendar size={14}/> 招募期間：{selectedTask.startDate} ~ {selectedTask.endDate}
+                   </span>
+                   <span className="flex items-center gap-1.5 bg-[#FDF0ED] text-[#C8522A] px-3 py-1.5 rounded-lg border border-[#C8522A]/20">
+                     <Clock size={14}/> 截止後優惠碼展延：{selectedTask.promoDays || 7} 天
+                   </span>
                 </div>
               </div>
-              <Badge status={selectedTask.status || 'active'} />
+              <Badge status={selectedTask.status === 'active' && selectedTask.startDate > getTodayString() ? 'scheduled' : selectedTask.status || 'active'} />
             </div>
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-5">
