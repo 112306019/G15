@@ -9,8 +9,7 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
@@ -31,20 +30,20 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Admins',
             fields=[
-                ('admin_id', models.AutoField(primary_key=True, serialize=False)),
-                ('name', models.CharField(max_length=200)),
-                ('email', models.EmailField(max_length=255)),
-                ('password', models.CharField(max_length=255)),
-                ('role', models.CharField(max_length=50)),
-                ('status', models.CharField(max_length=50)),
-                ('last_login_at', models.DateTimeField(blank=True, null=True)),
+                ("admin_id", models.AutoField(primary_key=True, serialize=False)),
+                ("name", models.CharField(max_length=200)),
+                ("email", models.EmailField(max_length=255)),
+                ("password", models.CharField(max_length=255)),
+                ("role", models.CharField(max_length=50)),
+                ("status", models.CharField(max_length=50)),
+                ("last_login_at", models.DateTimeField(blank=True, null=True)),
             ],
             options={
-                'db_table': 'Admins',
+                "db_table": "Admins",
             },
         ),
         migrations.CreateModel(
-            name='Campaigns',
+            name="Campaigns",
             fields=[
                 ('campaign_id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=255)),
@@ -56,19 +55,19 @@ class Migration(migrations.Migration):
                 ('status', models.CharField(default='active', max_length=50)),
             ],
             options={
-                'db_table': 'Campaigns',
+                "db_table": "Campaigns",
             },
         ),
         migrations.CreateModel(
-            name='Cart',
+            name="Cart",
             fields=[
-                ('cart_id', models.AutoField(primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('status', models.CharField(max_length=50)),
+                ("cart_id", models.AutoField(primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("status", models.CharField(max_length=50)),
             ],
             options={
-                'db_table': 'Cart',
+                "db_table": "Cart",
             },
         ),
         migrations.CreateModel(
@@ -99,51 +98,56 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='Product',
+            name="Product",
             fields=[
-                ('product_id', models.AutoField(primary_key=True, serialize=False)),
-                ('vendor_id', models.CharField(db_column='vendor_id', max_length=100)),
-                ('product_name', models.CharField(max_length=200)),
-                ('description', models.TextField(blank=True, null=True)),
-                ('price', models.IntegerField()),
-                ('discounted_price', models.IntegerField(blank=True, null=True)),
-                ('stock', models.IntegerField(default=0)),
-                ('category', models.CharField(blank=True, max_length=100, null=True)),
-                ('image_url', models.CharField(blank=True, max_length=500, null=True)),
-                ('status', models.CharField(max_length=50)),
+                ("product_id", models.AutoField(primary_key=True, serialize=False)),
+                ("vendor_id", models.CharField(db_column="vendor_id", max_length=100)),
+                ("product_name", models.CharField(max_length=200)),
+                ("description", models.TextField(blank=True, null=True)),
+                ("price", models.IntegerField()),
+                ("discounted_price", models.IntegerField(blank=True, null=True)),
+                ("stock", models.IntegerField(default=0)),
+                ("category", models.CharField(blank=True, max_length=100, null=True)),
+                ("image_url", models.CharField(blank=True, max_length=500, null=True)),
+                ("status", models.CharField(max_length=50)),
             ],
             options={
-                'db_table': 'Product',
+                "db_table": "Product",
             },
         ),
         migrations.CreateModel(
             name='User',
             fields=[
-                ('user_id', models.CharField(max_length=50, primary_key=True, serialize=False, unique=True)),
-                ('role', models.CharField(max_length=20)),
-                ('name', models.CharField(max_length=100)),
-                ('email', models.EmailField(max_length=254, unique=True)),
-                ('password', models.CharField(max_length=128)),
-                ('phone', models.CharField(max_length=20)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "user_id",
+                    models.CharField(
+                        max_length=50, primary_key=True, serialize=False, unique=True
+                    ),
+                ),
+                ("role", models.CharField(max_length=20)),
+                ("name", models.CharField(max_length=100)),
+                ("email", models.EmailField(max_length=254, unique=True)),
+                ("password", models.CharField(max_length=128)),
+                ("phone", models.CharField(max_length=20)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'db_table': 'User',
+                "db_table": "User",
             },
         ),
         migrations.CreateModel(
-            name='Vendor',
+            name="Vendor",
             fields=[
-                ('vendor_id', models.AutoField(primary_key=True, serialize=False)),
-                ('company_name', models.CharField(max_length=200)),
-                ('contact_name', models.CharField(max_length=200)),
-                ('email', models.EmailField(max_length=255)),
-                ('password', models.CharField(max_length=255)),
-                ('tax_id', models.CharField(db_column='tax_id', max_length=50)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ("vendor_id", models.AutoField(primary_key=True, serialize=False)),
+                ("company_name", models.CharField(max_length=200)),
+                ("contact_name", models.CharField(max_length=200)),
+                ("email", models.EmailField(max_length=255)),
+                ("password", models.CharField(max_length=255)),
+                ("tax_id", models.CharField(db_column="tax_id", max_length=50)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'db_table': 'Vendor',
+                "db_table": "Vendor",
             },
         ),
         migrations.CreateModel(
@@ -155,11 +159,11 @@ class Migration(migrations.Migration):
                 ('koc', models.ForeignKey(blank=True, db_column='koc_id', null=True, on_delete=django.db.models.deletion.CASCADE, to='api.koc')),
             ],
             options={
-                'db_table': 'Application',
+                "db_table": "Application",
             },
         ),
         migrations.CreateModel(
-            name='KOCMissionNew',
+            name="KOCMissionNew",
             fields=[
                 ('kocmission_id', models.AutoField(db_column='kocmission_id', primary_key=True, serialize=False)),
                 ('stage', models.CharField(db_column='stage', max_length=50)),
@@ -171,7 +175,7 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='CouponNew',
+            name="CouponNew",
             fields=[
                 ('coupon_id', models.AutoField(db_column='coupon_id', primary_key=True, serialize=False)),
                 ('promotion_code', models.CharField(db_column='promotion_code', max_length=100, unique=True)),
@@ -182,20 +186,36 @@ class Migration(migrations.Migration):
                 ('kocmission', models.ForeignKey(db_column='kocmisson_id', on_delete=django.db.models.deletion.CASCADE, to='api.kocmissionnew')),
             ],
             options={
-                'db_table': 'Coupon',
+                "db_table": "Coupon",
             },
         ),
         migrations.CreateModel(
-            name='KocWallet',
+            name="KocWallet",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('balance_available', models.IntegerField(default=0)),
-                ('balance_frozen', models.IntegerField(default=0)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('koc', models.OneToOneField(db_column='koc_id', on_delete=django.db.models.deletion.CASCADE, related_name='wallet', to='api.koc')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("balance_available", models.IntegerField(default=0)),
+                ("balance_frozen", models.IntegerField(default=0)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "koc",
+                    models.OneToOneField(
+                        db_column="koc_id",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="wallet",
+                        to="api.koc",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'Koc_Wallet',
+                "db_table": "Koc_Wallet",
             },
         ),
         migrations.CreateModel(
@@ -222,7 +242,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(blank=True, db_column='order_id', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='applications', to='api.order'),
         ),
         migrations.CreateModel(
-            name='Payment',
+            name="Payment",
             fields=[
                 ('payment_id', models.AutoField(primary_key=True, serialize=False)),
                 ('payment_method', models.CharField(blank=True, max_length=50, null=True)),
@@ -232,7 +252,7 @@ class Migration(migrations.Migration):
                 ('order', models.ForeignKey(db_column='order_id', on_delete=django.db.models.deletion.CASCADE, to='api.order')),
             ],
             options={
-                'db_table': 'Payment',
+                "db_table": "Payment",
             },
         ),
         migrations.CreateModel(
@@ -261,11 +281,11 @@ class Migration(migrations.Migration):
                 ('product', models.ForeignKey(db_column='product_id', on_delete=django.db.models.deletion.CASCADE, to='api.product')),
             ],
             options={
-                'db_table': 'CartItem',
+                "db_table": "CartItem",
             },
         ),
         migrations.CreateModel(
-            name='Submissions',
+            name="Submissions",
             fields=[
                 ('submission_id', models.AutoField(db_column='submission_id', primary_key=True, serialize=False)),
                 ('submission_type', models.CharField(choices=[('text', '文案'), ('link', '作品連結')], db_column='submission_type', max_length=50)),
@@ -278,11 +298,11 @@ class Migration(migrations.Migration):
                 ('kocmission', models.ForeignKey(db_column='kocmisson_id', on_delete=django.db.models.deletion.CASCADE, to='api.kocmissionnew')),
             ],
             options={
-                'db_table': 'Submissions',
+                "db_table": "Submissions",
             },
         ),
         migrations.CreateModel(
-            name='Payouts',
+            name="Payouts",
             fields=[
                 ('payout_id', models.AutoField(primary_key=True, serialize=False)),
                 ('amount', models.IntegerField()),
@@ -291,16 +311,20 @@ class Migration(migrations.Migration):
                 ('koc', models.ForeignKey(db_column='koc_id', on_delete=django.db.models.deletion.CASCADE, to='api.user')),
             ],
             options={
-                'db_table': 'Payouts',
+                "db_table": "Payouts",
             },
         ),
         migrations.AddField(
-            model_name='koc',
-            name='user',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='koc_profile', to='api.user'),
+            model_name="koc",
+            name="user",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="koc_profile",
+                to="api.user",
+            ),
         ),
         migrations.CreateModel(
-            name='Earnings',
+            name="Earnings",
             fields=[
                 ('earnings_id', models.AutoField(primary_key=True, serialize=False)),
                 ('amount', models.IntegerField()),
@@ -311,7 +335,7 @@ class Migration(migrations.Migration):
                 ('user', models.ForeignKey(db_column='user_id', on_delete=django.db.models.deletion.CASCADE, to='api.user')),
             ],
             options={
-                'db_table': 'Earnings',
+                "db_table": "Earnings",
             },
         ),
         migrations.AddField(
@@ -320,7 +344,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(db_column='user_id', on_delete=django.db.models.deletion.CASCADE, to='api.user'),
         ),
         migrations.CreateModel(
-            name='CampaignParticipants',
+            name="CampaignParticipants",
             fields=[
                 ('participants_id', models.AutoField(primary_key=True, serialize=False)),
                 ('status', models.CharField(max_length=50)),
@@ -329,7 +353,7 @@ class Migration(migrations.Migration):
                 ('koc', models.ForeignKey(db_column='koc_id', on_delete=django.db.models.deletion.CASCADE, to='api.user')),
             ],
             options={
-                'db_table': 'Campaign_Participants',
+                "db_table": "Campaign_Participants",
             },
         ),
         migrations.AddField(
@@ -338,23 +362,70 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(db_column='user_id', on_delete=django.db.models.deletion.CASCADE, to='api.user'),
         ),
         migrations.CreateModel(
-            name='ServiceTickets',
+            name="ServiceTickets",
             fields=[
-                ('ticket_id', models.AutoField(primary_key=True, serialize=False)),
-                ('category', models.CharField(max_length=100)),
-                ('description', models.TextField(blank=True, null=True)),
-                ('status', models.CharField(max_length=50)),
-                ('resolution_note', models.TextField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('update_at', models.DateTimeField(auto_now=True)),
-                ('admin_id', models.ForeignKey(blank=True, db_column='admin_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='api.admins')),
-                ('order_id', models.ForeignKey(blank=True, db_column='order_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='api.order')),
-                ('consumer_id', models.ForeignKey(blank=True, db_column='consumer_id', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='tickets_as_consumer', to='api.user')),
-                ('koc_id', models.ForeignKey(blank=True, db_column='koc_id', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='tickets_as_koc', to='api.user')),
-                ('vendor_id', models.ForeignKey(blank=True, db_column='vendor_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='api.vendor')),
+                ("ticket_id", models.AutoField(primary_key=True, serialize=False)),
+                ("category", models.CharField(max_length=100)),
+                ("description", models.TextField(blank=True, null=True)),
+                ("status", models.CharField(max_length=50)),
+                ("resolution_note", models.TextField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("update_at", models.DateTimeField(auto_now=True)),
+                (
+                    "admin_id",
+                    models.ForeignKey(
+                        blank=True,
+                        db_column="admin_id",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="api.admins",
+                    ),
+                ),
+                (
+                    "order_id",
+                    models.ForeignKey(
+                        blank=True,
+                        db_column="order_id",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="api.order",
+                    ),
+                ),
+                (
+                    "consumer_id",
+                    models.ForeignKey(
+                        blank=True,
+                        db_column="consumer_id",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="tickets_as_consumer",
+                        to="api.user",
+                    ),
+                ),
+                (
+                    "koc_id",
+                    models.ForeignKey(
+                        blank=True,
+                        db_column="koc_id",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="tickets_as_koc",
+                        to="api.user",
+                    ),
+                ),
+                (
+                    "vendor_id",
+                    models.ForeignKey(
+                        blank=True,
+                        db_column="vendor_id",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to="api.vendor",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'Service_Tickets',
+                "db_table": "Service_Tickets",
             },
         ),
         migrations.AddField(
@@ -380,27 +451,43 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.CreateModel(
-            name='VendorWallet',
+            name="VendorWallet",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('balance_available', models.IntegerField(default=0)),
-                ('balance_frozen', models.IntegerField(default=0)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('vendor', models.OneToOneField(db_column='vendor_id', on_delete=django.db.models.deletion.CASCADE, related_name='wallet', to='api.vendor')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("balance_available", models.IntegerField(default=0)),
+                ("balance_frozen", models.IntegerField(default=0)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "vendor",
+                    models.OneToOneField(
+                        db_column="vendor_id",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="wallet",
+                        to="api.vendor",
+                    ),
+                ),
             ],
             options={
-                'db_table': 'Vendor_Wallet',
+                "db_table": "Vendor_Wallet",
             },
         ),
         migrations.CreateModel(
-            name='Wishlist',
+            name="Wishlist",
             fields=[
                 ('wishlist_id', models.AutoField(primary_key=True, serialize=False)),
                 ('product', models.ForeignKey(db_column='product_id', on_delete=django.db.models.deletion.CASCADE, to='api.product')),
                 ('user', models.ForeignKey(db_column='user_id', on_delete=django.db.models.deletion.CASCADE, to='api.user')),
             ],
             options={
-                'db_table': 'Wishlist',
+                "db_table": "Wishlist",
             },
         ),
         migrations.CreateModel(
