@@ -139,6 +139,6 @@ urlpatterns = [
     path('platform/vendor/review', platform.admin_vendor_review, name='admin-vendor-review'),
     path('platform/overview', platform.admin_overview, name='admin-overview'),
     path('platform/coupons', platform.admin_coupon_usage, name='admin-coupon-usage'),
-    path('platform/performance', platform.admin_performance, name='admin-performance'),
+    # path('platform/performance', platform.admin_performance, name='admin-performance'),
 ]
 

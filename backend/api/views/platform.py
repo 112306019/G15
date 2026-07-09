@@ -567,116 +567,10 @@ def koc_get_list(request):
             "fb_account": koc.fb_account,
             "threads_account": koc.threads_account,
             "status": 1 if koc.is_suspended else 0,  # 0:已啟用, 1:已停權
->>>>>>> 481bcd8efa46cc28dba02ccf64b76c2c824ec143
         })
 
     return Response({
         "success": True,
-<<<<<<< HEAD
-        
-
-# ==============================================================================
-# Platform Admin - 查看成效追蹤資料
-# GET /platform_admin/performance
-# ==============================================================================
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def admin_performance(request):
-    campaign_id = request.query_params.get('Campaign_id')
-    promotion_code = request.query_params.get('Promotion_code')
-    influencer_id = request.query_params.get('Influencer_id')
-
-    coupons = CouponNew.objects.all()
-
-    if promotion_code:
-        coupons = coupons.filter(promotion_code__icontains=promotion_code)
-
-    if campaign_id:
-        coupons = coupons.filter(kocmission__application__campaign_id=campaign_id)
-
-    if influencer_id:
-        coupons = coupons.filter(kocmission__koc_id=influencer_id)
-
-    data = []
-
-    for coupon in coupons:
-        kocmission = coupon.kocmission
-        application = kocmission.application if kocmission else None
-        campaign = application.campaign if application else None
-
-        orders = Order.objects.filter(
-            promotion_code=coupon.promotion_code
-        ).order_by('-created_at')
-
-        total_sales = 0
-        for order in orders:
-            total_sales += order.total_amount
-
-        participant = None
-
-        if campaign and kocmission and kocmission.koc_id:
-            participant = CampaignParticipants.objects.filter(
-                campaign=campaign,
-                influencer_id=kocmission.koc_id
-            ).first()
-
-        # 如果有訂單，就一筆訂單一筆成效資料
-        if orders.exists():
-            for order in orders:
-                data.append({
-                    # 目前沒有 TrackingLog 表，所以先回傳 None
-                    "Tracking_id": None,
-                    "Click_id": None,
-
-                    "Order_id": order.order_id,
-                    "User_id": order.user_id,
-                    "Promotion_code": coupon.promotion_code,
-                    "Created_at": order.created_at,
-
-                    # 分潤 / 成效
-                    "Commission_id": None,
-                    "Influencer_id": kocmission.koc_id if kocmission else None,
-                    "Amount": coupon.total_commission,
-                    "Status": coupon.status,
-
-                    # 活動參與
-                    "Participants_id": participant.participants_id if participant else None,
-                    "Campaign_id": campaign.campaign_id if campaign else None,
-                    "Assigned_coupon_id": participant.assigned_coupon_id if participant else None,
-
-                    # 額外統計
-                    "Order_total_amount": order.total_amount,
-                    "Coupon_usage_count": coupon.usage_count,
-                    "Total_sales": total_sales,
-                    "Total_order_count": orders.count(),
-                })
-
-        # 如果沒有訂單，也回傳優惠碼本身的成效資料
-        else:
-            data.append({
-                "Tracking_id": None,
-                "Click_id": None,
-
-                "Order_id": None,
-                "User_id": None,
-                "Promotion_code": coupon.promotion_code,
-                "Created_at": None,
-
-                "Commission_id": None,
-                "Influencer_id": kocmission.koc_id if kocmission else None,
-                "Amount": coupon.total_commission,
-                "Status": coupon.status,
-
-                "Participants_id": participant.participants_id if participant else None,
-                "Campaign_id": campaign.campaign_id if campaign else None,
-                "Assigned_coupon_id": participant.assigned_coupon_id if participant else None,
-
-                "Order_total_amount": 0,
-                "Coupon_usage_count": coupon.usage_count,
-                "Total_sales": 0,
-                "Total_order_count": 0,
-=======
         "err": "",
         "koc_list": result,
         "total": len(result)
@@ -758,15 +652,10 @@ def koc_get_detail(request):
                 "Stage": STAGE_CODE_MAP.get(mission.stage),
                 "Tasks_id": str(mission.kocmission_id),
                 "Deadline": campaign.end_date.strftime('%Y-%m-%d %H:%M') if campaign.end_date else None,
->>>>>>> 481bcd8efa46cc28dba02ccf64b76c2c824ec143
             })
 
     return Response({
         "success": True,
-<<<<<<< HEAD
-        "performance": data
-    }, status=status.HTTP_200_OK)
-=======
         "err": "",
         "total": len(result),
         "data": result
@@ -994,4 +883,3 @@ def get_audit_logs(request):
         })
 
     return Response(result, status=status.HTTP_200_OK)
->>>>>>> 481bcd8efa46cc28dba02ccf64b76c2c824ec143
