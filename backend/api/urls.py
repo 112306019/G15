@@ -59,4 +59,7 @@ urlpatterns = [
     path('platform_admin/vendor/audit', platform_admin.admin_vendor_audit, name='admin-vendor-audit'),
     path('platform_admin/vendor/review', platform_admin.admin_vendor_review, name='admin-vendor-review'),
     path('platform_admin/overview', platform_admin.admin_overview, name='admin-overview'),
+    path('platform_admin/coupons', platform_admin.admin_coupon_usage, name='admin-coupon-usage'),
+    path('platform_admin/performance', platform_admin.admin_performance, name='admin-performance'),
+
 ]
