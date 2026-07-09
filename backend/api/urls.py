@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import koc, vendor, platform_admin
+from .views import koc, platform, vendor
 
 # 之後在這裡加 API 路由
 # 例如：
@@ -54,12 +54,12 @@ urlpatterns = [
 
     # Admin API
     # Platform Admin 平台端 API
-    path('platform_admin/vendors', platform_admin.admin_vendor_list, name='admin-vendor-list'),
-    path('platform_admin/vendor/detail', platform_admin.admin_vendor_detail, name='admin-vendor-detail'),
-    path('platform_admin/vendor/audit', platform_admin.admin_vendor_audit, name='admin-vendor-audit'),
-    path('platform_admin/vendor/review', platform_admin.admin_vendor_review, name='admin-vendor-review'),
-    path('platform_admin/overview', platform_admin.admin_overview, name='admin-overview'),
-    path('platform_admin/coupons', platform_admin.admin_coupon_usage, name='admin-coupon-usage'),
-    path('platform_admin/performance', platform_admin.admin_performance, name='admin-performance'),
+    path('platform/vendors', platform.admin_vendor_list, name='admin-vendor-list'),
+    path('platform/vendor/detail', platform.admin_vendor_detail, name='admin-vendor-detail'),
+    path('platform/vendor/audit', platform.admin_vendor_audit, name='admin-vendor-audit'),
+    path('platform/vendor/review', platform.admin_vendor_review, name='admin-vendor-review'),
+    path('platform/overview', platform.admin_overview, name='admin-overview'),
+    path('platform/coupons', platform.admin_coupon_usage, name='admin-coupon-usage'),
+    path('platform/performance', platform.admin_performance, name='admin-performance'),
 
 ]
