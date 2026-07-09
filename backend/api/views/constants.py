@@ -33,3 +33,25 @@ COUPON_STATUS_CODE_MAP = {
     'active': 1,     # 啟用中
     'expired': 2,    # 已過期
 }
+STAGE_ALLOWED_SUBMISSION_TYPE = {
+    'writing': 'text',   # 撰寫文案階段，只能交文案
+    'publishing': 'link',  # 待發佈階段，只能交連結
+}
+
+EARNINGS_STATUS_CHOICES_MAP = {
+    'pending': 'pending',
+    'withdrawable': 'withdrawable',
+}
+
+# Earnings.status: 資料庫字串 <-> API 對外 integer
+EARNINGS_STATUS_CODE_MAP = {
+    'withdrawable': 0,   # 撥款中(待轉帳)
+    'transferred': 1,    # 已撥款(已轉帳)
+}
+
+# User.role: 資料庫字串 <-> API 對外 integer
+ROLE_CODE_MAP = {
+    'vendor': 0,
+    'koc': 1,
+    'consumer': 2,
+}

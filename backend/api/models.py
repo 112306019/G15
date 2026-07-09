@@ -33,12 +33,28 @@ class User(models.Model):
 
 
 class KOC(models.Model):
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', '待審核'),
+        ('approved', '已通過'),
+        ('rejected', '已拒絕'),
+    ]
+
     koc_id = models.CharField(max_length=50, unique=True, primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='koc_profile')
-    social_account = models.CharField(max_length=100)
-    bank_number = models.CharField(max_length=50)
-    bank_account = models.CharField(max_length=50)
+    fb_account = models.CharField(max_length=100, blank=True, default='', db_column='fb_account')
+    ig_account = models.CharField(max_length=100, blank=True, default='', db_column='ig_account')
+    threads_account = models.CharField(max_length=100, blank=True, default='', db_column='threads_account')
+    bank_number = models.CharField(max_length=50, blank=True, default='', db_column='bank_number')
+    bank_account = models.CharField(max_length=50, blank=True, default='', db_column='bank_account')
     address = models.TextField(blank=True, null=True)
+    approval_status = models.CharField(
+        max_length=50,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+        db_column='approval_status'
+    )
+    reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
+    is_suspended = models.BooleanField(default=False, db_column='is_suspended')  # 新增
 
     class Meta:
         db_table = 'Koc'
@@ -189,6 +205,7 @@ class Submissions(models.Model):
         ('link', '作品連結'),
     ]
     STATUS_CHOICES = [
+        ('draft', '草稿'),
         ('pending', '審核中'),
         ('revising', '修改中'),
         ('approved', '審核通過'),
@@ -495,10 +512,33 @@ class Payouts(models.Model):
 
 
 class Earnings(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '待定'),
+        ('withdrawable', '可提領'),
+         ('transferred', '已轉帳'),
+    ]
+
     earnings_id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    kocmission = models.ForeignKey(
+        KOCMissionNew,
+        on_delete=models.CASCADE,
+        db_column='kocmission_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.SET_NULL,
+        db_column='order_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
     amount = models.IntegerField()
-    status = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'Earnings'
