@@ -33,8 +33,10 @@ from .views.consumer import (
 from .views import koc, platform, vendor
 
 urlpatterns = [
+    path('koc/profile/getProfile', views.get_koc_profile, name='koc-get-profile'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='koc-update-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
+    path('koc/application/getAppliedList', views.get_applied_campaign_list, name='koc-get-applied-campaign-list'),
     path('koc/application/applyMission', views.apply_mission, name='apply_mission'),
     path('koc/mission/submit', views.mission_submit, name='koc-mission-submit'),
     path('koc/application/getlist', views.get_application_list, name='get-application-list'),
@@ -55,6 +57,7 @@ urlpatterns = [
     path('platform/koc/getPendingList', views.koc_get_pending_list, name='platform-koc-get-pending-list'),
     path('platform/koc/getList', views.koc_get_list, name='platform-koc-get-list'),
     path('platform/koc/getDetail', views.koc_get_detail, name='platform-koc-get-detail'),
+    path('platform/kocmission/stage/update', views.koc_mission_stage_update, name='platform-kocmission-stage-update'),
 
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),

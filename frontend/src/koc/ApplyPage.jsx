@@ -1,54 +1,124 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+import api from '../api/index';
 
 export default function ApplyPage() {
   const [activeTab, setActiveTab] = useState('pending');
   const [showModal, setShowModal] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
+  const [pendingProducts, setPendingProducts] = useState([]);
+  const [appliedProducts, setAppliedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // 🟢 使用 useState 來管理動態列表，這樣我們才能在申請後「刪除」或「移動」它們
-  const [pendingProducts, setPendingProducts] = useState([
-    { id: '#E001', name: 'SanDisk 128GB SDXC Extreme Pro 相機記憶卡', brand: 'SanDisk' },
-    { id: '#E002', name: 'Transcend 創見 ESD260C 250GB 行動固態硬碟', brand: 'Transcend' },
-    { id: '#P003', name: '產品3', brand: '' },
-  ]);
+  // 暫時先寫死 user_id，等登入機制做好後再改成從 context/localStorage 拿
+  const user_id = 'U00001';
+  const koc_id = 'KOC00001';
 
-  const [appliedProducts, setAppliedProducts] = useState([
-    { id: '#E005', name: '樂扣樂扣嚼對FUN飲316不鏽鋼掀蓋吸管杯', status: '已結案' },
-  ]);
+  // 載入可申請的活動列表
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // 取得可申請的活動(待申請 tab)
+        const availableRes = await api.get('/koc/application/getAvailableList', {
+          params: { user_id }
+        });
 
-  // 🟢 處理申請：將任務移到已申請清單的最上方
-  const handleApply = (product) => {
-    setCurrentTask(product);
-    
-    // 1. 從待申請清單移除
-    setPendingProducts(prev => prev.filter(p => p.id !== product.id));
-    
-    // 2. 加入到已申請清單的「最前面」 (使用 [new, ...prev] 語法)
-    setAppliedProducts(prev => [{ ...product, status: '已申請' }, ...prev]);
-    
-    setShowModal(true);
+        if (availableRes.data.success) {
+          setPendingProducts(availableRes.data.campaigns.map(c => ({
+            id: c.campaign_id,
+            order_id: c.order_id,
+            name: c.campaign_name,
+            apply_status: c.apply_status,
+          })));
+        }
+
+        // 取得已申請的列表(只需要確認有申請過，不需要顯示狀態)
+        // 已申請：從 Application 表撈已申請過的活動
+        const appliedRes = await api.get('/koc/application/getAppliedList', {
+          params: { user_id }
+        });
+
+        if (appliedRes.data.success) {
+          setAppliedProducts(appliedRes.data.campaigns.map(c => ({
+            id: c.application_id,
+            name: c.campaign_name,
+            image: c.campaign_image,
+          })));
+        }
+      } catch (err) {
+        setError('載入失敗，請稍後再試');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // 申請任務
+  const handleApply = async (product) => {
+    try {
+      const res = await api.post('/koc/application/applyMission', {
+        koc_id: koc_id,        // 改成 koc_id
+        campaign_id: product.id,
+        order_id: product.order_id,
+      });
+
+      if (res.data.success) {
+        setCurrentTask(product);
+        setPendingProducts(prev => prev.filter(p => p.id !== product.id));
+        setAppliedProducts(prev => [
+          { ...product, status: '審核中' },
+          ...prev
+        ]);
+        setShowModal(true);
+      } else {
+        alert(res.data.err || '申請失敗');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('申請失敗，請稍後再試');
+    }
   };
 
   const currentList = activeTab === 'pending' ? pendingProducts : appliedProducts;
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-[#8C8880]">
+      載入中...
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex items-center justify-center py-20 text-red-500">
+      {error}
+    </div>
+  );
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
       <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">代言申請區</h2>
 
       <div className="flex gap-4 mb-10">
-        <button 
+        <button
           onClick={() => setActiveTab('pending')}
           className={`px-8 py-2.5 rounded-full font-bold transition-all shadow-sm ${
-            activeTab === 'pending' ? 'bg-[#C8522A] text-white' : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+            activeTab === 'pending'
+              ? 'bg-[#C8522A] text-white'
+              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
           }`}
         >
           待申請
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('applied')}
           className={`px-8 py-2.5 rounded-full font-bold transition-all shadow-sm ${
-            activeTab === 'applied' ? 'bg-[#C8522A] text-white' : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+            activeTab === 'applied'
+              ? 'bg-[#C8522A] text-white'
+              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
           }`}
         >
           已申請
@@ -60,11 +130,11 @@ export default function ApplyPage() {
           <div>任務</div>
           <div>{activeTab === 'applied' ? '狀態' : '動作'}</div>
         </div>
-        
+
         <div className="flex flex-col">
           {currentList.map((product, i) => (
-            <div 
-              key={product.id} 
+            <div
+              key={product.id}
               className={`flex items-center justify-between px-10 py-6 hover:bg-[#F8F9FA] transition-colors ${
                 i !== currentList.length - 1 ? 'border-b border-[#E2DDD4]' : ''
               }`}
@@ -80,16 +150,20 @@ export default function ApplyPage() {
 
               <div className="flex-shrink-0 w-[120px] text-right">
                 {activeTab === 'pending' ? (
-                  <button 
-                    onClick={() => handleApply(product)}
-                    className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
-                  >
-                    申請任務
-                  </button>
+                  <div className="flex-shrink-0 w-[120px] text-right">
+                    <button
+                      onClick={() => handleApply(product)}
+                      className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                    >
+                      申請任務
+                    </button>
+                  </div>
                 ) : (
-                  <span className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] px-6 py-2 rounded-xl">
-                    {product.status}
-                  </span>
+                  <div className="flex-shrink-0 w-[120px] text-right">
+                    <span className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] px-6 py-2 rounded-xl">
+                      已申請
+                    </span>
+                  </div>
                 )}
               </div>
             </div>
@@ -107,12 +181,12 @@ export default function ApplyPage() {
         <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300">
           <div className="bg-white rounded-[2rem] p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
             <div className="mb-6 flex justify-center">
-                <CheckCircle2 size={64} className="text-[#C8522A]" />
+              <CheckCircle2 size={64} className="text-[#C8522A]" />
             </div>
             <h4 className="text-2xl font-black text-[#1A1A18] mb-8 leading-snug">
-              {currentTask.id}<br/>已申請成功
+              {currentTask.name}<br />已申請成功
             </h4>
-            <button 
+            <button
               onClick={() => setShowModal(false)}
               className="bg-[#1A1A18] text-[#F5F0E8] w-full py-4 rounded-2xl font-bold text-lg hover:bg-[#C8522A] transition-all active:scale-95 shadow-lg"
             >

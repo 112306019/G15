@@ -9,6 +9,7 @@ class User(models.Model):
     user_id = models.CharField(max_length=50, unique=True, primary_key=True)
     role = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
+    display_name = models.CharField(max_length=100, blank=True, default='', db_column='display_name') 
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
     phone = models.CharField(max_length=20)

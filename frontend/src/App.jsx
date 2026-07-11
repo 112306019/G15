@@ -12,7 +12,7 @@ import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage'; 
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyPage from './koc/ApplyPage';
-import ApplyKOCPage from './koc/ApplyKOCPage'; 
+import ApplyKOCPage from './koc/ApplyKOCPage';  
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage'; 

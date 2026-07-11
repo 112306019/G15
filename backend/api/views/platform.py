@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import status as http_status
 
 from api.models import (
     User,
@@ -24,7 +25,7 @@ from api.models import (
     CampaignProduct,
 )
 
-from api.serializers import KOCApproveSerializer, KOCRejectSerializer
+from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP
 
 
@@ -665,6 +666,56 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from api.models import Admins, User, Order, Payment, Transactions, AdminAuditLogs
+
+# 手動更新koc任務階段
+@api_view(['PATCH'])
+@permission_classes([AllowAny])
+def koc_mission_stage_update(request):
+    serializer = KOCMissionStageUpdateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": "; ".join(str(e) for e in serializer.errors.values())
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    try:
+        mission = KOCMissionNew.objects.select_related(
+            'application__campaign__vendor',
+            'koc__user'
+        ).get(pk=data['KOCMisson_id'])
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC 任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    # 更新 stage
+    mission.stage = data['Stage']
+    mission.save()
+
+    # 取得相關資料
+    campaign = mission.application.campaign
+    vendor = campaign.vendor
+    campaign_product = CampaignProduct.objects.filter(
+        campaign=campaign
+    ).select_related('product').first()
+    product_id = campaign_product.product.product_id if campaign_product else None
+
+    coupon = CouponNew.objects.filter(kocmission=mission).first()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "KOCMisson_id": str(mission.kocmission_id),
+        "Mission_id": str(campaign.campaign_id),
+        "User_id": mission.koc.user.user_id if mission.koc else None,
+        "Brand_id": str(vendor.vendor_id),
+        "Product_id": str(product_id) if product_id else None,
+        "Promotion_code": coupon.promotion_code if coupon else None,
+        "Stage": STAGE_CODE_MAP.get(mission.stage),
+    }, status=http_status.HTTP_200_OK)
 
 
 # ── 平台管理員登入 ──

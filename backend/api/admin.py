@@ -47,9 +47,10 @@ class KOCAdmin(admin.ModelAdmin):
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     readonly_fields = ('user_id',)
-    list_display = ('user_id', 'name', 'email', 'role', 'phone', 'created_at')
+    list_display = ('user_id', 'name', 'display_name', 'email', 'role', 'phone', 'created_at')
     list_filter = ('role',)
-    search_fields = ('user_id', 'name', 'email', 'phone')
+    search_fields = ('user_id', 'name', 'display_name', 'email', 'phone')
+
 
 @admin.register(KOCMissionNew)
 class KOCMissionNewAdmin(admin.ModelAdmin):

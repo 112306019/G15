@@ -32,6 +32,48 @@ from .constants import (
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP
 )
+# 獲取koc個人資料
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_koc_profile(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的使用者"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    try:
+        koc = user.koc_profile
+    except KOC.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "此使用者尚未成為 KOC"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "display_name": user.display_name,
+        "real_name": user.name,
+        "phone": user.phone,
+        "email": user.email,
+        "address": koc.address,
+        "bank_account": koc.bank_account,
+        "bank_number": koc.bank_number,
+        "ig_account": koc.ig_account,
+        "fb_account": koc.fb_account,
+        "threads_account": koc.threads_account,
+    }, status=http_status.HTTP_200_OK)
 
 # 修改KOC資料 
 @api_view(['POST'])
@@ -63,9 +105,15 @@ def update_koc_profile(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     # 更新 User 表欄位
-    user.name = data['user_name']
-    user.phone = data['phone']
-    user.email = data['email']
+    # 更新 User 表欄位
+    if data.get('user_name'):
+        user.name = data['user_name']
+    if data.get('display_name') is not None:
+        user.display_name = data['display_name']
+    if data.get('phone'):
+        user.phone = data['phone']
+    if data.get('email'):
+        user.email = data['email']
     user.save()
 
     # 更新 KOC 表欄位
@@ -84,7 +132,6 @@ def update_koc_profile(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_available_campaign_list(request):
-    # 1. 從網址後面取得 User_id (例如: ?User_id=test_koc_001)
     user_id = request.query_params.get('user_id')
     
     if not user_id:
@@ -95,47 +142,122 @@ def get_available_campaign_list(request):
         }, status=400)
         
     try:
-        # 2. 直接去查 Order_Item (訂單明細)
-        order_items = OrderItem.objects.filter(order__user_id=user_id)
+        # 找到這個 user 對應的 KOC
+        koc = KOC.objects.filter(user__user_id=user_id).first()
+
+        # 找出這個 KOC 已經申請過的 campaign_id 列表
+        applied_campaign_ids = set()
+        if koc:
+            applied_campaign_ids = set(
+                Application.objects.filter(koc=koc)
+                .values_list('campaign_id', flat=True)
+            )
+
+        # 只撈「已完成」的訂單
+        completed_orders = OrderItem.objects.filter(
+            order__user_id=user_id,
+            order__order_status='completed'  # 只取已完成的訂單
+        ).select_related('order', 'product')
+
         campaigns_data = []
-        
-        # 3. 跑迴圈，處理使用者購買的每個品項
-        for item in order_items:
-            # 💡 修改重點：透過中間表 campaign_product 查詢該商品對應的活動
-            # 使用 select_related('campaign') 可以順便把活動內容撈出來，不用再查一次
+        seen_campaign_ids = set()  # 避免同一個活動重複出現
+
+        for item in completed_orders:
             campaign_products = CampaignProduct.objects.filter(
                 product_id=item.product_id
             ).select_related('campaign')
-            
-            # 因為一個商品可能會對應到多個代言活動（多對多關係）
-            # 所以跑迴圈把該商品所有對應的活動都塞進去
+
             for cp in campaign_products:
-                campaign = cp.campaign  # 取得關聯的 Campaigns 物件
-                
-                if campaign:
-                    campaigns_data.append({
-                        "order_id": str(item.order_id),              # 來自 Order_Item 的 Order_id
-                        "campaign_id": str(campaign.campaign_id),    # 來自 Campaigns 的 Campaign_id
-                        "campaign_name": str(campaign.name),         # 來自 Campaigns 的 Name
-                        
-                        # 代言申請狀態：先預設給 0 (尚未申請)
-                        "apply_status": getattr(item, 'apply_status', 0) 
-                    })
-                
-        # 4. 回傳符合規格書的 JSON 格式
+                campaign = cp.campaign
+
+                if not campaign:
+                    continue
+
+                campaign_id_str = str(campaign.campaign_id)
+
+                # 排除已申請過的活動
+                if campaign.campaign_id in applied_campaign_ids:
+                    continue
+
+                # 排除重複出現的活動
+                if campaign_id_str in seen_campaign_ids:
+                    continue
+
+                seen_campaign_ids.add(campaign_id_str)
+
+                campaigns_data.append({
+                    "order_id": str(item.order_id),
+                    "campaign_id": campaign_id_str,
+                    "campaign_name": campaign.name,
+                    "apply_status": 0
+                })
+
         return Response({
             "success": True,
             "err": "",
             "campaigns": campaigns_data
         })
-        
+
     except Exception as e:
         return Response({
             "success": False,
             "err": f"伺服器發生錯誤: {str(e)}",
             "campaigns": []
         }, status=500)
-    
+
+# 顯示已申請代言
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_applied_campaign_list(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "缺少必要參數: user_id",
+            "campaigns": []
+        }, status=400)
+
+    try:
+        koc = KOC.objects.filter(user__user_id=user_id).first()
+        if not koc:
+            return Response({
+                "success": False,
+                "err": "找不到對應的 KOC",
+                "campaigns": []
+            }, status=404)
+
+        applications = Application.objects.filter(
+            koc=koc
+        ).select_related('campaign')
+
+        campaigns_data = []
+        for app in applications:
+            campaign_product = CampaignProduct.objects.filter(
+                campaign=app.campaign
+            ).select_related('product').first()
+            campaign_image = campaign_product.product.image_url if campaign_product else None
+
+            campaigns_data.append({
+                "application_id": str(app.application_id),
+                "campaign_id": str(app.campaign.campaign_id),
+                "campaign_name": app.campaign.name,
+                "campaign_image": campaign_image,
+            })
+
+        return Response({
+            "success": True,
+            "err": "",
+            "campaigns": campaigns_data
+        })
+
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": f"伺服器發生錯誤: {str(e)}",
+            "campaigns": []
+        }, status=500)
+
 # 代言申請 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -936,7 +1058,7 @@ def koc_apply(request):
     # 如果有填 name 或 email，直接更新 User 表
     user_updated = False
     if data.get('name'):
-        user.name = data['name']
+        user.display_name = data['name']
         user_updated = True
     if data.get('email'):
         # 檢查 email 是否被其他人用過
