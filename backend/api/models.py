@@ -1,8 +1,8 @@
-from django.db import models
+from django.db import models, transaction
 import uuid
 
 # ==============================================================================
-# 1. 核心主幹表 ── User / KOC / Campaigns / Order / OrderItem
+# 1. User / KOC / Campaigns / Order / OrderItem
 # ==============================================================================
 
 class User(models.Model):
@@ -17,20 +17,58 @@ class User(models.Model):
     class Meta:
         db_table = 'User'
 
+    def save(self, *args, **kwargs):
+        if not self.user_id:
+            with transaction.atomic():
+                last_user = User.objects.select_for_update().order_by('-user_id').first()
+                if last_user and last_user.user_id.startswith('U'):
+                    next_num = int(last_user.user_id[1:]) + 1
+                else:
+                    next_num = 1
+                self.user_id = f"U{next_num:05d}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"[{self.role}] {self.name}"
 
 
 class KOC(models.Model):
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', '待審核'),
+        ('approved', '已通過'),
+        ('rejected', '已拒絕'),
+    ]
+
     koc_id = models.CharField(max_length=50, unique=True, primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='koc_profile')
-    social_account = models.CharField(max_length=100)
-    bank_number = models.CharField(max_length=50)
-    bank_account = models.CharField(max_length=50)
+    fb_account = models.CharField(max_length=100, blank=True, default='', db_column='fb_account')
+    ig_account = models.CharField(max_length=100, blank=True, default='', db_column='ig_account')
+    threads_account = models.CharField(max_length=100, blank=True, default='', db_column='threads_account')
+    bank_number = models.CharField(max_length=50, blank=True, default='', db_column='bank_number')
+    bank_account = models.CharField(max_length=50, blank=True, default='', db_column='bank_account')
     address = models.TextField(blank=True, null=True)
+    approval_status = models.CharField(
+        max_length=50,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+        db_column='approval_status'
+    )
+    reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
+    is_suspended = models.BooleanField(default=False, db_column='is_suspended')  # 新增
 
     class Meta:
         db_table = 'Koc'
+
+    def save(self, *args, **kwargs):
+        if not self.koc_id:
+            with transaction.atomic():
+                last_koc = KOC.objects.select_for_update().order_by('-koc_id').first()
+                if last_koc and last_koc.koc_id.startswith('KOC'):
+                    next_num = int(last_koc.koc_id[3:]) + 1
+                else:
+                    next_num = 1
+                self.koc_id = f"KOC{next_num:05d}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"KOC: {self.user.name}"
@@ -39,7 +77,7 @@ class KOC(models.Model):
 class Campaigns(models.Model):
     """代言活動表"""
     campaign_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vendor_id = models.CharField(max_length=100)
+    vendor = models.ForeignKey('Vendor', on_delete=models.CASCADE, db_column='vendor_id', related_name='campaigns')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     budget = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -84,14 +122,14 @@ class CampaignProduct(models.Model):
 class Order(models.Model):
     """訂單主表"""
     order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user_id = models.CharField(max_length=100, db_index=True)
-    guest_id = models.CharField(max_length=100, blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    guest = models.ForeignKey('Guest', on_delete=models.SET_NULL, db_column='guest_id', null=True, blank=True, related_name='orders')
+    address = models.ForeignKey('Address', on_delete=models.SET_NULL, db_column='address_id', null=True, blank=True, related_name='orders')
     promotion_code = models.CharField(max_length=50, blank=True, null=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     order_status = models.CharField(max_length=50, default='pending')
     payment_status = models.CharField(max_length=50, default='unpaid')
     shipping_status = models.CharField(max_length=50, default='unshipped')
-    address_id = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -105,7 +143,7 @@ class OrderItem(models.Model):
     """訂單明細表"""
     order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items', db_column='order_id')
-    product_id = models.CharField(max_length=100, db_index=True)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, db_column='product_id',related_name='order_items')
     quantity = models.IntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
@@ -124,15 +162,23 @@ class OrderItem(models.Model):
 
 class Application(models.Model):
     application_id = models.AutoField(primary_key=True, db_column='application_id')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
-    campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
-    status = models.CharField(max_length=50, db_column='status')
+    koc = models.ForeignKey('KOC', on_delete=models.CASCADE, db_column='koc_id', null=True, blank=True)
+    order = models.ForeignKey(
+        'Order',                      # 指向你的 Order 模型類別名稱
+        on_delete=models.CASCADE,     # 當訂單被刪除時，連帶刪除這筆申請（或用 on_delete=models.PROTECT 限制刪除）
+        db_column='order_id',         # 明確指定資料庫實體資料表的欄位名稱為 order_id
+        related_name='applications',  # 反向查詢名稱
+        null=True,
+        blank=True
+    )
+    campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id',related_name='applications')
+    status = models.CharField(max_length=50, db_column='status', default='pending')
 
     class Meta:
         db_table = 'Application'
 
     def __str__(self):
-        return f"Application {self.application_id} by {self.user.user_id}"
+        return f"Application {self.application_id} by KOC {self.koc_id}"
 
 
 class KOCMissionNew(models.Model):
@@ -142,25 +188,43 @@ class KOCMissionNew(models.Model):
     # 1. 依然保留與申請表的關聯（為了追蹤當初是哪一次申請通過的）
     application = models.ForeignKey('Application',  on_delete=models.CASCADE, db_column='application_id')
     
-    # 🌟 2. 新增冗餘欄位：直接綁定 koc_id（對應 User 表）
-    # 這樣網紅打開 App 看任務清單時，直接查這張表，完全不需要 JOIN Application 表！
-    koc_id = models.CharField(max_length=50, db_column='koc_id', db_index=True, null=True, blank=True)
+    # 🌟 2. 冗餘欄位：直接綁定 KOC（對應 KOC 表），方便網紅打開 App 看任務清單時，不需要 JOIN Application 表！
+    koc = models.ForeignKey('KOC', on_delete=models.CASCADE, db_column='koc_id', db_index=True, null=True, blank=True)
     stage = models.CharField(max_length=50, db_column='stage')
 
     class Meta:
         db_table = 'Koc_Mission'  
 
     def __str__(self):
-        return f"Mission {self.koc_mission_id} for KOC {self.koc_id} (Stage: {self.stage})"
+        return f"Mission {self.kocmission_id} for KOC {self.koc_id} (Stage: {self.stage})"
 
 
 class Submissions(models.Model):
+    SUBMISSION_TYPE_CHOICES = [
+        ('text', '文案'),
+        ('link', '作品連結'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', '草稿'),
+        ('pending', '審核中'),
+        ('revising', '修改中'),
+        ('approved', '審核通過'),
+    ]
     submission_id = models.AutoField(primary_key=True, db_column='submission_id')
     kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='kocmisson_id')
-    submission_type = models.CharField(max_length=50, db_column='submission_type')
+    submission_type = models.CharField(
+        max_length=50,
+        choices=SUBMISSION_TYPE_CHOICES,
+        db_column='submission_type'
+    )
     content_url = models.CharField(max_length=500, blank=True, null=True, db_column='content_url')
     text_content = models.TextField(blank=True, null=True, db_column='text_content')
-    status = models.CharField(max_length=50, db_column='status')
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
     vendor_feedback = models.TextField(blank=True, null=True, db_column='vendor_feedback')
     submitted_time = models.DateTimeField(blank=True, null=True, db_column='submitted_time')
     reviewed_time = models.DateTimeField(blank=True, null=True, db_column='reviewed_time')
@@ -173,11 +237,16 @@ class Submissions(models.Model):
 
 
 class CouponNew(models.Model):
+    STATUS_CHOICES = [
+        ('inactive', '未啟用'),
+        ('active', '啟用中'),
+        ('expired', '已過期'),
+    ]
     coupon_id = models.AutoField(primary_key=True, db_column='coupon_id')
     kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='kocmisson_id')
     promotion_code = models.CharField(max_length=100, unique=True, db_column='promotion_code')
     discount_value = models.IntegerField(db_column='discount_value')
-    status = models.CharField(max_length=50, db_column='status')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='inactive', db_column='status')
     usage_count = models.IntegerField(default=0, db_column='usage_count')
     total_commission = models.IntegerField(default=0, db_column='total_commission')
 
@@ -189,19 +258,15 @@ class CouponNew(models.Model):
 
 
 # ==============================================================================
-# 3. 金流模組 ── BaseWallet(抽象) / KocWallet / VendorWallet / Transactions(合併)
+# 3. 金流模組 ── KocWallet / VendorWallet / Transactions(合併)
 # ==============================================================================
-
 class BaseWallet(models.Model):
-    """抽象錢包基礎範本（不單獨建表）"""
     balance_available = models.IntegerField(default=0)
     balance_frozen = models.IntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
-
-
 class KocWallet(BaseWallet):
     """KOC 網紅個人錢包"""
     koc = models.OneToOneField(KOC, on_delete=models.CASCADE, related_name='wallet', db_column='koc_id')
@@ -227,12 +292,18 @@ class VendorWallet(BaseWallet):
 class Transactions(models.Model):
     """統一資金交易流水帳總表"""
     transaction_id = models.AutoField(primary_key=True)
-    
-    # 區分錢包類型：'koc' 或 'vendor'
-    wallet_type = models.CharField(max_length=20, default='koc')  
-    # 記錄對應錢包的 ID 數字
-    wallet_id = models.IntegerField()  
-    
+
+    # 多型關聯：每筆交易只會用到其中一個欄位（koc_wallet 或 vendor_wallet），另一個留空
+    # 用哪個欄位有值，就代表這筆交易屬於哪種錢包類型
+    koc_wallet = models.ForeignKey(
+        KocWallet, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='transactions', db_column='koc_wallet_id'
+    )
+    vendor_wallet = models.ForeignKey(
+        VendorWallet, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='transactions', db_column='vendor_wallet_id'
+    )
+
     # 金流種類，例如：'deposit'(儲值), 'withdraw'(提領), 'reward'(分潤), 'pay'(付活動費)
     type = models.CharField(max_length=50) 
     # 交易金額
@@ -246,9 +317,28 @@ class Transactions(models.Model):
 
     class Meta:
         db_table = 'Transactions'
+        constraints = [
+            # 確保每筆交易「恰好」對應一種錢包：koc_wallet 和 vendor_wallet 不會同時有值，也不會同時都空
+            models.CheckConstraint(
+                condition=(
+                    models.Q(koc_wallet__isnull=False, vendor_wallet__isnull=True) |
+                    models.Q(koc_wallet__isnull=True, vendor_wallet__isnull=False)
+                ),
+                name='transactions_exactly_one_wallet'
+            )
+        ]
+
+    @property
+    def wallet_type(self):
+        """方便顯示用：依哪個欄位有值，回傳 'koc' 或 'vendor'"""
+        if self.koc_wallet_id:
+            return 'koc'
+        if self.vendor_wallet_id:
+            return 'vendor'
+        return None
 
     def __str__(self):
-        return f"[{self.wallet_type.upper()}] Trans {self.transaction_id}: {self.type} ({self.amount})"
+        return f"[{(self.wallet_type or '').upper()}] Trans {self.transaction_id}: {self.type} ({self.amount})"
 
 
 # ==============================================================================
@@ -276,7 +366,7 @@ class Product(models.Model):
 
 class Cart(models.Model):
     cart_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=50)
@@ -290,8 +380,8 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     cart_item_id = models.AutoField(primary_key=True)
-    cart_id = models.ForeignKey(Cart, on_delete=models.CASCADE, db_column='cart_id')
-    product_id = models.ForeignKey(Product, on_delete=models.CASCADE, db_column='product_id')
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, db_column='cart_id')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, db_column='product_id')
     quantity = models.IntegerField(default=1)
     unit_price = models.IntegerField()
     subtotal = models.IntegerField()
@@ -305,8 +395,8 @@ class CartItem(models.Model):
 
 class Wishlist(models.Model):
     wishlist_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
-    product_id = models.ForeignKey(Product, on_delete=models.CASCADE, db_column='product_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, db_column='product_id')
 
     class Meta:
         db_table = 'Wishlist'
@@ -317,7 +407,6 @@ class Wishlist(models.Model):
 
 class Guest(models.Model):
     guest_id = models.AutoField(primary_key=True)
-    order_id = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
 
     class Meta:
         db_table = 'Guest'
@@ -328,7 +417,7 @@ class Guest(models.Model):
 
 class Address(models.Model):
     address_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
     phone = models.CharField(max_length=20, blank=True, null=True)
     city = models.CharField(max_length=100, blank=True, null=True)
     district = models.CharField(max_length=100, blank=True, null=True)
@@ -345,7 +434,7 @@ class Address(models.Model):
 
 class Payment(models.Model):
     payment_id = models.AutoField(primary_key=True)
-    order_id = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, db_column='order_id')
     payment_method = models.CharField(max_length=50, blank=True, null=True)
     payment_status = models.CharField(max_length=50, blank=True, null=True)
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
@@ -393,8 +482,8 @@ class Vendor(models.Model):
 class CampaignParticipants(models.Model):
     participants_id = models.AutoField(primary_key=True)
     campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id')
-    influencer = models.ForeignKey(User, on_delete=models.CASCADE, db_column='influencer_id')
-    assigned_coupon_id = models.CharField(max_length=100, blank=True, null=True)
+    koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    coupon = models.ForeignKey(CouponNew, on_delete=models.SET_NULL, db_column='coupon_id', null=True, blank=True, related_name='campaign_participants')
     status = models.CharField(max_length=50)
 
     class Meta:
@@ -406,7 +495,7 @@ class CampaignParticipants(models.Model):
 
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
-    koc_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
     amount = models.IntegerField()
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
@@ -419,10 +508,33 @@ class Payouts(models.Model):
 
 
 class Earnings(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '待定'),
+        ('withdrawable', '可提領'),
+         ('transferred', '已轉帳'),
+    ]
+
     earnings_id = models.AutoField(primary_key=True)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
+    kocmission = models.ForeignKey(
+        KOCMissionNew,
+        on_delete=models.CASCADE,
+        db_column='kocmission_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.SET_NULL,
+        db_column='order_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
     amount = models.IntegerField()
-    status = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'Earnings'
@@ -458,8 +570,8 @@ class AdminAuditLogs(models.Model):
     action_type = models.CharField(max_length=100)
     submission_id = models.CharField(max_length=100, blank=True, null=True)
     tasks_id = models.CharField(max_length=100, blank=True, null=True)
-    koc_id = models.CharField(max_length=100, blank=True, null=True)
-    vendor_id = models.CharField(max_length=100, blank=True, null=True)
+    koc = models.ForeignKey('KOC', on_delete=models.SET_NULL, db_column='koc_id', null=True, blank=True, related_name='audit_logs')
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, db_column='vendor_id', null=True, blank=True, related_name='audit_logs')
     action_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
