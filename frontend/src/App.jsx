@@ -32,6 +32,10 @@ import PointsPage from './authentication/PointsPage';
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin'; 
 
+// === 🌟 新增：平台管理端 (Admin) 相關頁面 ===
+import AdminLogin from './admin/AdminLogin';
+import AdminApp from './AdminApp';
+
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown } from 'lucide-react';
 
 function Sidebar({ currentView, onNavigate, userRole }) {
@@ -119,8 +123,6 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 function MainSystem() {
   const [view, setView] = useState('welcome');
   const [selectedProduct, setSelectedProduct] = useState(null); 
-  
-  // 🟢 新增：用來記錄你點了哪個任務
   const [selectedTask, setSelectedTask] = useState(null); 
 
   const [userRole, setUserRole] = useState('guest'); 
@@ -130,7 +132,6 @@ function MainSystem() {
 
   const navigate = useNavigate(); 
 
-  // 🟢 修改：讓 handleNavigate 可以接收第二個參數 (資料)
   const handleNavigate = (targetView, data = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 
@@ -140,12 +141,11 @@ function MainSystem() {
     if (targetView === 'shop') setShopKey(prev => prev + 1);
 
     if (userRole === 'guest' && protectedViews.includes(targetView)) {
-      setAppToast("需先登入或註冊才能使用此功能喔！");
+      setAppToast("需先登入或註晨才能使用此功能喔！");
       setTimeout(() => setAppToast(""), 3500);
       return; 
     }
 
-    // 🟢 如果跳轉時有帶資料，把它存起來傳給對應的元件
     if (data) {
       if (targetView === 'sales_data') setSelectedProduct(data);
       if (targetView === 'task_detail') setSelectedTask(data);
@@ -175,7 +175,25 @@ function MainSystem() {
 
       {view === 'welcome' && <WelcomePage onSelectSeller={() => navigate('/vendor-login')} onSelectKoc={() => handleNavigate('login')} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
       
-      {view === 'login' && <LoginPage onLoginSuccess={() => { setUserRole('koc'); handleNavigate('home'); }} onRegisterSuccess={() => { setUserRole('shopper'); handleNavigate('profile'); }} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
+      {/* 🟢 修改：動態接收 LoginPage 傳回來的角色身份 */}
+      {view === 'login' && (
+        <LoginPage 
+          onLoginSuccess={(role) => { 
+            setUserRole(role); 
+            // 如果是 KOC 前往首頁看板，是一般消費者則前往購物商城
+            handleNavigate(role === 'koc' ? 'home' : 'shop'); 
+          }} 
+          onRegisterSuccess={() => { 
+            setUserRole('shopper'); 
+            handleNavigate('profile'); 
+          }} 
+          onSkipToShop={() => { 
+            setUserRole('guest'); 
+            handleNavigate('shop'); 
+          }} 
+        />
+      )}
+
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
       {view === 'product_detail' && <ProductDetailPage onBack={() => handleNavigate('shop')} onGoCart={() => handleNavigate('cart')} onBuyNow={() => handleNavigate('checkout')} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
       {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={() => handleNavigate('checkout')} />}
@@ -191,10 +209,11 @@ function MainSystem() {
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
             
-            {/* 🟢 修改：將 selectedTask 當作 props 傳給 TaskDetailPage */}
             {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
-
-            {view === 'profile' && <ProfilePage />}
+            
+            {/* 🟢 修改：將當前的 userRole 身份判斷傳入 ProfilePage 組件 */}
+            {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
+            
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
             {view === 'points' && <PointsPage points={30} expiringPoints={5} />}
             {view === 'coupons' && <CouponsPage />}
@@ -203,7 +222,18 @@ function MainSystem() {
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
             {view === 'earnings_detail' && <EarningsDetailPage onBack={() => handleNavigate('earnings')} />}
             {view === 'pending_detail' && <PendingEarningsPage onBack={() => handleNavigate('earnings')} />}
-            {view === 'applyKoc' && <ApplyKOCPage onSubmit={() => { setTimeout(() => { setUserRole('koc'); handleNavigate('home'); }, 1500); }} />}
+            
+            {/* 🟢 修改：當消費者成功申請 KOC 時，將 userRole 更新為 'koc' */}
+            {view === 'applyKoc' && (
+              <ApplyKOCPage 
+                onSubmit={() => { 
+                  setTimeout(() => { 
+                    setUserRole('koc'); 
+                    handleNavigate('home'); 
+                  }, 1500); 
+                }} 
+              />
+            )}
           </main>
         </div>
       )}
@@ -219,9 +249,16 @@ function MainSystem() {
 export default function App() {
   return (
     <Routes>
+      {/* 🟢 KOC 與消費者前台系統 */}
       <Route path="/*" element={<MainSystem />} />
+      
+      {/* 🔵 廠商端（Vendor） */}
       <Route path="/vendor-login" element={<VendorLogin />} />
       <Route path="/vendor/*" element={<VendorApp />} />
+
+      {/* 🔴 平台管理端（Admin）- 🌟 新增獨立路由 */}
+      <Route path="/admin-login" element={<AdminLogin />} />
+      <Route path="/admin/*" element={<AdminApp />} />
     </Routes>
   );
 }
