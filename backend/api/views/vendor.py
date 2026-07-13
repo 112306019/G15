@@ -106,6 +106,41 @@ def vendor_login(request):
         "vendor_id": vendor.vendor_id
     }, status=status.HTTP_200_OK)
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_profile_get(request):
+    """
+    取得廠商資料
+    URL: /vendor/profile/get
+    """
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "vendor": {
+            "vendor_id": vendor.vendor_id,
+            "company_name": vendor.company_name,
+            "contact_name": vendor.contact_name,
+            "email": vendor.email,
+            "tax_id": vendor.tax_id,
+            "created_at": vendor.created_at,
+        }
+    }, status=status.HTTP_200_OK)
 
 @api_view(["POST"])
 @permission_classes([AllowAny])

@@ -98,6 +98,7 @@ urlpatterns = [
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),
     path('vendor/profile/update', vendor.vendor_profile_update, name='vendor-profile-update'),
+    path('vendor/profile/get', vendor.vendor_profile_get, name='vendor-profile-get'),
 
     # Vendor 商品 API
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),

@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import {getVendorProfile, updateVendorProfile} from '../api/vendor'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Building, Bell, Shield } from 'lucide-react'
 import { cn } from './lib/utils'
@@ -31,14 +32,100 @@ function Button({ variant = 'default', className, children, ...props }) {
 
 export default function Settings() {
   const navigate = useNavigate()
+  const vendorId = localStorage.getItem('vendor_id')
+
+  const [profile, setProfile] = useState({
+    company_name: '',
+    contact_name: '',
+    email: '',
+    tax_id: '',
+  })
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [notifications, setNotifications] = useState({ newOrder: true, review: true, chat: false, weekly: true })
   
+  useEffect(() => {
+    async function loadProfile() {
+      if (!vendorId) {
+        setError('尚未登入廠商帳號')
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError('')
+
+        const response = await getVendorProfile(vendorId)
+        const vendor = response.data.vendor
+
+        setProfile({
+          company_name: vendor.company_name || '',
+          contact_name: vendor.contact_name || '',
+          email: vendor.email || '',
+          tax_id: vendor.tax_id || '',
+        })
+      } catch (err) {
+        setError(
+          err.response?.data?.err ||
+          err.message ||
+          '廠商資料載入失敗'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProfile()
+  }, [vendorId])
+
   const toggle = k => setNotifications(p => ({ ...p, [k]: !p[k] }))
 
   const handleLogout = () => {
-    // 這裡可以加入清除 Token 或登出 API 的邏輯
-    alert('已成功登出！');
-    navigate('/'); // 導回前台首頁
+    localStorage.removeItem('vendor_id')
+    navigate('/vendor-login')
+  }
+
+  const handleProfileChange = (event) => {
+    const { name, value } = event.target
+
+    setProfile((previous) => ({
+      ...previous,
+      [name]: value,
+    }))
+  }
+
+  const handleSaveProfile = async () => {
+    try {
+      setSaving(true)
+      setError('')
+      setMessage('')
+
+      await updateVendorProfile({
+        vendor_id: vendorId,
+        company_name: profile.company_name.trim(),
+        contact_name: profile.contact_name.trim(),
+        email: profile.email.trim(),
+        tax_id: profile.tax_id.trim(),
+      })
+
+      setMessage('公司資料更新成功')
+    } catch (err) {
+      const apiError = err.response?.data?.err
+
+      setError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : err.message || '公司資料更新失敗'
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -51,9 +138,72 @@ export default function Settings() {
           公司資訊
         </h2>
         <div className="space-y-4">
-          <Input label="公司名稱" defaultValue="廠商A" />
-          <Input label="聯絡信箱" defaultValue="contact@brand.tw" />
-          <Input label="官方網站" defaultValue="https://brand.tw" />
+          {loading ? (
+            <div className="py-8 text-center text-sm font-bold text-[#8C8880]">
+              公司資料載入中...
+            </div>
+          ) : (
+            <>
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                  {error}
+                </div>
+              )}
+
+              {message && (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-700">
+                  {message}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <Input
+                  label="廠商編號"
+                  value={vendorId || ''}
+                  disabled
+                />
+
+                <Input
+                  label="公司名稱"
+                  name="company_name"
+                  value={profile.company_name}
+                  onChange={handleProfileChange}
+                />
+
+                <Input
+                  label="聯絡人姓名"
+                  name="contact_name"
+                  value={profile.contact_name}
+                  onChange={handleProfileChange}
+                />
+
+                <Input
+                  label="聯絡信箱"
+                  name="email"
+                  type="email"
+                  value={profile.email}
+                  onChange={handleProfileChange}
+                />
+
+                <Input
+                  label="統一編號"
+                  name="tax_id"
+                  value={profile.tax_id}
+                  onChange={handleProfileChange}
+                />
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  variant="brand"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                >
+                  {saving ? '儲存中...' : '儲存變更'}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
         <div className="pt-2">
           <Button variant="brand">儲存變更</Button>

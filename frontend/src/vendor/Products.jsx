@@ -1,13 +1,40 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, ShoppingCart, TrendingUp, Archive } from 'lucide-react'
-import { products as initial, productCategories } from './mock'
+import { productCategories } from './mock'
 import { formatCurrency, cn } from './lib/utils'
+import {getVendorProducts, createVendorProduct, updateVendorProduct} from '../api/vendor'
 
 // 🟢 專屬品牌色狀態設定 (配合新商業邏輯)
 const statusCfg = {
   active: { label: '推廣中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' }, // 正在某個任務裡
   idle:   { label: '庫存中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' }, // 閒置在資料庫
   empty:  { label: '已售完', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+}
+
+function mapProductFromApi(product) {
+  return {
+    id: product.product_id,
+    name: product.product_name,
+    sku: `PRODUCT-${String(product.product_id).padStart(5, '0')}`,
+    category: product.category || '未分類',
+    price: Number(product.price || 0),
+    discountedPrice:
+      product.discounted_price === null
+        ? null
+        : Number(product.discounted_price),
+    stock: Number(product.stock || 0),
+    sold: 0,
+    thumbnail: product.image_url || '📦',
+    imageUrl: product.image_url || '',
+    description: product.description || '',
+    apiStatus: product.status,
+    status:
+      Number(product.stock) === 0
+        ? 'empty'
+        : product.status === 'active'
+          ? 'active'
+          : 'idle'
+  }
 }
 
 // 🟢 內建客製化 UI 元件
@@ -27,6 +54,7 @@ function StatCard({ label, value, icon: Icon }) {
       <div className="text-2xl font-black text-[#1A1A18] font-sans">{value}</div>
     </Card>
   )
+  
 }
 
 function Button({ variant = 'default', className, disabled, children, ...props }) {
@@ -67,20 +95,67 @@ function Thumb({ emoji, size = 'md' }) {
 }
 
 // ─── 簡化版的新增商品 Modal (存入資料庫) ──────────────────────────────────────────
-function AddProductModal({ open, onClose, onComplete }) {
-  const [form, setForm] = useState({ name: '', sku: '', category: '', price: '', stock: '', thumbnail: '📦' })
-  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+function ProductModal({ open, onClose, onComplete, editingProduct}) {
+  const emptyForm = {
+    name: '',
+    sku: '',
+    category: '',
+    price: '',
+    discountedPrice: '',
+    stock: '',
+    description: '',
+    imageUrl: '',
+    thumbnail: '📦'
+  }
   
-  function finish() { 
-    onComplete({ 
-      ...form, 
-      id: `p${Date.now()}`, 
-      status: 'idle', // 預設狀態是放在庫存中
-      sold: 0, 
-      createdAt: new Date().toISOString().slice(0,10) 
-    })
-    setForm({ name: '', sku: '', category: '', price: '', stock: '', thumbnail: '📦' })
-    onClose() 
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  useEffect(() => {
+    if (editingProduct) {
+      setForm({
+        name: editingProduct.name || '',
+        sku: editingProduct.sku || '',
+        category: editingProduct.category || '',
+        price: editingProduct.price || '',
+        discountedPrice: editingProduct.discountedPrice || '',
+        stock: editingProduct.stock ?? '',
+        description: editingProduct.description || '',
+        imageUrl: editingProduct.imageUrl || '',
+        thumbnail: editingProduct.thumbnail || '📦'
+      })
+    } else {
+      setForm(emptyForm)
+    }
+
+    setError('')
+  }, [editingProduct, open])
+
+  
+  async function finish() {
+    try {
+      setSaving(true)
+      setError('')
+
+      await onComplete(form)
+
+      setForm(emptyForm)
+      onClose()
+    } catch (err) {
+      const apiError = err.response?.data?.err
+
+      setError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : err.message || '商品儲存失敗'
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!open) return null
@@ -91,8 +166,12 @@ function AddProductModal({ open, onClose, onComplete }) {
         
         <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] flex justify-between items-center">
           <div>
-            <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">新增至商品庫</h2>
-            <p className="text-xs font-bold text-[#8C8880] mt-1">建立基礎資料，未來發佈任務時即可直接選用</p>
+            <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">{editingProduct ? '修改商品資料' : '新增至商品庫'}</h2>
+            <p className="text-xs font-bold text-[#8C8880] mt-1">
+              {editingProduct
+                ? '更新商品價格、庫存與基本資訊'
+                : '建立基礎商品資料'}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] transition-colors"><X size={18}/></button>
         </div>
@@ -102,26 +181,92 @@ function AddProductModal({ open, onClose, onComplete }) {
             <Thumb emoji={form.thumbnail} size="lg" />
             <button className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all"><Upload size={14}/>上傳圖片</button>
           </div>
-          <Input label="商品名稱 *" value={form.name} onChange={set('name')} placeholder="例：深層保濕精華液" />
+          <Input
+            label="商品名稱 *"
+            value={form.name}
+            onChange={set('name')}
+            placeholder="例：深層保濕精華液"
+          />
+
+          <Input
+            label="商品描述"
+            value={form.description}
+            onChange={set('description')}
+            placeholder="輸入商品介紹"
+          />
+
           <div className="grid grid-cols-2 gap-4">
-            <Input label="SKU" value={form.sku} onChange={set('sku')} placeholder="SKU-XXX-001" />
+            <Input
+              label="商品價格 *"
+              type="number"
+              value={form.price}
+              onChange={set('price')}
+            />
+
+            <Input
+              label="折扣價格"
+              type="number"
+              value={form.discountedPrice}
+              onChange={set('discountedPrice')}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="庫存數量 *"
+              type="number"
+              value={form.stock}
+              onChange={set('stock')}
+            />
+
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">類別</label>
-              <select value={form.category} onChange={set('category')} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                類別
+              </label>
+
+              <select
+                value={form.category}
+                onChange={set('category')}
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm"
+              >
                 <option value="">選擇類別</option>
-                {productCategories.map(c => <option key={c} value={c}>{c}</option>)}
+
+                {productCategories.map(category => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="官方定價 (NT$) *" type="number" value={form.price} onChange={set('price')} placeholder="1200" />
-            <Input label="入庫數量 *" type="number" value={form.stock} onChange={set('stock')} placeholder="100" />
-          </div>
+
+          <Input
+            label="商品圖片網址"
+            value={form.imageUrl}
+            onChange={set('imageUrl')}
+            placeholder="https://..."
+          />
         </div>
+        
+        {error && (
+          <p className="text-sm font-bold text-red-600">
+            {error}
+          </p>
+        )}
 
         <div className="px-8 py-5 border-t border-[#E2DDD4] flex gap-4 bg-[#F8F9FA] justify-end">
           <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button variant="brand" onClick={finish} disabled={!form.name || !form.price || !form.stock} className="gap-1.5"><Plus size={14}/> 儲存至商品庫</Button>
+          <Button
+            variant="brand"
+            onClick={finish}
+            disabled={saving || !form.name || !form.price || form.stock === ''}
+          >
+            {saving
+              ? '儲存中...'
+              : editingProduct
+                ? '儲存修改'
+                : '新增商品'}
+          </Button>
         </div>
       </div>
     </div>
@@ -131,23 +276,200 @@ function AddProductModal({ open, onClose, onComplete }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Products() {
   // 將 mock 資料中的狀態 mapping 到我們新的邏輯
-  const [prods, setProds] = useState(initial.map(p => ({
-    ...p,
-    status: p.stock === 0 ? 'empty' : (p.status === 'listed' ? 'active' : 'idle')
-  })))
-  
+  const [prods, setProds] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [editingProduct, setEditingProduct] = useState(null)
   const [filter, setFilter]     = useState('all')
   const [search, setSearch]     = useState('')
   const [view, setView]         = useState('grid')
   const [modalOpen, setModalOpen] = useState(false)
+  
+  const vendorId = localStorage.getItem('vendor_id')
+
+  useEffect(() => {
+    async function loadProducts() {
+      if (!vendorId) {
+        setError('尚未登入廠商帳號')
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError('')
+
+        const response = await getVendorProducts(vendorId)
+
+        setProds(
+          response.data.products.map(mapProductFromApi)
+        )
+      } catch (err) {
+        setError(
+          err.response?.data?.err ||
+          err.message ||
+          '商品資料載入失敗'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProducts()
+  }, [vendorId])
 
   const filtered = prods.filter(p =>
     (filter === 'all' || p.status === filter) &&
     (!search || p.name.includes(search) || p.sku?.toLowerCase().includes(search.toLowerCase()))
   )
 
+  const handleOpenCreate = () => {
+    setEditingProduct(null)
+    setModalOpen(true)
+  }
+
+  const handleOpenEdit = (product) => {
+    setEditingProduct(product)
+    setModalOpen(true)
+  }
+
   const handleDelete = id => setProds(prev => prev.filter(p => p.id!==id))
-  const handleSave   = up => setProds(prev => [up, ...prev])
+  const handleSave = async form => {
+    if (!vendorId) {
+      throw new Error('找不到廠商編號，請重新登入')
+    }
+
+    const payload = {
+      vendor_id: vendorId,
+      product_name: form.name.trim(),
+      description: form.description.trim(),
+      price: Number(form.price),
+      discounted_price:
+        form.discountedPrice === ''
+          ? null
+          : Number(form.discountedPrice),
+      stock: Number(form.stock),
+      category: form.category || '',
+      image_url: form.imageUrl.trim(),
+      status: editingProduct?.apiStatus || 'idle'
+    }
+
+    if (editingProduct) {
+      const response = await updateVendorProduct({
+        ...payload,
+        product_id: editingProduct.id
+      })
+
+      setProds(previous =>
+        previous.map(product =>
+          product.id === editingProduct.id
+            ? {
+                ...product,
+                name: form.name,
+                category: form.category || '未分類',
+                price: Number(form.price),
+                discountedPrice:
+                  form.discountedPrice === ''
+                    ? null
+                    : Number(form.discountedPrice),
+                stock: Number(form.stock),
+                description: form.description,
+                imageUrl: form.imageUrl,
+                thumbnail: form.imageUrl || '📦',
+                status:
+                  Number(form.stock) === 0
+                    ? 'empty'
+                    : payload.status === 'active'
+                      ? 'active'
+                      : 'idle'
+              }
+            : product
+        )
+      )
+
+      return response
+    }
+
+    const response = await createVendorProduct(payload)
+
+    const newProduct = {
+      id: response.data.product_id,
+      name: form.name,
+      sku: form.sku ||
+        `PRODUCT-${String(response.data.product_id).padStart(5, '0')}`,
+      category: form.category || '未分類',
+      price: Number(form.price),
+      discountedPrice:
+        form.discountedPrice === ''
+          ? null
+          : Number(form.discountedPrice),
+      stock: Number(form.stock),
+      sold: 0,
+      thumbnail: form.imageUrl || '📦',
+      imageUrl: form.imageUrl,
+      description: form.description,
+      apiStatus: 'idle',
+      status: Number(form.stock) === 0 ? 'empty' : 'idle'
+    }
+
+    setProds(previous => [newProduct, ...previous])
+  }
+
+  const handleToggleStatus = async product => {
+    if (!vendorId) {
+      setError('找不到廠商編號，請重新登入')
+      return
+    }
+
+    const nextStatus =
+      product.apiStatus === 'active'
+        ? 'idle'
+        : 'active'
+
+    try {
+      setError('')
+
+      await updateVendorProduct({
+        vendor_id: vendorId,
+        product_id: product.id,
+        product_name: product.name,
+        description: product.description || '',
+        price: product.price,
+        discounted_price: product.discountedPrice,
+        stock: product.stock,
+        category:
+          product.category === '未分類'
+            ? ''
+            : product.category,
+        image_url: product.imageUrl || '',
+        status: nextStatus
+      })
+
+      setProds(previous =>
+        previous.map(item =>
+          item.id === product.id
+            ? {
+                ...item,
+                apiStatus: nextStatus,
+                status:
+                  item.stock === 0
+                    ? 'empty'
+                    : nextStatus === 'active'
+                      ? 'active'
+                      : 'idle'
+              }
+            : item
+        )
+      )
+    } catch (err) {
+      setError(
+        err.response?.data?.err ||
+        err.message ||
+        '商品狀態更新失敗'
+      )
+    }
+  }
+
 
   const stats = {
     total:     prods.length,
@@ -156,6 +478,13 @@ export default function Products() {
     gmv:       prods.reduce((s,p) => s+p.price*p.sold, 0),
   }
 
+  if (loading) {
+    return (
+      <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
+        商品資料載入中...
+      </div>
+    )
+  }
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
@@ -166,6 +495,12 @@ export default function Products() {
           商品庫管理
         </h2>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+          {String(error)}
+        </div>
+      )}
 
       {/* KPI 卡片 */}
       <div className="grid grid-cols-4 gap-6">
@@ -198,7 +533,14 @@ export default function Products() {
           <button onClick={() => setView('list')} className={cn('p-2 rounded-full transition-colors', view==='list' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]')}><List size={16}/></button>
         </div>
 
-        <Button variant="brand" onClick={() => setModalOpen(true)} className="gap-2 px-6 py-2.5"><Plus size={16}/>新增商品</Button>
+        <Button
+          variant="brand"
+          onClick={handleOpenCreate}
+          className="gap-2 px-6 py-2.5"
+        >
+          <Plus size={16} />
+          新增商品
+        </Button>
       </div>
 
       {/* 網格視圖 (Grid View) */}
@@ -209,7 +551,26 @@ export default function Products() {
             return (
               <Card key={p.id} hoverable className="p-6 flex flex-col gap-4 group relative overflow-hidden">
                 <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button onClick={() => handleDelete(p.id)} className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] transition-all hover:scale-110 hover:text-[#D93025]"><Trash2 size={14}/></button>
+                  <button
+                    onClick={() => handleToggleStatus(p)}
+                    disabled={p.stock === 0}
+                    className="px-3 py-2 bg-white/90 rounded-full shadow-sm border border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:text-[#C8522A] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {p.apiStatus === 'active' ? '下架' : '上架'}
+                  </button>
+                  <button
+                    onClick={() => handleOpenEdit(p)}
+                    className="p-2 bg-white/90 rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] hover:text-[#C8522A]"
+                  >
+                    <Edit3 size={14} />
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    className="p-2 bg-white/90 rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025]"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
                 
                 <div className="flex items-start gap-4">
@@ -270,7 +631,15 @@ export default function Products() {
                     <td className="p-5"><ProductBadge status={p.status}/></td>
                     <td className="p-5">
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleOpenEdit(p)} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#C8522A] hover:border-[#C8522A] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Edit3 size={14}/></button>
                         <button onClick={() => handleDelete(p.id)} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025] hover:border-[#D93025] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Trash2 size={14}/></button>
+                        <button
+                          onClick={() => handleToggleStatus(p)}
+                          disabled={p.stock === 0}
+                          className="px-3 py-2 rounded-full bg-white border border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:text-[#C8522A] disabled:opacity-40"
+                        >
+                          {p.apiStatus === 'active' ? '下架' : '上架'}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -282,7 +651,15 @@ export default function Products() {
       )}
 
       {/* 新增商品彈窗 */}
-      <AddProductModal open={modalOpen} onClose={() => setModalOpen(false)} onComplete={handleSave}/>
+      <ProductModal
+        open={modalOpen}
+        editingProduct={editingProduct}
+        onClose={() => {
+          setModalOpen(false)
+          setEditingProduct(null)
+        }}
+        onComplete={handleSave}
+      />
     </div>
   )
 }
