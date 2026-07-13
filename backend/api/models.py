@@ -9,6 +9,7 @@ class User(models.Model):
     user_id = models.CharField(max_length=50, unique=True, primary_key=True)
     role = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
+    display_name = models.CharField(max_length=100, blank=True, default='', db_column='display_name') 
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
     phone = models.CharField(max_length=20)
@@ -464,7 +465,7 @@ class Admins(models.Model):
 
 
 class Vendor(models.Model):
-    vendor_id = models.AutoField(primary_key=True)
+    vendor_id = models.CharField(max_length=6, unique=True, primary_key=True)
     company_name = models.CharField(max_length=200)
     contact_name = models.CharField(max_length=200)
     email = models.EmailField(max_length=255)
@@ -474,6 +475,26 @@ class Vendor(models.Model):
 
     class Meta:
         db_table = 'Vendor'
+
+    def save(self, *args, **kwargs):
+        if not self.vendor_id:
+            with transaction.atomic():
+                last_vendor = (
+                    Vendor.objects
+                    .select_for_update()
+                    .filter(vendor_id__startswith='V')
+                    .order_by('-vendor_id')
+                    .first()
+                )
+
+                if last_vendor:
+                    next_num = int(last_vendor.vendor_id[1:]) + 1
+                else:
+                    next_num = 1
+
+                self.vendor_id = f"V{next_num:05d}"
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.company_name
