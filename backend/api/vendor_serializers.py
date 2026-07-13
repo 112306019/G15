@@ -88,7 +88,7 @@ class VendorProductUpdateSerializer(serializers.ModelSerializer):
 
 
 class VendorProductStatusSerializer(serializers.Serializer):
-    vendor_id = serializers.IntegerField()
+    vendor_id = serializers.CharField()
     product_id = serializers.IntegerField()
     status = serializers.CharField()
 
@@ -139,7 +139,7 @@ class VendorCampaignUpdateSerializer(serializers.ModelSerializer):
 # ──────────────────────────────────────────────
 
 class VendorApplicationReviewSerializer(serializers.Serializer):
-    vendor_id = serializers.IntegerField()
+    vendor_id = serializers.CharField()
     application_id = serializers.IntegerField()
     status = serializers.CharField()
 
@@ -149,7 +149,7 @@ class VendorApplicationReviewSerializer(serializers.Serializer):
 # ──────────────────────────────────────────────
 
 class VendorSubmissionReviewSerializer(serializers.Serializer):
-    vendor_id = serializers.IntegerField()
+    vendor_id = serializers.CharField()
     submission_id = serializers.IntegerField()
     status = serializers.CharField()
     vendor_feedback = serializers.CharField(required=False, allow_blank=True)

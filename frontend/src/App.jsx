@@ -33,8 +33,8 @@ import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin'; 
 
 // === 🌟 新增：平台管理端 (Admin) 相關頁面 ===
-import AdminLogin from './admin/AdminLogin';
-import AdminApp from './AdminApp';
+//import AdminLogin from './admin/AdminLogin';
+//import AdminApp from './AdminApp';
 
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown } from 'lucide-react';
 
@@ -257,8 +257,8 @@ export default function App() {
       <Route path="/vendor/*" element={<VendorApp />} />
 
       {/* 🔴 平台管理端（Admin）- 🌟 新增獨立路由 */}
-      <Route path="/admin-login" element={<AdminLogin />} />
-      <Route path="/admin/*" element={<AdminApp />} />
+      {/* <Route path="/admin-login" element={<AdminLogin />} /> */}
+      {/* <Route path="/admin/*" element={<AdminApp />} /> */}
     </Routes>
   );
 }
