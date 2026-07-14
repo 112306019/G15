@@ -205,9 +205,7 @@ export default function Settings() {
             </>
           )}
         </div>
-        <div className="pt-2">
-          <Button variant="brand">儲存變更</Button>
-        </div>
+  
       </Card>
 
       {/* 🟢 通知設定 */}

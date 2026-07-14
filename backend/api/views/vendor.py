@@ -643,7 +643,7 @@ def vendor_application_review(request):
                 kocmission=mission,
                 promotion_code=promotion_code,
                 discount_value=50,
-                status="active",
+                status="inactive",
                 usage_count=0,
                 total_commission=0
             )
@@ -740,16 +740,24 @@ def vendor_mission_review_submission(request):
     vendor_id = serializer.validated_data["vendor_id"]
     submission_id = serializer.validated_data["submission_id"]
     review_result = serializer.validated_data["status"]
-    vendor_feedback = serializer.validated_data.get("vendor_feedback", "")
+    vendor_feedback = serializer.validated_data.get(
+        "vendor_feedback",
+        ""
+    )
 
-    if review_result not in ["approved", "rejected"]:
+    # 對應 Submissions.STATUS_CHOICES
+    if review_result not in ["approved", "revising"]:
         return Response({
             "success": False,
             "err": "Invalid review result"
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        submission = Submissions.objects.get(submission_id=submission_id)
+        submission = Submissions.objects.select_related(
+            "kocmission__application__campaign"
+        ).get(
+            submission_id=submission_id
+        )
     except Submissions.DoesNotExist:
         return Response({
             "success": False,
@@ -764,18 +772,50 @@ def vendor_mission_review_submission(request):
             "err": "This submission does not belong to this vendor"
         }, status=status.HTTP_403_FORBIDDEN)
 
+    coupon = CouponNew.objects.filter(
+        kocmission=submission.kocmission
+    ).first()
+
+    # model 中 text 代表文案
+    should_activate_coupon = (
+        review_result == "approved"
+        and submission.submission_type == "text"
+    )
+
+    # 文案審核通過前，先確認優惠碼存在
+    if should_activate_coupon and not coupon:
+        return Response({
+            "success": False,
+            "err": "Coupon not found for this KOC mission"
+        }, status=status.HTTP_404_NOT_FOUND)
+
     submission.status = review_result
     submission.vendor_feedback = vendor_feedback
     submission.reviewed_time = timezone.now()
-    submission.save()
+    submission.save(
+        update_fields=[
+            "status",
+            "vendor_feedback",
+            "reviewed_time"
+        ]
+    )
+
+    # 只有文案審核通過才啟用優惠碼
+    if should_activate_coupon:
+        coupon.status = "active"
+        coupon.save(update_fields=["status"])
 
     return Response({
         "success": True,
         "err": "",
         "submission_id": submission.submission_id,
+        "submission_type": submission.submission_type,
         "status": submission.status,
         "vendor_feedback": submission.vendor_feedback,
         "reviewed_time": submission.reviewed_time,
+        "coupon_id": coupon.coupon_id if coupon else None,
+        "promotion_code": coupon.promotion_code if coupon else None,
+        "coupon_status": coupon.status if coupon else None,
     }, status=status.HTTP_200_OK)
 
 
