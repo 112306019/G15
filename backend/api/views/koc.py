@@ -97,14 +97,13 @@ def update_koc_profile(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     try:
-        koc = user.koc_profile  # User model 裡 OneToOneField 的 related_name
+        koc = user.koc_profile
     except KOC.DoesNotExist:
         return Response({
             "success": False,
-            "err": "此使用者沒有對應的 KOC 資料"
+            "err": "此使用者尚未成為 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    # 更新 User 表欄位
     # 更新 User 表欄位
     if data.get('user_name'):
         user.name = data['user_name']
@@ -113,13 +112,27 @@ def update_koc_profile(request):
     if data.get('phone'):
         user.phone = data['phone']
     if data.get('email'):
+        if User.objects.filter(email=data['email']).exclude(pk=user.pk).exists():
+            return Response({
+                "success": False,
+                "err": "此 email 已被使用"
+            }, status=http_status.HTTP_400_BAD_REQUEST)
         user.email = data['email']
     user.save()
 
     # 更新 KOC 表欄位
-    koc.bank_account = data['bank_account']
-    koc.bank_number = data['bank_number']
-    koc.address = data['address']
+    if data.get('bank_account') is not None:
+        koc.bank_account = data['bank_account']
+    if data.get('bank_number') is not None:
+        koc.bank_number = data['bank_number']
+    if data.get('address') is not None:
+        koc.address = data['address']
+    if data.get('fb_account') is not None:      # 新增
+        koc.fb_account = data['fb_account']
+    if data.get('ig_account') is not None:      # 新增
+        koc.ig_account = data['ig_account']
+    if data.get('threads_account') is not None:  # 新增
+        koc.threads_account = data['threads_account']
     koc.save()
 
     return Response({
@@ -393,6 +406,12 @@ def mission_submit(request):
             "success": False,
             "err": "請勿重複提交"
         }, status=http_status.HTTP_400_BAD_REQUEST)
+    # 正式提交前，刪除同類型的草稿(這段是新增的)
+    Submissions.objects.filter(
+        kocmission=mission,
+        submission_type=submission_type_db,
+        status='draft'
+    ).delete()
 
     submission = Submissions.objects.create(
         kocmission=mission,
@@ -523,7 +542,10 @@ def get_application_list(request):
             "err": "status 參數不正確"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
-    applications = Application.objects.filter(koc=koc, status=db_status).select_related('campaign')
+    # applications = Application.objects.filter(koc=koc, status=db_status).select_related('campaign')
+    applications = Application.objects.filter(
+        koc=koc, status=db_status
+    ).select_related('campaign__vendor')  # 加上 __vendor
 
     result = []
     for app in applications:
@@ -541,6 +563,8 @@ def get_application_list(request):
             "status": APPLICATION_STATUS_CODE_MAP[app.status],
             "promotion_code": coupon.promotion_code if coupon else None,
             "coupon_status": coupon_status,
+            "vendor_name": app.campaign.vendor.company_name,  # 新增廠商名稱
+            "deadline": app.campaign.end_date.strftime('%Y-%m-%d') if app.campaign.end_date else None,  # 新增截止時間
         })
 
     return Response({
@@ -616,7 +640,7 @@ def get_mission_list(request):
             "err": "找不到對應的 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign')
+    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
 
     # stage 是可選參數：如果有帶，篩出特定階段；沒帶就回全部階段（給前端自己分組用）
     if stage_param is not None:
@@ -641,6 +665,8 @@ def get_mission_list(request):
             "campaign_name": campaign.name,
             "campaign_image": campaign_image,
             "stage": STAGE_CODE_MAP[mission.stage],
+            "vendor_name": campaign.vendor.company_name,  
+            "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,  
         })
 
     return Response({

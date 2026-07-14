@@ -12,13 +12,16 @@ User = get_user_model()
 # ──────────────────────────────────────────────
 class UpdateKOCProfileSerializer(serializers.Serializer):
     user_id = serializers.CharField(required=True)
-    display_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # 新增
-    user_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # 改成選填
+    display_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    user_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     email = serializers.EmailField(required=False, allow_null=True)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     bank_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     bank_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
+    ig_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
+    threads_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # 新增
 
 class InfluencerSerializer(serializers.ModelSerializer):
     class Meta:
