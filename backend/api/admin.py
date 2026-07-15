@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts
+from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts, ChatRoom, Message
 # 例如：from .models import Product
 # admin.site.register(Product)
 
@@ -113,3 +113,18 @@ class PayoutsAdmin(admin.ModelAdmin):
     list_display = ('payout_id', 'koc', 'amount', 'status', 'payout_date')
     list_filter = ('status',)
     search_fields = ('koc__user_id',)
+
+@admin.register(ChatRoom)
+class ChatRoomAdmin(admin.ModelAdmin):
+    list_display = ('room_id', 'kocmission', 'created_at')
+    search_fields = ('kocmission__kocmission_id',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('message_id', 'room', 'sender_role', 'sender_id', 'content', 'is_read', 'created_at')
+    list_filter = ('sender_role', 'is_read')
+    search_fields = ('sender_id', 'content')
+    readonly_fields = ('created_at',)
+    list_editable = ('is_read',)
