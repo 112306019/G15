@@ -23,6 +23,7 @@ import CheckoutPage from './shopping/CheckoutPage';
 import OrdersPage from './shopping/OrdersPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import CouponsPage from './shopping/CouponsPage';
+import FavoritesPage from './shopping/FavoritesPage';
 
 // === Authentication & Vendor ===
 import LoginPage from './authentication/LoginPage'; 
@@ -32,11 +33,14 @@ import PointsPage from './authentication/PointsPage';
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin'; 
 
-// === 🌟 新增：平台管理端 (Admin) 相關頁面 ===
-//import AdminLogin from './admin/AdminLogin';
-//import AdminApp from './AdminApp';
 
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown } from 'lucide-react';
+// === 平台管理端 (Admin) 相關頁面 ===
+import AdminLogin from './admin/AdminLogin';
+import AdminApp from './AdminApp';
+
+
+// 🌟 新增：引入 Heart icon
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 function Sidebar({ currentView, onNavigate, userRole }) {
   const [expandedMenu, setExpandedMenu] = useState('home');
@@ -55,6 +59,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     },
     { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
+    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' }, // 🌟 新增：我的收藏選單
     { icon: <Ticket size={18} />, label: '我的優惠卷', view: 'coupons' },
     { icon: <Coins size={18} />, label: '我的點數', view: 'points' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
@@ -130,18 +135,22 @@ function MainSystem() {
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
 
+  // 🌟 新增：統一管理的收藏清單 State
+  const [favorites, setFavorites] = useState([]);
+
   const navigate = useNavigate(); 
 
   const handleNavigate = (targetView, data = null) => {
+    // 🌟 修改：將 'favorites' 也加入未登入阻擋名單
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 
-      'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'apply', 'cart', 'review'
+      'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'apply', 'cart', 'review', 'favorites'
     ];
 
     if (targetView === 'shop') setShopKey(prev => prev + 1);
 
     if (userRole === 'guest' && protectedViews.includes(targetView)) {
-      setAppToast("需先登入或註晨才能使用此功能喔！");
+      setAppToast("需先登入或註冊才能使用此功能喔！");
       setTimeout(() => setAppToast(""), 3500);
       return; 
     }
@@ -154,10 +163,28 @@ function MainSystem() {
     setView(targetView); 
   };
 
+  // 🌟 新增：商品加入 / 移除收藏的切換邏輯
+  const handleToggleFavorite = (product) => {
+    setFavorites((prev) => {
+      const exists = prev.find(item => item.id === product.id);
+      if (exists) {
+        return prev.filter(item => item.id !== product.id); // 已存在則移除
+      } else {
+        return [...prev, product]; // 不存在則加入
+      }
+    });
+  };
+
+  // 🌟 新增：單純移除收藏 (供 FavoritesPage 使用)
+  const handleRemoveFavorite = (productId) => {
+    setFavorites((prev) => prev.filter(item => item.id !== productId));
+  };
+
+  // 🌟 修改：將 'favorites' 放入含有 Sidebar 的殼 (shellViews) 之中
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
     'security', 'coupons', 'points', 'orders', 'order_detail', 'applyKoc', 'apply',
-    'review', 'analysis', 'sales_data', 'task_detail'
+    'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
@@ -175,12 +202,10 @@ function MainSystem() {
 
       {view === 'welcome' && <WelcomePage onSelectSeller={() => navigate('/vendor-login')} onSelectKoc={() => handleNavigate('login')} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
       
-      {/* 🟢 修改：動態接收 LoginPage 傳回來的角色身份 */}
       {view === 'login' && (
         <LoginPage 
           onLoginSuccess={(role) => { 
             setUserRole(role); 
-            // 如果是 KOC 前往首頁看板，是一般消費者則前往購物商城
             handleNavigate(role === 'koc' ? 'home' : 'shop'); 
           }} 
           onRegisterSuccess={() => { 
@@ -195,7 +220,21 @@ function MainSystem() {
       )}
 
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
-      {view === 'product_detail' && <ProductDetailPage onBack={() => handleNavigate('shop')} onGoCart={() => handleNavigate('cart')} onBuyNow={() => handleNavigate('checkout')} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
+      
+      {/* 🌟 修改：傳遞 favorites 與 onToggleFavorite 給 ProductDetailPage */}
+      {view === 'product_detail' && (
+        <ProductDetailPage 
+          onBack={() => handleNavigate('shop')} 
+          onGoCart={() => handleNavigate('cart')} 
+          onBuyNow={() => handleNavigate('checkout')} 
+          onNavigate={handleNavigate} 
+          userRole={userRole} 
+          onAddToCart={() => setCartCount(c => c + 1)}
+          favorites={favorites} 
+          onToggleFavorite={handleToggleFavorite}
+        />
+      )}
+      
       {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={() => handleNavigate('checkout')} />}
       {view === 'checkout' && <CheckoutPage onPaid={() => handleNavigate('orders')} />}
 
@@ -211,7 +250,6 @@ function MainSystem() {
             
             {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
             
-            {/* 🟢 修改：將當前的 userRole 身份判斷傳入 ProfilePage 組件 */}
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
             
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
@@ -223,7 +261,16 @@ function MainSystem() {
             {view === 'earnings_detail' && <EarningsDetailPage onBack={() => handleNavigate('earnings')} />}
             {view === 'pending_detail' && <PendingEarningsPage onBack={() => handleNavigate('earnings')} />}
             
-            {/* 🟢 修改：當消費者成功申請 KOC 時，將 userRole 更新為 'koc' */}
+            {/* 🌟 新增：渲染 FavoritesPage */}
+            {view === 'favorites' && (
+              <FavoritesPage 
+                favorites={favorites}
+                onRemoveFavorite={handleRemoveFavorite}
+                onAddToCart={() => setCartCount(c => c + 1)}
+                onNavigate={handleNavigate}
+              />
+            )}
+
             {view === 'applyKoc' && (
               <ApplyKOCPage 
                 onSubmit={() => { 
@@ -249,16 +296,13 @@ function MainSystem() {
 export default function App() {
   return (
     <Routes>
-      {/* 🟢 KOC 與消費者前台系統 */}
       <Route path="/*" element={<MainSystem />} />
-      
-      {/* 🔵 廠商端（Vendor） */}
       <Route path="/vendor-login" element={<VendorLogin />} />
       <Route path="/vendor/*" element={<VendorApp />} />
 
-      {/* 🔴 平台管理端（Admin）- 🌟 新增獨立路由 */}
-      {/* <Route path="/admin-login" element={<AdminLogin />} /> */}
-      {/* <Route path="/admin/*" element={<AdminApp />} /> */}
+      <Route path="/admin-login" element={<AdminLogin />} />
+      <Route path="/admin/*" element={<AdminApp />} />
+
     </Routes>
   );
 }
