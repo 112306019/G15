@@ -26,11 +26,16 @@ function Field({ label, value, onChange, disabled, type = "text", placeholder })
   );
 }
 
+<<<<<<< HEAD
+=======
+// 🟢 新增 isKOC prop，預設為 false (一般消費者)
+>>>>>>> origin/koc-frontend
 export default function ProfileInfo({ isKOC = false }) {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, message: "" });
 
+  // 🟢 擴充 form state，加入社群媒體欄位
   const [form, setForm] = useState({
     displayName: "",
     realName: "",
@@ -80,6 +85,7 @@ export default function ProfileInfo({ isKOC = false }) {
     window.setTimeout(() => setToast((t) => ({ ...t, show: false })), 2600);
   };
 
+<<<<<<< HEAD
   // 確認更新：打 update_koc_profile API
   const handleUpdate = async () => {
     try {
@@ -107,6 +113,12 @@ export default function ProfileInfo({ isKOC = false }) {
       console.error('更新失敗', err);
       showToast("✗ 更新失敗，請稍後再試");
     }
+=======
+  const handleUpdate = () => {
+    // 實務上這裡會呼叫 API 更新資料
+    showToast("✓ 資料已更新");
+    setEditing(false);
+>>>>>>> origin/koc-frontend
   };
 
   const clearAll = () => {
@@ -140,8 +152,17 @@ export default function ProfileInfo({ isKOC = false }) {
         </button>
       </div>
 
+<<<<<<< HEAD
       <div className="bg-white rounded-[2.5rem] p-10 border border-[#E2DDD4] shadow-sm">
         
+=======
+      {/* 白色底層卡片 */}
+      <div className="bg-white rounded-[2.5rem] p-10 border border-[#E2DDD4] shadow-sm">
+        
+        {/* =========================================
+            帳戶資料區塊 (所有人皆可見)
+        ========================================== */}
+>>>>>>> origin/koc-frontend
         <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           帳戶資料
@@ -193,6 +214,7 @@ export default function ProfileInfo({ isKOC = false }) {
           />
         </div>
 
+<<<<<<< HEAD
         {isKOC && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="my-10 h-px w-full bg-[#E2DDD4]" />
@@ -267,6 +289,91 @@ export default function ProfileInfo({ isKOC = false }) {
           </div>
         )}
 
+=======
+        {/* =========================================
+            KOC 專屬區塊 (銀行帳戶 + 社群帳號)
+        ========================================== */}
+        {isKOC && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="my-10 h-px w-full bg-[#E2DDD4]" />
+
+            {/* 社群帳號區塊 */}
+            <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+              <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block"></span>
+              社群帳號
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3 mb-10">
+              <Field
+                label="FB"
+                type="url"
+                value={form.fbUrl}
+                onChange={(v) => setForm({ ...form, fbUrl: v })}
+                disabled={!editing}
+                placeholder="個人首頁網址"
+              />
+              <Field
+                label="IG"
+                value={form.igUsername}
+                onChange={(v) => setForm({ ...form, igUsername: v })}
+                disabled={!editing}
+                placeholder="@username"
+              />
+              <Field
+                label="THREADS"
+                value={form.threadsUsername}
+                onChange={(v) => setForm({ ...form, threadsUsername: v })}
+                disabled={!editing}
+                placeholder="@username"
+              />
+            </div>
+
+            <div className="my-10 h-px w-full bg-[#E2DDD4]" />
+
+            {/* 銀行帳戶區塊 */}
+            <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+              <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block"></span>
+              銀行帳戶
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 mb-8">
+              {/* 銀行選擇下拉選單 */}
+              <div>
+                <label className="mb-2 block text-xs font-bold tracking-wider text-[#8C8880] uppercase">
+                  銀行帳戶
+                </label>
+                <select
+                  value={form.bankCode}
+                  onChange={(e) => setForm({ ...form, bankCode: e.target.value })}
+                  disabled={!editing}
+                  className={`w-full rounded-2xl border px-5 py-3.5 text-sm outline-none transition-all appearance-none ${
+                    !editing 
+                      ? "bg-[#F5F0E8] border-[#E2DDD4] text-[#8C8880] cursor-not-allowed opacity-80" 
+                      : "bg-white border-[#E2DDD4] text-[#1A1A18] focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 shadow-sm"
+                  }`}
+                >
+                  <option value="" disabled>選擇銀行帳戶</option>
+                  <option value="822">中國信託 (822)</option>
+                  <option value="013">國泰世華 (013)</option>
+                  <option value="012">台北富邦 (012)</option>
+                </select>
+              </div>
+
+              <Field
+                label="銀行帳戶號碼"
+                value={form.bankAccount}
+                onChange={(v) => setForm({ ...form, bankAccount: v })}
+                disabled={!editing}
+                placeholder="銀行帳戶號碼"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            底部操作按鈕
+        ========================================== */}
+>>>>>>> origin/koc-frontend
         {editing && (
           <div className="flex items-center justify-end gap-6 pt-6 mt-6 border-t border-[#E2DDD4]/50 animate-in slide-in-from-bottom-2 duration-300">
             <button
@@ -287,6 +394,10 @@ export default function ProfileInfo({ isKOC = false }) {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* 彈出提示 (Toast) */}
+>>>>>>> origin/koc-frontend
       <div
         className={`fixed bottom-10 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold text-white transition-all duration-300 shadow-xl border border-[#E2DDD4]/20 ${
           toast.show ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0 pointer-events-none"
