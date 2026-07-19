@@ -67,7 +67,7 @@ export default function LoginPage({
 
             <InputField 
               label="電子郵件或手機號碼" 
-              placeholder="請輸入電子郵件或手機號碼" 
+              placeholder="提示：輸入包含 'koc' 的電子郵件即可體驗 KOC 介面" 
               value={loginEmail} 
               onChange={(e) => setLoginEmail(e.target.value)} 
             />
@@ -87,7 +87,12 @@ export default function LoginPage({
 
             {/* 按鈕套用 ShopPage 的顏色 #1A1A18 與懸停橘色 #C8522A */}
             <button 
-              onClick={onLoginSuccess}
+              onClick={() => {
+                // 🟢 檢查輸入欄位中是否帶有 'koc' 字樣
+                const isKocUser = loginEmail.toLowerCase().includes("koc");
+                // 🟢 將身份傳遞給父組件的 handleLoginSuccess
+                onLoginSuccess(isKocUser ? "koc" : "shopper");
+              }}
               className="mt-auto w-full rounded-full bg-[#1A1A18] py-4 text-sm tracking-[0.05em] text-[#F5F0E8] shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#C8522A] active:translate-y-0"
             >
               登入

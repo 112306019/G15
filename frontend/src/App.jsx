@@ -175,7 +175,22 @@ function MainSystem() {
 
       {view === 'welcome' && <WelcomePage onSelectSeller={() => navigate('/vendor-login')} onSelectKoc={() => handleNavigate('login')} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
       
-      {view === 'login' && <LoginPage onLoginSuccess={() => { setUserRole('koc'); handleNavigate('home'); }} onRegisterSuccess={() => { setUserRole('shopper'); handleNavigate('profile'); }} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
+      {view === 'login' && (
+        <LoginPage 
+          onLoginSuccess={(role) => { 
+            setUserRole(role); 
+            handleNavigate(role === 'koc' ? 'home' : 'shop'); 
+          }} 
+          onRegisterSuccess={() => { 
+            setUserRole('shopper'); 
+            handleNavigate('profile'); 
+          }} 
+          onSkipToShop={() => { 
+            setUserRole('guest'); 
+            handleNavigate('shop'); 
+          }} 
+        />
+      )}
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
       {view === 'product_detail' && <ProductDetailPage onBack={() => handleNavigate('shop')} onGoCart={() => handleNavigate('cart')} onBuyNow={() => handleNavigate('checkout')} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
       {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={() => handleNavigate('checkout')} />}
@@ -194,7 +209,7 @@ function MainSystem() {
             {/* 🟢 修改：將 selectedTask 當作 props 傳給 TaskDetailPage */}
             {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
 
-            {view === 'profile' && <ProfilePage />}
+            {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
             {view === 'points' && <PointsPage points={30} expiringPoints={5} />}
             {view === 'coupons' && <CouponsPage />}
