@@ -90,8 +90,7 @@ class CouponNewAdmin(admin.ModelAdmin):
     list_display = ('coupon_id', 'kocmission', 'promotion_code', 'discount_value', 'status', 'usage_count', 'total_commission')
     list_filter = ('status',)
     search_fields = ('promotion_code', 'kocmission__kocmission_id')
-    list_editable = ('status', 'usage_count')
-    readonly_fields = ('total_commission',)
+    list_editable = ('status', 'usage_count', 'total_commission')  # 加進來
 
 @admin.register(Admins)
 class AdminsAdmin(admin.ModelAdmin):

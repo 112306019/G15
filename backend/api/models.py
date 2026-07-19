@@ -83,6 +83,8 @@ class Campaigns(models.Model):
     description = models.TextField(blank=True, null=True)
     budget = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     reward_type = models.CharField(max_length=100)
+    discount_percent = models.IntegerField(default=0, db_column='discount_percent')
+    promo_days = models.IntegerField(default=7, db_column='promo_days')
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     status = models.CharField(max_length=50, default='active')
