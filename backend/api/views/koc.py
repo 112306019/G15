@@ -155,55 +155,63 @@ def get_available_campaign_list(request):
         }, status=400)
         
     try:
-        # 找到這個 user 對應的 KOC
-        koc = KOC.objects.filter(user__user_id=user_id).first()
+        # 🔥 優化 1：一次性找出這個 user 已經申請過的 campaign_id 列表
+        applied_campaign_ids = set(
+            Application.objects.filter(koc__user__user_id=user_id)
+            .values_list('campaign_id', flat=True)
+        )
 
-        # 找出這個 KOC 已經申請過的 campaign_id 列表
-        applied_campaign_ids = set()
-        if koc:
-            applied_campaign_ids = set(
-                Application.objects.filter(koc=koc)
-                .values_list('campaign_id', flat=True)
-            )
-
-        # 只撈「已完成」的訂單
+        # 2. 撈出已完成的訂單項目
         completed_orders = OrderItem.objects.filter(
             order__user_id=user_id,
-            order__order_status='completed'  # 只取已完成的訂單
-        ).select_related('order', 'product')
+            order__order_status='completed'
+        )
+
+        # 收集所有的 product_id 並建立 product_id 到 order_id 的對照表
+        product_order_map = {}
+        for item in completed_orders:
+            if item.product_id not in product_order_map:
+                product_order_map[item.product_id] = str(item.order_id)
+
+        product_ids = list(product_order_map.keys())
+
+        if not product_ids:
+            return Response({
+                "success": True,
+                "err": "",
+                "campaigns": []
+            })
+
+        # 🔥 優化 2：在迴圈外一次性向印度 DB 撈出所有相關活動（對 DB 只發送 1 次 SQL）
+        campaign_products = CampaignProduct.objects.filter(
+            product_id__in=product_ids
+        ).select_related('campaign')
 
         campaigns_data = []
-        seen_campaign_ids = set()  # 避免同一個活動重複出現
+        seen_campaign_ids = set()
 
-        for item in completed_orders:
-            campaign_products = CampaignProduct.objects.filter(
-                product_id=item.product_id
-            ).select_related('campaign')
+        # 🔥 優化 3：在記憶體中進行篩選與組裝，迴圈內 0 次 SQL 查詢！
+        for cp in campaign_products:
+            campaign = cp.campaign
 
-            for cp in campaign_products:
-                campaign = cp.campaign
+            if not campaign:
+                continue
 
-                if not campaign:
-                    continue
+            campaign_id = campaign.campaign_id
+            campaign_id_str = str(campaign_id)
 
-                campaign_id_str = str(campaign.campaign_id)
+            # 排除已申請過與重複出現的活動
+            if campaign_id in applied_campaign_ids or campaign_id_str in seen_campaign_ids:
+                continue
 
-                # 排除已申請過的活動
-                if campaign.campaign_id in applied_campaign_ids:
-                    continue
+            seen_campaign_ids.add(campaign_id_str)
 
-                # 排除重複出現的活動
-                if campaign_id_str in seen_campaign_ids:
-                    continue
-
-                seen_campaign_ids.add(campaign_id_str)
-
-                campaigns_data.append({
-                    "order_id": str(item.order_id),
-                    "campaign_id": campaign_id_str,
-                    "campaign_name": campaign.name,
-                    "apply_status": 0
-                })
+            campaigns_data.append({
+                "order_id": product_order_map.get(cp.product_id, ""),
+                "campaign_id": campaign_id_str,
+                "campaign_name": campaign.name,
+                "apply_status": 0
+            })
 
         return Response({
             "success": True,
@@ -217,6 +225,7 @@ def get_available_campaign_list(request):
             "err": f"伺服器發生錯誤: {str(e)}",
             "campaigns": []
         }, status=500)
+
 
 # 顯示已申請代言
 @api_view(['GET'])
@@ -232,30 +241,41 @@ def get_applied_campaign_list(request):
         }, status=400)
 
     try:
-        koc = KOC.objects.filter(user__user_id=user_id).first()
-        if not koc:
-            return Response({
-                "success": False,
-                "err": "找不到對應的 KOC",
-                "campaigns": []
-            }, status=404)
-
+        # 🔥 優化 1：直接透過 koc__user__user_id 跨表查詢！
+        # 省去先查 KOC 再查 Application 的來回 1 次 SQL 時間
         applications = Application.objects.filter(
-            koc=koc
+            koc__user__user_id=user_id
         ).select_related('campaign')
 
+        if not applications.exists():
+            return Response({
+                "success": True,
+                "err": "",
+                "campaigns": []
+            })
+
+        # 🔥 優化 2：先把所有的 campaign_id 收集起來
+        campaign_ids = [app.campaign_id for app in applications]
+
+        # 🔥 優化 3：在迴圈外部「一次性」向印度 DB 查出所有相關圖片（只對 DB 發送 1 次 SQL）
+        campaign_products = CampaignProduct.objects.filter(
+            campaign_id__in=campaign_ids
+        ).select_related('product')
+
+        # 轉成 Python 字典 Mapping，方便 $O(1)$ 快速對照
+        image_map = {}
+        for cp in campaign_products:
+            if cp.campaign_id not in image_map and cp.product:
+                image_map[cp.campaign_id] = cp.product.image_url
+
+        # 🔥 優化 4：在記憶體中組裝資料，迴圈內完全不觸發任何 SQL！
         campaigns_data = []
         for app in applications:
-            campaign_product = CampaignProduct.objects.filter(
-                campaign=app.campaign
-            ).select_related('product').first()
-            campaign_image = campaign_product.product.image_url if campaign_product else None
-
             campaigns_data.append({
                 "application_id": str(app.application_id),
-                "campaign_id": str(app.campaign.campaign_id),
+                "campaign_id": str(app.campaign_id),
                 "campaign_name": app.campaign.name,
-                "campaign_image": campaign_image,
+                "campaign_image": image_map.get(app.campaign_id, None),
             })
 
         return Response({

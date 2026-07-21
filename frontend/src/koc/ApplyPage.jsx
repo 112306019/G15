@@ -11,19 +11,25 @@ export default function ApplyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 暫時先寫死 user_id，等登入機制做好後再改成從 context/localStorage 拿
   const user_id = 'U00001';
   const koc_id = 'KOC00001';
 
-  // 載入可申請的活動列表
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 取得可申請的活動(待申請 tab)
-        const availableRes = await api.get('/koc/application/getAvailableList', {
-          params: { user_id }
-        });
+        const [availableRes, appliedRes] = await Promise.all([
+          api.get('/koc/application/getAvailableList', {
+            params: { user_id },
+            signal: controller.signal
+          }),
+          api.get('/koc/application/getAppliedList', {
+            params: { user_id },
+            signal: controller.signal
+          })
+        ]);
 
         if (availableRes.data.success) {
           setPendingProducts(availableRes.data.campaigns.map(c => ({
@@ -34,12 +40,6 @@ export default function ApplyPage() {
           })));
         }
 
-        // 取得已申請的列表(只需要確認有申請過，不需要顯示狀態)
-        // 已申請：從 Application 表撈已申請過的活動
-        const appliedRes = await api.get('/koc/application/getAppliedList', {
-          params: { user_id }
-        });
-
         if (appliedRes.data.success) {
           setAppliedProducts(appliedRes.data.campaigns.map(c => ({
             id: c.application_id,
@@ -48,21 +48,23 @@ export default function ApplyPage() {
           })));
         }
       } catch (err) {
-        setError('載入失敗，請稍後再試');
-        console.error(err);
+        if (err.name !== 'CanceledError' && err.name !== 'AxiosError') {
+          setError('載入失敗，請稍後再試');
+          console.error(err);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
+    return () => controller.abort();
   }, []);
 
-  // 申請任務
   const handleApply = async (product) => {
     try {
       const res = await api.post('/koc/application/applyMission', {
-        koc_id: koc_id,        // 改成 koc_id
+        koc_id: koc_id,
         campaign_id: product.id,
         order_id: product.order_id,
       });
@@ -86,14 +88,8 @@ export default function ApplyPage() {
 
   const currentList = activeTab === 'pending' ? pendingProducts : appliedProducts;
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20 text-[#8C8880]">
-      載入中...
-    </div>
-  );
-
   if (error) return (
-    <div className="flex items-center justify-center py-20 text-red-500">
+    <div className="flex items-center justify-center py-20 text-red-500 font-bold">
       {error}
     </div>
   );
@@ -102,6 +98,7 @@ export default function ApplyPage() {
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
       <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">代言申請區</h2>
 
+      {/* 按鈕組：一開始就渲染，使用者可以自由切換 */}
       <div className="flex gap-4 mb-10">
         <button
           onClick={() => setActiveTab('pending')}
@@ -132,44 +129,53 @@ export default function ApplyPage() {
         </div>
 
         <div className="flex flex-col">
-          {currentList.map((product, i) => (
-            <div
-              key={product.id}
-              className={`flex items-center justify-between px-10 py-6 hover:bg-[#F8F9FA] transition-colors ${
-                i !== currentList.length - 1 ? 'border-b border-[#E2DDD4]' : ''
-              }`}
-            >
-              <div className="flex items-center gap-6 flex-1 pr-8">
-                <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
-                  <ImageIcon className="text-[#8C8880]/50" size={24} />
+          {/* 狀態 1：資料載入中 (顯示骨架屏 Skeleton) */}
+          {loading ? (
+            [1, 2].map((n) => (
+              <div key={n} className="flex items-center justify-between px-10 py-6 border-b border-[#E2DDD4] animate-pulse">
+                <div className="flex items-center gap-6 flex-1 pr-8">
+                  <div className="w-[88px] h-[64px] bg-[#E2DDD4] rounded-xl flex-shrink-0" />
+                  <div className="h-6 bg-[#E2DDD4] rounded-lg w-48" />
                 </div>
-                <div className="font-bold text-[#1A1A18] leading-snug">
-                  {product.name}
-                </div>
+                <div className="w-[100px] h-9 bg-[#E2DDD4] rounded-2xl flex-shrink-0" />
               </div>
+            ))
+          ) : currentList.length > 0 ? (
+            /* 狀態 2：載入完畢且有資料 */
+            currentList.map((product, i) => (
+              <div
+                key={product.id}
+                className={`flex items-center justify-between px-10 py-6 hover:bg-[#F8F9FA] transition-colors ${
+                  i !== currentList.length - 1 ? 'border-b border-[#E2DDD4]' : ''
+                }`}
+              >
+                <div className="flex items-center gap-6 flex-1 pr-8">
+                  <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
+                    <ImageIcon className="text-[#8C8880]/50" size={24} />
+                  </div>
+                  <div className="font-bold text-[#1A1A18] leading-snug">
+                    {product.name}
+                  </div>
+                </div>
 
-              <div className="flex-shrink-0 w-[120px] text-right">
-                {activeTab === 'pending' ? (
-                  <div className="flex-shrink-0 w-[120px] text-right">
+                <div className="flex-shrink-0 w-[120px] text-right">
+                  {activeTab === 'pending' ? (
                     <button
                       onClick={() => handleApply(product)}
                       className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
                     >
                       申請任務
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex-shrink-0 w-[120px] text-right">
+                  ) : (
                     <span className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] px-6 py-2 rounded-xl">
                       已申請
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-
-          {currentList.length === 0 && (
+            ))
+          ) : (
+            /* 狀態 3：載入完畢且確實「沒有資料」才顯示 */
             <div className="px-10 py-16 text-center text-[#8C8880] font-bold">
               目前沒有相關紀錄
             </div>

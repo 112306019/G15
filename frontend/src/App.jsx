@@ -216,10 +216,6 @@ function MainSystem() {
           }} 
         />
       )}
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/koc-frontend
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
       
       {/* 🌟 修改：傳遞 favorites 與 onToggleFavorite 給 ProductDetailPage */}
@@ -250,14 +246,9 @@ function MainSystem() {
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
             
             {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
-<<<<<<< HEAD
-
-            {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
-=======
             
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
             
->>>>>>> origin/koc-frontend
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
             {view === 'points' && <PointsPage points={30} expiringPoints={5} />}
             {view === 'coupons' && <CouponsPage />}
