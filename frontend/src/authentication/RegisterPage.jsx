@@ -29,6 +29,7 @@ function classNames(...xs) {
 }
 
 export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
+  const [role, setRole] = useState(2); // 預設消費者
   const [name, setName] = useState("");
   const [account, setAccount] = useState(""); // email or phone
   const [password, setPassword] = useState("");
@@ -38,6 +39,7 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
   const [touched, setTouched] = useState({ name: false, account: false, password: false });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const validName = useMemo(() => name.trim().length >= 2, [name]);
   const validAccount = useMemo(() => {
@@ -63,18 +65,42 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
   const errRing = "border-[#C8522A] bg-[#FEF5F3]";
   const neutralRing = "border-transparent focus:border-slate-900";
 
-  const handleSubmit = () => {
-    // 先把所有欄位標記為 touched，讓錯誤顯示
+  const handleSubmit = async () => {
     setTouched({ name: true, account: true, password: true });
-
     if (!canSubmit) return;
 
     setSubmitting(true);
-    window.setTimeout(() => {
+    setErrorMsg("");
+
+    try {
+      const isEmail = account.trim().includes("@");
+      const body = {
+        name: name.trim(),
+        email: isEmail ? account.trim() : `${account.trim()}@phone.local`,
+        password: password,
+        phone: isEmail ? "" : account.trim(),
+        role: role,
+      };
+
+      const res = await fetch("http://127.0.0.1:8000/api/user/signUp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSuccess(true);
+        onRegisterSuccess?.({ name: name.trim(), account: account.trim(), role });
+      } else {
+        setErrorMsg(data.err || "註冊失敗，請再試一次");
+      }
+    } catch (err) {
+      setErrorMsg("網路錯誤，請確認後端是否正常運作");
+    } finally {
       setSubmitting(false);
-      setSuccess(true);
-      onRegisterSuccess?.({ name: name.trim(), account: account.trim() });
-    }, 1200);
+    }
   };
 
   return (
@@ -98,6 +124,33 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
         <div className="flex items-center justify-center px-6 py-12 lg:px-20">
           <div className="w-full max-w-[400px]">
             <h2 className="mb-9 font-serif text-3xl">註冊帳號</h2>
+
+            {/* Role */}
+            <div className="mb-5">
+              <label className="mb-2 block text-[13px] text-slate-900">身分</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRole(2)}
+                  className={classNames(
+                    "flex-1 rounded-xl border py-3 text-sm transition-all",
+                    role === 2 ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-100 text-slate-500"
+                  )}
+                >
+                  消費者
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole(1)}
+                  className={classNames(
+                    "flex-1 rounded-xl border py-3 text-sm transition-all",
+                    role === 1 ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-100 text-slate-500"
+                  )}
+                >
+                  KOC / 網紅
+                </button>
+              </div>
+            </div>
 
             {/* Name */}
             <div className="mb-5">
@@ -209,6 +262,13 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
                 ) : null}
               </span>
             </button>
+
+            {/* Error message */}
+            {errorMsg && (
+              <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
+                {errorMsg}
+              </div>
+            )}
 
             {/* Submit */}
             <button
