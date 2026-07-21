@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, ShoppingCart, TrendingUp, Archive } from 'lucide-react'
 import { productCategories } from './mock'
 import { formatCurrency, cn } from './lib/utils'
-import {getVendorProducts, createVendorProduct, updateVendorProduct} from '../api/vendor'
+import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct} from '../api/vendor'
 
 // 🟢 專屬品牌色狀態設定 (配合新商業邏輯)
 const statusCfg = {
@@ -333,7 +333,48 @@ export default function Products() {
     setModalOpen(true)
   }
 
-  const handleDelete = id => setProds(prev => prev.filter(p => p.id!==id))
+  const handleDelete = async product => {
+    const confirmed = window.confirm(
+      `確定要刪除商品「${product.name}」嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setError('')
+
+      const response = await deleteVendorProduct({
+        vendor_id: vendorId,
+        product_id: product.id
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(
+          response.data.err || '刪除商品失敗'
+        )
+      }
+
+      setProds(previous =>
+        previous.filter(
+          item => item.id !== product.id
+        )
+      )
+    } catch (err) {
+      console.error('刪除商品失敗：', err)
+
+      const apiError = err.response?.data?.err
+
+      setError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : err.message || '刪除商品失敗'
+      )
+    }
+  }
+
+
   const handleSave = async form => {
     if (!vendorId) {
       throw new Error('找不到廠商編號，請重新登入')
@@ -351,7 +392,7 @@ export default function Products() {
       stock: Number(form.stock),
       category: form.category || '',
       image_url: form.imageUrl.trim(),
-      status: editingProduct?.apiStatus || 'idle'
+      status: editingProduct?.apiStatus || 'inactive'
     }
 
     if (editingProduct) {
@@ -408,8 +449,8 @@ export default function Products() {
       thumbnail: form.imageUrl || '📦',
       imageUrl: form.imageUrl,
       description: form.description,
-      apiStatus: 'idle',
-      status: Number(form.stock) === 0 ? 'empty' : 'idle'
+      apiStatus: 'inactive',
+      status: Number(form.stock) === 0 ? 'empty' : 'inactive'
     }
 
     setProds(previous => [newProduct, ...previous])
@@ -423,7 +464,7 @@ export default function Products() {
 
     const nextStatus =
       product.apiStatus === 'active'
-        ? 'idle'
+        ? 'inactive'
         : 'active'
 
     try {
@@ -456,7 +497,7 @@ export default function Products() {
                     ? 'empty'
                     : nextStatus === 'active'
                       ? 'active'
-                      : 'idle'
+                      : 'inactive'
               }
             : item
         )
@@ -566,8 +607,14 @@ export default function Products() {
                   </button>
 
                   <button
-                    onClick={() => handleDelete(p.id)}
+                    type="button"
+                    onClick={event => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      handleDelete(p)
+                    }}
                     className="p-2 bg-white/90 rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025]"
+                    title="刪除商品"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -632,7 +679,18 @@ export default function Products() {
                     <td className="p-5">
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => handleOpenEdit(p)} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#C8522A] hover:border-[#C8522A] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Edit3 size={14}/></button>
-                        <button onClick={() => handleDelete(p.id)} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025] hover:border-[#D93025] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Trash2 size={14}/></button>
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            handleDelete(p)
+                          }}
+                          className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025] hover:border-[#D93025] hover:bg-[#FFF0F0] transition-colors shadow-sm"
+                          title="刪除商品"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                         <button
                           onClick={() => handleToggleStatus(p)}
                           disabled={p.stock === 0}

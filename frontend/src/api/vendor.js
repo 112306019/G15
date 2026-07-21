@@ -43,10 +43,14 @@ export const updateVendorProduct = (data) => {
   return api.post('/vendor/product/update', data)
 }
 
+export const deleteVendorProduct = data =>
+  api.post('/vendor/product/delete', data)
+
 // 修改商品狀態
 export const updateVendorProductStatus = (data) => {
   return api.post('/vendor/product/updateStatus', data)
 }
+
 
 // 獲取活動清單
 export const getVendorCampaigns = (vendorId, status) => {
@@ -68,18 +72,30 @@ export const updateVendorCampaign = (data) => {
   return api.post('/vendor/campaign/update', data)
 }
 
+//刪除活動草稿
+export const deleteVendorCampaign = data =>
+  api.post('/vendor/campaign/delete', data)
+
 // 獲取 KOC 報名清單
 export const getVendorApplications = (
   vendorId,
-  campaignId,
-  status
+  campaignId = '',
+  applicationStatus = ''
 ) => {
+  const params = {
+    vendor_id: vendorId
+  }
+
+  if (campaignId) {
+    params.campaign_id = campaignId
+  }
+
+  if (applicationStatus) {
+    params.status = applicationStatus
+  }
+
   return api.get('/vendor/application/getlist', {
-    params: {
-      vendor_id: vendorId,
-      campaign_id: campaignId,
-      status,
-    },
+    params
   })
 }
 
@@ -91,19 +107,16 @@ export const reviewVendorApplication = (data) => {
 // 獲取投稿內容
 export const getVendorSubmissions = (
   vendorId,
-  submissionId,
-  kocmissionId,
-  status
-) => {
-  return api.get('/vendor/mission/getSubmissionDetail', {
+  submissionType = 'text'
+) =>
+  api.get('/vendor/mission/getSubmissionDetail', {
     params: {
       vendor_id: vendorId,
-      submission_id: submissionId,
-      kocmission_id: kocmissionId,
-      status,
-    },
+      submission_type: submissionType
+    }
   })
-}
+
+
 
 // 審核投稿
 export const reviewVendorSubmission = (data) => {

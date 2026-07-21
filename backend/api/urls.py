@@ -104,12 +104,14 @@ urlpatterns = [
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
+   path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
 
     # Vendor 任務 / Campaign API
     path('vendor/campaign/create', vendor.vendor_campaign_create, name='vendor-campaign-create'),
     path('vendor/campaign/update', vendor.vendor_campaign_update, name='vendor-campaign-update'),
     path('vendor/campaign/getlist', vendor.vendor_campaign_getlist, name='vendor-campaign-getlist'),
+    path('vendor/campaign/delete', vendor.vendor_campaign_delete, name='vendor-campaign-delete'),
 
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),

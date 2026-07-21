@@ -5,6 +5,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
+from datetime import datetime, time
+from django.db import transaction
 from django.db.models import Sum, Count
 
 
@@ -320,6 +322,69 @@ def vendor_product_update_status(request):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_product_delete(request):
+    """
+    刪除商品
+    URL: /vendor/product/delete
+
+    只有未被活動綁定、且沒有訂單紀錄的商品可以刪除。
+    """
+    vendor_id = request.data.get("vendor_id")
+    product_id = request.data.get("product_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "success": False,
+            "err": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = Product.objects.get(
+            product_id=product_id,
+            vendor_id=vendor_id
+        )
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Product not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 已綁定活動，不允許刪除
+    if CampaignProduct.objects.filter(
+        product=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已綁定活動，無法刪除；請改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 已有訂單紀錄，不允許刪除
+    if OrderItem.objects.filter(
+        product=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已有訂單紀錄，無法刪除；請改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    deleted_product_id = product.product_id
+    product.delete()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "product_id": deleted_product_id
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_product_getlist(request):
@@ -371,7 +436,16 @@ def vendor_product_getlist(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_campaign_create(request):
-    serializer = VendorCampaignCreateSerializer(data=request.data)
+    """
+    建立任務。
+
+    商品來源二選一：
+    1. 傳 product_id：綁定廠商既有商品
+    2. 傳 product：建立新商品並綁定
+    """
+    serializer = VendorCampaignCreateSerializer(
+        data=request.data
+    )
 
     if not serializer.is_valid():
         return Response({
@@ -379,43 +453,294 @@ def vendor_campaign_create(request):
             "err": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    vendor_id = serializer.validated_data.get("vendor_id")
-    product_id = serializer.validated_data.get("product_id")
+    data = serializer.validated_data
 
-    if not Vendor.objects.filter(vendor_id=vendor_id).exists():
+    vendor_id = data["vendor_id"]
+    product_id = data.get("product_id")
+    product_data = data.get("product")
+
+    try:
+        vendor = Vendor.objects.get(
+            vendor_id=vendor_id
+        )
+    except Vendor.DoesNotExist:
         return Response({
             "success": False,
             "err": "Vendor not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
-    if not Product.objects.filter(product_id=product_id, vendor_id=vendor_id).exists():
+    start_datetime = timezone.make_aware(
+        datetime.combine(
+            data["start_date"],
+            time.min
+        )
+    )
+
+    end_datetime = timezone.make_aware(
+        datetime.combine(
+            data["end_date"],
+            time.max
+        )
+    )
+
+    try:
+        with transaction.atomic():
+
+            # 情況一：選擇既有商品
+            if product_id is not None:
+                try:
+                    product = Product.objects.get(
+                        product_id=product_id,
+                        vendor_id=vendor_id
+                    )
+                except Product.DoesNotExist:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "Product not found or does not "
+                            "belong to this vendor"
+                        )
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # 情況二：建立活動時同步建立新商品
+            else:
+                if not product_data:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "請選擇既有商品或提供新商品資料"
+                        )
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                product = Product.objects.create(
+                    vendor_id=vendor.vendor_id,
+                    product_name=product_data[
+                        "product_name"
+                    ],
+                    description=product_data.get(
+                        "description",
+                        ""
+                    ),
+                    price=product_data["price"],
+                    discounted_price=product_data.get(
+                        "discounted_price"
+                    ),
+                    stock=product_data["stock"],
+                    category=product_data.get(
+                        "category",
+                        ""
+                    ),
+                    image_url=product_data.get(
+                        "image_url",
+                        ""
+                    ),
+                    status="active"
+                )
+
+            campaign = Campaigns.objects.create(
+                vendor=vendor,
+                name=data["name"],
+                description=data.get(
+                    "description",
+                    ""
+                ),
+                budget=data["budget"],
+                reward_type=data.get(
+                    "reward_type",
+                    "commission"
+                ),
+                discount_percent=data[
+                    "discount_percent"
+                ],
+                promo_days=data["promo_days"],
+                start_date=start_datetime,
+                end_date=end_datetime,
+                status=data["status"]
+            )
+
+            CampaignProduct.objects.create(
+                campaign=campaign,
+                product=product
+            )
+
+    except Exception as error:
         return Response({
             "success": False,
-            "err": "Product not found or does not belong to this vendor"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    campaign_data = serializer.validated_data.copy()
-    campaign_data.pop("product_id", None)
-
-    campaign = Campaigns.objects.create(**campaign_data)
-
-    product = Product.objects.get(product_id=product_id)
-
-    CampaignProduct.objects.create(
-        campaign=campaign,
-        product=product
-    )
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "success": True,
         "err": "",
-        "campaign_id": campaign.campaign_id
+        "campaign_id": str(campaign.campaign_id),
+        "product_id": product.product_id,
+        "product_created": product_id is None,
+        "status": campaign.status
     }, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_campaign_update(request):
+    """
+    修改任務。
+
+    商品來源二選一：
+    1. product_id：綁定既有商品
+    2. product：建立新商品並重新綁定
+    """
+    serializer = VendorCampaignUpdateSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    campaign_id = data["campaign_id"]
+    vendor_id = data["vendor_id"]
+
+    product_id = data.get("product_id")
+    product_data = data.get("product")
+
+    try:
+        campaign = Campaigns.objects.get(
+            campaign_id=campaign_id,
+            vendor_id=vendor_id
+        )
+    except Campaigns.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Campaign not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    start_datetime = timezone.make_aware(
+        datetime.combine(
+            data["start_date"],
+            time.min
+        )
+    )
+
+    end_datetime = timezone.make_aware(
+        datetime.combine(
+            data["end_date"],
+            time.max
+        )
+    )
+
+    try:
+        with transaction.atomic():
+
+            # 選擇既有商品
+            if product_id is not None:
+                try:
+                    product = Product.objects.get(
+                        product_id=product_id,
+                        vendor_id=vendor_id
+                    )
+                except Product.DoesNotExist:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "Product not found or does not "
+                            "belong to this vendor"
+                        )
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # 改成新建商品
+            else:
+                if not product_data:
+                    return Response({
+                        "success": False,
+                        "err": "New product data is required"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                product = Product.objects.create(
+                    vendor_id=vendor_id,
+                    product_name=product_data[
+                        "product_name"
+                    ],
+                    description=product_data.get(
+                        "description",
+                        ""
+                    ),
+                    price=product_data["price"],
+                    discounted_price=product_data.get(
+                        "discounted_price"
+                    ),
+                    stock=product_data["stock"],
+                    category=product_data.get(
+                        "category",
+                        ""
+                    ),
+                    image_url=product_data.get(
+                        "image_url",
+                        ""
+                    ),
+                    status="active"
+                )
+
+            campaign.name = data["name"]
+            campaign.description = data.get(
+                "description",
+                ""
+            )
+            campaign.budget = data["budget"]
+            campaign.reward_type = data.get(
+                "reward_type",
+                "commission"
+            )
+            campaign.discount_percent = data[
+                "discount_percent"
+            ]
+            campaign.promo_days = data["promo_days"]
+            campaign.start_date = start_datetime
+            campaign.end_date = end_datetime
+            campaign.status = data["status"]
+            campaign.save()
+
+            # 更新原有關聯；沒有關聯時就建立
+            campaign_product = CampaignProduct.objects.filter(
+                campaign=campaign
+            ).first()
+
+            if campaign_product:
+                campaign_product.product = product
+                campaign_product.save(
+                    update_fields=["product"]
+                )
+            else:
+                CampaignProduct.objects.create(
+                    campaign=campaign,
+                    product=product
+                )
+
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaign_id": str(campaign.campaign_id),
+        "product_id": product.product_id,
+        "product_created": product_id is None,
+        "status": campaign.status
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_campaign_delete(request):
+    """
+    刪除任務草稿
+    URL: /vendor/campaign/delete
+    """
     campaign_id = request.data.get("campaign_id")
     vendor_id = request.data.get("vendor_id")
 
@@ -442,26 +767,24 @@ def vendor_campaign_update(request):
             "err": "Campaign not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
-    serializer = VendorCampaignUpdateSerializer(
-        campaign,
-        data=request.data,
-        partial=True
-    )
-
-    if not serializer.is_valid():
+    if campaign.status != "draft":
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": "Only draft campaigns can be deleted"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    serializer.save()
+    # 刪除 CampaignProduct 關聯，但不刪除原本商品庫中的商品
+    CampaignProduct.objects.filter(
+        campaign=campaign
+    ).delete()
+
+    campaign.delete()
 
     return Response({
         "success": True,
         "err": "",
-        "campaign_id": campaign.campaign_id
+        "campaign_id": str(campaign_id)
     }, status=status.HTTP_200_OK)
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -494,21 +817,34 @@ def vendor_campaign_getlist(request):
             products.append({
                 "product_id": product.product_id,
                 "product_name": product.product_name,
+                "description": product.description,
                 "price": product.price,
                 "discounted_price": product.discounted_price,
+                "stock": product.stock,
+                "category": product.category,
                 "image_url": product.image_url,
                 "status": product.status,
             })
 
         campaign_list.append({
-            "campaign_id": campaign.campaign_id,
+            "campaign_id": str(campaign.campaign_id),
             "vendor_id": campaign.vendor_id,
             "name": campaign.name,
             "description": campaign.description,
-            "budget": campaign.budget,
+            "budget": str(campaign.budget),
             "reward_type": campaign.reward_type,
-            "start_date": campaign.start_date,
-            "end_date": campaign.end_date,
+            "discount_percent": campaign.discount_percent,
+            "promo_days": campaign.promo_days,
+            "start_date": (
+                campaign.start_date.date().isoformat()
+                if campaign.start_date
+                else None
+            ),
+            "end_date": (
+                campaign.end_date.date().isoformat()
+                if campaign.end_date
+                else None
+            ),
             "status": campaign.status,
             "products": products,
         })
@@ -672,6 +1008,7 @@ def vendor_mission_get_submission_detail(request):
     vendor_id = request.GET.get("vendor_id")
     submission_id = request.GET.get("submission_id")
     kocmission_id = request.GET.get("kocmission_id")
+    submission_type = request.GET.get("submission_type")
     submission_status = request.GET.get("status")
 
     if not vendor_id:
@@ -693,12 +1030,19 @@ def vendor_mission_get_submission_detail(request):
     if submission_status:
         submissions = submissions.filter(status=submission_status)
 
+    if submission_type:
+        submissions = submissions.filter(submission_type=submission_type)
+
     submission_list = []
 
     for submission in submissions:
         mission = submission.kocmission
         application = mission.application
         campaign = application.campaign
+
+        coupon = CouponNew.objects.filter(
+            kocmission=mission
+        ).first()
 
         submission_list.append({
             "submission_id": submission.submission_id,
@@ -717,6 +1061,17 @@ def vendor_mission_get_submission_detail(request):
             "application_id": application.application_id,
             "campaign_id": campaign.campaign_id,
             "campaign_name": campaign.name,
+
+            "promotion_code": (
+                coupon.promotion_code
+                if coupon
+                else None
+            ),
+            "coupon_status": (
+                coupon.status
+                if coupon
+                else None
+            ),
         })
 
     return Response({
@@ -799,6 +1154,23 @@ def vendor_mission_review_submission(request):
             "reviewed_time"
         ]
     )
+    mission = submission.kocmission
+
+    if review_result == "approved":
+        if submission.submission_type == "text":
+            # 文案審核通過：進入待發佈
+            mission.stage = "publishing"
+
+        elif submission.submission_type == "link":
+            # 發佈連結審核通過：任務完成
+            mission.stage = "completed"
+
+        mission.save(update_fields=["stage"])
+
+    elif review_result == "revising":
+        # 審核退回：回到撰寫文案
+        mission.stage = "writing"
+        mission.save(update_fields=["stage"])
 
     # 只有文案審核通過才啟用優惠碼
     if should_activate_coupon:
@@ -813,6 +1185,8 @@ def vendor_mission_review_submission(request):
         "status": submission.status,
         "vendor_feedback": submission.vendor_feedback,
         "reviewed_time": submission.reviewed_time,
+        "kocmission_id": mission.kocmission_id,
+        "stage": mission.stage,
         "coupon_id": coupon.coupon_id if coupon else None,
         "promotion_code": coupon.promotion_code if coupon else None,
         "coupon_status": coupon.status if coupon else None,
