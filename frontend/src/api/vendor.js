@@ -167,6 +167,43 @@ export const updateVendorCouponStatus = (data) => {
   return api.post('/vendor/coupon/updateStatus', data)
 }
 
+// 建立聊天室
+export const createVendorChatroom = data => {
+  return api.post('/vendor/chatroom/create', data)
+}
+
+// 取得廠商聊天室清單
+export const getVendorChatrooms = vendorId => {
+  return api.get('/vendor/chatroom/getlist', {
+    params: {
+      vendor_id: vendorId
+    }
+  })
+}
+
+// 取得聊天室訊息
+export const getVendorChatMessages = (
+  vendorId,
+  roomId
+) => {
+  return api.get('/vendor/chatroom/getMessages', {
+    params: {
+      vendor_id: vendorId,
+      room_id: roomId
+    }
+  })
+}
+
+// 廠商發送訊息
+export const sendVendorChatMessage = data => {
+  return api.post('/vendor/chatroom/sendMessage', data)
+}
+
+// 將 KOC 訊息標記為已讀
+export const markVendorChatroomRead = data => {
+  return api.post('/vendor/chatroom/markRead', data)
+}
+
 // 廠商成效總覽
 export const getVendorAnalyticsOverview = (vendorId) => {
   return api.get('/vendor/analytics/overview', {
