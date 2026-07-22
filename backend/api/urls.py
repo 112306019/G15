@@ -130,6 +130,13 @@ urlpatterns = [
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),
     path('vendor/coupon/updateStatus', vendor.vendor_coupon_update_status, name='vendor-coupon-update-status'),
 
+    # Vendor 聊天室 API
+    path('vendor/chatroom/create', vendor.vendor_chatroom_create, name='vendor_chatroom_create'),
+    path('vendor/chatroom/getlist', vendor.vendor_chatroom_getlist, name='vendor_chatroom_getlist'),
+    path('vendor/chatroom/getMessages', vendor.vendor_chatroom_get_messages, name='vendor_chatroom_get_messages'),
+    path('vendor/chatroom/sendMessage', vendor.vendor_chatroom_send_message, name='vendor_chatroom_send_message'),
+    path('vendor/chatroom/markRead', vendor.vendor_chatroom_mark_read, name='vendor_chatroom_mark_read'),
+
     # Vendor 分析 API
     path('vendor/analytics/overview', vendor.vendor_analytics_overview, name='vendor-analytics-overview'),
     path('vendor/analytics/productPerformance', vendor.vendor_product_performance, name='vendor-product-performance'),

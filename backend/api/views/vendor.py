@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Sum, Count
 
 
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, ChatRoom, Message
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -919,7 +919,23 @@ def generate_promotion_code(koc_id):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_application_review(request):
-    serializer = VendorApplicationReviewSerializer(data=request.data)
+    """
+    廠商審核 KOC 接案申請
+    URL: /vendor/application/review
+
+    通過時：
+    1. Application 狀態改為 approved
+    2. 建立 KOCMissionNew
+    3. 建立未啟用優惠碼
+    4. 自動建立聊天室
+
+    拒絕時：
+    1. Application 狀態改為 rejected
+    """
+
+    serializer = VendorApplicationReviewSerializer(
+        data=request.data
+    )
 
     if not serializer.is_valid():
         return Response({
@@ -938,62 +954,166 @@ def vendor_application_review(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        application = Application.objects.get(application_id=application_id)
+        application = (
+            Application.objects
+            .select_related(
+                "campaign",
+                "koc"
+            )
+            .get(
+                application_id=application_id
+            )
+        )
     except Application.DoesNotExist:
         return Response({
             "success": False,
             "err": "Application not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
+    # 確認這筆申請屬於目前登入的廠商
     if str(application.campaign.vendor_id) != str(vendor_id):
         return Response({
             "success": False,
-            "err": "This application does not belong to this vendor"
+            "err": (
+                "This application does not belong "
+                "to this vendor"
+            )
         }, status=status.HTTP_403_FORBIDDEN)
 
-    application.status = review_result
-    application.save()
+    # 目前新版 Model 中 application.koc 可以為空值
+    if review_result == "approved" and not application.koc_id:
+        return Response({
+            "success": False,
+            "err": "This application does not have a KOC"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     created_mission = None
     created_coupon = None
+    created_chatroom = None
 
-    if review_result == "approved":
-        mission, mission_created = KOCMissionNew.objects.get_or_create(
-            application=application,
-            defaults={
-                "koc_id": application.koc_id,
-                "stage": "pending"
-            }
-        )
+    mission_created = False
+    coupon_created = False
+    chatroom_created = False
 
-        coupon = CouponNew.objects.filter(
-            kocmission=mission
-        ).first()
-
-        if not coupon:
-            promotion_code = generate_promotion_code(
-                application.koc_id
+    try:
+        with transaction.atomic():
+            # 更新接案申請狀態
+            application.status = review_result
+            application.save(
+                update_fields=["status"]
             )
 
-            coupon = CouponNew.objects.create(
-                kocmission=mission,
-                promotion_code=promotion_code,
-                discount_value=50,
-                status="inactive",
-                usage_count=0,
-                total_commission=0
-            )
+            if review_result == "approved":
+                # 建立或取得 KOC 任務
+                mission, mission_created = (
+                    KOCMissionNew.objects.get_or_create(
+                        application=application,
+                        defaults={
+                            # koc 是 ForeignKey，
+                            # 使用 koc_id 指定實際主鍵值
+                            "koc_id": application.koc_id,
+                            "stage": "pending"
+                        }
+                    )
+                )
 
-        created_mission = mission
-        created_coupon = coupon
+                # 舊資料如果已經有任務，但沒有綁定 KOC，
+                # 就補上 KOC 關聯
+                mission_fields_to_update = []
+
+                if not mission.koc_id:
+                    mission.koc_id = application.koc_id
+                    mission_fields_to_update.append("koc")
+
+                if not mission.stage:
+                    mission.stage = "pending"
+                    mission_fields_to_update.append("stage")
+
+                if mission_fields_to_update:
+                    mission.save(
+                        update_fields=mission_fields_to_update
+                    )
+
+                # 建立或取得優惠碼
+                coupon = CouponNew.objects.filter(
+                    kocmission=mission
+                ).first()
+
+                if not coupon:
+                    promotion_code = generate_promotion_code(
+                        application.koc_id
+                    )
+
+                    coupon = CouponNew.objects.create(
+                        kocmission=mission,
+                        promotion_code=promotion_code,
+
+                        # 暫時保留你原本設定的固定折扣值
+                        discount_value=50,
+
+                        # 接案通過時只建立，不啟用
+                        status="inactive",
+                        usage_count=0,
+                        total_commission=0
+                    )
+
+                    coupon_created = True
+
+                # 一個 KOC 任務只能有一個聊天室
+                chatroom, chatroom_created = (
+                    ChatRoom.objects.get_or_create(
+                        kocmission=mission
+                    )
+                )
+
+                created_mission = mission
+                created_coupon = coupon
+                created_chatroom = chatroom
+
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "success": True,
         "err": "",
+
         "application_id": application.application_id,
         "status": application.status,
-        "kocmission_id": created_mission.kocmission_id if created_mission else None,
-        "promotion_code": created_coupon.promotion_code if created_coupon else None
+
+        "kocmission_id": (
+            created_mission.kocmission_id
+            if created_mission
+            else None
+        ),
+        "mission_created": mission_created,
+
+        "coupon_id": (
+            created_coupon.coupon_id
+            if created_coupon
+            else None
+        ),
+        "promotion_code": (
+            created_coupon.promotion_code
+            if created_coupon
+            else None
+        ),
+        "coupon_status": (
+            created_coupon.status
+            if created_coupon
+            else None
+        ),
+        "coupon_created": coupon_created,
+
+        "room_id": (
+            created_chatroom.room_id
+            if created_chatroom
+            else None
+        ),
+        "chatroom_created": chatroom_created,
+
     }, status=status.HTTP_200_OK)
 
 
@@ -1436,6 +1556,10 @@ def vendor_coupon_get_usage_list(request):
     }, status=status.HTTP_200_OK)
 
 
+# ──────────────────────────────────────────────
+# 聊天室 api
+# ──────────────────────────────────────────────
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_coupon_update_status(request):
@@ -1659,3 +1783,391 @@ def vendor_product_performance(request):
         "err": "",
         "products": products
     }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_create(request):
+    """
+    建立聊天室
+    URL: /vendor/chatroom/create
+
+    Request:
+    {
+        "vendor_id": "V00001",
+        "kocmission_id": 1
+    }
+    """
+    vendor_id = request.data.get("vendor_id")
+    kocmission_id = request.data.get("kocmission_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not kocmission_id:
+        return Response({
+            "success": False,
+            "err": "kocmission_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = (
+            KOCMissionNew.objects
+            .select_related(
+                "application__campaign",
+                "koc__user"
+            )
+            .get(
+                kocmission_id=kocmission_id
+            )
+        )
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "KOC mission not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = mission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This mission does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    chatroom, created = ChatRoom.objects.get_or_create(
+        kocmission=mission
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "created": created,
+        "room_id": chatroom.room_id,
+        "kocmission_id": mission.kocmission_id,
+        "koc_id": mission.koc_id,
+        "campaign_id": str(campaign.campaign_id),
+        "campaign_name": campaign.name,
+        "created_at": chatroom.created_at,
+    }, status=(
+        status.HTTP_201_CREATED
+        if created
+        else status.HTTP_200_OK
+    ))
+    
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_chatroom_getlist(request):
+    """
+    取得廠商聊天室清單
+    URL: /vendor/chatroom/getlist
+    """
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    chatrooms = (
+        ChatRoom.objects
+        .filter(
+            kocmission__application__campaign__vendor_id=vendor_id
+        )
+        .select_related(
+            "kocmission",
+            "kocmission__koc",
+            "kocmission__koc__user",
+            "kocmission__application__campaign"
+        )
+        .prefetch_related("messages")
+        .order_by("-created_at")
+    )
+
+    chatroom_list = []
+
+    for chatroom in chatrooms:
+        mission = chatroom.kocmission
+        campaign = mission.application.campaign
+
+        koc_name = ""
+        if mission.koc and mission.koc.user:
+            koc_name = (
+                mission.koc.user.display_name
+                or mission.koc.user.name
+            )
+
+        last_message = (
+            chatroom.messages
+            .order_by("-created_at")
+            .first()
+        )
+
+        unread_count = chatroom.messages.filter(
+            sender_role="koc",
+            is_read=False
+        ).count()
+
+        chatroom_list.append({
+            "room_id": chatroom.room_id,
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "koc_name": koc_name,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "mission_stage": mission.stage,
+            "last_message": (
+                last_message.content
+                if last_message
+                else ""
+            ),
+            "last_message_time": (
+                last_message.created_at
+                if last_message
+                else chatroom.created_at
+            ),
+            "last_sender_role": (
+                last_message.sender_role
+                if last_message
+                else None
+            ),
+            "unread_count": unread_count,
+            "created_at": chatroom.created_at,
+        })
+
+    chatroom_list.sort(
+        key=lambda room: room["last_message_time"],
+        reverse=True
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "chatrooms": chatroom_list
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_chatroom_get_messages(request):
+    """
+    取得聊天室訊息
+    URL: /vendor/chatroom/getMessages
+    """
+    vendor_id = request.GET.get("vendor_id")
+    room_id = request.GET.get("room_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign",
+                "kocmission__koc__user"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    messages = chatroom.messages.all()
+
+    message_list = []
+
+    for message in messages:
+        message_list.append({
+            "message_id": message.message_id,
+            "room_id": chatroom.room_id,
+            "sender_role": message.sender_role,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "is_read": message.is_read,
+            "created_at": message.created_at,
+        })
+
+    mission = chatroom.kocmission
+
+    koc_name = ""
+    if mission.koc and mission.koc.user:
+        koc_name = (
+            mission.koc.user.display_name
+            or mission.koc.user.name
+        )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "chatroom": {
+            "room_id": chatroom.room_id,
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "koc_name": koc_name,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "mission_stage": mission.stage,
+        },
+        "messages": message_list
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_send_message(request):
+    """
+    廠商發送訊息
+    URL: /vendor/chatroom/sendMessage
+
+    Request:
+    {
+        "vendor_id": "V00001",
+        "room_id": 1,
+        "content": "您好，請修改文案內容"
+    }
+    """
+    vendor_id = request.data.get("vendor_id")
+    room_id = request.data.get("room_id")
+    content = request.data.get("content", "").strip()
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not content:
+        return Response({
+            "success": False,
+            "err": "content is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    message = Message.objects.create(
+        room=chatroom,
+        sender_role="vendor",
+        sender_id=str(vendor_id),
+        content=content,
+        is_read=False
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "message": {
+            "message_id": message.message_id,
+            "room_id": chatroom.room_id,
+            "sender_role": message.sender_role,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "is_read": message.is_read,
+            "created_at": message.created_at,
+        }
+    }, status=status.HTTP_201_CREATED)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_mark_read(request):
+    """
+    廠商開啟聊天室後，將 KOC 訊息標記為已讀
+    URL: /vendor/chatroom/markRead
+    """
+    vendor_id = request.data.get("vendor_id")
+    room_id = request.data.get("room_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    updated_count = chatroom.messages.filter(
+        sender_role="koc",
+        is_read=False
+    ).update(is_read=True)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "room_id": chatroom.room_id,
+        "updated_count": updated_count
+    }, status=status.HTTP_200_OK)
+
