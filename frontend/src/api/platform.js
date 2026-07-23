@@ -93,3 +93,11 @@ export const getAdminPerformance = (params = {}) => {
   return api.get('/platform/performance', { params })
 
 }
+
+export const getAllMissions = () => {
+  return api.get('/platform/mission/getAll');
+};
+
+export const getEarningsTracking = () => {
+  return api.get('/platform/mission/getEarningsTracking');
+};

@@ -21,6 +21,7 @@ from .views.platform import (
     admin_vendor_review,    # 新增
     admin_overview,         # 新增
     admin_coupon_usage,     # 新增
+    admin_performance,
     get_all_missions,
     get_earnings_tracking,
 )
@@ -169,13 +170,13 @@ urlpatterns = [
 
     # Admin API
     # Platform Admin 平台端 API
-    path('platform/vendors', platform.admin_vendor_list, name='admin-vendor-list'),
-    path('platform/vendor/detail', platform.admin_vendor_detail, name='admin-vendor-detail'),
-    path('platform/vendor/audit', platform.admin_vendor_audit, name='admin-vendor-audit'),
-    path('platform/vendor/review', platform.admin_vendor_review, name='admin-vendor-review'),
-    path('platform/overview', platform.admin_overview, name='admin-overview'),
-    path('platform/coupons', platform.admin_coupon_usage, name='admin-coupon-usage'),
-    path('platform/performance', platform.admin_performance, name='admin-performance'),
+    path('platform/vendors', admin_vendor_list, name='admin-vendor-list'),
+    path('platform/vendor/detail', admin_vendor_detail, name='admin-vendor-detail'),
+    path('platform/vendor/audit', admin_vendor_audit, name='admin-vendor-audit'),
+    path('platform/vendor/review', admin_vendor_review, name='admin-vendor-review'),
+    path('platform/overview', admin_overview, name='admin-overview'),
+    path('platform/coupons', admin_coupon_usage, name='admin-coupon-usage'),
+    path('platform/performance', admin_performance, name='admin-performance'),
 
 ]
 
