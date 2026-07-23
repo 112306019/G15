@@ -12,7 +12,7 @@ import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyPage from './koc/ApplyPage';
-import ApplyKOCPage from './koc/ApplyKOCPage';
+import ApplyKOCPage from './koc/ApplyKOCPage';  
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -119,8 +119,9 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 
 function MainSystem() {
   const [view, setView] = useState('welcome');
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null); 
   const [selectedTask, setSelectedTask] = useState(null);
+  const [homeJumpStage, setHomeJumpStage] = useState(null);
 
   const [userRole, setUserRole] = useState('guest');
   const [cartCount, setCartCount] = useState(0);
@@ -206,7 +207,6 @@ function MainSystem() {
           }}
         />
       )}
-
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
 
       {/* 🌟 修改：傳遞 favorites 與 onToggleFavorite 給 ProductDetailPage */}
@@ -230,14 +230,28 @@ function MainSystem() {
         <div className="flex p-8 max-w-7xl mx-auto">
           <Sidebar userRole={userRole} currentView={getSidebarActiveView()} onNavigate={handleNavigate} />
           <main className="flex-1 ml-12">
-            {view === 'home' && <HomePage onNavigate={handleNavigate} />}
-            {view === 'apply' && <ApplyPage />}
-
+            {view === 'home' && (
+              <HomePage
+                onNavigate={handleNavigate}
+                jumpToStage={homeJumpStage}
+                onJumpHandled={() => setHomeJumpStage(null)}
+              />
+            )}
+            {view === 'apply' && <ApplyPage />} 
+            
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
-
-            {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
-
+            
+            {view === 'task_detail' && (
+              <TaskDetailPage
+                task={selectedTask}
+                onBack={(targetStage) => {
+                  if (targetStage) setHomeJumpStage(targetStage);
+                  handleNavigate('home');
+                }}
+              />
+            )}
+            
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
 
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}

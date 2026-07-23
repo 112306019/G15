@@ -9,6 +9,7 @@ class User(models.Model):
     user_id = models.CharField(max_length=50, unique=True, primary_key=True)
     role = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
+    display_name = models.CharField(max_length=100, blank=True, default='', db_column='display_name') 
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
     phone = models.CharField(max_length=20)
@@ -82,6 +83,8 @@ class Campaigns(models.Model):
     description = models.TextField(blank=True, null=True)
     budget = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     reward_type = models.CharField(max_length=100)
+    discount_percent = models.IntegerField(default=0, db_column='discount_percent')
+    promo_days = models.IntegerField(default=7, db_column='promo_days')
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     status = models.CharField(max_length=50, default='active')
@@ -464,7 +467,7 @@ class Admins(models.Model):
 
 
 class Vendor(models.Model):
-    vendor_id = models.AutoField(primary_key=True)
+    vendor_id = models.CharField(max_length=6, unique=True, primary_key=True)
     company_name = models.CharField(max_length=200)
     contact_name = models.CharField(max_length=200)
     email = models.EmailField(max_length=255)
@@ -475,8 +478,29 @@ class Vendor(models.Model):
     class Meta:
         db_table = 'Vendor'
 
+    def save(self, *args, **kwargs):
+        if not self.vendor_id:
+            with transaction.atomic():
+                last_vendor = (
+                    Vendor.objects
+                    .select_for_update()
+                    .filter(vendor_id__startswith='V')
+                    .order_by('-vendor_id')
+                    .first()
+                )
+
+                if last_vendor:
+                    next_num = int(last_vendor.vendor_id[1:]) + 1
+                else:
+                    next_num = 1
+
+                self.vendor_id = f"V{next_num:05d}"
+
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.company_name
+
 
 
 class CampaignParticipants(models.Model):
@@ -580,3 +604,53 @@ class AdminAuditLogs(models.Model):
 
     def __str__(self):
         return f"AuditLog {self.log_id}"
+    
+# ==============================================================================
+# 5. 聊天室
+# ==============================================================================
+
+class ChatRoom(models.Model):
+    room_id = models.AutoField(primary_key=True)
+    kocmission = models.OneToOneField(
+        KOCMissionNew,
+        on_delete=models.CASCADE,
+        related_name='chat_room',
+        db_column='kocmission_id'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ChatRoom'
+
+    def __str__(self):
+        return f"ChatRoom {self.room_id} for Mission {self.kocmission_id}"
+    
+class Message(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('koc', 'KOC'),
+        ('vendor', '廠商'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(
+        ChatRoom,
+        on_delete=models.CASCADE,
+        related_name='messages',
+        db_column='room_id'
+    )
+    sender_role = models.CharField(
+        max_length=20,
+        choices=SENDER_ROLE_CHOICES,
+        db_column='sender_role'
+    )
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Message'
+        ordering = ['created_at']  # 依時間排序，最舊的在最上面
+
+    def __str__(self):
+        return f"Message {self.message_id} in Room {self.room_id}"

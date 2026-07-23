@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import api from '../api/index';
 
-// 自訂的輸入框元件 (套用高級品牌色與明確框線)
+const user_id = 'U00001'; // 暫時寫死，等登入機制做好再改
+
 function Field({ label, value, onChange, disabled, type = "text", placeholder }) {
   return (
     <div>
@@ -27,6 +29,7 @@ function Field({ label, value, onChange, disabled, type = "text", placeholder })
 // 🟢 新增 isKOC prop，預設為 false (一般消費者)
 export default function ProfileInfo({ isKOC = false }) {
   const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, message: "" });
 
   // 🟢 擴充 form state，加入社群媒體欄位
@@ -43,15 +46,69 @@ export default function ProfileInfo({ isKOC = false }) {
     threadsUsername: "",
   });
 
+  // 頁面載入時撈個人資料
+  useEffect(() => {
+    const fetchProfile = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get('/koc/profile/getProfile', {
+          params: { user_id }
+        });
+        if (res.data.success) {
+          setForm({
+            displayName: res.data.display_name || '',
+            realName: res.data.real_name || '',
+            phone: res.data.phone || '',
+            email: res.data.email || '',
+            address: res.data.address || '',
+            bankCode: res.data.bank_number || '',
+            bankAccount: res.data.bank_account || '',
+            fbUrl: res.data.fb_account || '',
+            igUsername: res.data.ig_account || '',
+            threadsUsername: res.data.threads_account || '',
+          });
+        }
+      } catch (err) {
+        console.error('載入個人資料失敗', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
   const showToast = (message) => {
     setToast({ show: true, message });
     window.setTimeout(() => setToast((t) => ({ ...t, show: false })), 2600);
   };
 
-  const handleUpdate = () => {
-    // 實務上這裡會呼叫 API 更新資料
-    showToast("✓ 資料已更新");
-    setEditing(false);
+  // 確認更新：打 update_koc_profile API
+  const handleUpdate = async () => {
+    try {
+      const res = await api.post('/koc/profile/updateProfile', {
+        user_id: user_id,
+        display_name: form.displayName,
+        user_name: form.realName,
+        phone: form.phone,
+        email: form.email,
+        address: form.address,
+        bank_number: form.bankCode,
+        bank_account: form.bankAccount,
+        fb_account: form.fbUrl,       
+        ig_account: form.igUsername,  
+        threads_account: form.threadsUsername,  
+      });
+
+      if (res.data.success) {
+        showToast("✓ 資料已更新");
+        setEditing(false);
+      } else {
+        showToast("✗ 更新失敗：" + (res.data.err || '請稍後再試'));
+      }
+    } catch (err) {
+      console.error('更新失敗', err);
+      showToast("✗ 更新失敗，請稍後再試");
+    }
   };
 
   const clearAll = () => {
@@ -62,10 +119,15 @@ export default function ProfileInfo({ isKOC = false }) {
     showToast("已清空所有欄位");
   };
 
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-[#8C8880] font-bold">
+      載入中...
+    </div>
+  );
+
   return (
     <div className="animate-in fade-in duration-500 max-w-4xl">
       
-      {/* 標題與編輯按鈕 */}
       <div className="mb-8 flex items-center justify-between">
         <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">個人資訊</h2>
         <button
@@ -137,14 +199,10 @@ export default function ProfileInfo({ isKOC = false }) {
           />
         </div>
 
-        {/* =========================================
-            KOC 專屬區塊 (銀行帳戶 + 社群帳號)
-        ========================================== */}
         {isKOC && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="my-10 h-px w-full bg-[#E2DDD4]" />
 
-            {/* 社群帳號區塊 */}
             <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
               <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block"></span>
               社群帳號
@@ -177,14 +235,12 @@ export default function ProfileInfo({ isKOC = false }) {
 
             <div className="my-10 h-px w-full bg-[#E2DDD4]" />
 
-            {/* 銀行帳戶區塊 */}
             <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
               <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block"></span>
               銀行帳戶
             </h3>
             
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 mb-8">
-              {/* 銀行選擇下拉選單 */}
               <div>
                 <label className="mb-2 block text-xs font-bold tracking-wider text-[#8C8880] uppercase">
                   銀行帳戶
@@ -217,9 +273,6 @@ export default function ProfileInfo({ isKOC = false }) {
           </div>
         )}
 
-        {/* =========================================
-            底部操作按鈕
-        ========================================== */}
         {editing && (
           <div className="flex items-center justify-end gap-6 pt-6 mt-6 border-t border-[#E2DDD4]/50 animate-in slide-in-from-bottom-2 duration-300">
             <button

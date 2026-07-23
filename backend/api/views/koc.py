@@ -20,7 +20,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -32,6 +32,48 @@ from .constants import (
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP
 )
+# 獲取koc個人資料
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_koc_profile(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.select_related('koc_profile').get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的使用者"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    try:
+        koc = user.koc_profile
+    except KOC.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "此使用者尚未成為 KOC"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "display_name": user.display_name,
+        "real_name": user.name,
+        "phone": user.phone,
+        "email": user.email,
+        "address": koc.address,
+        "bank_account": koc.bank_account,
+        "bank_number": koc.bank_number,
+        "ig_account": koc.ig_account,
+        "fb_account": koc.fb_account,
+        "threads_account": koc.threads_account,
+    }, status=http_status.HTTP_200_OK)
 
 # 修改KOC資料 
 @api_view(['POST'])
@@ -47,7 +89,7 @@ def update_koc_profile(request):
     data = serializer.validated_data
 
     try:
-        user = User.objects.get(pk=data['user_id'])
+        user = User.objects.select_related('koc_profile').get(pk=data['user_id'])
     except User.DoesNotExist:
         return Response({
             "success": False,
@@ -55,23 +97,42 @@ def update_koc_profile(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     try:
-        koc = user.koc_profile  # User model 裡 OneToOneField 的 related_name
+        koc = user.koc_profile
     except KOC.DoesNotExist:
         return Response({
             "success": False,
-            "err": "此使用者沒有對應的 KOC 資料"
+            "err": "此使用者尚未成為 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     # 更新 User 表欄位
-    user.name = data['user_name']
-    user.phone = data['phone']
-    user.email = data['email']
+    if data.get('user_name'):
+        user.name = data['user_name']
+    if data.get('display_name') is not None:
+        user.display_name = data['display_name']
+    if data.get('phone'):
+        user.phone = data['phone']
+    if data.get('email'):
+        if User.objects.filter(email=data['email']).exclude(pk=user.pk).exists():
+            return Response({
+                "success": False,
+                "err": "此 email 已被使用"
+            }, status=http_status.HTTP_400_BAD_REQUEST)
+        user.email = data['email']
     user.save()
 
     # 更新 KOC 表欄位
-    koc.bank_account = data['bank_account']
-    koc.bank_number = data['bank_number']
-    koc.address = data['address']
+    if data.get('bank_account') is not None:
+        koc.bank_account = data['bank_account']
+    if data.get('bank_number') is not None:
+        koc.bank_number = data['bank_number']
+    if data.get('address') is not None:
+        koc.address = data['address']
+    if data.get('fb_account') is not None:      # 新增
+        koc.fb_account = data['fb_account']
+    if data.get('ig_account') is not None:      # 新增
+        koc.ig_account = data['ig_account']
+    if data.get('threads_account') is not None:  # 新增
+        koc.threads_account = data['threads_account']
     koc.save()
 
     return Response({
@@ -84,7 +145,6 @@ def update_koc_profile(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_available_campaign_list(request):
-    # 1. 從網址後面取得 User_id (例如: ?User_id=test_koc_001)
     user_id = request.query_params.get('user_id')
     
     if not user_id:
@@ -95,47 +155,142 @@ def get_available_campaign_list(request):
         }, status=400)
         
     try:
-        # 2. 直接去查 Order_Item (訂單明細)
-        order_items = OrderItem.objects.filter(order__user_id=user_id)
+        # 🔥 優化 1：一次性找出這個 user 已經申請過的 campaign_id 列表
+        applied_campaign_ids = set(
+            Application.objects.filter(koc__user__user_id=user_id)
+            .values_list('campaign_id', flat=True)
+        )
+
+        # 2. 撈出已完成的訂單項目
+        completed_orders = OrderItem.objects.filter(
+            order__user_id=user_id,
+            order__order_status='completed'
+        )
+
+        # 收集所有的 product_id 並建立 product_id 到 order_id 的對照表
+        product_order_map = {}
+        for item in completed_orders:
+            if item.product_id not in product_order_map:
+                product_order_map[item.product_id] = str(item.order_id)
+
+        product_ids = list(product_order_map.keys())
+
+        if not product_ids:
+            return Response({
+                "success": True,
+                "err": "",
+                "campaigns": []
+            })
+
+        # 🔥 優化 2：在迴圈外一次性向印度 DB 撈出所有相關活動（對 DB 只發送 1 次 SQL）
+        campaign_products = CampaignProduct.objects.filter(
+            product_id__in=product_ids
+        ).select_related('campaign')
+
         campaigns_data = []
-        
-        # 3. 跑迴圈，處理使用者購買的每個品項
-        for item in order_items:
-            # 💡 修改重點：透過中間表 campaign_product 查詢該商品對應的活動
-            # 使用 select_related('campaign') 可以順便把活動內容撈出來，不用再查一次
-            campaign_products = CampaignProduct.objects.filter(
-                product_id=item.product_id
-            ).select_related('campaign')
-            
-            # 因為一個商品可能會對應到多個代言活動（多對多關係）
-            # 所以跑迴圈把該商品所有對應的活動都塞進去
-            for cp in campaign_products:
-                campaign = cp.campaign  # 取得關聯的 Campaigns 物件
-                
-                if campaign:
-                    campaigns_data.append({
-                        "order_id": str(item.order_id),              # 來自 Order_Item 的 Order_id
-                        "campaign_id": str(campaign.campaign_id),    # 來自 Campaigns 的 Campaign_id
-                        "campaign_name": str(campaign.name),         # 來自 Campaigns 的 Name
-                        
-                        # 代言申請狀態：先預設給 0 (尚未申請)
-                        "apply_status": getattr(item, 'apply_status', 0) 
-                    })
-                
-        # 4. 回傳符合規格書的 JSON 格式
+        seen_campaign_ids = set()
+
+        # 🔥 優化 3：在記憶體中進行篩選與組裝，迴圈內 0 次 SQL 查詢！
+        for cp in campaign_products:
+            campaign = cp.campaign
+
+            if not campaign:
+                continue
+
+            campaign_id = campaign.campaign_id
+            campaign_id_str = str(campaign_id)
+
+            # 排除已申請過與重複出現的活動
+            if campaign_id in applied_campaign_ids or campaign_id_str in seen_campaign_ids:
+                continue
+
+            seen_campaign_ids.add(campaign_id_str)
+
+            campaigns_data.append({
+                "order_id": product_order_map.get(cp.product_id, ""),
+                "campaign_id": campaign_id_str,
+                "campaign_name": campaign.name,
+                "apply_status": 0
+            })
+
         return Response({
             "success": True,
             "err": "",
             "campaigns": campaigns_data
         })
-        
+
     except Exception as e:
         return Response({
             "success": False,
             "err": f"伺服器發生錯誤: {str(e)}",
             "campaigns": []
         }, status=500)
-    
+
+
+# 顯示已申請代言
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_applied_campaign_list(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "缺少必要參數: user_id",
+            "campaigns": []
+        }, status=400)
+
+    try:
+        # 🔥 優化 1：直接透過 koc__user__user_id 跨表查詢！
+        # 省去先查 KOC 再查 Application 的來回 1 次 SQL 時間
+        applications = Application.objects.filter(
+            koc__user__user_id=user_id
+        ).select_related('campaign')
+
+        if not applications.exists():
+            return Response({
+                "success": True,
+                "err": "",
+                "campaigns": []
+            })
+
+        # 🔥 優化 2：先把所有的 campaign_id 收集起來
+        campaign_ids = [app.campaign_id for app in applications]
+
+        # 🔥 優化 3：在迴圈外部「一次性」向印度 DB 查出所有相關圖片（只對 DB 發送 1 次 SQL）
+        campaign_products = CampaignProduct.objects.filter(
+            campaign_id__in=campaign_ids
+        ).select_related('product')
+
+        # 轉成 Python 字典 Mapping，方便 $O(1)$ 快速對照
+        image_map = {}
+        for cp in campaign_products:
+            if cp.campaign_id not in image_map and cp.product:
+                image_map[cp.campaign_id] = cp.product.image_url
+
+        # 🔥 優化 4：在記憶體中組裝資料，迴圈內完全不觸發任何 SQL！
+        campaigns_data = []
+        for app in applications:
+            campaigns_data.append({
+                "application_id": str(app.application_id),
+                "campaign_id": str(app.campaign_id),
+                "campaign_name": app.campaign.name,
+                "campaign_image": image_map.get(app.campaign_id, None),
+            })
+
+        return Response({
+            "success": True,
+            "err": "",
+            "campaigns": campaigns_data
+        })
+
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": f"伺服器發生錯誤: {str(e)}",
+            "campaigns": []
+        }, status=500)
+
 # 代言申請 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -162,7 +317,7 @@ def apply_mission(request):
                 "status": "pending"
             }, status=400)
             
-        order_items = OrderItem.objects.filter(order_id=order_id)
+        order_items = OrderItem.objects.filter(order_id=order_id).select_related('product')
         if not order_items.exists():
             return Response({
                 "success": False,
@@ -271,6 +426,12 @@ def mission_submit(request):
             "success": False,
             "err": "請勿重複提交"
         }, status=http_status.HTTP_400_BAD_REQUEST)
+    # 正式提交前，刪除同類型的草稿(這段是新增的)
+    Submissions.objects.filter(
+        kocmission=mission,
+        submission_type=submission_type_db,
+        status='draft'
+    ).delete()
 
     submission = Submissions.objects.create(
         kocmission=mission,
@@ -296,7 +457,9 @@ def mission_submit(request):
         except CouponNew.DoesNotExist:
             # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
             pass
-        # stage 維持 publishing，等 Campaigns.end_date 到期後由排程結案
+        # 連結提交後任務即完成本階段任務，直接結案
+        mission.stage = 'completed'
+        mission.save()
 
     return Response({
         "success": True,
@@ -401,15 +564,36 @@ def get_application_list(request):
             "err": "status 參數不正確"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
-    applications = Application.objects.filter(koc=koc, status=db_status).select_related('campaign')
+    # applications = Application.objects.filter(koc=koc, status=db_status).select_related('campaign')
+    applications = list(Application.objects.filter(
+        koc=koc, status=db_status
+    ).select_related('campaign__vendor'))  # 加上 __vendor
+
+    # 🔥 批次查出所有活動的商品圖片，避免迴圈內逐一查詢
+    campaign_ids = [app.campaign_id for app in applications]
+    campaign_products = CampaignProduct.objects.filter(
+        campaign_id__in=campaign_ids
+    ).select_related('product')
+    image_map = {}
+    for cp in campaign_products:
+        if cp.campaign_id not in image_map and cp.product:
+            image_map[cp.campaign_id] = cp.product.image_url
+
+    # 🔥 批次查出所有申請對應的優惠碼，避免迴圈內逐一查詢
+    coupons = CouponNew.objects.filter(
+        kocmission__application__in=applications
+    ).select_related('kocmission').order_by('-coupon_id')
+    coupon_map = {}
+    for coupon in coupons:
+        application_id = coupon.kocmission.application_id
+        if application_id not in coupon_map:
+            coupon_map[application_id] = coupon
 
     result = []
     for app in applications:
-        # 取得活動關聯的第一個商品圖片
-        campaign_product = CampaignProduct.objects.filter(campaign=app.campaign).select_related('product').first()
-        campaign_image = campaign_product.product.image_url if campaign_product else None
+        campaign_image = image_map.get(app.campaign_id)
 
-        coupon = CouponNew.objects.filter(kocmission__application=app).order_by('-coupon_id').first()
+        coupon = coupon_map.get(app.application_id)
         coupon_status = COUPON_STATUS_CODE_MAP[coupon.status] if coupon else None
 
         result.append({
@@ -419,6 +603,8 @@ def get_application_list(request):
             "status": APPLICATION_STATUS_CODE_MAP[app.status],
             "promotion_code": coupon.promotion_code if coupon else None,
             "coupon_status": coupon_status,
+            "vendor_name": app.campaign.vendor.company_name,  # 新增廠商名稱
+            "deadline": app.campaign.end_date.strftime('%Y-%m-%d') if app.campaign.end_date else None,  # 新增截止時間
         })
 
     return Response({
@@ -460,6 +646,9 @@ def mission_get_detail(request):
         status='draft'
     ).first()
 
+    # 查詢這個任務對應的優惠碼
+    coupon = CouponNew.objects.filter(kocmission=mission).first()
+
     return Response({
         "success": True,
         "err": "",
@@ -471,6 +660,8 @@ def mission_get_detail(request):
         "file_url": latest_submission.content_url if latest_submission else None,
         "vendor_feedback": latest_submission.vendor_feedback if latest_submission else None,
         "draft_content": draft.text_content if draft else None,  # 新增這個
+        "promotion_code": coupon.promotion_code if coupon else None,
+        "coupon_status": coupon.status if coupon else None,
     }, status=http_status.HTTP_200_OK)
 
 #獲取任務完整狀態
@@ -494,7 +685,7 @@ def get_mission_list(request):
             "err": "找不到對應的 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign')
+    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
 
     # stage 是可選參數：如果有帶，篩出特定階段；沒帶就回全部階段（給前端自己分組用）
     if stage_param is not None:
@@ -508,17 +699,50 @@ def get_mission_list(request):
             }, status=http_status.HTTP_400_BAD_REQUEST)
         missions = missions.filter(stage=db_stage)
 
+    # 已結案的任務，只顯示活動截止日還沒到期的（到期的不再顯示）
+    today = timezone.localdate()
+    missions = missions.exclude(
+        stage='completed',
+        application__campaign__end_date__date__lt=today
+    )
+
+    missions = list(missions)
+
+    # 🔥 批次查出所有任務對應活動的商品圖片，避免迴圈內逐一查詢
+    campaign_ids = [mission.application.campaign_id for mission in missions]
+    campaign_products = CampaignProduct.objects.filter(
+        campaign_id__in=campaign_ids
+    ).select_related('product')
+    image_map = {}
+    for cp in campaign_products:
+        if cp.campaign_id not in image_map and cp.product:
+            image_map[cp.campaign_id] = cp.product.image_url
+
+    # 🔥 批次查出所有已結案任務的分潤總額，避免迴圈內逐一查詢
+    completed_mission_ids = [mission.kocmission_id for mission in missions if mission.stage == 'completed']
+    earnings_totals = (
+        Earnings.objects.filter(
+            kocmission_id__in=completed_mission_ids,
+            status__in=['pending','withdrawable', 'transferred']
+        )
+        .values('kocmission_id')
+        .annotate(total=Sum('amount'))
+    )
+    earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
+
     result = []
     for mission in missions:
         campaign = mission.application.campaign
-        campaign_product = CampaignProduct.objects.filter(campaign=campaign).select_related('product').first()
-        campaign_image = campaign_product.product.image_url if campaign_product else None
+        campaign_image = image_map.get(campaign.campaign_id)
 
         result.append({
             "KOCMission_id": str(mission.kocmission_id),
             "campaign_name": campaign.name,
             "campaign_image": campaign_image,
             "stage": STAGE_CODE_MAP[mission.stage],
+            "vendor_name": campaign.vendor.company_name,
+            "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
+            "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage == 'completed' else 0,
         })
 
     return Response({
@@ -636,7 +860,7 @@ def get_revenue_total(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        koc = KOC.objects.get(user_id=user_id)
+        koc = KOC.objects.select_related('wallet').get(user_id=user_id)
     except KOC.DoesNotExist:
         return Response({
             "success": False,
@@ -778,14 +1002,31 @@ def get_analytics_list(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     # 只撈有優惠碼的任務(代表已經進到 publishing 以後的階段)
-    missions = KOCMissionNew.objects.filter(
+    missions = list(KOCMissionNew.objects.filter(
         koc=koc
-    ).select_related('application__campaign')
+    ).select_related('application__campaign'))
+
+    # 🔥 批次查出所有任務的優惠碼，避免迴圈內逐一查詢
+    coupons = CouponNew.objects.filter(kocmission__in=missions)
+    coupon_map = {}
+    for coupon in coupons:
+        if coupon.kocmission_id not in coupon_map:
+            coupon_map[coupon.kocmission_id] = coupon
+
+    # 🔥 批次查出所有活動的商品圖片，避免迴圈內逐一查詢
+    campaign_ids = [mission.application.campaign_id for mission in missions]
+    campaign_products = CampaignProduct.objects.filter(
+        campaign_id__in=campaign_ids
+    ).select_related('product')
+    image_map = {}
+    for cp in campaign_products:
+        if cp.campaign_id not in image_map and cp.product:
+            image_map[cp.campaign_id] = cp.product.image_url
 
     result = []
     for mission in missions:
         # 取得優惠碼(一個任務對應一個優惠碼)
-        coupon = CouponNew.objects.filter(kocmission=mission).first()
+        coupon = coupon_map.get(mission.kocmission_id)
 
         # 沒有優惠碼的任務不顯示在成效分析(還沒到 publishing 階段)
         if not coupon:
@@ -793,10 +1034,7 @@ def get_analytics_list(request):
 
         # 取商品圖片
         campaign = mission.application.campaign
-        campaign_product = CampaignProduct.objects.filter(
-            campaign=campaign
-        ).select_related('product').first()
-        campaign_image = campaign_product.product.image_url if campaign_product else None
+        campaign_image = image_map.get(campaign.campaign_id)
 
         result.append({
             "KOCMission_id": str(mission.kocmission_id),
@@ -936,7 +1174,7 @@ def koc_apply(request):
     # 如果有填 name 或 email，直接更新 User 表
     user_updated = False
     if data.get('name'):
-        user.name = data['name']
+        user.display_name = data['name']
         user_updated = True
     if data.get('email'):
         # 檢查 email 是否被其他人用過
@@ -993,4 +1231,127 @@ def koc_apply(request):
         "err": "",
         "koc_id": koc.koc_id,
         "message": "申請已送出，請等待審核"
+    }, status=http_status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 聊天室
+# ==============================================================================
+
+# 取得或建立任務對應的聊天室
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def get_or_create_chat_room(request):
+    kocmission_id = request.data.get('kocmission_id')
+
+    if not kocmission_id:
+        return Response({
+            "success": False,
+            "err": "kocmission_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = KOCMissionNew.objects.get(pk=kocmission_id)
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    room, _ = ChatRoom.objects.get_or_create(kocmission=mission)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "room_id": room.room_id,
+    }, status=http_status.HTTP_200_OK)
+
+
+# 取得聊天室歷史訊息
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_chat_history(request):
+    room_id = request.query_params.get('room_id')
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id 為必填",
+            "messages": []
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        room = ChatRoom.objects.get(pk=room_id)
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的聊天室",
+            "messages": []
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    messages = Message.objects.filter(room=room).order_by('created_at')
+
+    result = [{
+        "message_id": m.message_id,
+        "sender_role": m.sender_role,
+        "sender_id": m.sender_id,
+        "content": m.content,
+        "created_at": m.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        "is_read": m.is_read,
+    } for m in messages]
+
+    return Response({
+        "success": True,
+        "err": "",
+        "messages": result
+    }, status=http_status.HTTP_200_OK)
+
+
+# 發送聊天室訊息
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_chat_message(request):
+    room_id = request.data.get('room_id')
+    sender_role = request.data.get('sender_role')
+    sender_id = request.data.get('sender_id')
+    content = request.data.get('content')
+
+    if not all([room_id, sender_role, sender_id, content]):
+        return Response({
+            "success": False,
+            "err": "room_id, sender_role, sender_id, content 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    if sender_role not in dict(Message.SENDER_ROLE_CHOICES):
+        return Response({
+            "success": False,
+            "err": "sender_role 只能是 koc 或 vendor"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        room = ChatRoom.objects.get(pk=room_id)
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的聊天室"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    message = Message.objects.create(
+        room=room,
+        sender_role=sender_role,
+        sender_id=sender_id,
+        content=content,
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "message": {
+            "message_id": message.message_id,
+            "sender_role": message.sender_role,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "is_read": message.is_read,
+        }
     }, status=http_status.HTTP_200_OK)

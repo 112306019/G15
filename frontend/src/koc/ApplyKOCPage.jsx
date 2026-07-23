@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Check } from "lucide-react";
+import api from '../api/index';
+
+const user_id = 'U00002'; // 暫時寫死，等登入機制做好再改
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -69,8 +72,7 @@ export default function ApplyKOCPage({ onSubmit }) {
     };
 
     const handleSubmit = async () => {
-        // 先把所有欄位標記為已觸碰，觸發 UI 上的紅色錯誤框
-        setTouched({
+            setTouched({
             displayName: true,
             email: true,
             fbUrl: true,
@@ -79,57 +81,52 @@ export default function ApplyKOCPage({ onSubmit }) {
         });
 
         let ok = true;
-        let errorMsg = ""; // 🟢 用來收集第一個遇到的錯誤訊息
+        let errorMsg = "";
 
-        // 1. 檢查基本資料
         if (!displayNameValid || !emailValid) {
             errorMsg = "請填寫正確的顯示名稱(至少2字)與電子郵件";
             ok = false;
         }
 
-        // 2. 檢查社群帳號（如果基本資料沒錯，才檢查這個，避免一次跳太多錯誤）
         if (ok && !hasAnySocial) {
             errorMsg = "請至少填入一個社群帳號";
             ok = false;
         }
 
-        // 3. 檢查是否同意條款
         if (ok && !termsAccepted) {
             errorMsg = "請勾選同意 KOC 條款";
             ok = false;
         }
 
-        // 🟢 攔截錯誤：如果不通過，彈出提示並停止執行
         if (!ok) {
-            showToast(errorMsg); 
+            showToast(errorMsg);
             return;
         }
 
-        // --- 若全部通過，開始執行送出邏輯 ---
         setSubmitState("submitting");
         try {
-            // 模擬 API 延遲
-            await new Promise((r) => setTimeout(r, 900));
-            await onSubmit?.({
-                displayName: displayName.trim(),
+            const res = await api.post('/koc/apply', {
+                user_id: user_id,
+                name: displayName.trim(),       // 顯示名稱
                 email: email.trim(),
-                socials: {
-                    fbUrl: fbUrl.trim() || null,
-                    igUsername: igUsername.trim() || null,
-                    threadsUsername: threadsUsername.trim() || null,
-                },
-                verified: {
-                    ig: igVerify.status === "verified",
-                    threads: threadsVerify.status === "verified",
-                },
-                termsAccepted: true,
+                fb_account: fbUrl.trim() || '',
+                ig_account: igUsername.trim() || '',
+                threads_account: threadsUsername.trim() || '',
             });
 
-            // 成功狀態
-            setSubmitState("success");
-            showToast("✓ KOC 申請已送出，歡迎加入！");
-        } catch (e) {
-            // 失敗狀態
+            if (res.data.success) {
+                setSubmitState("success");
+                showToast("✓ KOC 申請已送出，請等待審核！");
+                // 成功後通知父元件
+                setTimeout(() => {
+                    onSubmit?.();
+                }, 1500);
+            } else {
+                setSubmitState("idle");
+                showToast("✗ " + (res.data.err || '申請失敗，請稍後再試'));
+            }
+        } catch (err) {
+            console.error('申請失敗', err);
             setSubmitState("idle");
             showToast("送出失敗，請稍後再試");
         }
