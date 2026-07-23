@@ -3,8 +3,7 @@ import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, C
 import api from '../api/index';
 import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
 
-const user_id = 'U00001';   // 暫時寫死，等登入機制做好再改
-const koc_id = 'KOC00001';  // 暫時寫死
+const user_id = localStorage.getItem('userId'); // 登入後存於 localStorage
 
 export default function TaskDetailPage({ task, onBack }) {
   const [detail, setDetail] = useState(null);

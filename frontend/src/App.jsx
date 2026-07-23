@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 
 // === KOC 相關頁面 ===
@@ -131,8 +131,27 @@ function MainSystem() {
   const [shopKey, setShopKey] = useState(0);
 
   const [favorites, setFavorites] = useState([]);
+  const [isInitializing, setIsInitializing] = useState(true); // 新增
 
   const navigate = useNavigate();
+
+  // 新增：App 啟動時恢復登入狀態
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+
+    if (token && role) {
+      const mappedRole = role === "1" || role === 1 ? 'koc' : 'shopper';
+      setUserRole(mappedRole);
+      setView(mappedRole === 'koc' ? 'home' : 'shop');
+    }
+    setIsInitializing(false);
+  }, []);
+
+  // 避免恢復狀態前畫面閃一下 welcome/login
+  if (isInitializing) {
+    return null; // 或是一個 loading spinner
+  }
 
   const handleNavigate = (targetView, data = null) => {
     const protectedViews = [
@@ -256,7 +275,18 @@ function MainSystem() {
             
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
 
-            {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
+            {view === 'security' && (
+              <SecurityPage
+                onLogout={() => {
+                  localStorage.removeItem("token");
+                  localStorage.removeItem("userId");
+                  localStorage.removeItem("role");
+                  setUserRole('guest');
+                  setCartCount(0);
+                  setView('login'); // 或 'welcome'，看你們想登出後導去哪個頁面
+                }}
+              />
+            )}
             {view === 'orders' && <OrdersPage onTrackOrder={() => handleNavigate('order_detail')} onOpenOrderDetail={() => handleNavigate('order_detail')} />}
             {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} />}
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}

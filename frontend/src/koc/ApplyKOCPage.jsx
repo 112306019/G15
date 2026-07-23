@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import api from '../api/index';
 
-const user_id = 'U00002'; // 暫時寫死，等登入機制做好再改
+const user_id = localStorage.getItem('userId'); // 登入後存於 localStorage
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
