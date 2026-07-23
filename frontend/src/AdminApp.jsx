@@ -8,7 +8,8 @@ import {
 // 🌟 引入切好的各個頁面元件
 import AdminOverview from './admin/AdminOverview';
 import AdminInfluencers from './admin/AdminInfluencers';
-import AdminKocDetail from './admin/AdminKocDetail';
+import AdminKocDetail from './admin/AdminKOCDetail';
+import AdminKOCPending from './admin/AdminKOCPending';
 import AdminConsumers from './admin/AdminConsumers';
 import AdminConsumerDetail from './admin/AdminConsumerDetail';
 import AdminVendors from './admin/AdminVendors';
@@ -193,25 +194,14 @@ export default function AdminApp() {
                 <AdminInfluencers />
               </ProtectedRoute>
             } />
+            <Route path="/influencers/pending" element={
+              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                <AdminKOCPending />
+              </ProtectedRoute>
+            } />
             <Route path="/influencers/:id" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
-                <AdminKocDetail koc={{
-                  id: 'U0089',
-                  name: '王大寶', 
-                  account: 'dabao.ig',
-                  email: 'dabao@example.com',
-                  phone: '0912-345-678',
-                  status: 'active',
-                  createdAt: '2026-01-15',
-                  missions: [
-                      { missionId: 'M-1029', promotionCode: 'DABAO50', stage: '圖文審核中', deadline: '2026-07-20', status: '進行中' },
-                      { missionId: 'M-0988', promotionCode: 'DABAO-SUMMER', stage: '已上線', deadline: '2026-06-30', status: '已結案' }
-                  ],
-                  earnings: [
-                      { kocMissionId: 'KM-0988', amount: 3500, payoutDate: '2026-07-05', status: '已撥款' },
-                      { kocMissionId: 'KM-1029', amount: 5000, payoutDate: null, status: '待結算' }
-                  ]
-                }} />
+                <AdminKocDetail />
               </ProtectedRoute>
             } />
 

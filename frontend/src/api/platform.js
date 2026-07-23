@@ -30,3 +30,13 @@ export const getKOCDetail = (params) => {
 export const updateKOCMissionStage = (data) => {
   return api.patch('/platform/kocmission/stage/update', data)
 }
+
+// 獲取全平台所有 KOC 任務
+export const getAllMissions = () => {
+  return api.get('/platform/mission/getAll')
+}
+
+// 獲取使用推薦碼的訂單與對應分潤資料
+export const getEarningsTracking = () => {
+  return api.get('/platform/mission/getEarningsTracking')
+}

@@ -126,7 +126,8 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 function MainSystem() {
   const [view, setView] = useState('welcome');
   const [selectedProduct, setSelectedProduct] = useState(null); 
-  const [selectedTask, setSelectedTask] = useState(null); 
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [homeJumpStage, setHomeJumpStage] = useState(null);
 
   const [userRole, setUserRole] = useState('guest'); 
   const [cartCount, setCartCount] = useState(0); 
@@ -239,13 +240,27 @@ function MainSystem() {
         <div className="flex p-8 max-w-7xl mx-auto">
           <Sidebar userRole={userRole} currentView={getSidebarActiveView()} onNavigate={handleNavigate} />
           <main className="flex-1 ml-12">
-            {view === 'home' && <HomePage onNavigate={handleNavigate} />}
+            {view === 'home' && (
+              <HomePage
+                onNavigate={handleNavigate}
+                jumpToStage={homeJumpStage}
+                onJumpHandled={() => setHomeJumpStage(null)}
+              />
+            )}
             {view === 'apply' && <ApplyPage />} 
             
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
             
-            {view === 'task_detail' && <TaskDetailPage task={selectedTask} onBack={() => handleNavigate('home')} />}
+            {view === 'task_detail' && (
+              <TaskDetailPage
+                task={selectedTask}
+                onBack={(targetStage) => {
+                  if (targetStage) setHomeJumpStage(targetStage);
+                  handleNavigate('home');
+                }}
+              />
+            )}
             
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
             

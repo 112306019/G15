@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2 } from 'lucide-react';
 import api from '../api/index';
+import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
 
 const user_id = 'U00001';   // 暫時寫死，等登入機制做好再改
 const koc_id = 'KOC00001';  // 暫時寫死
@@ -13,6 +14,13 @@ export default function TaskDetailPage({ task, onBack }) {
   const [linkText, setLinkText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 聊天室相關狀態
+  const [roomId, setRoomId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const messagesEndRef = useRef(null);
 
   // 載入任務詳情
   useEffect(() => {
@@ -37,6 +45,83 @@ export default function TaskDetailPage({ task, onBack }) {
     fetchDetail();
   }, [task]);
 
+  // 建立/取得聊天室，並每 5 秒輪詢一次歷史訊息
+  useEffect(() => {
+    if (!task) return;
+    let intervalId;
+    let cancelled = false;
+
+    const fetchHistory = async (currentRoomId) => {
+      try {
+        const res = await getChatHistory(currentRoomId);
+        if (res.data.success && !cancelled) {
+          setMessages(res.data.messages);
+        }
+      } catch (err) {
+        console.error('載入聊天室訊息失敗', err);
+      }
+    };
+
+    const initChatRoom = async () => {
+      try {
+        const res = await getOrCreateChatRoom(task.id);
+        if (res.data.success && !cancelled) {
+          setRoomId(res.data.room_id);
+          await fetchHistory(res.data.room_id);
+          intervalId = setInterval(() => fetchHistory(res.data.room_id), 5000);
+        }
+      } catch (err) {
+        console.error('建立聊天室失敗', err);
+      }
+    };
+
+    setRoomId(null);
+    setMessages([]);
+    initChatRoom();
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [task]);
+
+  // 有新訊息時自動捲到最下面
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async () => {
+    const content = chatInput.trim();
+    if (!content || !roomId || sendingMessage) return;
+    setSendingMessage(true);
+    try {
+      const res = await sendChatMessage({
+        room_id: roomId,
+        sender_role: 'koc',
+        sender_id: user_id,
+        content,
+      });
+      if (res.data.success) {
+        setMessages(prev => [...prev, res.data.message]);
+        setChatInput('');
+      } else {
+        alert(res.data.err || '傳送失敗');
+      }
+    } catch (err) {
+      console.error('傳送訊息失敗', err);
+      alert('傳送失敗，請稍後再試');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleChatKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   if (!task) return null;
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-[#8C8880] font-bold">
@@ -48,7 +133,7 @@ export default function TaskDetailPage({ task, onBack }) {
   const stage = detail ? detail.stage : task.stage - 1; // API 回傳 0-3，畫面用 1-5
   const vendorFeedback = detail?.vendor_feedback;
   const draftContent = detail?.draft_content;
-  const promoCode = task.promoCode || null;
+  const promoCode = detail?.promotion_code || task.promoCode || null;
   const deadline = task.deadline || detail?.deadline;
 
   // stage 對照(API 回傳 0=writing, 1=reviewing, 2=publishing, 3=completed)
@@ -56,6 +141,7 @@ export default function TaskDetailPage({ task, onBack }) {
   const isEditable = stage === 0 || (stage === 1 && vendorFeedback);  // writing 或 reviewing+被退回
   const isReviewing = stage === 1 && !vendorFeedback;                  // reviewing 且沒有被退回
   const isWaitPublish = stage === 2;                                    // publishing
+  const isCompleted = stage === 3;                                      // completed
 
   // 儲存草稿
   const handleSaveDraft = async () => {
@@ -119,8 +205,9 @@ export default function TaskDetailPage({ task, onBack }) {
         content_url: linkText,
       });
       if (res.data.success) {
-        alert('已成功提交連結！返回任務中心即可在「已結案」看到任務。');
-        onBack();
+        alert('已成功提交連結，任務已完成！');
+        // 跳回任務列表，並通知 HomePage 切換到「已結案」分頁 (activeStage = 5)
+        onBack(5);
       } else {
         alert(res.data.err || '提交失敗');
       }
@@ -151,9 +238,13 @@ export default function TaskDetailPage({ task, onBack }) {
                 {task.productName}
               </h2>
             </div>
-            <div className="bg-[#FDF0ED] text-[#C8522A] px-4 py-1.5 rounded-full text-sm font-bold border border-[#FDF0ED] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#C8522A] animate-pulse"></span>
-              執行中
+            <div className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2 ${
+              isCompleted
+                ? 'bg-[#F5F0E8] text-[#8C8880] border-[#E2DDD4]'
+                : 'bg-[#FDF0ED] text-[#C8522A] border-[#FDF0ED]'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-[#8C8880]' : 'bg-[#C8522A] animate-pulse'}`}></span>
+              {isCompleted ? '已完成' : '執行中'}
             </div>
           </div>
 
@@ -266,6 +357,25 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
             </div>
           )}
+
+          {/* 情境 4：已完成 */}
+          {isCompleted && (
+            <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
+              <div className="w-24 h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#E2DDD4]">
+                <CheckCircle2 size={48} className="text-[#8C8880]" />
+              </div>
+              <h3 className="text-2xl font-bold text-[#1A1A18] mb-3">任務已完成</h3>
+              <p className="text-[#8C8880] font-medium leading-relaxed mb-8">
+                感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
+              </p>
+              <button
+                onClick={onBack}
+                className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
+              >
+                返回任務中心
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -280,14 +390,48 @@ export default function TaskDetailPage({ task, onBack }) {
             <span className="text-[10px] text-[#8C8880] font-bold">線上客服</span>
           </div>
         </div>
-        <div className="flex-1 bg-white p-6 overflow-y-auto">
-          <div className="text-center text-xs text-[#8C8880] my-4 font-bold">您已加入聊天室，可隨時與廠商聯繫</div>
+        <div className="flex-1 bg-white p-6 overflow-y-auto flex flex-col gap-3">
+          {messages.length === 0 && (
+            <div className="text-center text-xs text-[#8C8880] my-4 font-bold">您已加入聊天室，可隨時與廠商聯繫</div>
+          )}
+          {messages.map((msg) => (
+            <div
+              key={msg.message_id}
+              className={`flex flex-col ${msg.sender_role === 'koc' ? 'items-end' : 'items-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+                  msg.sender_role === 'koc'
+                    ? 'bg-[#1A1A18] text-[#F5F0E8] rounded-br-md'
+                    : 'bg-[#F5F0E8] text-[#1A1A18] rounded-bl-md'
+                }`}
+              >
+                {msg.content}
+              </div>
+              <span className="text-[10px] text-[#8C8880] font-bold mt-1 px-1">
+                {msg.created_at}
+              </span>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
         </div>
         <div className="bg-[#F5F0E8] p-4 rounded-b-[1.5rem]">
           <div className="bg-white rounded-full flex items-center px-4 py-2 gap-3 shadow-sm border border-[#E2DDD4] focus-within:border-[#1A1A18] transition-colors">
-            <input type="text" placeholder="傳送訊息..." className="flex-1 bg-transparent outline-none text-sm placeholder:text-[#8C8880]" />
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={handleChatKeyDown}
+              placeholder="傳送訊息..."
+              disabled={!roomId}
+              className="flex-1 bg-transparent outline-none text-sm placeholder:text-[#8C8880] disabled:opacity-50"
+            />
             <Smile size={20} className="text-[#8C8880] cursor-pointer hover:text-[#1A1A18]" />
-            <button className="bg-[#1A1A18] text-[#F5F0E8] p-2 rounded-full hover:bg-[#C8522A] shadow-md">
+            <button
+              onClick={handleSendMessage}
+              disabled={!roomId || !chatInput.trim() || sendingMessage}
+              className="bg-[#1A1A18] text-[#F5F0E8] p-2 rounded-full hover:bg-[#C8522A] shadow-md disabled:opacity-50"
+            >
               <Send size={16} />
             </button>
           </div>

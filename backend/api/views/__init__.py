@@ -18,6 +18,9 @@ from .koc import (
     get_analytics_detail,
     save_draft,
     koc_apply,
+    get_or_create_chat_room,
+    get_chat_history,
+    send_chat_message,
 )
 # 有新寫的 function 就要補進來
 

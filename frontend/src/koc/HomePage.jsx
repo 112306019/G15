@@ -22,7 +22,7 @@ const STAGE_MAP = {
 const user_id = 'U00001';   // 暫時寫死，等登入機制做好再改
 const koc_id = 'KOC00001';  // 暫時寫死
 
-export default function HomePage({ onNavigate }) {
+export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [activeStage, setActiveStage] = useState(1);
   const [stageCounts, setStageCounts] = useState({
     qualification: 0,
@@ -33,6 +33,15 @@ export default function HomePage({ onNavigate }) {
   });
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // 從 TaskDetailPage 跳回時，如果有指定要切換的分頁就切過去
+  useEffect(() => {
+    if (jumpToStage) {
+      setActiveStage(jumpToStage);
+      onJumpHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpToStage]);
 
   // 載入各階段數量徽章
   useEffect(() => {
@@ -108,6 +117,7 @@ export default function HomePage({ onNavigate }) {
               deadline: m.deadline,   
               stage: activeStage,
               promoCode: null,
+              earningsTotal: m.earnings_total,
             })));
           }
         }
@@ -194,9 +204,14 @@ export default function HomePage({ onNavigate }) {
         );
       case 5:
         return (
-          <div className="flex items-center justify-between px-2">
-            <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
-            <span className="text-xl font-black text-[#1A1A18]">NT$ {task.reward || 0}</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
+              <span className="text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
+            </div>
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+              <Search size={16}/> 查看詳情
+            </button>
           </div>
         );
       default: return null;
