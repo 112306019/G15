@@ -22,14 +22,12 @@ import CartPage from './shopping/CartPage';
 import CheckoutPage from './shopping/CheckoutPage';
 import OrdersPage from './shopping/OrdersPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
-import CouponsPage from './shopping/CouponsPage';
 import FavoritesPage from './shopping/FavoritesPage';
 
 // === Authentication & Vendor ===
 import LoginPage from './authentication/LoginPage'; 
 import ProfilePage from './authentication/ProfilePage';
 import SecurityPage from './authentication/SecurityPage';
-import PointsPage from './authentication/PointsPage'; 
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin'; 
 
@@ -57,9 +55,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     },
     { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
-    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' }, // 🌟 新增：我的收藏選單
-    { icon: <Ticket size={18} />, label: '我的優惠卷', view: 'coupons' },
-    { icon: <Coins size={18} />, label: '我的點數', view: 'points' },
+    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
@@ -133,13 +129,11 @@ function MainSystem() {
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
 
-  // 🌟 新增：統一管理的收藏清單 State
   const [favorites, setFavorites] = useState([]);
 
   const navigate = useNavigate(); 
 
   const handleNavigate = (targetView, data = null) => {
-    // 🌟 修改：將 'favorites' 也加入未登入阻擋名單
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 
       'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'apply', 'cart', 'review', 'favorites'
@@ -161,7 +155,6 @@ function MainSystem() {
     setView(targetView); 
   };
 
-  // 🌟 新增：商品加入 / 移除收藏的切換邏輯
   const handleToggleFavorite = (product) => {
     setFavorites((prev) => {
       const exists = prev.find(item => item.id === product.id);
@@ -173,15 +166,13 @@ function MainSystem() {
     });
   };
 
-  // 🌟 新增：單純移除收藏 (供 FavoritesPage 使用)
   const handleRemoveFavorite = (productId) => {
     setFavorites((prev) => prev.filter(item => item.id !== productId));
   };
 
-  // 🌟 修改：將 'favorites' 放入含有 Sidebar 的殼 (shellViews) 之中
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
-    'security', 'coupons', 'points', 'orders', 'order_detail', 'applyKoc', 'apply',
+    'security', 'orders', 'order_detail', 'applyKoc', 'apply',
     'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
@@ -251,8 +242,6 @@ function MainSystem() {
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
             
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
-            {view === 'points' && <PointsPage points={30} expiringPoints={5} />}
-            {view === 'coupons' && <CouponsPage />}
             {view === 'orders' && <OrdersPage onTrackOrder={() => handleNavigate('order_detail')} onOpenOrderDetail={() => handleNavigate('order_detail')} />}
             {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} />}
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
