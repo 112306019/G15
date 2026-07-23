@@ -348,10 +348,17 @@ def admin_vendor_review(request):
     vendor.save()
 
     # 自動新增管理員操作紀錄
+    if review_status == "approved":
+        audit_action_type = "approve_vendor"
+    elif review_status == "rejected":
+        audit_action_type = "reject_vendor"
+    else:
+        audit_action_type = "review_vendor"
+
     audit_log = AdminAuditLogs.objects.create(
         admin_id=admin_obj,
-        action_type="review_vendor",
-        vendor_id=str(vendor.vendor_id),
+        action_type=audit_action_type,
+        vendor=vendor,
         action_reason=action_reason
     )
 

@@ -9,7 +9,7 @@ from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Sum, Count
 
-
+from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, ChatRoom, Message
 from api.vendor_serializers import (
     VendorRegisterSerializer,
@@ -916,6 +916,11 @@ def generate_promotion_code(koc_id):
             return code
 
 
+SUBMISSION_TYPE_TO_STAGE = {
+    submission_type: stage
+    for stage, submission_type in STAGE_ALLOWED_SUBMISSION_TYPE.items()
+}
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_application_review(request):
@@ -1012,7 +1017,9 @@ def vendor_application_review(request):
                             # koc 是 ForeignKey，
                             # 使用 koc_id 指定實際主鍵值
                             "koc_id": application.koc_id,
-                            "stage": "pending"
+                            # 任務建立時進入撰寫文案階段，
+                            # 對齊 constants.STAGE_CODE_MAP 的 "writing"
+                            "stage": "writing"
                         }
                     )
                 )
@@ -1026,7 +1033,7 @@ def vendor_application_review(request):
                     mission_fields_to_update.append("koc")
 
                 if not mission.stage:
-                    mission.stage = "pending"
+                    mission.stage = "writing"
                     mission_fields_to_update.append("stage")
 
                 if mission_fields_to_update:
@@ -1247,6 +1254,19 @@ def vendor_mission_review_submission(request):
             "err": "This submission does not belong to this vendor"
         }, status=status.HTTP_403_FORBIDDEN)
 
+    mission = submission.kocmission
+
+    # 只有 KOC 提交、進入待審核（reviewing）的任務才能被廠商審核，
+    # 避免在錯誤的 stage 下誤觸發 stage 轉移
+    if mission.stage != "reviewing":
+        return Response({
+            "success": False,
+            "err": (
+                "This mission is not currently awaiting review "
+                f"(current stage: {mission.stage})"
+            )
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     coupon = CouponNew.objects.filter(
         kocmission=submission.kocmission
     ).first()
@@ -1274,7 +1294,6 @@ def vendor_mission_review_submission(request):
             "reviewed_time"
         ]
     )
-    mission = submission.kocmission
 
     if review_result == "approved":
         if submission.submission_type == "text":
@@ -1288,8 +1307,13 @@ def vendor_mission_review_submission(request):
         mission.save(update_fields=["stage"])
 
     elif review_result == "revising":
-        # 審核退回：回到撰寫文案
-        mission.stage = "writing"
+        # 審核退回：依 submission 的類型回到對應的撰寫階段
+        # ('text' -> 'writing'，'link' -> 'publishing')
+        # 而不是不分類型都退回 "writing"
+        mission.stage = SUBMISSION_TYPE_TO_STAGE.get(
+            submission.submission_type,
+            "writing"
+        )
         mission.save(update_fields=["stage"])
 
     # 只有文案審核通過才啟用優惠碼
