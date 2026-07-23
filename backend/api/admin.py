@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts
+from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts, ChatRoom, Message
 # 例如：from .models import Product
 # admin.site.register(Product)
 
@@ -47,9 +47,10 @@ class KOCAdmin(admin.ModelAdmin):
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     readonly_fields = ('user_id',)
-    list_display = ('user_id', 'name', 'email', 'role', 'phone', 'created_at')
+    list_display = ('user_id', 'name', 'display_name', 'email', 'role', 'phone', 'created_at')
     list_filter = ('role',)
-    search_fields = ('user_id', 'name', 'email', 'phone')
+    search_fields = ('user_id', 'name', 'display_name', 'email', 'phone')
+
 
 @admin.register(KOCMissionNew)
 class KOCMissionNewAdmin(admin.ModelAdmin):
@@ -89,8 +90,7 @@ class CouponNewAdmin(admin.ModelAdmin):
     list_display = ('coupon_id', 'kocmission', 'promotion_code', 'discount_value', 'status', 'usage_count', 'total_commission')
     list_filter = ('status',)
     search_fields = ('promotion_code', 'kocmission__kocmission_id')
-    list_editable = ('status', 'usage_count')
-    readonly_fields = ('total_commission',)
+    list_editable = ('status', 'usage_count', 'total_commission')  # 加進來
 
 @admin.register(Admins)
 class AdminsAdmin(admin.ModelAdmin):
@@ -112,3 +112,18 @@ class PayoutsAdmin(admin.ModelAdmin):
     list_display = ('payout_id', 'koc', 'amount', 'status', 'payout_date')
     list_filter = ('status',)
     search_fields = ('koc__user_id',)
+
+@admin.register(ChatRoom)
+class ChatRoomAdmin(admin.ModelAdmin):
+    list_display = ('room_id', 'kocmission', 'created_at')
+    search_fields = ('kocmission__kocmission_id',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('message_id', 'room', 'sender_role', 'sender_id', 'content', 'is_read', 'created_at')
+    list_filter = ('sender_role', 'is_read')
+    search_fields = ('sender_id', 'content')
+    readonly_fields = ('created_at',)
+    list_editable = ('is_read',)

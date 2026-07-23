@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import status as http_status
 
 from api.models import (
     User,
@@ -23,9 +24,10 @@ from api.models import (
     Application,
     CampaignProduct,
     Earnings
+
 )
 
-from api.serializers import KOCApproveSerializer, KOCRejectSerializer
+from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP
 
 
@@ -105,8 +107,9 @@ def admin_vendor_list(request):
         "err": "",
         "total": len(data),
         "vendors": data,
+
     }, status=status.HTTP_200_OK)
-        
+
 
 
 # 顯示待審核koc名單
@@ -386,10 +389,12 @@ def admin_coupon_usage(request):
     campaign_id = request.query_params.get('Campaign_id')
     coupon_status = request.query_params.get('Status')
 
+
     coupons = CouponNew.objects.select_related(
         'kocmission__application__campaign',
         'kocmission__koc',
     ).all().order_by('-coupon_id')
+
 
     # 依優惠碼模糊搜尋
     if promotion_code:
@@ -407,15 +412,23 @@ def admin_coupon_usage(request):
             kocmission__application__campaign__campaign_id=campaign_id
         )
 
-    coupon_data = []
+
+    coupons = list(coupons)
+
+    # 🔥 批次查出所有優惠碼對應的訂單，依 promotion_code 分組，避免迴圈內逐一查詢
+    promotion_codes = [coupon.promotion_code for coupon in coupons]
+    orders_by_code = {}
+    for order in Order.objects.filter(promotion_code__in=promotion_codes).order_by('-created_at'):
+        orders_by_code.setdefault(order.promotion_code, []).append(order)
+
+    data = []
+
 
     for coupon in coupons:
-        orders = Order.objects.filter(
-            promotion_code=coupon.promotion_code
-        ).order_by('-created_at')
-
+        matching_orders = orders_by_code.get(coupon.promotion_code, [])
         latest_order = orders.first()
         actual_order_count = orders.count()
+
 
         campaign = coupon.kocmission.application.campaign
         koc = coupon.kocmission.koc
@@ -462,6 +475,7 @@ def admin_coupon_usage(request):
                     else None
                 ),
             }
+
         })
 
     return Response({
@@ -469,6 +483,7 @@ def admin_coupon_usage(request):
         "err": "",
         "total": len(coupon_data),
         "coupons": coupon_data,
+
     }, status=status.HTTP_200_OK)
 
 # ==============================================================================
@@ -840,25 +855,45 @@ def koc_get_detail(request):
     if status_param:
         applications = applications.filter(status=status_param)
 
+    applications = list(applications)
+
+    # 🔥 批次查出所有活動的商品，避免迴圈內逐一查詢
+    campaign_ids = [app.campaign_id for app in applications]
+    campaign_products = CampaignProduct.objects.filter(
+        campaign_id__in=campaign_ids
+    ).select_related('product')
+    product_id_map = {}
+    for cp in campaign_products:
+        if cp.campaign_id not in product_id_map and cp.product:
+            product_id_map[cp.campaign_id] = cp.product.product_id
+
+    # 🔥 批次查出所有申請對應的任務，依 application_id 分組，避免迴圈內逐一查詢
+    missions_qs = KOCMissionNew.objects.filter(application__in=applications)
+    if kocmission_id:
+        missions_qs = missions_qs.filter(kocmission_id=kocmission_id)
+    missions_qs = list(missions_qs)
+
+    missions_by_application = {}
+    for mission in missions_qs:
+        missions_by_application.setdefault(mission.application_id, []).append(mission)
+
+    # 🔥 批次查出所有任務對應的優惠碼，避免迴圈內逐一查詢
+    coupons = CouponNew.objects.filter(kocmission__in=missions_qs)
+    coupon_map = {}
+    for coupon in coupons:
+        if coupon.kocmission_id not in coupon_map:
+            coupon_map[coupon.kocmission_id] = coupon
+
     result = []
     for app in applications:
         campaign = app.campaign
         vendor = campaign.vendor
 
-        # 取得商品
-        campaign_product = CampaignProduct.objects.filter(
-            campaign=campaign
-        ).select_related('product').first()
-        product_id = campaign_product.product.product_id if campaign_product else None
+        product_id = product_id_map.get(campaign.campaign_id)
 
-        # 取得對應的 KOCMission
-        missions = KOCMissionNew.objects.filter(application=app)
-        if kocmission_id:
-            missions = missions.filter(kocmission_id=kocmission_id)
-
-        for mission in missions:
+        for mission in missions_by_application.get(app.application_id, []):
             # 取得優惠碼
-            coupon = CouponNew.objects.filter(kocmission=mission).first()
+            coupon = coupon_map.get(mission.kocmission_id)
 
             result.append({
                 # Application 層級
@@ -888,6 +923,132 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from api.models import Admins, User, Order, Payment, Transactions, AdminAuditLogs
+
+# 手動更新koc任務階段
+@api_view(['PATCH'])
+@permission_classes([AllowAny])
+def koc_mission_stage_update(request):
+    serializer = KOCMissionStageUpdateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": "; ".join(str(e) for e in serializer.errors.values())
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    try:
+        mission = KOCMissionNew.objects.select_related(
+            'application__campaign__vendor',
+            'koc__user'
+        ).get(pk=data['KOCMisson_id'])
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC 任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    # 更新 stage
+    mission.stage = data['Stage']
+    mission.save()
+
+    # 取得相關資料
+    campaign = mission.application.campaign
+    vendor = campaign.vendor
+    campaign_product = CampaignProduct.objects.filter(
+        campaign=campaign
+    ).select_related('product').first()
+    product_id = campaign_product.product.product_id if campaign_product else None
+
+    coupon = CouponNew.objects.filter(kocmission=mission).first()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "KOCMisson_id": str(mission.kocmission_id),
+        "Mission_id": str(campaign.campaign_id),
+        "User_id": mission.koc.user.user_id if mission.koc else None,
+        "Brand_id": str(vendor.vendor_id),
+        "Product_id": str(product_id) if product_id else None,
+        "Promotion_code": coupon.promotion_code if coupon else None,
+        "Stage": STAGE_CODE_MAP.get(mission.stage),
+    }, status=http_status.HTTP_200_OK)
+
+
+# 查看全平台所有 KOC 任務
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_all_missions(request):
+    # 🔥 用 select_related 一次帶出 koc/user/活動/廠商，避免迴圈內逐一查詢
+    missions = KOCMissionNew.objects.select_related(
+        'koc__user',
+        'application__campaign__vendor'
+    ).order_by('-kocmission_id')
+
+    result = []
+    for mission in missions:
+        campaign = mission.application.campaign
+
+        result.append({
+            "kocmission_id": str(mission.kocmission_id),
+            "koc_id": mission.koc.koc_id if mission.koc else None,
+            "koc_name": mission.koc.user.name if mission.koc else None,
+            "vendor_name": campaign.vendor.company_name,
+            "stage": STAGE_CODE_MAP.get(mission.stage),
+            "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "missions": result,
+        "total": len(result)
+    }, status=http_status.HTTP_200_OK)
+
+
+# 查看使用推薦碼的訂單與對應分潤資料
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_earnings_tracking(request):
+    # 只撈訂單有帶推薦碼、且已經產生分潤紀錄的 Earnings
+    earnings_list = list(
+        Earnings.objects.filter(order__isnull=False)
+        .exclude(order__promotion_code__isnull=True)
+        .exclude(order__promotion_code='')
+        .select_related('order')
+        .order_by('-created_at')
+    )
+
+    # 🔥 批次查出所有推薦碼對應的 KOC 姓名（CouponNew -> KOCMissionNew -> KOC -> User），避免迴圈內逐一查詢
+    promotion_codes = {earning.order.promotion_code for earning in earnings_list}
+    coupons = CouponNew.objects.filter(
+        promotion_code__in=promotion_codes
+    ).select_related('kocmission__koc__user')
+
+    koc_name_map = {}
+    for coupon in coupons:
+        if coupon.promotion_code in koc_name_map:
+            continue
+        if coupon.kocmission and coupon.kocmission.koc and coupon.kocmission.koc.user:
+            koc_name_map[coupon.promotion_code] = coupon.kocmission.koc.user.name
+
+    result = []
+    for earning in earnings_list:
+        promotion_code = earning.order.promotion_code
+        result.append({
+            "promotion_code": promotion_code,
+            "koc_name": koc_name_map.get(promotion_code),
+            "order_id": str(earning.order.order_id),
+            "amount": earning.amount,
+            "status": earning.status,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "tracking": result,
+        "total": len(result)
+    }, status=http_status.HTTP_200_OK)
 
 
 # ── 平台管理員登入 ──
@@ -1008,34 +1169,34 @@ def get_payments(request):
     payment_id = request.query_params.get('Payment_id', None)
     payment_status = request.query_params.get('payment_status', None)
 
-    orders = Order.objects.all()
+    # 🔥 直接查 Payment 並 select_related('order')，避免對每筆訂單各查一次 Payment
+    payments = Payment.objects.select_related('order').all()
 
     if order_id:
-        orders = orders.filter(order_id=order_id)
+        payments = payments.filter(order_id=order_id)
     if payment_status:
-        orders = orders.filter(payment_status=payment_status)
+        payments = payments.filter(order__payment_status=payment_status)
+    if payment_id:
+        payments = payments.filter(payment_id=payment_id)
 
     result = []
-    for o in orders:
-        payments = Payment.objects.filter(order_id=o)
-        if payment_id:
-            payments = payments.filter(payment_id=payment_id)
-        for p in payments:
-            result.append({
-                'Order_id': str(o.order_id),
-                'User_id': o.user_id,
-                'Guest_id': o.guest_id,
-                'Promotion_code': o.promotion_code,
-                'total_amount': float(o.total_amount),
-                'order_status': o.order_status,
-                'payment_status': o.payment_status,
-                'shipping_status': o.shipping_status,
-                'Address_id': o.address_id,
-                'created_at': o.created_at,
-                'Payment_id': p.payment_id,
-                'payment_method': p.payment_method,
-                'transaction_id': p.transaction_id,
-            })
+    for p in payments:
+        o = p.order
+        result.append({
+            'Order_id': str(o.order_id),
+            'User_id': o.user_id,
+            'Guest_id': o.guest_id,
+            'Promotion_code': o.promotion_code,
+            'total_amount': float(o.total_amount),
+            'order_status': o.order_status,
+            'payment_status': o.payment_status,
+            'shipping_status': o.shipping_status,
+            'Address_id': o.address_id,
+            'created_at': o.created_at,
+            'Payment_id': p.payment_id,
+            'payment_method': p.payment_method,
+            'transaction_id': p.transaction_id,
+        })
 
     return Response(result, status=status.HTTP_200_OK)
 
@@ -1080,7 +1241,7 @@ def get_audit_logs(request):
     vendor_id = request.query_params.get('Vendor_id', None)
     influencer_id = request.query_params.get('Influencer_id', None)
 
-    logs = AdminAuditLogs.objects.all()
+    logs = AdminAuditLogs.objects.select_related('admin_id')
 
     if admin_id:
         logs = logs.filter(admin_id=admin_id)

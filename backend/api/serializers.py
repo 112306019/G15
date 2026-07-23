@@ -10,19 +10,24 @@ User = get_user_model()
 # ──────────────────────────────────────────────
 # KOC部分
 # ──────────────────────────────────────────────
+class UpdateKOCProfileSerializer(serializers.Serializer):
+    user_id = serializers.CharField(required=True)
+    display_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    user_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    email = serializers.EmailField(required=False, allow_null=True)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    bank_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    bank_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
+    ig_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
+    threads_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # 新增
+
 class InfluencerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = '__all__'
 
-class UpdateKOCProfileSerializer(serializers.Serializer):
-    user_id = serializers.CharField(required=True)
-    user_name = serializers.CharField(required=True)
-    phone = serializers.CharField(required=True)
-    email = serializers.EmailField(required=True)
-    bank_account = serializers.CharField(required=True)
-    bank_number = serializers.CharField(required=True)
-    address = serializers.CharField(required=True)
   
 class MissionSubmitSerializer(serializers.Serializer):
     KOCMission_id = serializers.IntegerField(required=True)
@@ -149,3 +154,10 @@ class PlatformKOCListItemSerializer(serializers.Serializer):
 
 class PlatformKOCDetailSerializer(serializers.Serializer):
     koc_id = serializers.CharField(required=True)
+
+class KOCMissionStageUpdateSerializer(serializers.Serializer):
+    KOCMisson_id = serializers.IntegerField(required=True)
+    Stage = serializers.ChoiceField(
+        choices=['writing', 'reviewing', 'publishing', 'completed'],
+        required=True
+    )

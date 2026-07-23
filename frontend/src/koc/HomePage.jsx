@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket } from 'lucide-react';
+import api from '../api/index';
 
 const STAGES = [
   { id: 1, label: '資格審核', icon: Clock, desc: '等待廠商確認' },
@@ -9,49 +10,147 @@ const STAGES = [
   { id: 5, label: '已結案', icon: CheckCircle2, desc: '任務完成' },
 ];
 
-// 🟢 假資料更新：為階段二、階段三的任務都補上 promoCode
-const defaultTasks = [
-  { id: 'T001', productName: 'SanDisk 128GB Extreme PRO', vendor: 'SanDisk 官方', stage: 1, deadline: '2026-05-18' },
-  { id: 'T006', productName: '夏季控油保濕化妝水', vendor: '某專櫃品牌', stage: 1, deadline: '2026-05-10', isRejected: true, rejectReason: '粉絲受眾類型較不符' },
-  { id: 'T002', productName: '樂扣樂扣嚼對FUN飲吸管杯', vendor: 'LocknLock', stage: 2, deadline: '2026-05-20', promoCode: '#LOCK2026' },
-  { id: 'T003', productName: '夏季控油防曬乳 SPF50+', vendor: '專科', stage: 3, status: 'reviewing', deadline: '2026-05-22', promoCode: '#SUN50PLUS' },
-  { id: 'T007', productName: 'SAMSUNG 256GB 記憶卡', vendor: '三星', stage: 3, status: 'rejected', rejectReason: '未提及防水功能，請補充。', deadline: '2026-05-23', promoCode: '#SAMSUNG88' },
-  { id: 'T004', productName: '極致保濕修護精華', vendor: '理膚寶水', stage: 4, deadline: '2026-05-25', promoCode: '#WATER2026' },
-  { id: 'T005', productName: 'Transcend 行動固態硬碟', vendor: '創見', stage: 5, deadline: '2026-05-10', reward: 1500 },
-];
+// stage 對照表
+const STAGE_MAP = {
+  1: null,        // 資格審核：從 Application 撈
+  2: 0,           // 撰寫文案：stage=0(writing)
+  3: 1,           // 文案審核：stage=1(reviewing)
+  4: 2,           // 待發佈：stage=2(publishing)
+  5: 3,           // 已結案：stage=3(completed)
+};
 
-export default function HomePage({ onNavigate }) {
+const user_id = 'U00001';   // 暫時寫死，等登入機制做好再改
+const koc_id = 'KOC00001';  // 暫時寫死
+
+export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [activeStage, setActiveStage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [allTasks, setAllTasks] = useState([]);
+  const [stageCounts, setStageCounts] = useState({
+    qualification: 0,
+    writing: 0,
+    reviewing: 0,
+    publishing: 0,
+    completed: 0,
+  });
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  // 從 TaskDetailPage 跳回時，如果有指定要切換的分頁就切過去
   useEffect(() => {
-    const savedTasks = localStorage.getItem('koc_tasks');
-    if (savedTasks) {
-      setAllTasks(JSON.parse(savedTasks));
-    } else {
-      setAllTasks(defaultTasks);
-      localStorage.setItem('koc_tasks', JSON.stringify(defaultTasks));
+    if (jumpToStage) {
+      setActiveStage(jumpToStage);
+      onJumpHandled?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpToStage]);
+
+  // 載入各階段數量徽章
+  useEffect(() => {
+    const fetchStageCounts = async () => {
+      try {
+        const res = await api.get('/koc/mission/getStageCounts', {
+          params: { User_id: user_id }
+        });
+        if (res.data.success) {
+          setStageCounts(res.data);
+        }
+      } catch (err) {
+        console.error('載入階段數量失敗', err);
+      }
+    };
+    fetchStageCounts();
   }, []);
 
+  // 切換分頁時載入對應資料
+  useEffect(() => {
+    const fetchTasks = async () => {
+      setLoading(true);
+      setTasks([]);
+      try {
+        if (activeStage === 1) {
+          // 資格審核：撈 pending + rejected 的 Application
+          const [pendingRes, rejectedRes] = await Promise.all([
+            api.get('/koc/application/getlist', { params: { User_id: user_id, status: 0 } }),
+            api.get('/koc/application/getlist', { params: { User_id: user_id, status: 2 } }),
+          ]);
+
+          const pending = pendingRes.data.success
+            ? pendingRes.data.application.map(a => ({
+                id: a.application_id,
+                productName: a.campaign_name,
+                campaignImage: a.campaign_image,
+                vendor: a.vendor_name,     
+                deadline: a.deadline,       
+                stage: 1,
+                isRejected: false,
+                rejectReason: null,
+                reject_reason: a.reject_reason,
+              }))
+            : [];
+
+          const rejected = rejectedRes.data.success
+            ? rejectedRes.data.application.map(a => ({
+                id: a.application_id,
+                productName: a.campaign_name,
+                campaignImage: a.campaign_image,
+                vendor: a.vendor_name,     
+                deadline: a.deadline,        
+                stage: 1,
+                isRejected: true,
+                rejectReason: a.reject_reason,
+              }))
+            : [];
+
+          setTasks([...pending, ...rejected]);
+
+        } else {
+          // 其他四個分頁：撈 KOCMission
+          const stage = STAGE_MAP[activeStage];
+          const res = await api.get('/koc/mission/getlist', {
+            params: { User_id: user_id, stage }
+          });
+          if (res.data.success) {
+            setTasks(res.data.missions.map(m => ({
+              id: m.KOCMission_id,
+              productName: m.campaign_name,
+              campaignImage: m.campaign_image,
+              vendor: m.vendor_name,    
+              deadline: m.deadline,   
+              stage: activeStage,
+              promoCode: null,
+              earningsTotal: m.earnings_total,
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('載入任務失敗', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTasks();
+  }, [activeStage]);
+
+  // 移除退件申請
+  const dismissTask = async (taskId) => {
+    try {
+      await api.delete(`/koc/application/remove/${taskId}`, {
+        params: { user_id }
+      });
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      // 更新徽章數量
+      setStageCounts(prev => ({
+        ...prev,
+        qualification: Math.max(0, prev.qualification - 1)
+      }));
+    } catch (err) {
+      console.error('移除失敗', err);
+      alert('移除失敗，請稍後再試');
+    }
+  };
+
   const handleGoToDetail = (task) => {
-    localStorage.setItem('currentSelectedTask', JSON.stringify(task));
     onNavigate('task_detail', task);
-  };
-
-  const handleResetData = () => {
-    localStorage.setItem('koc_tasks', JSON.stringify(defaultTasks));
-    setAllTasks(defaultTasks);
-    alert('測試資料已重新整理！請查看卡片與內頁是否出現優惠碼。');
-  };
-
-  const filteredTasks = allTasks.filter(task => task.stage === activeStage && task.productName.includes(searchQuery));
-
-  const dismissTask = (taskId) => {
-    const newTasks = allTasks.filter(t => t.id !== taskId);
-    setAllTasks(newTasks);
-    localStorage.setItem('koc_tasks', JSON.stringify(newTasks));
   };
 
   const renderCardAction = (task) => {
@@ -64,7 +163,10 @@ export default function HomePage({ onNavigate }) {
                 <XCircle size={14} className="shrink-0 mt-0.5" />
                 <span>抱歉，資格未符。<br/><span className="text-[#8C8880] font-normal">{task.rejectReason}</span></span>
               </div>
-              <button onClick={() => dismissTask(task.id)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5">
+              <button
+                onClick={() => dismissTask(task.id)}
+                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5"
+              >
                 <Trash2 size={14}/> 移除紀錄
               </button>
             </div>
@@ -78,7 +180,6 @@ export default function HomePage({ onNavigate }) {
       case 2:
         return (
           <div className="flex flex-col gap-3">
-            {/* 🟢 撰寫文案階段：顯示優惠碼 */}
             {task.promoCode && (
               <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
                 <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
@@ -90,70 +191,50 @@ export default function HomePage({ onNavigate }) {
           </div>
         );
       case 3:
-        if (task.status === 'rejected') {
-          return (
-            <div className="flex flex-col gap-3">
-              {/* 🟢 退件重寫階段：顯示優惠碼 */}
-              {task.promoCode && (
-                <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
-                  <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
-                </div>
-              )}
-              <div className="text-xs font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-2.5 rounded-xl flex items-center gap-1.5 border border-[#C8522A]/20 leading-snug">
-                <AlertCircle size={16} className="shrink-0" /> 需修改：{task.rejectReason}
-              </div>
-              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
-                <Edit3 size={16}/> 修改草稿並重新送出
-              </button>
-            </div>
-          );
-        }
         return (
-          <div className="flex flex-col gap-3">
-             {/* 🟢 廠商審核中階段：顯示優惠碼 */}
-             {task.promoCode && (
-              <div className="bg-[#F8F9FA] border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
-                <Ticket size={14} /> 綁定優惠碼：{task.promoCode}
-              </div>
-            )}
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
-              <Search size={16}/> 查看審核進度
-            </button>
-          </div>
+          <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+            <Search size={16}/> 查看審核進度
+          </button>
         );
       case 4:
         return (
-          <div className="flex gap-3">
-             <div className="flex-[0.8] bg-[#FDF0ED] border border-[#FDF0ED] text-[#C8522A] py-3.5 rounded-2xl font-bold text-xs flex flex-col items-center justify-center leading-tight">
-               <span>專屬優惠碼</span>
-               <span className="text-sm font-black tracking-wider">{task.promoCode}</span>
-             </div>
-             <button onClick={() => handleGoToDetail(task)} className="flex-[1.2] bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
-               <Upload size={16}/> 提交貼文連結
-             </button>
-          </div>
+          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+            <Upload size={16}/> 提交貼文連結
+          </button>
         );
       case 5:
         return (
-          <div className="flex items-center justify-between px-2">
-             <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
-             <span className="text-xl font-black text-[#1A1A18]">NT$ {task.reward || 1500}</span>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
+              <span className="text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
+            </div>
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+              <Search size={16}/> 查看詳情
+            </button>
           </div>
         );
       default: return null;
     }
   };
 
+  // 分頁數量對照
+  const getStageCount = (stageId) => {
+    switch(stageId) {
+      case 1: return stageCounts.qualification;
+      case 2: return stageCounts.writing;
+      case 3: return stageCounts.reviewing;
+      case 4: return stageCounts.publishing;
+      case 5: return stageCounts.completed;
+      default: return 0;
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
-      
+
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] flex items-center gap-4">
-          任務管理
-          <button onClick={handleResetData} className="text-[#8C8880] hover:text-[#C8522A] text-xs font-bold flex items-center gap-1 bg-white px-3 py-1.5 rounded-full border border-[#E2DDD4] transition-colors shadow-sm">
-            <RotateCcw size={12} /> 重新整理測試資料
-          </button>
-        </h2>
+        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">任務管理</h2>
         <button onClick={() => onNavigate('analysis')} className="bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3 rounded-full font-bold text-sm hover:border-[#1A1A18] hover:shadow-md transition-all flex items-center gap-2 group">
           <div className="w-6 h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
             <TrendingUp size={14} className="text-[#C8522A] group-hover:text-white transition-colors" />
@@ -163,96 +244,106 @@ export default function HomePage({ onNavigate }) {
       </div>
 
       <div className="bg-[#1A1A18] rounded-[2rem] p-8 mb-10 flex items-center justify-between shadow-xl relative overflow-hidden border border-[#E2DDD4]">
-         <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
-         <div className="relative z-10">
-            <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
-              <span className="text-[#C8522A]">💡</span> 賺取分潤超簡單，跟著進度走！
-            </h3>
-            <div className="flex items-center gap-4 text-sm font-bold text-[#F5F0E8]/80">
-               <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請任務</span>
-               <ChevronRight size={14} className="text-[#8C8880]" />
-               <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">2</span> 撰寫文案</span>
-               <ChevronRight size={14} className="text-[#8C8880]" />
-               <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-xs shadow-md">3</span> 發布貼文賺獎金</span>
-            </div>
-         </div>
-         <button onClick={() => onNavigate('apply')} className="relative z-10 bg-white text-[#1A1A18] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#F5F0E8] transition-all shadow-md active:scale-95">
-           前往探索新任務
-         </button>
+        <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
+        <div className="relative z-10">
+          <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+            <span className="text-[#C8522A]">💡</span> 賺取分潤超簡單，跟著進度走！
+          </h3>
+          <div className="flex items-center gap-4 text-sm font-bold text-[#F5F0E8]/80">
+            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請任務</span>
+            <ChevronRight size={14} className="text-[#8C8880]" />
+            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">2</span> 撰寫文案</span>
+            <ChevronRight size={14} className="text-[#8C8880]" />
+            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-xs shadow-md">3</span> 發布貼文賺獎金</span>
+          </div>
+        </div>
+        <button onClick={() => onNavigate('apply')} className="relative z-10 bg-white text-[#1A1A18] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#F5F0E8] transition-all shadow-md active:scale-95">
+          前往探索新任務
+        </button>
       </div>
 
+      {/* 分頁列 */}
       <div className="bg-white p-2 rounded-2xl shadow-sm border border-[#E2DDD4] mb-8 flex justify-between overflow-x-auto hide-scrollbar">
         {STAGES.map((stage) => {
           const Icon = stage.icon;
           const isActive = activeStage === stage.id;
-          const taskCount = allTasks.filter(t => t.stage === stage.id).length;
+          const count = getStageCount(stage.id);
 
           return (
-            <button 
+            <button
               key={stage.id}
               onClick={() => setActiveStage(stage.id)}
               className={`flex-1 min-w-[140px] flex flex-col items-center justify-center py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
             >
-              {taskCount > 0 && (
+              {count > 0 && (
                 <span className="absolute top-3 right-8 w-5 h-5 bg-[#C8522A] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
-                  {taskCount}
+                  {count}
                 </span>
               )}
               <Icon size={20} className={`mb-2 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
               <span className={`text-sm font-bold mb-0.5 ${isActive ? 'text-[#1A1A18]' : 'text-[#8C8880]'}`}>{stage.label}</span>
               <span className="text-[10px] font-bold text-[#8C8880] tracking-wider">{stage.desc}</span>
             </button>
-          )
+          );
         })}
       </div>
 
       <div className="flex justify-between items-end mb-6 px-2">
         <h3 className="text-xl font-bold text-[#1A1A18] flex items-center gap-2">
-           {STAGES.find(s => s.id === activeStage)?.label} 
-           <span className="text-[#8C8880] text-sm">({filteredTasks.length})</span>
+          {STAGES.find(s => s.id === activeStage)?.label}
+          <span className="text-[#8C8880] text-sm">({tasks.length})</span>
         </h3>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredTasks.map((task) => (
-          <div key={task.id} className={`bg-white rounded-[2rem] p-6 border ${task.isRejected || task.status === 'rejected' ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
-            
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <span className="text-[10px] font-black text-[#8C8880] tracking-widest uppercase bg-[#F8F9FA] px-2 py-1 rounded-md mb-2 inline-block">
-                  {task.vendor}
-                </span>
-                <div className="flex items-center gap-1.5 text-[#C8522A] text-xs font-bold mt-1">
-                  <Calendar size={12} />
-                  <span>截止: {task.deadline}</span>
+      {loading ? (
+        <div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div>
+      ) : (
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-6">
+          {tasks.map((task) => (
+            <div key={task.id} className={`bg-white rounded-[2rem] p-6 border ${task.isRejected ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <span className="text-[10px] font-black text-[#8C8880] tracking-widest uppercase bg-[#F8F9FA] px-2 py-1 rounded-md mb-2 inline-block">
+                    {task.vendor}
+                  </span>
+                  {task.deadline && (
+                    <div className="flex items-center gap-1.5 text-[#C8522A] text-xs font-bold mt-1">
+                      <Calendar size={12} />
+                      <span>截止: {task.deadline}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-4 mb-6">
-               <div className="w-16 h-16 bg-[#F5F0E8] rounded-2xl flex items-center justify-center shrink-0 border border-[#E2DDD4]">
-                  <ImageIcon size={24} className="text-[#8C8880]/50" />
-               </div>
-               <h4 className={`text-[15px] font-bold leading-snug line-clamp-2 ${task.isRejected ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'}`}>
-                 {task.productName}
-               </h4>
-            </div>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-[#F5F0E8] rounded-2xl flex items-center justify-center shrink-0 border border-[#E2DDD4]">
+                  {task.campaignImage ? (
+                    <img src={task.campaignImage} alt={task.productName} className="w-full h-full object-cover rounded-2xl" />
+                  ) : (
+                    <ImageIcon size={24} className="text-[#8C8880]/50" />
+                  )}
+                </div>
+                <h4 className={`text-[15px] font-bold leading-snug line-clamp-2 ${task.isRejected ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'}`}>
+                  {task.productName}
+                </h4>
+              </div>
 
-            <div className="mt-auto pt-4 border-t border-[#F8F9FA]">
-               {renderCardAction(task)}
+              <div className="mt-auto pt-4 border-t border-[#F8F9FA]">
+                {renderCardAction(task)}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {filteredTasks.length === 0 && (
-          <div className="col-span-full py-20 text-center flex flex-col items-center justify-center bg-white rounded-[2rem] border border-[#E2DDD4] border-dashed">
-            <div className="w-16 h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 size={24} className="text-[#8C8880]" />
+          {tasks.length === 0 && (
+            <div className="col-span-full py-20 text-center flex flex-col items-center justify-center bg-white rounded-[2rem] border border-[#E2DDD4] border-dashed">
+              <div className="w-16 h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4">
+                <CheckCircle2 size={24} className="text-[#8C8880]" />
+              </div>
+              <p className="text-[#1A1A18] font-bold">這個階段目前沒有任務喔！</p>
             </div>
-            <p className="text-[#1A1A18] font-bold">這個階段目前沒有任務喔！</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

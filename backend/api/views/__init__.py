@@ -1,7 +1,9 @@
 # api/views/__init__.py
 from .koc import (
+    get_koc_profile,
     update_koc_profile,
     get_available_campaign_list,
+    get_applied_campaign_list,
     apply_mission,
     mission_submit,
     get_application_list,
@@ -16,6 +18,9 @@ from .koc import (
     get_analytics_detail,
     save_draft,
     koc_apply,
+    get_or_create_chat_room,
+    get_chat_history,
+    send_chat_message,
 )
 # 有新寫的 function 就要補進來
 
@@ -25,4 +30,5 @@ from .platform import (
     koc_get_pending_list,
     koc_get_list,
     koc_get_detail,
+    koc_mission_stage_update,
 )

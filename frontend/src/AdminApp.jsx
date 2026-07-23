@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, Users, Store, UserCheck, 
+import {
+  LayoutDashboard, Users, Store, UserCheck,
   ClipboardList, CreditCard, LogOut, History, ShieldAlert
 } from 'lucide-react';
 
 // 🌟 引入切好的各個頁面元件
 import AdminOverview from './admin/AdminOverview';
 import AdminInfluencers from './admin/AdminInfluencers';
-import AdminKocDetail from './admin/AdminKocDetail';
+import AdminKocDetail from './admin/AdminKOCDetail';
+import AdminKOCPending from './admin/AdminKOCPending';
 import AdminConsumers from './admin/AdminConsumers';
 import AdminConsumerDetail from './admin/AdminConsumerDetail';
 import AdminVendors from './admin/AdminVendors';
@@ -22,14 +23,14 @@ export default function AdminApp() {
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
-  
+
   // 🌟 管理員身分狀態
-  const [adminRole, setAdminRole] = useState('Super Admin'); 
+  const [adminRole, setAdminRole] = useState('Super Admin');
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
     const email = localStorage.getItem('admin_email');
-    
+
     if (!token) {
       alert("請先登入平台管理端！");
       navigate('/admin-login');
@@ -73,7 +74,7 @@ export default function AdminApp() {
           </div>
           <h3 className="text-2xl font-serif font-black text-[#1A1A18] mb-2">權限不足</h3>
           <p className="text-[#8C8880] font-medium">您的帳號角色 <span className="font-bold text-[#1A1A18]">{adminRole}</span> 無法存取此管理模組。</p>
-          <button 
+          <button
             onClick={() => navigate('/admin')}
             className="mt-6 px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold text-sm hover:bg-[#333] transition-all shadow-md"
           >
@@ -87,10 +88,8 @@ export default function AdminApp() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800">
+
       
-      {/* =========================================
-          左側邊欄 (Sidebar)
-      ========================================== */}
       <aside className="w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-10">
         <div className="h-20 flex items-center px-8 border-b border-[#E2DDD4]">
           <h1 className="text-xl font-black text-[#1A1A18] tracking-tight flex items-center gap-2">
@@ -103,16 +102,15 @@ export default function AdminApp() {
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
           {allowedMenuItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path) && (item.path !== '/admin' || location.pathname === '/admin' || location.pathname === '/admin/');
-            
+
             return (
               <button
                 key={item.id}
                 onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold text-sm transition-all ${
-                  isActive 
-                    ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md' 
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
+                    ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
                     : 'text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]'
-                }`}
+                  }`}
               >
                 <span className={isActive ? 'text-[#C8522A]' : ''}>{item.icon}</span>
                 {item.label}
@@ -122,7 +120,7 @@ export default function AdminApp() {
         </nav>
 
         <div className="p-4 border-t border-[#E2DDD4]">
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm text-[#8C8880] border border-[#E2DDD4] hover:bg-[#FDF0ED] hover:text-[#C8522A] hover:border-[#C8522A]/30 transition-all"
           >
@@ -131,11 +129,9 @@ export default function AdminApp() {
         </div>
       </aside>
 
-      {/* =========================================
-          右側主要內容區
-      ========================================== */}
+    
       <main className="flex-1 ml-64 flex flex-col min-h-screen">
-        
+
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-end px-10">
           <div className="flex items-center gap-5">
             <div className="text-sm font-bold text-[#8C8880] pr-5 border-r border-[#E2DDD4]">
@@ -160,13 +156,14 @@ export default function AdminApp() {
                 <AdminOverview currentRole={adminRole} />
               </ProtectedRoute>
             } />
-            
+
             {/* 🌟 廠商管理模組 */}
             <Route path="/vendors" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
                 <AdminVendors />
               </ProtectedRoute>
             } />
+
             <Route
               path="/vendors/:id"
               element={
@@ -176,29 +173,35 @@ export default function AdminApp() {
               }
             />     
 
+
             {/* 🌟 KOC 管理模組 */}
             <Route path="/influencers" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
                 <AdminInfluencers />
               </ProtectedRoute>
             } />
+            <Route path="/influencers/pending" element={
+              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                <AdminKOCPending />
+              </ProtectedRoute>
+            } />
             <Route path="/influencers/:id" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
                 <AdminKocDetail koc={{
                   id: 'U0089',
-                  name: '王大寶', 
+                  name: '王大寶',
                   account: 'dabao.ig',
                   email: 'dabao@example.com',
                   phone: '0912-345-678',
                   status: 'active',
                   createdAt: '2026-01-15',
                   missions: [
-                      { missionId: 'M-1029', promotionCode: 'DABAO50', stage: '圖文審核中', deadline: '2026-07-20', status: '進行中' },
-                      { missionId: 'M-0988', promotionCode: 'DABAO-SUMMER', stage: '已上線', deadline: '2026-06-30', status: '已結案' }
+                    { missionId: 'M-1029', promotionCode: 'DABAO50', stage: '圖文審核中', deadline: '2026-07-20', status: '進行中' },
+                    { missionId: 'M-0988', promotionCode: 'DABAO-SUMMER', stage: '已上線', deadline: '2026-06-30', status: '已結案' }
                   ],
                   earnings: [
-                      { kocMissionId: 'KM-0988', amount: 3500, payoutDate: '2026-07-05', status: '已撥款' },
-                      { kocMissionId: 'KM-1029', amount: 5000, payoutDate: null, status: '待結算' }
+                    { kocMissionId: 'KM-0988', amount: 3500, payoutDate: '2026-07-05', status: '已撥款' },
+                    { kocMissionId: 'KM-1029', amount: 5000, payoutDate: null, status: '待結算' }
                   ]
                 }} />
               </ProtectedRoute>
@@ -212,21 +215,7 @@ export default function AdminApp() {
             } />
             <Route path="/consumers/:id" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer']}>
-                <AdminConsumerDetail consumer={{
-                  id: 'U10045',
-                  name: '張大明', 
-                  email: 'daming.zhang@example.com',
-                  phone: '0911-222-333',
-                  status: 'active',
-                  createdAt: '2026-03-15',
-                  totalOrders: 2,
-                  totalSpent: 4500,
-                  usedPromoCodes: 1,
-                  orders: [
-                      { orderId: 'ORD-260714-001', promotionCode: 'DABAO50', totalAmount: 2500, orderStatus: 'completed', paymentStatus: 'paid', shippingStatus: 'shipped', createdAt: '2026-07-14 10:30' },
-                      { orderId: 'ORD-260601-088', promotionCode: null, totalAmount: 2000, orderStatus: 'processing', paymentStatus: 'paid', shippingStatus: 'pending', createdAt: '2026-06-01 14:20' }
-                  ]
-                }} />
+                <AdminConsumerDetail />
               </ProtectedRoute>
             } />
 
@@ -243,7 +232,7 @@ export default function AdminApp() {
                 <AdminFinance />
               </ProtectedRoute>
             } />
-            
+
             {/* 🌟 系統操作紀錄模組 */}
             <Route path="/logs" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
@@ -252,7 +241,7 @@ export default function AdminApp() {
             } />
           </Routes>
         </div>
-        
+
       </main>
     </div>
   );

@@ -9,6 +9,20 @@ from .views.platform import (
     get_payments,
     get_transactions,
     get_audit_logs,
+    koc_approve,       
+    koc_reject,         
+    koc_get_pending_list,  
+    koc_get_list,       
+    koc_get_detail,     
+    koc_mission_stage_update,  
+    admin_vendor_list,      # 新增
+    admin_vendor_detail,    # 新增
+    admin_vendor_audit,     # 新增
+    admin_vendor_review,    # 新增
+    admin_overview,         # 新增
+    admin_coupon_usage,     # 新增
+    get_all_missions,
+    get_earnings_tracking,
 )
 from .views.consumer import (
     get_products,
@@ -30,11 +44,14 @@ from .views.consumer import (
     payment_result,
 )
 
-from .views import koc, platform, vendor
+from .views import koc, vendor
 
 urlpatterns = [
+    # koc
+    path('koc/profile/getProfile', views.get_koc_profile, name='koc-get-profile'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='koc-update-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
+    path('koc/application/getAppliedList', views.get_applied_campaign_list, name='koc-get-applied-campaign-list'),
     path('koc/application/applyMission', views.apply_mission, name='apply_mission'),
     path('koc/mission/submit', views.mission_submit, name='koc-mission-submit'),
     path('koc/application/getlist', views.get_application_list, name='get-application-list'),
@@ -49,15 +66,24 @@ urlpatterns = [
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
     path('koc/mission/saveDraft', views.save_draft, name='koc-mission-save-draft'),
     path('koc/apply', views.koc_apply, name='koc-apply'),
-
-    path('platform/koc/approve', views.koc_approve, name='platform-koc-approve'),
-    path('platform/koc/reject', views.koc_reject, name='platform-koc-reject'),
-    path('platform/koc/getPendingList', views.koc_get_pending_list, name='platform-koc-get-pending-list'),
-    path('platform/koc/getList', views.koc_get_list, name='platform-koc-get-list'),
-    path('platform/koc/getDetail', views.koc_get_detail, name='platform-koc-get-detail'),
-
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
+
+    # koc - 聊天室
+    path('koc/chat/getOrCreateRoom', views.get_or_create_chat_room, name='koc-chat-get-or-create-room'),
+    path('koc/chat/getHistory', views.get_chat_history, name='koc-chat-get-history'),
+    path('koc/chat/sendMessage', views.send_chat_message, name='koc-chat-send-message'),
+
+    # platform/038
+    path('platform/koc/approve', koc_approve, name='platform-koc-approve'),
+    path('platform/koc/reject', koc_reject, name='platform-koc-reject'),
+    path('platform/koc/getPendingList', koc_get_pending_list, name='platform-koc-get-pending-list'),
+    path('platform/koc/getList', koc_get_list, name='platform-koc-get-list'),
+    path('platform/koc/getDetail', koc_get_detail, name='platform-koc-get-detail'),
+    path('platform/kocmission/stage/update', koc_mission_stage_update, name='platform-kocmission-stage-update'),
+    path('platform/mission/getAll', get_all_missions, name='platform-mission-get-all'),
+    path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
+
     # auth
     path('user/signUp', user_signup, name='user-signup'),
     path('user/login', user_login, name='user-login'),
@@ -150,5 +176,6 @@ urlpatterns = [
     path('platform/overview', platform.admin_overview, name='admin-overview'),
     path('platform/coupons', platform.admin_coupon_usage, name='admin-coupon-usage'),
     path('platform/performance', platform.admin_performance, name='admin-performance'),
+
 ]
 

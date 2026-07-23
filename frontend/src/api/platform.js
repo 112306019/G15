@@ -1,9 +1,11 @@
 // frontend/src/api/platform.js
 import api from './index'
 
+
 // ======================================================
 // KOC 管理
 // ======================================================
+
 
 // 獲取待審核 KOC 列表
 export const getKOCPendingList = () => {
@@ -31,10 +33,11 @@ export const getKOCDetail = (params) => {
 }
 
 // 更新 KOC 任務階段
-// 注意：目前後端 urls.py 尚未註冊這條路由
+
 export const updateKOCMissionStage = (data) => {
   return api.patch('/platform/kocmission/stage/update', data)
 }
+
 
 // ======================================================
 // 廠商管理
@@ -88,4 +91,5 @@ export const getAdminCouponUsage = (params = {}) => {
 // 後端尚未完成 /platform/performance
 export const getAdminPerformance = (params = {}) => {
   return api.get('/platform/performance', { params })
+
 }

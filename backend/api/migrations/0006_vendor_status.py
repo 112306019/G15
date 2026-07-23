@@ -15,4 +15,6 @@ class Migration(migrations.Migration):
             name='status',
             field=models.CharField(choices=[('pending', '待審核'), ('approved', '已通過'), ('rejected', '已拒絕')], db_column='status', default='pending', max_length=20),
         ),
+
     ]
+
