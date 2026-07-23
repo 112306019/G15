@@ -249,7 +249,6 @@ function MainSystem() {
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
 
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
-            {view === 'coupons' && <CouponsPage />}
             {view === 'orders' && <OrdersPage onTrackOrder={() => handleNavigate('order_detail')} onOpenOrderDetail={() => handleNavigate('order_detail')} />}
             {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} />}
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
