@@ -125,8 +125,47 @@ export default function CartPage({
     }
   };
 
-  const toggleWish = (id) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, wish: !it.wish } : it)));
+  const toggleWish = async (id) => {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+
+    if (!item.wish) {
+      // 加入收藏
+      try {
+        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/add", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            User_id: userId,
+            Product_id: item.productId,
+          }),
+        });
+        setItems((prev) => prev.map((it) => (it.id === id ? { ...it, wish: true } : it)));
+      } catch (err) {
+        console.error("加入收藏失敗", err);
+      }
+    } else {
+      // 移除收藏
+      try {
+        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            User_id: userId,
+            Product_id: item.productId,
+          }),
+        });
+        setItems((prev) => prev.map((it) => (it.id === id ? { ...it, wish: false } : it)));
+      } catch (err) {
+        console.error("移除收藏失敗", err);
+      }
+    }
   };
 
   const removeItem = async (id) => {
