@@ -1,0 +1,2173 @@
+import random, string
+from django.contrib.auth.hashers import make_password, check_password
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import datetime, time
+from django.db import transaction
+from django.db.models import Sum, Count
+
+
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, ChatRoom, Message
+from api.vendor_serializers import (
+    VendorRegisterSerializer,
+    VendorLoginSerializer,
+    VendorProfileUpdateSerializer,
+    VendorProductCreateSerializer,
+    VendorProductUpdateSerializer,
+    VendorProductStatusSerializer,
+    VendorCampaignCreateSerializer,
+    VendorCampaignUpdateSerializer,
+    VendorApplicationReviewSerializer,
+    VendorSubmissionReviewSerializer,
+)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_register(request):
+    """
+    廠商註冊
+    URL: /vendor/auth/register
+    """
+    serializer = VendorRegisterSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    email = serializer.validated_data.get("email")
+    tax_id = serializer.validated_data.get("tax_id")
+
+    if Vendor.objects.filter(email=email).exists():
+        return Response({
+            "success": False,
+            "err": "Email already exists"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if Vendor.objects.filter(tax_id=tax_id).exists():
+        return Response({
+            "success": False,
+            "err": "Tax ID already exists"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = serializer.save(
+        password=make_password(serializer.validated_data["password"])
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "vendor_id": vendor.vendor_id
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_login(request):
+    """
+    廠商登入
+    URL: /vendor/auth/login
+    """
+    serializer = VendorLoginSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data["vendor_id"]
+    password = serializer.validated_data["password"]
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 正式註冊的密碼會是 hash，所以用 check_password
+    # 如果你資料庫裡原本有明文密碼，也暫時允許直接比對，方便測試
+    password_correct = check_password(password, vendor.password) or password == vendor.password
+
+    if not password_correct:
+        return Response({
+            "success": False,
+            "err": "Invalid password"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "vendor_id": vendor.vendor_id
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_profile_get(request):
+    """
+    取得廠商資料
+    URL: /vendor/profile/get
+    """
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "vendor": {
+            "vendor_id": vendor.vendor_id,
+            "company_name": vendor.company_name,
+            "contact_name": vendor.contact_name,
+            "email": vendor.email,
+            "tax_id": vendor.tax_id,
+            "created_at": vendor.created_at,
+        }
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_profile_update(request):
+    """
+    修改廠商資料
+    URL: /vendor/profile/update
+    """
+    vendor_id = request.data.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = VendorProfileUpdateSerializer(
+        vendor,
+        data=request.data,
+        partial=True
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "vendor_id": vendor.vendor_id
+    }, status=status.HTTP_200_OK)
+
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_product_create(request):
+    """
+    新增商品
+    URL: /vendor/product/create
+    """
+    data = request.data.copy()
+
+    if not data.get("status"):
+        data["status"] = "active"
+
+    serializer = VendorProductCreateSerializer(data=data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data.get("vendor_id")
+
+    if not Vendor.objects.filter(vendor_id=vendor_id).exists():
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    product = serializer.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "product_id": product.product_id,
+        "status": product.status
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_product_update(request):
+    """
+    修改商品資料
+    URL: /vendor/product/update
+    """
+    product_id = request.data.get("product_id")
+    vendor_id = request.data.get("vendor_id")
+
+    if not product_id:
+        return Response({
+            "success": False,
+            "err": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = Product.objects.get(product_id=product_id, vendor_id=vendor_id)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Product not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = VendorProductUpdateSerializer(
+        product,
+        data=request.data,
+        partial=True
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "product_id": product.product_id
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_product_update_status(request):
+    """
+    商品上架 / 下架
+    URL: /vendor/product/updateStatus
+    """
+    serializer = VendorProductStatusSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    product_id = serializer.validated_data["product_id"]
+    vendor_id = serializer.validated_data["vendor_id"]
+    new_status = serializer.validated_data["status"]
+
+    if new_status not in ["active", "inactive"]:
+        return Response({
+            "success": False,
+            "err": "Invalid status"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = Product.objects.get(product_id=product_id, vendor_id=vendor_id)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Product not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    product.status = new_status
+    product.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "product_id": product.product_id,
+        "status": product.status
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_product_delete(request):
+    """
+    刪除商品
+    URL: /vendor/product/delete
+
+    只有未被活動綁定、且沒有訂單紀錄的商品可以刪除。
+    """
+    vendor_id = request.data.get("vendor_id")
+    product_id = request.data.get("product_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "success": False,
+            "err": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        product = Product.objects.get(
+            product_id=product_id,
+            vendor_id=vendor_id
+        )
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Product not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 已綁定活動，不允許刪除
+    if CampaignProduct.objects.filter(
+        product=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已綁定活動，無法刪除；請改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 已有訂單紀錄，不允許刪除
+    if OrderItem.objects.filter(
+        product=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已有訂單紀錄，無法刪除；請改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    deleted_product_id = product.product_id
+    product.delete()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "product_id": deleted_product_id
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_product_getlist(request):
+    """
+    獲取商品清單
+    URL: /vendor/product/getlist
+    """
+    vendor_id = request.GET.get("vendor_id")
+    product_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    products = Product.objects.filter(vendor_id=vendor_id)
+
+    if product_status:
+        products = products.filter(status=product_status)
+
+    product_list = []
+
+    for product in products:
+        product_list.append({
+            "product_id": product.product_id,
+            "product_name": product.product_name,
+            "description": product.description,
+            "image_url": product.image_url,
+            "price": product.price,
+            "discounted_price": product.discounted_price,
+            "stock": product.stock,
+            "category": product.category,
+            "status": product.status,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "products": product_list
+    }, status=status.HTTP_200_OK)
+
+
+
+# ──────────────────────────────────────────────
+# Vendor 任務 / Campaign 管理
+# ──────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_campaign_create(request):
+    """
+    建立任務。
+
+    商品來源二選一：
+    1. 傳 product_id：綁定廠商既有商品
+    2. 傳 product：建立新商品並綁定
+    """
+    serializer = VendorCampaignCreateSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    vendor_id = data["vendor_id"]
+    product_id = data.get("product_id")
+    product_data = data.get("product")
+
+    try:
+        vendor = Vendor.objects.get(
+            vendor_id=vendor_id
+        )
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    start_datetime = timezone.make_aware(
+        datetime.combine(
+            data["start_date"],
+            time.min
+        )
+    )
+
+    end_datetime = timezone.make_aware(
+        datetime.combine(
+            data["end_date"],
+            time.max
+        )
+    )
+
+    try:
+        with transaction.atomic():
+
+            # 情況一：選擇既有商品
+            if product_id is not None:
+                try:
+                    product = Product.objects.get(
+                        product_id=product_id,
+                        vendor_id=vendor_id
+                    )
+                except Product.DoesNotExist:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "Product not found or does not "
+                            "belong to this vendor"
+                        )
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # 情況二：建立活動時同步建立新商品
+            else:
+                if not product_data:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "請選擇既有商品或提供新商品資料"
+                        )
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                product = Product.objects.create(
+                    vendor_id=vendor.vendor_id,
+                    product_name=product_data[
+                        "product_name"
+                    ],
+                    description=product_data.get(
+                        "description",
+                        ""
+                    ),
+                    price=product_data["price"],
+                    discounted_price=product_data.get(
+                        "discounted_price"
+                    ),
+                    stock=product_data["stock"],
+                    category=product_data.get(
+                        "category",
+                        ""
+                    ),
+                    image_url=product_data.get(
+                        "image_url",
+                        ""
+                    ),
+                    status="active"
+                )
+
+            campaign = Campaigns.objects.create(
+                vendor=vendor,
+                name=data["name"],
+                description=data.get(
+                    "description",
+                    ""
+                ),
+                budget=data["budget"],
+                reward_type=data.get(
+                    "reward_type",
+                    "commission"
+                ),
+                discount_percent=data[
+                    "discount_percent"
+                ],
+                promo_days=data["promo_days"],
+                start_date=start_datetime,
+                end_date=end_datetime,
+                status=data["status"]
+            )
+
+            CampaignProduct.objects.create(
+                campaign=campaign,
+                product=product
+            )
+
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaign_id": str(campaign.campaign_id),
+        "product_id": product.product_id,
+        "product_created": product_id is None,
+        "status": campaign.status
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_campaign_update(request):
+    """
+    修改任務。
+
+    商品來源二選一：
+    1. product_id：綁定既有商品
+    2. product：建立新商品並重新綁定
+    """
+    serializer = VendorCampaignUpdateSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    campaign_id = data["campaign_id"]
+    vendor_id = data["vendor_id"]
+
+    product_id = data.get("product_id")
+    product_data = data.get("product")
+
+    try:
+        campaign = Campaigns.objects.get(
+            campaign_id=campaign_id,
+            vendor_id=vendor_id
+        )
+    except Campaigns.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Campaign not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    start_datetime = timezone.make_aware(
+        datetime.combine(
+            data["start_date"],
+            time.min
+        )
+    )
+
+    end_datetime = timezone.make_aware(
+        datetime.combine(
+            data["end_date"],
+            time.max
+        )
+    )
+
+    try:
+        with transaction.atomic():
+
+            # 選擇既有商品
+            if product_id is not None:
+                try:
+                    product = Product.objects.get(
+                        product_id=product_id,
+                        vendor_id=vendor_id
+                    )
+                except Product.DoesNotExist:
+                    return Response({
+                        "success": False,
+                        "err": (
+                            "Product not found or does not "
+                            "belong to this vendor"
+                        )
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+            # 改成新建商品
+            else:
+                if not product_data:
+                    return Response({
+                        "success": False,
+                        "err": "New product data is required"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                product = Product.objects.create(
+                    vendor_id=vendor_id,
+                    product_name=product_data[
+                        "product_name"
+                    ],
+                    description=product_data.get(
+                        "description",
+                        ""
+                    ),
+                    price=product_data["price"],
+                    discounted_price=product_data.get(
+                        "discounted_price"
+                    ),
+                    stock=product_data["stock"],
+                    category=product_data.get(
+                        "category",
+                        ""
+                    ),
+                    image_url=product_data.get(
+                        "image_url",
+                        ""
+                    ),
+                    status="active"
+                )
+
+            campaign.name = data["name"]
+            campaign.description = data.get(
+                "description",
+                ""
+            )
+            campaign.budget = data["budget"]
+            campaign.reward_type = data.get(
+                "reward_type",
+                "commission"
+            )
+            campaign.discount_percent = data[
+                "discount_percent"
+            ]
+            campaign.promo_days = data["promo_days"]
+            campaign.start_date = start_datetime
+            campaign.end_date = end_datetime
+            campaign.status = data["status"]
+            campaign.save()
+
+            # 更新原有關聯；沒有關聯時就建立
+            campaign_product = CampaignProduct.objects.filter(
+                campaign=campaign
+            ).first()
+
+            if campaign_product:
+                campaign_product.product = product
+                campaign_product.save(
+                    update_fields=["product"]
+                )
+            else:
+                CampaignProduct.objects.create(
+                    campaign=campaign,
+                    product=product
+                )
+
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaign_id": str(campaign.campaign_id),
+        "product_id": product.product_id,
+        "product_created": product_id is None,
+        "status": campaign.status
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_campaign_delete(request):
+    """
+    刪除任務草稿
+    URL: /vendor/campaign/delete
+    """
+    campaign_id = request.data.get("campaign_id")
+    vendor_id = request.data.get("vendor_id")
+
+    if not campaign_id:
+        return Response({
+            "success": False,
+            "err": "campaign_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        campaign = Campaigns.objects.get(
+            campaign_id=campaign_id,
+            vendor_id=vendor_id
+        )
+    except Campaigns.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Campaign not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if campaign.status != "draft":
+        return Response({
+            "success": False,
+            "err": "Only draft campaigns can be deleted"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 刪除 CampaignProduct 關聯，但不刪除原本商品庫中的商品
+    CampaignProduct.objects.filter(
+        campaign=campaign
+    ).delete()
+
+    campaign.delete()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaign_id": str(campaign_id)
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_campaign_getlist(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    campaigns = Campaigns.objects.filter(vendor_id=vendor_id)
+
+    if campaign_status:
+        campaigns = campaigns.filter(status=campaign_status)
+
+    campaign_list = []
+
+    for campaign in campaigns:
+        campaign_products = CampaignProduct.objects.filter(
+            campaign=campaign
+        )
+
+        products = []
+
+        for campaign_product in campaign_products:
+            product = campaign_product.product
+            products.append({
+                "product_id": product.product_id,
+                "product_name": product.product_name,
+                "description": product.description,
+                "price": product.price,
+                "discounted_price": product.discounted_price,
+                "stock": product.stock,
+                "category": product.category,
+                "image_url": product.image_url,
+                "status": product.status,
+            })
+
+        campaign_list.append({
+            "campaign_id": str(campaign.campaign_id),
+            "vendor_id": campaign.vendor_id,
+            "name": campaign.name,
+            "description": campaign.description,
+            "budget": str(campaign.budget),
+            "reward_type": campaign.reward_type,
+            "discount_percent": campaign.discount_percent,
+            "promo_days": campaign.promo_days,
+            "start_date": (
+                campaign.start_date.date().isoformat()
+                if campaign.start_date
+                else None
+            ),
+            "end_date": (
+                campaign.end_date.date().isoformat()
+                if campaign.end_date
+                else None
+            ),
+            "status": campaign.status,
+            "products": products,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaigns": campaign_list
+    }, status=status.HTTP_200_OK)
+
+
+
+# ──────────────────────────────────────────────
+# Vendor KOC 報名審核
+# ──────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_application_getlist(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
+    application_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    campaigns = Campaigns.objects.filter(vendor_id=vendor_id)
+
+    if campaign_id:
+        campaigns = campaigns.filter(campaign_id=campaign_id)
+
+    applications = Application.objects.filter(campaign__in=campaigns)
+
+    if application_status:
+        applications = applications.filter(status=application_status)
+
+    application_list = []
+
+    for application in applications:
+        application_list.append({
+            "application_id": application.application_id,
+            "koc_id": application.koc_id,
+            "koc_name": "",
+            "campaign_id": application.campaign.campaign_id,
+            "campaign_name": application.campaign.name,
+            "status": application.status,
+            "detail_status": application.status,
+            "order_id": application.order_id,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "applications": application_list
+    }, status=status.HTTP_200_OK)
+
+# 產生優惠碼
+def generate_promotion_code(koc_id):
+    while True:
+        random_part = ''.join(
+            random.choices(string.digits, k=3)
+        )
+        code = f"{koc_id}-{random_part}"
+
+        if not CouponNew.objects.filter(promotion_code=code).exists():
+            return code
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_application_review(request):
+    """
+    廠商審核 KOC 接案申請
+    URL: /vendor/application/review
+
+    通過時：
+    1. Application 狀態改為 approved
+    2. 建立 KOCMissionNew
+    3. 建立未啟用優惠碼
+    4. 自動建立聊天室
+
+    拒絕時：
+    1. Application 狀態改為 rejected
+    """
+
+    serializer = VendorApplicationReviewSerializer(
+        data=request.data
+    )
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data["vendor_id"]
+    application_id = serializer.validated_data["application_id"]
+    review_result = serializer.validated_data["status"]
+
+    if review_result not in ["approved", "rejected"]:
+        return Response({
+            "success": False,
+            "err": "Invalid review result"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        application = (
+            Application.objects
+            .select_related(
+                "campaign",
+                "koc"
+            )
+            .get(
+                application_id=application_id
+            )
+        )
+    except Application.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Application not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 確認這筆申請屬於目前登入的廠商
+    if str(application.campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": (
+                "This application does not belong "
+                "to this vendor"
+            )
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    # 目前新版 Model 中 application.koc 可以為空值
+    if review_result == "approved" and not application.koc_id:
+        return Response({
+            "success": False,
+            "err": "This application does not have a KOC"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    created_mission = None
+    created_coupon = None
+    created_chatroom = None
+
+    mission_created = False
+    coupon_created = False
+    chatroom_created = False
+
+    try:
+        with transaction.atomic():
+            # 更新接案申請狀態
+            application.status = review_result
+            application.save(
+                update_fields=["status"]
+            )
+
+            if review_result == "approved":
+                # 建立或取得 KOC 任務
+                mission, mission_created = (
+                    KOCMissionNew.objects.get_or_create(
+                        application=application,
+                        defaults={
+                            # koc 是 ForeignKey，
+                            # 使用 koc_id 指定實際主鍵值
+                            "koc_id": application.koc_id,
+                            "stage": "pending"
+                        }
+                    )
+                )
+
+                # 舊資料如果已經有任務，但沒有綁定 KOC，
+                # 就補上 KOC 關聯
+                mission_fields_to_update = []
+
+                if not mission.koc_id:
+                    mission.koc_id = application.koc_id
+                    mission_fields_to_update.append("koc")
+
+                if not mission.stage:
+                    mission.stage = "pending"
+                    mission_fields_to_update.append("stage")
+
+                if mission_fields_to_update:
+                    mission.save(
+                        update_fields=mission_fields_to_update
+                    )
+
+                # 建立或取得優惠碼
+                coupon = CouponNew.objects.filter(
+                    kocmission=mission
+                ).first()
+
+                if not coupon:
+                    promotion_code = generate_promotion_code(
+                        application.koc_id
+                    )
+
+                    coupon = CouponNew.objects.create(
+                        kocmission=mission,
+                        promotion_code=promotion_code,
+
+                        # 暫時保留你原本設定的固定折扣值
+                        discount_value=50,
+
+                        # 接案通過時只建立，不啟用
+                        status="inactive",
+                        usage_count=0,
+                        total_commission=0
+                    )
+
+                    coupon_created = True
+
+                # 一個 KOC 任務只能有一個聊天室
+                chatroom, chatroom_created = (
+                    ChatRoom.objects.get_or_create(
+                        kocmission=mission
+                    )
+                )
+
+                created_mission = mission
+                created_coupon = coupon
+                created_chatroom = chatroom
+
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+
+        "application_id": application.application_id,
+        "status": application.status,
+
+        "kocmission_id": (
+            created_mission.kocmission_id
+            if created_mission
+            else None
+        ),
+        "mission_created": mission_created,
+
+        "coupon_id": (
+            created_coupon.coupon_id
+            if created_coupon
+            else None
+        ),
+        "promotion_code": (
+            created_coupon.promotion_code
+            if created_coupon
+            else None
+        ),
+        "coupon_status": (
+            created_coupon.status
+            if created_coupon
+            else None
+        ),
+        "coupon_created": coupon_created,
+
+        "room_id": (
+            created_chatroom.room_id
+            if created_chatroom
+            else None
+        ),
+        "chatroom_created": chatroom_created,
+
+    }, status=status.HTTP_200_OK)
+
+
+
+# ──────────────────────────────────────────────
+# Vendor 投稿 / 任務成果審核
+# ──────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_mission_get_submission_detail(request):
+    vendor_id = request.GET.get("vendor_id")
+    submission_id = request.GET.get("submission_id")
+    kocmission_id = request.GET.get("kocmission_id")
+    submission_type = request.GET.get("submission_type")
+    submission_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    submissions = Submissions.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    )
+
+    if submission_id:
+        submissions = submissions.filter(submission_id=submission_id)
+
+    if kocmission_id:
+        submissions = submissions.filter(kocmission__kocmission_id=kocmission_id)
+
+    if submission_status:
+        submissions = submissions.filter(status=submission_status)
+
+    if submission_type:
+        submissions = submissions.filter(submission_type=submission_type)
+
+    submission_list = []
+
+    for submission in submissions:
+        mission = submission.kocmission
+        application = mission.application
+        campaign = application.campaign
+
+        coupon = CouponNew.objects.filter(
+            kocmission=mission
+        ).first()
+
+        submission_list.append({
+            "submission_id": submission.submission_id,
+            "submission_type": submission.submission_type,
+            "content_url": submission.content_url,
+            "text_content": submission.text_content,
+            "status": submission.status,
+            "vendor_feedback": submission.vendor_feedback,
+            "submitted_time": submission.submitted_time,
+            "reviewed_time": submission.reviewed_time,
+
+            "kocmission_id": mission.kocmission_id,
+            "stage": mission.stage,
+            "koc_id": mission.koc_id,
+
+            "application_id": application.application_id,
+            "campaign_id": campaign.campaign_id,
+            "campaign_name": campaign.name,
+
+            "promotion_code": (
+                coupon.promotion_code
+                if coupon
+                else None
+            ),
+            "coupon_status": (
+                coupon.status
+                if coupon
+                else None
+            ),
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submissions": submission_list
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_mission_review_submission(request):
+    serializer = VendorSubmissionReviewSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data["vendor_id"]
+    submission_id = serializer.validated_data["submission_id"]
+    review_result = serializer.validated_data["status"]
+    vendor_feedback = serializer.validated_data.get(
+        "vendor_feedback",
+        ""
+    )
+
+    # 對應 Submissions.STATUS_CHOICES
+    if review_result not in ["approved", "revising"]:
+        return Response({
+            "success": False,
+            "err": "Invalid review result"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        submission = Submissions.objects.select_related(
+            "kocmission__application__campaign"
+        ).get(
+            submission_id=submission_id
+        )
+    except Submissions.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Submission not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = submission.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This submission does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    coupon = CouponNew.objects.filter(
+        kocmission=submission.kocmission
+    ).first()
+
+    # model 中 text 代表文案
+    should_activate_coupon = (
+        review_result == "approved"
+        and submission.submission_type == "text"
+    )
+
+    # 文案審核通過前，先確認優惠碼存在
+    if should_activate_coupon and not coupon:
+        return Response({
+            "success": False,
+            "err": "Coupon not found for this KOC mission"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    submission.status = review_result
+    submission.vendor_feedback = vendor_feedback
+    submission.reviewed_time = timezone.now()
+    submission.save(
+        update_fields=[
+            "status",
+            "vendor_feedback",
+            "reviewed_time"
+        ]
+    )
+    mission = submission.kocmission
+
+    if review_result == "approved":
+        if submission.submission_type == "text":
+            # 文案審核通過：進入待發佈
+            mission.stage = "publishing"
+
+        elif submission.submission_type == "link":
+            # 發佈連結審核通過：任務完成
+            mission.stage = "completed"
+
+        mission.save(update_fields=["stage"])
+
+    elif review_result == "revising":
+        # 審核退回：回到撰寫文案
+        mission.stage = "writing"
+        mission.save(update_fields=["stage"])
+
+    # 只有文案審核通過才啟用優惠碼
+    if should_activate_coupon:
+        coupon.status = "active"
+        coupon.save(update_fields=["status"])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submission_id": submission.submission_id,
+        "submission_type": submission.submission_type,
+        "status": submission.status,
+        "vendor_feedback": submission.vendor_feedback,
+        "reviewed_time": submission.reviewed_time,
+        "kocmission_id": mission.kocmission_id,
+        "stage": mission.stage,
+        "coupon_id": coupon.coupon_id if coupon else None,
+        "promotion_code": coupon.promotion_code if coupon else None,
+        "coupon_status": coupon.status if coupon else None,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_order_getlist(request):
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    order_map = {}
+
+    for item in order_items:
+        order = item.order
+
+        if order.order_id not in order_map:
+            order_map[order.order_id] = {
+                "order_id": str(order.order_id),
+                "user_id": order.user_id,
+                "guest_id": order.guest_id,
+                "promotion_code": order.promotion_code,
+                "total_amount": str(order.total_amount),
+                "order_status": order.order_status,
+                "payment_status": order.payment_status,
+                "shipping_status": order.shipping_status,
+                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "items": []
+            }
+
+        order_map[order.order_id]["items"].append({
+            "order_item_id": str(item.order_item_id),
+            "product_id": item.product.product_id,
+            "product_name": item.product.product_name,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+            "subtotal": str(item.subtotal),
+            "apply_status": item.apply_status
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "orders": list(order_map.values())
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_order_get_detail(request):
+    vendor_id = request.GET.get("vendor_id")
+    order_id = request.GET.get("order_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not order_id:
+        return Response({
+            "success": False,
+            "err": "order_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        order_id=order_id,
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if not order_items.exists():
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order = order_items[0].order
+
+    payment = Payment.objects.filter(order_id=order_id).first()
+
+    items = []
+    for item in order_items:
+        items.append({
+            "order_item_id": str(item.order_item_id),
+            "product_id": item.product.product_id,
+            "product_name": item.product.product_name,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+            "subtotal": str(item.subtotal),
+            "apply_status": item.apply_status
+        })
+
+    payment_data = None
+    if payment:
+        payment_data = {
+            "payment_id": payment.payment_id,
+            "payment_method": payment.payment_method,
+            "payment_status": payment.payment_status,
+            "transaction_id": payment.transaction_id,
+            "promotion_code": payment.promotion_code
+        }
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order": {
+            "order_id": str(order.order_id),
+            "user_id": order.user_id,
+            "guest_id": order.guest_id,
+            "promotion_code": order.promotion_code,
+            "total_amount": str(order.total_amount),
+            "order_status": order.order_status,
+            "payment_status": order.payment_status,
+            "shipping_status": order.shipping_status,
+            "address_id": order.address_id,
+            "created_at": order.created_at.isoformat() if order.created_at else None,
+            "items": items,
+            "payment": payment_data
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_update_shipping(request):
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+    shipping_status = request.data.get("shipping_status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not order_id:
+        return Response({
+            "success": False,
+            "err": "order_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not shipping_status:
+        return Response({
+            "success": False,
+            "err": "shipping_status is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_status = ["unshipped", "preparing", "shipped", "delivered", "cancelled"]
+
+    if shipping_status not in valid_status:
+        return Response({
+            "success": False,
+            "err": "Invalid shipping_status"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        order_id=order_id,
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if not order_items.exists():
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order = order_items[0].order
+    order.shipping_status = shipping_status
+    order.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order_id": str(order.order_id),
+        "shipping_status": order.shipping_status
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_coupon_get_usage_list(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
+    status_filter = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    coupons = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).select_related(
+        "kocmission",
+        "kocmission__application",
+        "kocmission__application__campaign"
+    )
+
+    if campaign_id:
+        coupons = coupons.filter(
+            kocmission__application__campaign__campaign_id=campaign_id
+        )
+
+    if status_filter:
+        coupons = coupons.filter(status=status_filter)
+
+    coupon_list = []
+
+    for coupon in coupons:
+        mission = coupon.kocmission
+        application = mission.application
+        campaign = application.campaign
+
+        coupon_list.append({
+            "coupon_id": coupon.coupon_id,
+            "promotion_code": coupon.promotion_code,
+            "discount_value": coupon.discount_value,
+            "status": coupon.status,
+            "usage_count": coupon.usage_count,
+            "total_commission": coupon.total_commission,
+
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "stage": mission.stage,
+
+            "application_id": application.application_id,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "vendor_id": campaign.vendor_id
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "coupons": coupon_list
+    }, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────
+# 聊天室 api
+# ──────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_coupon_update_status(request):
+    vendor_id = request.data.get("vendor_id")
+    coupon_id = request.data.get("coupon_id")
+    coupon_status = request.data.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not coupon_id:
+        return Response({
+            "success": False,
+            "err": "coupon_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not coupon_status:
+        return Response({
+            "success": False,
+            "err": "status is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_status = ["active", "inactive", "disabled"]
+
+    if coupon_status not in valid_status:
+        return Response({
+            "success": False,
+            "err": "Invalid status"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        coupon = CouponNew.objects.select_related(
+            "kocmission__application__campaign"
+        ).get(coupon_id=coupon_id)
+    except CouponNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Coupon not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = coupon.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This coupon does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    coupon.status = coupon_status
+    coupon.save()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "coupon_id": coupon.coupon_id,
+        "promotion_code": coupon.promotion_code,
+        "status": coupon.status
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_analytics_overview(request):
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 1. 活動總數
+    total_campaigns = Campaigns.objects.filter(
+        vendor_id=vendor_id
+    ).count()
+
+    # 2. 這個廠商商品相關的訂單明細
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    # 3. 訂單總數，不重複計算同一張訂單
+    total_orders = order_items.values("order_id").distinct().count()
+
+    # 4. 商品銷售金額：用 OrderItem subtotal 加總
+    revenue_result = order_items.aggregate(
+        total_revenue=Sum("subtotal")
+    )
+    total_revenue = revenue_result["total_revenue"] or 0
+
+    # 5. 優惠碼資料
+    coupons = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    )
+
+    coupon_usage_result = coupons.aggregate(
+        total_coupon_usage=Sum("usage_count"),
+        total_commission=Sum("total_commission")
+    )
+
+    total_coupon_usage = coupon_usage_result["total_coupon_usage"] or 0
+    total_commission = coupon_usage_result["total_commission"] or 0
+
+    # 6. KOC 報名數
+    total_applications = Application.objects.filter(
+        campaign__vendor_id=vendor_id
+    ).count()
+
+    # 7. 投稿數
+    total_submissions = Submissions.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).count()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "analytics": {
+            "vendor_id": vendor_id,
+            "total_campaigns": total_campaigns,
+            "total_applications": total_applications,
+            "total_submissions": total_submissions,
+            "total_orders": total_orders,
+            "total_revenue": str(total_revenue),
+            "total_coupon_usage": total_coupon_usage,
+            "total_commission": total_commission
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_product_performance(request):
+    vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if start_date:
+        order_items = order_items.filter(order__created_at__date__gte=start_date)
+
+    if end_date:
+        order_items = order_items.filter(order__created_at__date__lte=end_date)
+
+    if campaign_id:
+        campaign_product_ids = CampaignProduct.objects.filter(
+            campaign_id=campaign_id
+        ).values_list("product_id", flat=True)
+
+        order_items = order_items.filter(
+            product_id__in=campaign_product_ids
+        )
+
+    product_data = (
+        order_items
+        .values(
+            "product__product_id",
+            "product__product_name"
+        )
+        .annotate(
+            quantity_sold=Sum("quantity"),
+            total_sales=Sum("subtotal"),
+            total_orders=Count("order", distinct=True),
+        )
+        .order_by("-total_sales")
+    )
+
+    products = []
+
+    for item in product_data:
+        product_id = item["product__product_id"]
+
+        product_order_items = order_items.filter(
+            product__product_id=product_id
+        )
+
+        coupon_codes = product_order_items.filter(
+            order__promotion_code__isnull=False
+        ).exclude(
+            order__promotion_code=""
+        ).values_list(
+            "order__promotion_code",
+            flat=True
+        ).distinct()
+
+        coupon_orders = product_order_items.filter(
+            order__promotion_code__in=coupon_codes
+        ).values(
+            "order_id"
+        ).distinct().count()
+
+        coupon_result = CouponNew.objects.filter(
+            promotion_code__in=coupon_codes
+        ).aggregate(
+            total_commission=Sum("total_commission")
+        )
+
+        products.append({
+            "product_id": str(product_id),
+            "product_name": item["product__product_name"],
+            "quantity_sold": item["quantity_sold"] or 0,
+            "total_sales": int(item["total_sales"] or 0),
+            "total_orders": item["total_orders"] or 0,
+            "coupon_orders": coupon_orders,
+            "total_commission": coupon_result["total_commission"] or 0
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "products": products
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_create(request):
+    """
+    建立聊天室
+    URL: /vendor/chatroom/create
+
+    Request:
+    {
+        "vendor_id": "V00001",
+        "kocmission_id": 1
+    }
+    """
+    vendor_id = request.data.get("vendor_id")
+    kocmission_id = request.data.get("kocmission_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not kocmission_id:
+        return Response({
+            "success": False,
+            "err": "kocmission_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = (
+            KOCMissionNew.objects
+            .select_related(
+                "application__campaign",
+                "koc__user"
+            )
+            .get(
+                kocmission_id=kocmission_id
+            )
+        )
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "KOC mission not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = mission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This mission does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    chatroom, created = ChatRoom.objects.get_or_create(
+        kocmission=mission
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "created": created,
+        "room_id": chatroom.room_id,
+        "kocmission_id": mission.kocmission_id,
+        "koc_id": mission.koc_id,
+        "campaign_id": str(campaign.campaign_id),
+        "campaign_name": campaign.name,
+        "created_at": chatroom.created_at,
+    }, status=(
+        status.HTTP_201_CREATED
+        if created
+        else status.HTTP_200_OK
+    ))
+    
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_chatroom_getlist(request):
+    """
+    取得廠商聊天室清單
+    URL: /vendor/chatroom/getlist
+    """
+    vendor_id = request.GET.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    chatrooms = (
+        ChatRoom.objects
+        .filter(
+            kocmission__application__campaign__vendor_id=vendor_id
+        )
+        .select_related(
+            "kocmission",
+            "kocmission__koc",
+            "kocmission__koc__user",
+            "kocmission__application__campaign"
+        )
+        .prefetch_related("messages")
+        .order_by("-created_at")
+    )
+
+    chatroom_list = []
+
+    for chatroom in chatrooms:
+        mission = chatroom.kocmission
+        campaign = mission.application.campaign
+
+        koc_name = ""
+        if mission.koc and mission.koc.user:
+            koc_name = (
+                mission.koc.user.display_name
+                or mission.koc.user.name
+            )
+
+        last_message = (
+            chatroom.messages
+            .order_by("-created_at")
+            .first()
+        )
+
+        unread_count = chatroom.messages.filter(
+            sender_role="koc",
+            is_read=False
+        ).count()
+
+        chatroom_list.append({
+            "room_id": chatroom.room_id,
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "koc_name": koc_name,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "mission_stage": mission.stage,
+            "last_message": (
+                last_message.content
+                if last_message
+                else ""
+            ),
+            "last_message_time": (
+                last_message.created_at
+                if last_message
+                else chatroom.created_at
+            ),
+            "last_sender_role": (
+                last_message.sender_role
+                if last_message
+                else None
+            ),
+            "unread_count": unread_count,
+            "created_at": chatroom.created_at,
+        })
+
+    chatroom_list.sort(
+        key=lambda room: room["last_message_time"],
+        reverse=True
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "chatrooms": chatroom_list
+    }, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_chatroom_get_messages(request):
+    """
+    取得聊天室訊息
+    URL: /vendor/chatroom/getMessages
+    """
+    vendor_id = request.GET.get("vendor_id")
+    room_id = request.GET.get("room_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign",
+                "kocmission__koc__user"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    messages = chatroom.messages.all()
+
+    message_list = []
+
+    for message in messages:
+        message_list.append({
+            "message_id": message.message_id,
+            "room_id": chatroom.room_id,
+            "sender_role": message.sender_role,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "is_read": message.is_read,
+            "created_at": message.created_at,
+        })
+
+    mission = chatroom.kocmission
+
+    koc_name = ""
+    if mission.koc and mission.koc.user:
+        koc_name = (
+            mission.koc.user.display_name
+            or mission.koc.user.name
+        )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "chatroom": {
+            "room_id": chatroom.room_id,
+            "kocmission_id": mission.kocmission_id,
+            "koc_id": mission.koc_id,
+            "koc_name": koc_name,
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "mission_stage": mission.stage,
+        },
+        "messages": message_list
+    }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_send_message(request):
+    """
+    廠商發送訊息
+    URL: /vendor/chatroom/sendMessage
+
+    Request:
+    {
+        "vendor_id": "V00001",
+        "room_id": 1,
+        "content": "您好，請修改文案內容"
+    }
+    """
+    vendor_id = request.data.get("vendor_id")
+    room_id = request.data.get("room_id")
+    content = request.data.get("content", "").strip()
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not content:
+        return Response({
+            "success": False,
+            "err": "content is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    message = Message.objects.create(
+        room=chatroom,
+        sender_role="vendor",
+        sender_id=str(vendor_id),
+        content=content,
+        is_read=False
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "message": {
+            "message_id": message.message_id,
+            "room_id": chatroom.room_id,
+            "sender_role": message.sender_role,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "is_read": message.is_read,
+            "created_at": message.created_at,
+        }
+    }, status=status.HTTP_201_CREATED)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_chatroom_mark_read(request):
+    """
+    廠商開啟聊天室後，將 KOC 訊息標記為已讀
+    URL: /vendor/chatroom/markRead
+    """
+    vendor_id = request.data.get("vendor_id")
+    room_id = request.data.get("room_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related(
+                "kocmission__application__campaign"
+            )
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Chat room not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = chatroom.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This chat room does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    updated_count = chatroom.messages.filter(
+        sender_role="koc",
+        is_read=False
+    ).update(is_read=True)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "room_id": chatroom.room_id,
+        "updated_count": updated_count
+    }, status=status.HTTP_200_OK)
+
