@@ -1,42 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Filter, History, ShieldAlert, CheckCircle, Edit, FileText } from 'lucide-react';
+import { getAdminAuditLogs } from '../api/platform';
 
 export default function AdminLogs() {
   // 模擬從 API (GET /admin/audit/logs) 取得的操作紀錄資料
-  const [logs] = useState([
-    {
-      logId: 'LOG-8801',
-      adminId: 'ADMIN-01 (da)',
-      actionType: '核准入駐',
-      target: 'Vendor: V001 (美味餐飲企業)',
-      actionReason: '廠商資料審核無誤，統編與負責人身分皆已確認。',
-      createdAt: '2026-07-14 15:30:22'
-    },
-    {
-      logId: 'LOG-8802',
-      adminId: 'ADMIN-02 (System)',
-      actionType: '狀態更新',
-      target: 'Mission: M-1029 (KOC: 王大寶)',
-      actionReason: '管理員手動將任務階段從 [圖文審核中] 變更為 [已上線]。',
-      createdAt: '2026-07-14 11:20:05'
-    },
-    {
-      logId: 'LOG-8803',
-      adminId: 'ADMIN-01 (da)',
-      actionType: '停權處分',
-      target: 'User: U10047 (趙違規)',
-      actionReason: '該用戶多次惡意取消訂單，違反平台使用者條款，予以停權 30 天。',
-      createdAt: '2026-07-13 09:15:40'
-    },
-    {
-      logId: 'LOG-8804',
-      adminId: 'ADMIN-03 (Finance)',
-      actionType: '手動撥款',
-      target: 'Earning: EARN-9901',
-      actionReason: 'KOC 反映未收到款項，經查為銀行連線超時，已人工重新執行撥款作業。',
-      createdAt: '2026-07-10 16:45:00'
-    }
-  ]);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // 根據操作類型給予不同的視覺 Icon 與顏色
   const getActionBadge = (type) => {
@@ -51,6 +21,66 @@ export default function AdminLogs() {
         return { icon: <Edit size={14} />, color: 'text-[#1A1A18] bg-white border-[#E2DDD4]' };
     }
   };
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await getAdminAuditLogs();
+
+        const logData = response.data.map((log) => {
+          let target = '-';
+
+          if (log.Vendor_id) {
+            target = `Vendor: ${log.Vendor_id}`;
+          } else if (log.Influencer_id) {
+            target = `KOC: ${log.Influencer_id}`;
+          } else if (log.Submission_id) {
+            target = `Submission: ${log.Submission_id}`;
+          } else if (log.Tasks_id) {
+            target = `Task: ${log.Tasks_id}`;
+          }
+
+          const actionLabels = {
+            review_vendor: '廠商審核',
+            approve_vendor: '核准廠商',
+            reject_vendor: '拒絕廠商',
+            approve_koc: '核准 KOC',
+            reject_koc: '拒絕 KOC',
+          };
+
+          return {
+            logId: `LOG-${log.Log_id}`,
+            adminId: `ADMIN-${log.Admin_id}`,
+            actionType:
+              actionLabels[log.Action_type] ||
+              log.Action_type,
+            target,
+            actionReason:
+              log.Action_reason || '未填寫原因',
+            createdAt: log.created_at
+              ? new Date(log.created_at).toLocaleString('zh-TW')
+              : '-',
+          };
+        });
+
+        setLogs(logData);
+      } catch (err) {
+        console.error('取得操作紀錄失敗：', err);
+
+        setError(
+          err.response?.data?.err ||
+          '取得操作紀錄失敗'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -92,6 +122,18 @@ export default function AdminLogs() {
         </div>
       </div>
 
+      {loading && (
+        <div className="bg-white border border-[#E2DDD4] rounded-xl p-4 text-sm font-bold text-[#8C8880]">
+          操作紀錄載入中...
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-4 text-sm font-bold text-[#C8522A]">
+          {error}
+        </div>
+      )}
+
       {/* 🟢 紀錄列表 (Table) */}
       <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden">
         <div className="overflow-x-auto">
@@ -113,8 +155,7 @@ export default function AdminLogs() {
                     
                     {/* 時間與編號 */}
                     <td className="px-6 py-4">
-                      <div className="text-sm font-black text-[#1A1A18]">{log.createdAt.split(' ')[0]}</div>
-                      <div className="text-xs font-medium text-[#8C8880] mt-0.5">{log.createdAt.split(' ')[1]}</div>
+                      <div className="text-sm font-black text-[#1A1A18]">{log.createdAt}</div>
                       <div className="text-[10px] text-[#8C8880] mt-1 tracking-wider">{log.logId}</div>
                     </td>
                     

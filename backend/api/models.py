@@ -467,12 +467,19 @@ class Admins(models.Model):
 
 
 class Vendor(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '待審核'),
+        ('approved', '已通過'),
+        ('rejected', '已拒絕'),
+    ]
+
     vendor_id = models.CharField(max_length=6, unique=True, primary_key=True)
     company_name = models.CharField(max_length=200)
     contact_name = models.CharField(max_length=200)
     email = models.EmailField(max_length=255)
     password = models.CharField(max_length=255)
     tax_id = models.CharField(max_length=50, db_column='tax_id')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status',)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

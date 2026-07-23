@@ -167,25 +167,14 @@ export default function AdminApp() {
                 <AdminVendors />
               </ProtectedRoute>
             } />
-            <Route path="/vendors/:id" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
-                <AdminVendorDetail vendor={{
-                  id: 'V001', 
-                  companyName: '美味餐飲企業', 
-                  contactName: '王經理', 
-                  email: 'service@yummy.com', 
-                  taxId: '12345678', 
-                  status: 'active', 
-                  createdAt: '2026-02-10',
-                  walletId: 'W-98765432',
-                  balance: 45000, 
-                  campaigns: [
-                    { campaignId: 'C1001', name: '夏季新品試吃推廣', budget: 50000, rewardType: '現金+公關品', startDate: '2026-06-01', endDate: '2026-06-30', status: 'active' },
-                    { campaignId: 'C1002', name: '秋季隱藏菜單曝光', budget: 80000, rewardType: '現金', startDate: '2026-08-01', endDate: '2026-08-31', status: 'pending' }
-                  ]
-                }} />
-              </ProtectedRoute>
-            } />     
+            <Route
+              path="/vendors/:id"
+              element={
+                <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                  <AdminVendorDetail />
+                </ProtectedRoute>
+              }
+            />     
 
             {/* 🌟 KOC 管理模組 */}
             <Route path="/influencers" element={

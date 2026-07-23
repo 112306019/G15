@@ -1,14 +1,88 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getAdminVendorDetail, reviewAdminVendor} from '../api/platform';
 import { 
   ArrowLeft, FileText, Wallet, ShieldAlert, CheckCircle, 
   AlertTriangle, Building2, Megaphone, Calendar
 } from 'lucide-react';
 
-export default function AdminVendorDetail({ vendor }) {
+export default function AdminVendorDetail() {
   const navigate = useNavigate();
+  const { id } = useParams();
+
+  const [vendor, setVendor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [actionType, setActionType] = useState(''); 
+  const [actionType, setActionType] = useState('');
+
+  useEffect(() => {
+    const fetchVendorDetail = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await getAdminVendorDetail(id);
+        const data = response.data;
+
+        setVendor({
+          id: data.vendor.Vendor_id,
+          companyName: data.vendor.Company_name,
+          contactName: data.vendor.Contact_name,
+          email: data.vendor.Email,
+          taxId: data.vendor.Tax_ID,
+          status: data.vendor.Status,
+
+          createdAt: data.vendor.Created_at
+            ? new Date(data.vendor.Created_at).toLocaleDateString('zh-TW')
+            : '-',
+
+          walletId: data.wallet?.Wallet_id || null,
+          balance: Number(data.wallet?.Balance_available || 0),
+
+          campaigns: (data.campaigns || []).map((campaign) => ({
+            campaignId: campaign.Campaign_id,
+            name: campaign.Name,
+            budget: Number(campaign.Budget || 0),
+            rewardType: campaign.Reward_type,
+
+            startDate: campaign.Start_date
+              ? new Date(campaign.Start_date).toLocaleDateString('zh-TW')
+              : '-',
+
+            endDate: campaign.End_date
+              ? new Date(campaign.End_date).toLocaleDateString('zh-TW')
+              : '-',
+
+            status: campaign.Status,
+          })),
+        });
+      } catch (err) {
+        console.error('取得廠商詳細資料失敗：', err);
+
+        setError(
+          err.response?.data?.err ||
+          '取得廠商詳細資料失敗'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVendorDetail();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-[#8C8880] font-bold">
+          廠商資料載入中...
+        </p>
+      </div>
+    );
+  }
+
 
   if (!vendor) {
     return (
@@ -27,13 +101,58 @@ export default function AdminVendorDetail({ vendor }) {
     setShowConfirmModal(true);
   };
 
-  const executeAction = () => {
-    // 這裡對接 API: POST /admin/vendor/audit
-    setShowConfirmModal(false);
-    setTimeout(() => {
-      alert(`已成功對【${vendor.companyName}】執行操作！系統已記錄操作日誌。`);
+  const executeAction = async () => {
+    const adminId = localStorage.getItem('admin_id');
+
+    if (!adminId) {
+      alert('找不到管理員編號，請重新登入。');
+      return;
+    }
+
+    let reviewStatus = '';
+
+    if (actionType === 'approve') {
+      reviewStatus = 'approved';
+    } else if (actionType === 'reject') {
+      reviewStatus = 'rejected';
+    } else {
+      alert('目前後端只支援核准或拒絕廠商申請。');
+      return;
+    }
+
+    try {
+      const response = await reviewAdminVendor({
+        Admin_id: Number(adminId),
+        Vendor_id: vendor.id,
+        Status: reviewStatus,
+        Action_reason:
+          actionType === 'approve'
+            ? '廠商資料確認無誤'
+            : '廠商申請資料未通過審核',
+      });
+
+      if (!response.data.success) {
+        alert(response.data.err || '審核失敗');
+        return;
+      }
+
+      setShowConfirmModal(false);
+
+      alert(
+        actionType === 'approve'
+          ? `已核准【${vendor.companyName}】的廠商申請。`
+          : `已拒絕【${vendor.companyName}】的廠商申請。`
+      );
+
       navigate('/admin/vendors');
-    }, 300);
+    } catch (error) {
+      console.error('審核廠商失敗：', error);
+
+      alert(
+        error.response?.data?.err ||
+        '審核廠商失敗，請稍後再試。'
+      );
+    }
   };
 
   return (
@@ -89,27 +208,27 @@ export default function AdminVendorDetail({ vendor }) {
                   ID: {vendor.id}
                 </span>
                 <span className={`text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest ${
-                  vendor.status === 'active' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 
-                  vendor.status === 'applying' ? 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30' :
+                  vendor.status === 'approved' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 
+                  vendor.status === 'pending' ? 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30' :
                   'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
                 }`}>
-                  {vendor.status === 'active' ? '🟢 已啟用' : vendor.status === 'applying' ? '⏳ 審核中' : '⚫️ 已停權'}
+                  {vendor.status === 'approved' ? '🟢 已通過' : vendor.status === 'pending' ? '⏳ 待審核' : '⚫️ 已拒絕'}
                 </span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {vendor.status === 'applying' && (
+            {vendor.status === 'pending' && (
               <>
                 <button onClick={() => handleActionClick('approve')} className="px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-sm">核准入駐</button>
                 <button onClick={() => handleActionClick('reject')} className="px-6 py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-sm">退回申請</button>
               </>
             )}
-            {vendor.status === 'active' && (
+            {vendor.status === 'approved' && (
               <button onClick={() => handleActionClick('suspend')} className="px-6 py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-sm">停權帳號</button>
             )}
-            {vendor.status === 'suspended' && (
+            {vendor.status === 'rejected' && (
               <button onClick={() => handleActionClick('reactivate')} className="px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-sm">恢復權限</button>
             )}
           </div>

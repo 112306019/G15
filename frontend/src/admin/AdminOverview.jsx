@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Store, ClipboardList, Wallet, 
   TrendingUp, UserPlus, X, ShieldCheck, History 
 } from 'lucide-react';
+import {
+  getAdminOverview,
+  getAdminPerformance,
+} from '../api/platform';
 
 // 🟢 統一的輸入框元件
 function InputField({ label, ...props }) {
@@ -24,14 +28,76 @@ export default function AdminOverview({ currentRole }) {
   
   // 平台數據狀態 (對應 API: GET /admin/overview)
   const [stats, setStats] = useState({
-    users: 1250,
-    vendors: 86,
-    activeCampaigns: 42,
-    totalRevenue: 325000, 
+    users: 0,
+    vendors: 0,
+    kocMissions: 0,
+    totalRevenue: 0,
   });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ email: '', password: '', role: 'Reviewer' });
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const [
+          overviewResponse,
+          performanceResponse,
+        ] = await Promise.all([
+          getAdminOverview(),
+          getAdminPerformance(),
+        ]);
+
+        const overviewData = overviewResponse.data;
+        const performanceData = performanceResponse.data;
+
+        if (!overviewData.success) {
+          throw new Error(
+            overviewData.err || '取得平台總覽失敗'
+          );
+        }
+
+        if (!performanceData.success) {
+          throw new Error(
+            performanceData.err || '取得成效統計失敗'
+          );
+        }
+
+        const overview = overviewData.overview || {};
+        const summary = performanceData.summary || {};
+
+        setStats({
+          users: Number(overview.User_count || 0),
+          vendors: Number(overview.Vendor_count || 0),
+          kocMissions: Number(
+            overview.KOCMission_count || 0
+          ),
+          totalRevenue: Number(
+            summary.Total_revenue || 0
+          ),
+        });
+      } catch (err) {
+        console.error('取得平台總覽失敗：', err);
+
+        setError(
+          err.response?.data?.err ||
+            err.message ||
+            '取得平台總覽失敗'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverview();
+  }, []);
+
 
   const handleAddAdmin = (e) => {
     e.preventDefault();
@@ -74,6 +140,18 @@ export default function AdminOverview({ currentRole }) {
         </div>
       </div>
 
+      {loading && (
+        <div className="mb-6 bg-white border border-[#E2DDD4] rounded-xl p-4 text-sm font-bold text-[#8C8880]">
+          平台總覽載入中...
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-6 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-4 text-sm font-bold text-[#C8522A]">
+          {error}
+        </div>
+      )}
+
       {/* =========================================
           數據卡片區 
       ========================================== */}
@@ -103,38 +181,56 @@ export default function AdminOverview({ currentRole }) {
         </div>
 
         <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] hover:border-[#B89B6A] transition-all group">
-          <div className="flex justify-between items-start mb-2">
-            <div className="w-12 h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
-              <ClipboardList size={22} />
-            </div>
+        <div className="flex justify-between items-start mb-2">
+          <div className="w-12 h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
+            <ClipboardList size={22} />
           </div>
-          <p className="text-[#8C8880] text-xs font-bold uppercase tracking-widest mt-4">進行中 KOC 任務</p>
-          <h3 className="text-3xl font-black text-[#1A1A18] mt-1">{stats.activeCampaigns}</h3>
         </div>
 
-        {/* 🌟 權限控管：只有 Super Admin 或 Finance 能看到總收益 */}
-        {(currentRole === 'Super Admin' || currentRole === 'Finance') ? (
-          <div className="bg-[#1A1A18] p-6 rounded-[1.5rem] shadow-md border border-[#1A1A18] relative overflow-hidden group">
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B89B6A] rounded-full filter blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity"></div>
-            <div className="flex justify-between items-start mb-2 relative z-10">
-              <div className="w-12 h-12 rounded-full bg-white/10 text-[#F5F0E8] flex items-center justify-center">
-                <Wallet size={22} />
-              </div>
-              <span className="text-[10px] font-bold text-[#1A1A18] bg-[#B89B6A] px-2 py-1 rounded-md">本月結算</span>
-            </div>
-            <p className="text-[#8C8880] text-xs font-bold uppercase tracking-widest mt-4 relative z-10">本月平台總收益 (NT$)</p>
-            <h3 className="text-3xl font-black text-[#F5F0E8] mt-1 relative z-10">
-              ${stats.totalRevenue.toLocaleString()}
-            </h3>
-          </div>
-        ) : (
-          /* 若沒有權限，顯示一個被鎖定的佔位卡片 */
-          <div className="bg-[#F8F9FA] p-6 rounded-[1.5rem] border border-[#E2DDD4] border-dashed flex flex-col items-center justify-center opacity-60">
-             <ShieldCheck size={32} className="text-[#8C8880] mb-2" />
-             <p className="text-sm font-bold text-[#8C8880]">無權限檢視財務數據</p>
-          </div>
-        )}
+        <p className="text-[#8C8880] text-xs font-bold uppercase tracking-widest mt-4">
+          KOC 任務總數
+        </p>
+
+        <h3 className="text-3xl font-black text-[#1A1A18] mt-1">
+          {stats.kocMissions}
+        </h3>
       </div>
+
+      {/* 只有 Super Admin 或 Finance 能看到收益 */}
+      {currentRole === 'Super Admin' || currentRole === 'Finance' ? (
+        <div className="bg-[#1A1A18] p-6 rounded-[1.5rem] shadow-md border border-[#1A1A18] relative overflow-hidden group">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B89B6A] rounded-full filter blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity" />
+
+          <div className="flex justify-between items-start mb-2 relative z-10">
+            <div className="w-12 h-12 rounded-full bg-white/10 text-[#F5F0E8] flex items-center justify-center">
+              <Wallet size={22} />
+            </div>
+
+            <span className="text-[10px] font-bold text-[#1A1A18] bg-[#B89B6A] px-2 py-1 rounded-md">
+              本月結算
+            </span>
+          </div>
+
+          <p className="text-[#8C8880] text-xs font-bold uppercase tracking-widest mt-4 relative z-10">
+            本月平台總收益 (NT$)
+          </p>
+
+          <h3 className="text-3xl font-black text-[#F5F0E8] mt-1 relative z-10">
+            NT$ {stats.totalRevenue.toLocaleString()}
+          </h3>
+        </div>
+      ) : (
+        <div className="bg-[#F8F9FA] p-6 rounded-[1.5rem] border border-[#E2DDD4] border-dashed flex flex-col items-center justify-center opacity-60">
+          <ShieldCheck
+            size={32}
+            className="text-[#8C8880] mb-2"
+          />
+
+          <p className="text-sm font-bold text-[#8C8880]">
+            無權限檢視財務數據
+          </p>
+        </div>
+      )}</div>
 
       {/* =========================================
           下方佈局：圖表 (左) 與 系統動態 (右)
