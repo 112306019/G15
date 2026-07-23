@@ -74,12 +74,12 @@ function formatExpiry(raw) {
 }
 
 export default function CheckoutPage({
-  onPaid, // () => navigate('/orders') 或 setView('orderSuccess')
+  onPaid,
   initialSummary = {
     items: "$20 x 2",
     itemsAmount: 40,
     shippingAmount: 0,
-    couponDiscount: 3.4,
+    couponDiscount: 0,
     pointsDiscount: 7.66,
     currency: "USD",
     total: 68.94,
@@ -87,15 +87,29 @@ export default function CheckoutPage({
 }) {
   const [method, setMethod] = useState("card");
 
-  // Form states (credit card)
-  const [cardNum, setCardNum] = useState("999999999999"); // 你原本有預填
+  const [cardNum, setCardNum] = useState("999999999999");
   const [cardName, setCardName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvc, setCvc] = useState("");
-
   const [saveInfo, setSaveInfo] = useState(true);
 
-  const [submitState, setSubmitState] = useState("idle"); // idle | success
+  const [submitState, setSubmitState] = useState("idle");
+  const [payError, setPayError] = useState("");
+
+  // 優惠碼
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState(false);
+  const [couponDiscount, setCouponDiscount] = useState(initialSummary.couponDiscount || 0);
+  const [couponMsg, setCouponMsg] = useState({ text: "", ok: false, show: false });
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const grandTotal = Math.max(
+    0,
+    initialSummary.itemsAmount +
+    initialSummary.shippingAmount -
+    couponDiscount -
+    initialSummary.pointsDiscount
+  );
 
   const cardNumDigits = useMemo(() => digitsOnly(cardNum), [cardNum]);
   const expiryDigits = useMemo(() => digitsOnly(expiry), [expiry]);
@@ -111,16 +125,143 @@ export default function CheckoutPage({
     "w-full rounded-[10px] border-[1.5px] px-4 py-[13px] pr-11 outline-none transition-colors tracking-[0.05em] font-mono text-[14px]";
   const inputNormal = "bg-white border-[#E2DDD4] focus:border-[#1A1A18]";
   const inputValid = "bg-white border-[#6BBF6B]";
-
   const inputClass = (valid) => `${inputBase} ${valid ? inputValid : inputNormal}`;
 
-  const handlePay = () => {
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponMsg({ text: "", ok: false, show: false });
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/consumer/coupon/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Promotion_code: couponCode.trim() }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        const discountValue = data.Discount_value || 0;
+        setCouponDiscount(discountValue);
+        setCouponApplied(true);
+        setCouponMsg({ text: `✓ 優惠碼已套用，折抵 $${discountValue}`, ok: true, show: true });
+      } else {
+        setCouponApplied(false);
+        setCouponDiscount(0);
+        setCouponMsg({ text: data.err || "優惠碼無效或已過期", ok: false, show: true });
+      }
+    } catch (err) {
+      setCouponMsg({ text: "驗證失敗，請稍後再試", ok: false, show: true });
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode("");
+    setCouponApplied(false);
+    setCouponDiscount(0);
+    setCouponMsg({ text: "", ok: false, show: false });
+  };
+
+  const handlePay = async () => {
     if (!canPay) return;
-    setSubmitState("success");
-    setTimeout(() => {
-      setSubmitState("idle");
-      onPaid?.();
-    }, 2000);
+    setSubmitState("loading");
+    setPayError("");
+
+    const userId = localStorage.getItem("userId");
+    const token = localStorage.getItem("token");
+    const isGuest = !userId;
+
+    // 如果是訪客，先建立 guest record
+    let guestId = null;
+    if (isGuest) {
+      try {
+        const guestRes = await fetch("http://127.0.0.1:8000/api/consumer/guest/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Order_id: null }),
+        });
+        const guestData = await guestRes.json();
+        guestId = guestData.Guest_id;
+      } catch (err) {
+        throw new Error("建立訪客資料失敗");
+      }
+    }
+
+    try {
+      const orderRes = await fetch("http://127.0.0.1:8000/api/consumer/order/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          User_id: isGuest ? null : userId,
+          Guest_id: guestId,
+          total_amount: grandTotal,
+          promotion_code: couponApplied ? couponCode.trim() : null,
+          address_id: initialSummary.addressId || "default",
+        }),
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.err || "建立訂單失敗");
+      const orderId = orderData.Order_id;
+
+      const txRes = await fetch("http://127.0.0.1:8000/api/consumer/transaction/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          wallet_type: "koc",
+          Wallets_id: 1,
+          Type: "pay",
+          Amount: Math.round(grandTotal),
+          Reference_type: "order",
+          Reference_id: orderId,
+        }),
+      });
+      const txData = await txRes.json();
+      if (!txRes.ok) throw new Error(txData.err || "建立交易失敗");
+
+      await fetch("http://127.0.0.1:8000/api/consumer/payment/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          Order_id: orderId,
+          payment_method: method,
+          payment_status: "paid",
+          transaction_id: txData.Transaction_ID,
+        }),
+      });
+
+      await fetch("http://127.0.0.1:8000/api/consumer/payments/result", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          Order_id: orderId,
+          payment_status: "paid",
+        }),
+      });
+
+      setSubmitState("success");
+      setTimeout(() => {
+        setSubmitState("idle");
+        onPaid?.({ orderId });
+      }, 2000);
+    } catch (err) {
+      setSubmitState("error");
+      setPayError(err.message || "付款失敗，請再試一次");
+      setTimeout(() => setSubmitState("idle"), 3000);
+    }
   };
 
   const badgeText = METHODS.find((m) => m.key === method)?.label ?? "信用卡";
@@ -133,7 +274,6 @@ export default function CheckoutPage({
           <h1 className="font-['DM_Serif_Display'] text-[40px] leading-none mb-7">結帳</h1>
           <div className="h-px bg-[#E2DDD4] mb-7" />
 
-          {/* Section title + badge */}
           <div className="flex items-center justify-between mb-5">
             <div className="text-[18px] font-bold">支付方式</div>
             <span className="rounded-full bg-[#1A1A18] px-3.5 py-1 text-[12px] tracking-[0.06em] text-[#F5F0E8] font-mono">
@@ -141,7 +281,6 @@ export default function CheckoutPage({
             </span>
           </div>
 
-          {/* Method tabs */}
           <div className="flex flex-wrap gap-2.5 mb-7">
             {METHODS.map(({ key, label, Icon }) => {
               const active = method === key;
@@ -176,9 +315,7 @@ export default function CheckoutPage({
 
           <p className="font-['DM_Serif_Display'] text-[16px] font-bold mb-6">Credit Card</p>
 
-          {/* Credit card form (仍可顯示，但你也可以改成 method===card 才顯示) */}
           <div className={`${method === "card" ? "" : "opacity-50 pointer-events-none select-none"}`}>
-            {/* Card Number */}
             <div className="mb-5">
               <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">信用卡號</label>
               <div className="relative">
@@ -196,14 +333,13 @@ export default function CheckoutPage({
               </div>
             </div>
 
-            {/* Cardholder */}
             <div className="mb-5">
               <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">持卡人姓名</label>
               <div className="relative">
                 <input
                   value={cardName}
                   onChange={(e) => setCardName(e.target.value)}
-                  placeholder="PHAM TRAN LAN CAM NGOC"
+                  placeholder="CARDHOLDER NAME"
                   className={`${inputClass(cardNameValid)} font-serif tracking-[0.02em]`}
                 />
                 {cardNameValid && (
@@ -214,7 +350,6 @@ export default function CheckoutPage({
               </div>
             </div>
 
-            {/* Expiry + CVC */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
               <div>
                 <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">到期日</label>
@@ -233,7 +368,6 @@ export default function CheckoutPage({
                   )}
                 </div>
               </div>
-
               <div>
                 <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">CVC</label>
                 <div className="relative">
@@ -254,16 +388,12 @@ export default function CheckoutPage({
               </div>
             </div>
 
-            {/* Save info */}
             <button
               type="button"
               onClick={() => setSaveInfo((v) => !v)}
               className="mb-7 inline-flex items-center gap-3"
             >
-              <span
-                className={`h-5 w-5 rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors
-                  ${saveInfo ? "bg-[#1A1A18] border-[#1A1A18]" : "bg-white border-[#E2DDD4]"}`}
-              >
+              <span className={`h-5 w-5 rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors ${saveInfo ? "bg-[#1A1A18] border-[#1A1A18]" : "bg-white border-[#E2DDD4]"}`}>
                 {saveInfo && <CheckIcon className="h-3 w-3 text-white" />}
               </span>
               <span className="text-[14px]">儲存資訊</span>
@@ -274,21 +404,21 @@ export default function CheckoutPage({
           <button
             type="button"
             onClick={handlePay}
-            disabled={!canPay || submitState === "success"}
+            disabled={!canPay || submitState === "success" || submitState === "loading"}
             className={`inline-flex items-center gap-2 rounded-full px-9 py-[15px] text-[16px] tracking-[0.05em] transition-all
-              ${(!canPay || submitState === "success") ? "opacity-80" : "hover:-translate-y-[1px]"}
-              ${submitState === "success" ? "bg-[#6BBF6B] text-[#F5F0E8]" : "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A]"}`}
+              ${(!canPay || submitState === "success" || submitState === "loading") ? "opacity-80" : "hover:-translate-y-[1px]"}
+              ${submitState === "success" ? "bg-[#6BBF6B] text-[#F5F0E8]"
+                : submitState === "error" ? "bg-[#C8522A] text-[#F5F0E8]"
+                  : "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A]"}`}
           >
             {submitState === "success" ? (
-              <>
-                <CheckIcon className="h-[18px] w-[18px]" />
-                付款成功！
-              </>
+              <><CheckIcon className="h-[18px] w-[18px]" />付款成功！</>
+            ) : submitState === "loading" ? (
+              <>處理中...</>
+            ) : submitState === "error" ? (
+              <>{payError || "付款失敗，請再試一次"}</>
             ) : (
-              <>
-                確認並支付
-                <ArrowRightIcon className="h-[18px] w-[18px]" />
-              </>
+              <>確認並支付<ArrowRightIcon className="h-[18px] w-[18px]" /></>
             )}
           </button>
 
@@ -318,12 +448,55 @@ export default function CheckoutPage({
               </div>
               <div className="flex items-center justify-between border-b border-[#E2DDD4] py-2.5">
                 <span>優惠碼折扣</span>
-                <span className="font-mono text-[#6BBF6B]">−${initialSummary.couponDiscount.toFixed(2)}</span>
+                <span className={`font-mono ${couponDiscount > 0 ? "text-[#6BBF6B]" : "text-[#8C8880]"}`}>
+                  {couponDiscount > 0 ? `−$${couponDiscount}` : "$0"}
+                </span>
               </div>
               <div className="flex items-center justify-between py-2.5">
                 <span>點數折抵</span>
                 <span className="font-mono text-[#6BBF6B]">−${initialSummary.pointsDiscount.toFixed(2)}</span>
               </div>
+            </div>
+
+            {/* 優惠碼輸入區 */}
+            <div className="mt-4 border-t border-[#E2DDD4] pt-4">
+              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                輸入優惠碼
+              </label>
+              {couponApplied ? (
+                <div className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-3">
+                  <span className="font-mono text-[13px] font-bold text-[#6BBF6B]">{couponCode}</span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
+                  >
+                    移除
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="輸入優惠碼"
+                    className="flex-1 rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-4 py-2.5 font-mono text-[13px] outline-none focus:border-[#1A1A18] tracking-[0.08em]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={couponLoading || !couponCode.trim()}
+                    className="rounded-[10px] bg-[#1A1A18] px-4 py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {couponLoading ? "驗證中..." : "套用"}
+                  </button>
+                </div>
+              )}
+              {couponMsg.show && (
+                <p className={`mt-2 text-[12px] font-bold ${couponMsg.ok ? "text-[#6BBF6B]" : "text-[#C8522A]"}`}>
+                  {couponMsg.text}
+                </p>
+              )}
             </div>
 
             <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F0E8] px-4 py-3.5">
@@ -332,7 +505,7 @@ export default function CheckoutPage({
                 <span className="ml-1 text-[11px] font-normal text-[#8C8880]">({initialSummary.currency})</span>
               </div>
               <div className="font-mono text-[18px] font-bold text-[#1A1A18]">
-                ${initialSummary.total.toFixed(2)}
+                ${grandTotal.toFixed(2)}
               </div>
             </div>
 

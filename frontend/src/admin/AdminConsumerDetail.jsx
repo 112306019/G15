@@ -1,28 +1,74 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Mail, Phone, Calendar, 
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft, Mail, Phone, Calendar,
   ShoppingBag, AlertTriangle, User, Package, CreditCard
 } from 'lucide-react';
 
-export default function AdminConsumerDetail({ consumer }) {
+export default function AdminConsumerDetail() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const [consumer, setConsumer] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // 如果沒有傳入資料，顯示找不到的狀態
-  if (!consumer) {
+  const token = localStorage.getItem("admin_token");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 拉使用者資料
+        const userRes = await fetch(
+          `http://127.0.0.1:8000/api/platform/consumers?User_id=${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const userData = await userRes.json();
+        if (Array.isArray(userData) && userData.length > 0) {
+          const u = userData[0];
+          setConsumer({
+            id: u.User_id,
+            name: u.Name,
+            email: u.Email,
+            phone: u.Phone,
+            status: "active",
+            createdAt: u.Created_At
+              ? new Date(u.Created_At).toLocaleDateString("zh-TW")
+              : "-",
+          });
+        }
+
+        // 拉訂單資料
+        const orderRes = await fetch(
+          `http://127.0.0.1:8000/api/platform/consumer/orders?User_id=${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const orderData = await orderRes.json();
+        if (Array.isArray(orderData)) {
+          setOrders(orderData.map((o) => ({
+            orderId: o.Order_id,
+            promotionCode: o.Promotion_code,
+            totalAmount: parseFloat(o.total_amount),
+            orderStatus: o.order_status,
+            paymentStatus: o.payment_status,
+            shippingStatus: o.shipping_status,
+            createdAt: o.created_at
+              ? new Date(o.created_at).toLocaleString("zh-TW")
+              : "-",
+          })));
+        }
+      } catch (err) {
+        console.error("載入失敗", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (id) fetchData();
+  }, [id]);
+
+  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in">
-        <div className="w-16 h-16 bg-[#F8F9FA] text-[#8C8880] rounded-full flex items-center justify-center mb-4 border border-[#E2DDD4]">
-          <AlertTriangle size={24} />
-        </div>
-        <p className="text-[#1A1A18] font-bold text-lg mb-2">找不到使用者資料</p>
-        <p className="text-[#8C8880] text-sm mb-6">這筆資料可能已被移除或存取路徑錯誤。</p>
-        <button 
-          onClick={() => navigate('/admin/consumers')} 
-          className="flex items-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-3 rounded-full text-sm font-bold tracking-wider hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
-        >
-          <ArrowLeft size={16} /> 返回使用者列表
-        </button>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-[#8C8880] font-bold">載入中...</p>
       </div>
     );
   }
@@ -88,12 +134,12 @@ export default function AdminConsumerDetail({ consumer }) {
           <div className="bg-[#F8F9FA] rounded-2xl p-6 border border-[#E2DDD4] flex flex-col justify-center items-center text-center">
             <ShoppingBag size={24} className="text-[#1A1A18] mb-2" />
             <span className="text-sm font-bold text-[#8C8880]">累積訂單數</span>
-            <span className="text-2xl font-black text-[#1A1A18] mt-1">{consumer.totalOrders || 0} 筆</span>
+            <span className="text-2xl font-black text-[#1A1A18] mt-1">{orders.length || 0} 筆</span>
           </div>
           <div className="bg-[#F8F9FA] rounded-2xl p-6 border border-[#E2DDD4] flex flex-col justify-center items-center text-center">
             <CreditCard size={24} className="text-[#C8522A] mb-2" />
             <span className="text-sm font-bold text-[#8C8880]">總消費金額</span>
-            <span className="text-2xl font-black text-[#C8522A] mt-1">NT$ {consumer.totalSpent?.toLocaleString() || 0}</span>
+            <span className="text-2xl font-black text-[#C8522A] mt-1">NT$ {orders.reduce((sum, o) => sum + o.totalAmount, 0)?.toLocaleString() || 0}</span>
           </div>
           <div className="bg-[#F8F9FA] rounded-2xl p-6 border border-[#E2DDD4] flex flex-col justify-center items-center text-center">
             <User size={24} className="text-[#B89B6A] mb-2" />
@@ -122,8 +168,8 @@ export default function AdminConsumerDetail({ consumer }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
-                {consumer.orders && consumer.orders.length > 0 ? (
-                  consumer.orders.map((order, idx) => (
+                {orders && orders.length > 0 ? (
+                  orders.map((order, idx) => (
                     <tr key={idx} className="hover:bg-white transition-colors">
                       <td className="px-6 py-4">
                         <div className="font-bold text-[#1A1A18] text-sm">{order.orderId}</div>
