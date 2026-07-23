@@ -29,7 +29,6 @@ import FavoritesPage from './shopping/FavoritesPage';
 import LoginPage from './authentication/LoginPage';
 import ProfilePage from './authentication/ProfilePage';
 import SecurityPage from './authentication/SecurityPage';
-import PointsPage from './authentication/PointsPage';
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin';
 
@@ -250,7 +249,6 @@ function MainSystem() {
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
 
             {view === 'security' && <SecurityPage onLogout={() => { setUserRole('guest'); setCartCount(0); setView('shop'); }} />}
-            {view === 'points' && <PointsPage points={30} expiringPoints={5} />}
             {view === 'coupons' && <CouponsPage />}
             {view === 'orders' && <OrdersPage onTrackOrder={() => handleNavigate('order_detail')} onOpenOrderDetail={() => handleNavigate('order_detail')} />}
             {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} />}
