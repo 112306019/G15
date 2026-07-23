@@ -1,7 +1,17 @@
-import React, { useState } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock } from 'lucide-react'
-import { campaigns as initialCampaigns, products as initialProducts } from './mock'
+import React, { useState, useEffect } from 'react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
+import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
+
+
+// 🟢 取得今天的日期字串 (YYYY-MM-DD)，用於防呆與排程判斷
+const getTodayString = () => new Date().toISOString().slice(0,10)
+
+const isValidUuid = value => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '')
+  )
+}
 
 // 🟢 內建客製化 UI 元件
 function Card({ children, className = "", hoverable, onClick }) {
@@ -11,8 +21,11 @@ function Card({ children, className = "", hoverable, onClick }) {
 function Badge({ status }) {
   const cfg = {
     active: { label: '招募中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
+    // 🌟 新增：排程中的視覺樣式
+    scheduled: { label: '排程中', cls: 'bg-[#F8F9FA] border border-[#E2DDD4] text-[#1A1A18]', dot: 'bg-[#B89B6A]' },
     promo:  { label: '推廣中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
-    closed: { label: '已結案 (已下架)', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+    closed: { label: '已結案 (已失效)', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+    draft:  { label: '草稿', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#8C8880]' },
   }[status] || { label: status, cls: 'bg-gray-100 text-gray-500', dot: 'bg-gray-500' }
   
   return (
@@ -25,7 +38,7 @@ function Badge({ status }) {
 function Button({ variant = 'default', className, disabled, children, ...props }) {
   const variants = {
     brand: 'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] shadow-sm',
-    outline: 'border border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18]',
+    outline: 'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F8F9FA]',
     ghost: 'text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA]',
     default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
   }
@@ -38,9 +51,9 @@ function Button({ variant = 'default', className, disabled, children, ...props }
 
 function Input({ label, ...props }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 w-full">
       <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">{label}</label>
-      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50" {...props} />
+      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50 disabled:opacity-60 disabled:cursor-not-allowed" {...props} />
     </div>
   )
 }
@@ -58,14 +71,13 @@ function ProgressBar({ value }) {
   )
 }
 
-// 🟢 修正後的共用 Modal 結構 (支援內部滾動與自訂標題列)
+// 🟢 共用 Modal 結構
 function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="absolute inset-0 bg-[#1A1A18]/60 backdrop-blur-sm" onClick={onClose} />
       <div className={cn("relative w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-[#E2DDD4] animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]", maxWidth)}>
-        {/* 如果有傳入 title，才渲染預設標題列 */}
         {title && (
           <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] flex justify-between items-center shrink-0">
             <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">{title}</h2>
@@ -81,55 +93,214 @@ function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
 const STEPS = ['任務與時程', '推廣商品', '分潤與折扣', '確認發佈']
 
 // ─── 發佈任務精靈 ────────────────────────────────────────────────────────
-function CampaignWizard({ open, onClose, onComplete }) {
+function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts }) {
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
+  const [isSaving, setIsSaving] = useState(false)
   
-  const [form, setForm] = useState({ 
-    name: '', budget: '', recruitEndDate: '', promoDays: '7', 
-    prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦',
-    kocDiscount: ''
-  })
+  // 🌟 修改：加入 startDate，作為排程發佈日期
+  const defaultForm = {
+    id: '', name: '', description: '', budget: '',
+    startDate: getTodayString(), recruitEndDate: '', promoDays: '7',
+    prodId: '', prodName: '', prodDescription: '', prodPrice: '', prodDiscountedPrice: '',
+    prodStock: '', prodCategory: '', prodImageUrl: '', thumbnail: '📦',
+    kocDiscount: '', status: 'draft', spent: 0, kocCount: 0, orders: 0, gmv: 0
+  }
+  const [form, setForm] = useState(defaultForm)
   
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setForm(initialData)
+        setProdMode(initialData.prodId ? 'existing' : (initialData.prodName ? 'new' : 'existing'))
+      } else {
+        setForm(defaultForm)
+        setProdMode('existing')
+      }
+      setStep(0)
+    }
+  }, [open, initialData])
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const existingProducts = [
-    { id: 'p1', name: '極致保濕修護精華', price: 1200, stock: 50, thumbnail: '✨' },
-    { id: 'p2', name: '夏季控油防曬乳 SPF50+', price: 850, stock: 120, thumbnail: '🌞' },
-  ]
+  const handleSelectProduct = event => {
+    const selected = existingProducts.find(
+      product =>
+        String(product.product_id) === event.target.value
+    )
 
-  const handleSelectProduct = (e) => {
-    const selected = existingProducts.find(p => p.id === e.target.value)
-    if (selected) {
-      setForm(f => ({ ...f, prodId: selected.id, prodName: selected.name, prodPrice: selected.price, prodStock: selected.stock, thumbnail: selected.thumbnail }))
-    } else {
-      setForm(f => ({ ...f, prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦' }))
+    if (!selected) {
+      setForm(previous => ({
+        ...previous,
+        prodId: '',
+        prodName: '',
+        prodDescription: '',
+        prodPrice: '',
+        prodDiscountedPrice: '',
+        prodStock: '',
+        prodCategory: '',
+        prodImageUrl: '',
+        thumbnail: '📦'
+      }))
+
+      return
+    }
+
+    setForm(previous => ({
+      ...previous,
+      prodId: selected.product_id,
+      prodName: selected.product_name,
+      prodDescription: selected.description || '',
+      prodPrice: selected.price,
+      prodDiscountedPrice:
+        selected.discounted_price ?? '',
+      prodStock: selected.stock,
+      prodCategory: selected.category || '',
+      prodImageUrl: selected.image_url || '',
+      thumbnail: selected.image_url || '📦'
+    }))
+  }
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true)
+
+    try {
+      const payload = buildPayload('draft')
+
+      let response
+
+      if (isValidUuid(form.id)) {
+        // 已存在的草稿：更新原本資料
+        response = await updateVendorCampaign({
+          ...payload,
+          campaign_id: form.id
+        })
+      } else {
+        // 第一次儲存：建立新草稿
+        response = await createVendorCampaign(payload)
+      }
+
+      const savedCampaignId =
+        response.data?.campaign_id ||
+        response.campaign_id ||
+        form.id
+
+      const savedProductId =
+        response.data?.product_id ||
+        response.product_id ||
+        form.prodId
+
+      onComplete({
+        ...form,
+        id: savedCampaignId,
+        prodId: savedProductId,
+        status: 'draft',
+        spent: form.spent || 0,
+        kocCount: form.kocCount || 0,
+        orders: form.orders || 0,
+        gmv: form.gmv || 0
+      })
+
+      onClose()
+    } catch (error) {
+      alert(
+        error.response?.data?.err
+          ? JSON.stringify(error.response.data.err)
+          : error.message || '儲存草稿失敗'
+      )
+    } finally {
+      setIsSaving(false)
     }
   }
+
   
-  function finish() { 
-    onComplete({ 
-      ...form, 
-      id: `c${Date.now()}`, 
-      status: 'active', 
-      spent: 0, kocCount: 0, orders: 0, gmv: 0,
-      startDate: new Date().toISOString().slice(0,10),
-      endDate: form.recruitEndDate || '待定'
-    })
-    setStep(0); setProdMode('existing');
-    setForm({ name: '', budget: '', recruitEndDate: '', promoDays: '7', prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦', kocDiscount: '' })
-    onClose() 
+  const finish = async () => {
+    try {
+      setIsSaving(true)
+
+      const payload = buildPayload('active')
+
+      let response
+
+      if (isValidUuid(form.id)) {
+        response = await updateVendorCampaign({
+          ...payload,
+          campaign_id: form.id
+        })
+      } else {
+        response = await createVendorCampaign(payload)
+      }
+
+      onComplete({
+        ...form,
+        id: response.data.campaign_id,
+        prodId:
+          response.data.product_id || form.prodId,
+        status: 'active',
+        spent: form.spent || 0,
+        kocCount: form.kocCount || 0,
+        orders: form.orders || 0,
+        gmv: form.gmv || 0
+      })
+
+      onClose()
+    } catch (error) {
+      alert(
+        error.response?.data?.err
+          ? JSON.stringify(error.response.data.err)
+          : error.message || '任務發佈失敗'
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+    const buildPayload = campaignStatus => {
+    const basePayload = {
+      vendor_id: localStorage.getItem('vendor_id'),
+      name: form.name.trim(),
+      description: form.description.trim(),
+      budget: Number(form.budget),
+      reward_type: 'commission',
+      discount_percent: Number(form.kocDiscount),
+      promo_days: Number(form.promoDays),
+      start_date: form.startDate,
+      end_date: form.recruitEndDate,
+      status: campaignStatus
+    }
+
+    if (prodMode === 'existing') {
+      return {
+        ...basePayload,
+        product_id: Number(form.prodId)
+      }
+    }
+
+    return {
+      ...basePayload,
+      product: {
+        product_name: form.prodName.trim(),
+        description: form.prodDescription.trim(),
+        price: Number(form.prodPrice),
+        discounted_price:
+          form.prodDiscountedPrice === ''
+            ? null
+            : Number(form.prodDiscountedPrice),
+        stock: Number(form.prodStock),
+        category: form.prodCategory.trim(),
+        image_url: form.prodImageUrl.trim()
+      }
+    }
   }
 
   if (!open) return null
   return (
-    // 移除 Modal 預設 title，並將 maxWidth 加寬至 xl
     <Modal open={open} onClose={onClose} maxWidth="max-w-xl">
-      
-      {/* 🌟 客製化 Header：將標題與步驟條完美融合 */}
       <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] shrink-0">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">發佈 KOC 專屬任務</h2>
+          <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">
+            {initialData && initialData.status === 'draft' ? '編輯任務草稿' : '發佈 KOC 專屬任務'}
+          </h2>
           <button onClick={onClose} className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] transition-colors"><X size={18}/></button>
         </div>
         <div className="flex items-center gap-1">
@@ -146,20 +317,43 @@ function CampaignWizard({ open, onClose, onComplete }) {
         </div>
       </div>
 
-      {/* 步驟內容區 (支援內部滾動) */}
       <div className="px-8 py-6 overflow-y-auto flex-1 space-y-5">
         
         {step === 0 && <>
           <Input label="任務名稱 *" value={form.name} onChange={set('name')} placeholder="例：夏季防曬大作戰" />
           <Input label="總預算 (NT$) *" type="number" value={form.budget} onChange={set('budget')} placeholder="50000" />
+          
+          {/* 🌟 修改：排程發佈日期與截止日期 */}
           <div className="grid grid-cols-2 gap-4">
-            <Input label="接案截止日期 *" type="date" value={form.recruitEndDate} onChange={set('recruitEndDate')} />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">接案後推廣天數 *</label>
-              <select value={form.promoDays} onChange={set('promoDays')} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
-                {[...Array(8).keys()].map(d => <option key={d} value={d}>{d} 天 (自動下架)</option>)}
-              </select>
-            </div>
+            <Input 
+              label="排程發佈日期 *" 
+              type="date" 
+              value={form.startDate} 
+              onChange={set('startDate')} 
+              min={getTodayString()} // 防呆：不能選過去的時間
+            />
+            <Input 
+              label="申請截止日期 *" 
+              type="date" 
+              value={form.recruitEndDate} 
+              onChange={set('recruitEndDate')} 
+              min={form.startDate || getTodayString()} // 防呆：截止日不能早於發佈日
+              disabled={!form.startDate} // 防呆：必須先選發佈日
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-2">
+            <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">優惠碼有效天數 (接案截止後) *</label>
+            <select 
+              value={form.promoDays} 
+              onChange={set('promoDays')} 
+              className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none"
+            >
+              {[1, 2, 3, 4, 5, 6, 7].map(d => (
+                <option key={d} value={d}>{d} 天 (到期自動失效)</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-[#8C8880] mt-0.5 ml-1">接案任務截止後，消費者仍可使用該折扣碼下單的天數</p>
           </div>
         </>}
 
@@ -174,7 +368,16 @@ function CampaignWizard({ open, onClose, onComplete }) {
               <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">從商品庫選擇 *</label>
               <select value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
                 <option value="">請選擇要推廣的商品...</option>
-                {existingProducts.map(p => <option key={p.id} value={p.id}>{p.name} (庫存: {p.stock})</option>)}
+                {existingProducts.map(product => (
+                  <option
+                    key={product.product_id}
+                    value={product.product_id}
+                  >
+                    {product.product_name}
+                    {' '}
+                    （庫存：{product.stock}）
+                  </option>
+                ))}
               </select>
               
               {form.prodName && (
@@ -217,19 +420,35 @@ function CampaignWizard({ open, onClose, onComplete }) {
         {step === 3 && (
           <div className="space-y-4">
             <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-5">
-              <h4 className="text-xs font-black text-[#C8522A] uppercase tracking-wider mb-3 flex items-center gap-2"><Calendar size={14}/> 任務生命週期</h4>
-              <div className="space-y-3 relative before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-[#C8522A]/20">
+              <h4 className="text-xs font-black text-[#C8522A] uppercase tracking-wider mb-3 flex items-center gap-2"><Calendar size={14}/> 任務週期預覽</h4>
+              <div className="space-y-4 relative before:absolute before:inset-y-2 before:left-[7px] before:w-0.5 before:bg-[#C8522A]/20">
+                
+                {/* 🌟 修改：根據設定的開始日期顯示動態文字 */}
+                <div className="flex items-start gap-3 relative z-10">
+                  <div className={cn("w-4 h-4 rounded-full border-4 border-[#FDF0ED] shrink-0 mt-0.5", form.startDate > getTodayString() ? "bg-[#B89B6A]" : "bg-[#C8522A]")} />
+                  <div>
+                    <div className="text-sm font-bold text-[#1A1A18] flex items-center gap-2">
+                      {form.startDate === getTodayString() ? '今日起' : form.startDate}
+                      {form.startDate > getTodayString() && <span className="bg-[#F5F0E8] text-[#1A1A18] px-1.5 py-0.5 rounded text-[10px]"><Timer size={10} className="inline mr-1 mb-0.5"/>排程</span>}
+                    </div>
+                    <div className="text-xs text-[#8C8880]">任務上架，開放 KOC 申請接案</div>
+                  </div>
+                </div>
+                
                 <div className="flex items-start gap-3 relative z-10">
                   <div className="w-4 h-4 rounded-full bg-[#C8522A] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-bold text-[#1A1A18]">今日起</div><div className="text-xs text-[#8C8880]">開放 KOC 申請接案</div></div>
+                  <div>
+                    <div className="text-sm font-bold text-[#1A1A18]">{form.recruitEndDate || '未設定'}</div>
+                    <div className="text-xs text-[#8C8880]">停止接案申請，優惠碼進入 {form.promoDays} 天最後效期</div>
+                  </div>
                 </div>
-                <div className="flex items-start gap-3 relative z-10">
-                  <div className="w-4 h-4 rounded-full bg-[#C8522A] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-bold text-[#1A1A18]">{form.recruitEndDate || '未設定'}</div><div className="text-xs text-[#8C8880]">停止招募，開始 {form.promoDays} 天推廣期</div></div>
-                </div>
+                
                 <div className="flex items-start gap-3 relative z-10">
                   <div className="w-4 h-4 rounded-full bg-[#1A1A18] border-4 border-[#FDF0ED] shrink-0 mt-0.5" />
-                  <div><div className="text-sm font-black text-[#1A1A18]">推廣期結束後</div><div className="text-xs font-bold text-[#C8522A]">商品退回草稿狀態，優惠碼失效</div></div>
+                  <div>
+                    <div className="text-sm font-black text-[#1A1A18]">優惠效期結束</div>
+                    <div className="text-xs font-bold text-[#C8522A]">任務關閉，商品下架，專屬優惠碼正式失效</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -237,37 +456,337 @@ function CampaignWizard({ open, onClose, onComplete }) {
         )}
       </div>
 
-      {/* Footer 區塊固定在底部 */}
-      <div className="px-8 py-5 border-t border-[#E2DDD4] flex gap-4 bg-[#F8F9FA] shrink-0">
+      <div className="px-8 py-5 border-t border-[#E2DDD4] flex justify-between bg-[#F8F9FA] shrink-0">
         <Button variant="ghost" onClick={() => step > 0 ? setStep(s=>s-1) : onClose()} className="gap-1.5 px-6">
           <ChevronLeft size={14}/>{step === 0 ? '取消' : '上一步'}
         </Button>
-        <div className="flex-1"/>
-        {step < STEPS.length-1
-          ? <Button variant="brand" onClick={() => setStep(s=>s+1)} disabled={step === 1 && !form.prodName} className="gap-1.5 px-8">下一步<ChevronRight size={14}/></Button>
-          : <Button variant="brand" onClick={finish} className="gap-2 px-8"><Plus size={14}/>確認發佈任務</Button>
-        }
+        
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={handleSaveDraft} 
+            disabled={isSaving || !form.name} 
+            className="gap-2 px-6"
+          >
+            {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
+            {isSaving ? '儲存中...' : '儲存草稿'}
+          </Button>
+
+          {step < STEPS.length-1
+            ? <Button 
+                variant="brand" 
+                onClick={() => setStep(s=>s+1)} 
+                // 🌟 修改：補上完整的防呆，第一關一定要有名字跟日期才能下一步
+                disabled={(step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) || (step === 1 && !form.prodName) || isSaving} 
+                className="gap-1.5 px-8"
+              >
+                下一步<ChevronRight size={14}/>
+              </Button>
+            : <Button 
+                variant="brand" 
+                onClick={finish} 
+                disabled={isSaving || !form.name} 
+                className="gap-2 px-8"
+              >
+                <Plus size={14}/>確認發佈任務
+              </Button>
+          }
+        </div>
       </div>
     </Modal>
   )
 }
 
-// ─── 假資料：KOC 申請名單 ──────────────────────────────────────────────────
-const mockKocList = [
-  { id: 1, name: '林小美', handle: '@xiaomei_beauty', platform: 'Instagram', followers: '45K', status: 'approved', orders: 12, gmv: 14400, avatar: '👩🏻' },
-  { id: 2, name: '陳大頭', handle: '@bighead_chen', platform: 'TikTok', followers: '120K', status: 'pending', orders: 0, gmv: 0, avatar: '👦🏽' },
-  { id: 3, name: 'Alice Wu', handle: '@alice_wuwu', platform: 'Instagram', followers: '88K', status: 'approved', orders: 35, gmv: 42000, avatar: '👱🏻‍♀️' },
-]
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Campaigns() {
-  const [items, setItems] = useState(initialCampaigns)
+  const [kocList, setKocList] = useState([])
+  const [kocLoading, setKocLoading] = useState(false)
+  const [kocError, setKocError] = useState('')
+  const vendorId = localStorage.getItem('vendor_id')
+  const [existingProducts, setExistingProducts] = useState([])
+  const [productLoading, setProductLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [items, setItems] = useState([])
+  const [campaignLoading, setCampaignLoading] = useState(true)
   const [wizardOpen, setWizardOpen] = useState(false)
-  
+  const [editingDraft, setEditingDraft] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const [showKocList, setShowKocList] = useState(false)
+  const [reviewingApplicationId, setReviewingApplicationId] = useState(null)
 
-  const handleCreate = (newTask) => setItems(prev => [newTask, ...prev])
+  const handleCreateOrUpdate = (taskData) => {
+    setItems(prev => {
+      const isExisting = prev.find(t => t.id === taskData.id)
+      if (isExisting) {
+        return prev.map(t => t.id === taskData.id ? taskData : t)
+      } else {
+        return [taskData, ...prev]
+      }
+    })
+  }
+  const handleDeleteDraft = async campaign => {
+    const confirmed = window.confirm(
+      `確定要刪除草稿「${campaign.name || '未命名任務'}」嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      await deleteVendorCampaign({
+        vendor_id: vendorId,
+        campaign_id: campaign.id
+      })
+
+      setItems(previous =>
+        previous.filter(item => item.id !== campaign.id)
+      )
+    } catch (error) {
+      alert(
+        error.response?.data?.err ||
+        error.message ||
+        '刪除草稿失敗'
+      )
+    }
+  }
+
+  const handleOpenWizard = () => {
+    setEditingDraft(null)
+    setWizardOpen(true)
+  }
+
+  const handleCardClick = (c) => {
+    if (c.status === 'draft') {
+      setEditingDraft(c)
+      setWizardOpen(true)
+    } else {
+      setSelectedTask(c)
+    }
+  }
+
+  const loadKocApplications = async campaign => {
+    if (!vendorId || !campaign?.id) return
+
+    try {
+      setKocLoading(true)
+      setKocError('')
+
+      const response = await getVendorApplications(
+        vendorId,
+        campaign.id
+      )
+
+      setKocList(
+        (response.data.applications || []).map(application => ({
+          id: application.application_id,
+          applicationId: application.application_id,
+          kocId: application.koc_id,
+          name:
+            application.koc_name ||
+            application.koc_id ||
+            '未命名 KOC',
+          campaignId: application.campaign_id,
+          campaignName: application.campaign_name,
+          status: application.status,
+          orderId: application.order_id,
+
+          handle: application.koc_id,
+          platform: '尚未提供',
+          followers: '—',
+          orders: 0,
+          gmv: 0,
+          avatar: '👤'
+        }))
+      )
+    } catch (error) {
+      setKocList([])
+
+      setKocError(
+        error.response?.data?.err ||
+        error.message ||
+        'KOC 報名名單載入失敗'
+      )
+    } finally {
+      setKocLoading(false)
+    }
+  }
+
+  const handleReviewApplication = async (
+    application,
+    reviewStatus
+  ) => {
+    const actionText =
+      reviewStatus === 'approved'
+        ? '通過'
+        : '拒絕'
+
+    const confirmed = window.confirm(
+      `確定要${actionText} KOC「${application.name}」的申請嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setReviewingApplicationId(
+        application.applicationId
+      )
+      setKocError('')
+
+      const response = await reviewVendorApplication({
+        vendor_id: vendorId,
+        application_id: application.applicationId,
+        status: reviewStatus
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(
+          response.data.err || '審核失敗'
+        )
+      }
+
+      setKocList(previous =>
+        previous.map(item =>
+          item.applicationId === application.applicationId
+            ? {
+                ...item,
+                status: reviewStatus,
+                promotionCode:
+                  response.data.promotion_code || null,
+                kocmissionId:
+                  response.data.kocmission_id || null
+              }
+            : item
+        )
+      )
+
+      alert(
+        reviewStatus === 'approved'
+          ? '申請已通過，已建立任務與未啟用優惠碼'
+          : '申請已拒絕'
+      )
+    } catch (error) {
+      console.error('審核 KOC 申請失敗：', error)
+
+      const apiError = error.response?.data?.err
+
+      setKocError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message || '審核失敗'
+      )
+    } finally {
+      setReviewingApplicationId(null)
+    }
+  }
+  
+  
+  function mapCampaignFromApi(campaign) {
+    const product = campaign.products?.[0] || {}
+
+    return {
+      id: campaign.campaign_id,
+      name: campaign.name,
+      description: campaign.description || '',
+      budget: Number(campaign.budget || 0),
+
+      startDate: campaign.start_date || '',
+      recruitEndDate: campaign.end_date || '',
+      endDate: campaign.end_date || '',
+
+      promoDays: String(campaign.promo_days || 7),
+      kocDiscount: String(campaign.discount_percent || 0),
+
+      prodId: product.product_id || '',
+      prodName: product.product_name || '',
+      prodDescription: product.description || '',
+      prodPrice: product.price || '',
+      prodDiscountedPrice: product.discounted_price ?? '',
+      prodStock: product.stock ?? '',
+      prodCategory: product.category || '',
+      prodImageUrl: product.image_url || '',
+      thumbnail: product.image_url || '📦',
+
+      status: campaign.status || 'draft',
+      spent: 0,
+      kocCount: 0,
+      orders: 0,
+      gmv: 0
+    }
+  }
+
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      if (!vendorId) {
+        setError('尚未登入廠商帳號')
+        setCampaignLoading(false)
+        return
+      }
+
+      try {
+        setCampaignLoading(true)
+        setError('')
+
+        const response = await getVendorCampaigns(vendorId)
+
+        setItems(
+          (response.data.campaigns || []).map(mapCampaignFromApi)
+        )
+      } catch (error) {
+        setError(
+          error.response?.data?.err ||
+          error.message ||
+          '任務資料載入失敗'
+        )
+      } finally {
+        setCampaignLoading(false)
+      }
+    }
+
+    loadCampaigns()
+  }, [vendorId])
+
+  useEffect(() => {
+      async function loadProducts() {
+        if (!vendorId) {
+          setError('尚未登入廠商帳號')
+          setProductLoading(false)
+          return
+        }
+
+        try {
+          setProductLoading(true)
+          setError('')
+
+          const response = await getVendorProducts(vendorId)
+
+          setExistingProducts(
+            response.data.products || []
+          )
+        } catch (error) {
+          setError(
+            error.response?.data?.err ||
+            error.message ||
+            '商品資料載入失敗'
+          )
+        } finally {
+          setProductLoading(false)
+        }
+      }
+
+      loadProducts()
+    }, [vendorId])
+
+  
+  if (campaignLoading) {
+    return (
+      <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
+        任務資料載入中...
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -277,7 +796,7 @@ export default function Campaigns() {
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           任務與商品總覽
         </h2>
-        <Button variant="brand" onClick={() => setWizardOpen(true)} className="gap-2 px-6">
+        <Button variant="brand" onClick={handleOpenWizard} className="gap-2 px-6">
           <Plus size={16} /> 發佈 KOC 任務
         </Button>
       </div>
@@ -285,30 +804,55 @@ export default function Campaigns() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {items.map(c => {
           const pct = budgetUsedPct(c.spent, c.budget)
+          
+          // 🌟 核心邏輯：判斷目前任務的真實狀態 (是否為排程中)
+          let displayStatus = c.status;
+          if (c.status === 'active' && c.startDate > getTodayString()) {
+            displayStatus = 'scheduled';
+          }
+
           return (
-            <Card key={c.id} hoverable onClick={() => setSelectedTask(c)} className="p-8 flex flex-col gap-6">
+            <Card key={c.id} hoverable onClick={() => handleCardClick(c)} className="p-8 flex flex-col gap-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-bold text-lg text-[#1A1A18] mb-1">{c.name}</h3>
+                  <h3 className={cn("font-bold text-lg mb-1", c.status === 'draft' ? "text-[#8C8880]" : "text-[#1A1A18]")}>
+                    {c.name || '未命名任務'}
+                  </h3>
                   <div className="text-xs font-bold text-[#8C8880] flex items-center gap-2">
-                    <Package size={14} /> 綁定：{c.prodName || '預設活動商品'}
+                    <Package size={14} /> 綁定：{c.prodName || '尚未選擇商品'}
                   </div>
                 </div>
-                <Badge status={c.status || 'active'} />
+                <div className="flex items-center gap-2">
+                  <Badge status={displayStatus} />
+
+                  {c.status === 'draft' && (
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation()
+                        handleDeleteDraft(c)
+                      }}
+                      className="p-2 rounded-full text-[#8C8880] hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="刪除草稿"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-3 gap-4 text-center opacity-90">
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">GMV</div>
-                  <div className="font-black text-sm text-[#1A1A18]">{formatCurrency(c.gmv)}</div>
+                  <div className="font-black text-sm text-[#1A1A18]">{c.status === 'draft' ? '—' : formatCurrency(c.gmv)}</div>
                 </div>
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">訂單</div>
-                  <div className="font-black text-sm text-[#1A1A18]">{c.orders}</div>
+                  <div className="font-black text-sm text-[#1A1A18]">{c.status === 'draft' ? '—' : c.orders}</div>
                 </div>
                 <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4">
                   <div className="text-[11px] font-bold text-[#8C8880] mb-1.5 uppercase tracking-widest">進度</div>
-                  <div className="font-black text-sm text-[#C8522A]">{pct}%</div>
+                  <div className="font-black text-sm text-[#C8522A]">{c.status === 'draft' ? '—' : `${pct}%`}</div>
                 </div>
               </div>
             </Card>
@@ -316,20 +860,36 @@ export default function Campaigns() {
         })}
       </div>
 
-      <CampaignWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={handleCreate} />
+      <CampaignWizard
+        open={wizardOpen}
+        onClose={() => {
+          setWizardOpen(false)
+          setEditingDraft(null)
+        }}
+        onComplete={handleCreateOrUpdate}
+        initialData={editingDraft}
+        existingProducts={existingProducts}
+      />
 
       {/* 任務詳細資料 Modal */}
       {selectedTask && !showKocList && (
         <Modal open={!!selectedTask} onClose={() => setSelectedTask(null)} title="任務詳細資訊" maxWidth="max-w-2xl">
           <div className="px-8 py-6 space-y-6 overflow-y-auto flex-1">
+            
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-black text-[#1A1A18] mb-2">{selectedTask.name}</h3>
-                <div className="flex items-center gap-3 text-xs font-bold text-[#8C8880]">
-                   <span className="flex items-center gap-1.5"><Calendar size={14}/> {selectedTask.startDate} ~ {selectedTask.endDate}</span>
+                <h3 className="text-xl font-black text-[#1A1A18] mb-3">{selectedTask.name}</h3>
+                
+                <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+                   <span className="flex items-center gap-1.5 bg-[#F8F9FA] text-[#8C8880] px-3 py-1.5 rounded-lg border border-[#E2DDD4]">
+                     <Calendar size={14}/> 招募期間：{selectedTask.startDate} ~ {selectedTask.endDate}
+                   </span>
+                   <span className="flex items-center gap-1.5 bg-[#FDF0ED] text-[#C8522A] px-3 py-1.5 rounded-lg border border-[#C8522A]/20">
+                     <Clock size={14}/> 截止後優惠碼展延：{selectedTask.promoDays || 7} 天
+                   </span>
                 </div>
               </div>
-              <Badge status={selectedTask.status || 'active'} />
+              <Badge status={selectedTask.status === 'active' && selectedTask.startDate > getTodayString() ? 'scheduled' : selectedTask.status || 'active'} />
             </div>
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-5">
@@ -356,8 +916,15 @@ export default function Campaigns() {
               <div className="border border-[#E2DDD4] rounded-2xl p-5">
                 <div className="text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2">已參與 KOC</div>
                 <div className="text-2xl font-black text-[#1A1A18] mb-2">{selectedTask.kocCount || 0} <span className="text-sm text-[#8C8880]">人</span></div>
-                <button onClick={() => setShowKocList(true)} className="text-xs font-bold text-[#C8522A] hover:underline flex items-center gap-1 transition-all">
-                  查看完整名單 <ArrowRight size={12}/>
+                <button
+                  onClick={async () => {
+                    await loadKocApplications(selectedTask)
+                    setShowKocList(true)
+                  }}
+                  className="text-xs font-bold text-[#C8522A] hover:underline flex items-center gap-1 transition-all"
+                >
+                  查看完整名單
+                  <ArrowRight size={12} />
                 </button>
               </div>
             </div>
@@ -375,39 +942,146 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '帶來訂單', '創造 GMV'].map(h => (
+                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '帶來訂單', '創造 GMV', '審核'].map(h => (
                     <th key={h} className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
-                {mockKocList.map(koc => (
-                  <tr key={koc.id} className="hover:bg-[#F8F9FA] transition-colors">
-                    <td className="p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#F5F0E8] border border-[#E2DDD4] rounded-full flex items-center justify-center text-lg">{koc.avatar}</div>
-                        <div>
-                          <div className="text-sm font-bold text-[#1A1A18]">{koc.name}</div>
-                          <div className="text-[11px] font-bold text-[#8C8880]">{koc.handle}</div>
-                        </div>
-                      </div>
+                {kocLoading ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-[#8C8880]"
+                    >
+                      KOC 報名名單載入中...
                     </td>
-                    <td className="p-5">
-                      <div className="flex items-center gap-1.5 text-sm font-bold text-[#1A1A18]">
-                        <Instagram size={14} className="text-[#C8522A]"/> {koc.platform}
-                      </div>
-                      <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">{koc.followers} 粉絲</div>
-                    </td>
-                    <td className="p-5">
-                      {koc.status === 'approved' 
-                        ? <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F5F0E8] text-[#1A1A18] text-[11px] font-bold"><CheckCircle2 size={12}/> 合作中</span>
-                        : <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF0ED] text-[#C8522A] text-[11px] font-bold"><Clock size={12}/> 待審核</span>
-                      }
-                    </td>
-                    <td className="p-5 text-sm font-black text-[#1A1A18]">{koc.orders}</td>
-                    <td className="p-5 text-sm font-black text-[#C8522A]">{formatCurrency(koc.gmv)}</td>
                   </tr>
-                ))}
+                ) : kocError ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-red-600"
+                    >
+                      {kocError}
+                    </td>
+                  </tr>
+                ) : kocList.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-[#8C8880]"
+                    >
+                      目前尚無 KOC 報名
+                    </td>
+                  </tr>
+                ) : (
+                  kocList.map(koc => (
+                    <tr
+                      key={koc.id}
+                      className="hover:bg-[#F8F9FA] transition-colors"
+                    >
+                      <td className="p-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#F5F0E8] border border-[#E2DDD4] rounded-full flex items-center justify-center text-lg">
+                            {koc.avatar}
+                          </div>
+
+                          <div>
+                            <div className="text-sm font-bold text-[#1A1A18]">
+                              {koc.name}
+                            </div>
+
+                            <div className="text-[11px] font-bold text-[#8C8880]">
+                              {koc.kocId}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="text-sm font-bold text-[#1A1A18]">
+                          {koc.platform}
+                        </div>
+
+                        <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">
+                          {koc.followers}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold',
+                            koc.status === 'approved'
+                              ? 'bg-green-50 text-green-700'
+                              : koc.status === 'rejected'
+                                ? 'bg-red-50 text-red-600'
+                                : 'bg-[#FDF0ED] text-[#C8522A]'
+                          )}
+                        >
+                          {{
+                            pending: '待審核',
+                            approved: '已通過',
+                            rejected: '已拒絕'
+                          }[koc.status] || koc.status}
+                        </span>
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                        {koc.orders}
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#C8522A]">
+                        {formatCurrency(koc.gmv)}
+                      </td>
+
+                      <td className="p-5">
+                        {koc.status === 'pending' ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={
+                                reviewingApplicationId ===
+                                koc.applicationId
+                              }
+                              onClick={() =>
+                                handleReviewApplication(
+                                  koc,
+                                  'approved'
+                                )
+                              }
+                              className="px-3 py-1.5 rounded-full bg-[#1A1A18] text-white text-xs font-bold hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              通過
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                reviewingApplicationId ===
+                                koc.applicationId
+                              }
+                              onClick={() =>
+                                handleReviewApplication(
+                                  koc,
+                                  'rejected'
+                                )
+                              }
+                              className="px-3 py-1.5 rounded-full border border-[#E2DDD4] bg-white text-[#8C8880] text-xs font-bold hover:text-red-600 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              拒絕
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-bold text-[#8C8880]">
+                            已完成審核
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
