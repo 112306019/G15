@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Loader2, Timer } from 'lucide-react'
-import { campaigns as initialCampaigns, products as initialProducts } from './mock'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
+import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
+
 
 // 🟢 取得今天的日期字串 (YYYY-MM-DD)，用於防呆與排程判斷
 const getTodayString = () => new Date().toISOString().slice(0,10)
+
+const isValidUuid = value => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '')
+  )
+}
 
 // 🟢 內建客製化 UI 元件
 function Card({ children, className = "", hoverable, onClick }) {
@@ -86,15 +93,18 @@ function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
 const STEPS = ['任務與時程', '推廣商品', '分潤與折扣', '確認發佈']
 
 // ─── 發佈任務精靈 ────────────────────────────────────────────────────────
-function CampaignWizard({ open, onClose, onComplete, initialData }) {
+function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts }) {
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
   const [isSaving, setIsSaving] = useState(false)
   
   // 🌟 修改：加入 startDate，作為排程發佈日期
-  const defaultForm = { 
-    id: '', name: '', budget: '', startDate: getTodayString(), recruitEndDate: '', promoDays: '7', 
-    prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦', kocDiscount: ''
+  const defaultForm = {
+    id: '', name: '', description: '', budget: '',
+    startDate: getTodayString(), recruitEndDate: '', promoDays: '7',
+    prodId: '', prodName: '', prodDescription: '', prodPrice: '', prodDiscountedPrice: '',
+    prodStock: '', prodCategory: '', prodImageUrl: '', thumbnail: '📦',
+    kocDiscount: '', status: 'draft', spent: 0, kocCount: 0, orders: 0, gmv: 0
   }
   const [form, setForm] = useState(defaultForm)
   
@@ -113,51 +123,173 @@ function CampaignWizard({ open, onClose, onComplete, initialData }) {
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const existingProducts = [
-    { id: 'p1', name: '極致保濕修護精華', price: 1200, stock: 50, thumbnail: '✨' },
-    { id: 'p2', name: '夏季控油防曬乳 SPF50+', price: 850, stock: 120, thumbnail: '🌞' },
-  ]
+  const handleSelectProduct = event => {
+    const selected = existingProducts.find(
+      product =>
+        String(product.product_id) === event.target.value
+    )
 
-  const handleSelectProduct = (e) => {
-    const selected = existingProducts.find(p => p.id === e.target.value)
-    if (selected) {
-      setForm(f => ({ ...f, prodId: selected.id, prodName: selected.name, prodPrice: selected.price, prodStock: selected.stock, thumbnail: selected.thumbnail }))
-    } else {
-      setForm(f => ({ ...f, prodId: '', prodName: '', prodPrice: '', prodStock: '', thumbnail: '📦' }))
+    if (!selected) {
+      setForm(previous => ({
+        ...previous,
+        prodId: '',
+        prodName: '',
+        prodDescription: '',
+        prodPrice: '',
+        prodDiscountedPrice: '',
+        prodStock: '',
+        prodCategory: '',
+        prodImageUrl: '',
+        thumbnail: '📦'
+      }))
+
+      return
     }
+
+    setForm(previous => ({
+      ...previous,
+      prodId: selected.product_id,
+      prodName: selected.product_name,
+      prodDescription: selected.description || '',
+      prodPrice: selected.price,
+      prodDiscountedPrice:
+        selected.discounted_price ?? '',
+      prodStock: selected.stock,
+      prodCategory: selected.category || '',
+      prodImageUrl: selected.image_url || '',
+      thumbnail: selected.image_url || '📦'
+    }))
   }
 
   const handleSaveDraft = async () => {
     setIsSaving(true)
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 800)) 
-      onComplete({ 
-        ...form, 
-        id: form.id || `draft_${Date.now()}`, 
-        status: 'draft', 
-        spent: form.spent || 0, kocCount: form.kocCount || 0, orders: form.orders || 0, gmv: form.gmv || 0
+      const payload = buildPayload('draft')
+
+      let response
+
+      if (isValidUuid(form.id)) {
+        // 已存在的草稿：更新原本資料
+        response = await updateVendorCampaign({
+          ...payload,
+          campaign_id: form.id
+        })
+      } else {
+        // 第一次儲存：建立新草稿
+        response = await createVendorCampaign(payload)
+      }
+
+      const savedCampaignId =
+        response.data?.campaign_id ||
+        response.campaign_id ||
+        form.id
+
+      const savedProductId =
+        response.data?.product_id ||
+        response.product_id ||
+        form.prodId
+
+      onComplete({
+        ...form,
+        id: savedCampaignId,
+        prodId: savedProductId,
+        status: 'draft',
+        spent: form.spent || 0,
+        kocCount: form.kocCount || 0,
+        orders: form.orders || 0,
+        gmv: form.gmv || 0
       })
+
       onClose()
     } catch (error) {
-      alert("儲存草稿失敗")
+      alert(
+        error.response?.data?.err
+          ? JSON.stringify(error.response.data.err)
+          : error.message || '儲存草稿失敗'
+      )
     } finally {
       setIsSaving(false)
     }
   }
+
   
-  const finish = async () => { 
-    setIsSaving(true)
+  const finish = async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 800))
-      onComplete({ 
-        ...form, 
-        id: form.id && form.id.startsWith('draft_') ? `c${Date.now()}` : (form.id || `c${Date.now()}`), 
-        status: 'active', // 後續在列表中會根據 startDate 判斷是否為排程中
-        spent: form.spent || 0, kocCount: form.kocCount || 0, orders: form.orders || 0, gmv: form.gmv || 0
+      setIsSaving(true)
+
+      const payload = buildPayload('active')
+
+      let response
+
+      if (isValidUuid(form.id)) {
+        response = await updateVendorCampaign({
+          ...payload,
+          campaign_id: form.id
+        })
+      } else {
+        response = await createVendorCampaign(payload)
+      }
+
+      onComplete({
+        ...form,
+        id: response.data.campaign_id,
+        prodId:
+          response.data.product_id || form.prodId,
+        status: 'active',
+        spent: form.spent || 0,
+        kocCount: form.kocCount || 0,
+        orders: form.orders || 0,
+        gmv: form.gmv || 0
       })
-      onClose() 
+
+      onClose()
+    } catch (error) {
+      alert(
+        error.response?.data?.err
+          ? JSON.stringify(error.response.data.err)
+          : error.message || '任務發佈失敗'
+      )
     } finally {
       setIsSaving(false)
+    }
+  }
+
+    const buildPayload = campaignStatus => {
+    const basePayload = {
+      vendor_id: localStorage.getItem('vendor_id'),
+      name: form.name.trim(),
+      description: form.description.trim(),
+      budget: Number(form.budget),
+      reward_type: 'commission',
+      discount_percent: Number(form.kocDiscount),
+      promo_days: Number(form.promoDays),
+      start_date: form.startDate,
+      end_date: form.recruitEndDate,
+      status: campaignStatus
+    }
+
+    if (prodMode === 'existing') {
+      return {
+        ...basePayload,
+        product_id: Number(form.prodId)
+      }
+    }
+
+    return {
+      ...basePayload,
+      product: {
+        product_name: form.prodName.trim(),
+        description: form.prodDescription.trim(),
+        price: Number(form.prodPrice),
+        discounted_price:
+          form.prodDiscountedPrice === ''
+            ? null
+            : Number(form.prodDiscountedPrice),
+        stock: Number(form.prodStock),
+        category: form.prodCategory.trim(),
+        image_url: form.prodImageUrl.trim()
+      }
     }
   }
 
@@ -236,7 +368,16 @@ function CampaignWizard({ open, onClose, onComplete, initialData }) {
               <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">從商品庫選擇 *</label>
               <select value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
                 <option value="">請選擇要推廣的商品...</option>
-                {existingProducts.map(p => <option key={p.id} value={p.id}>{p.name} (庫存: {p.stock})</option>)}
+                {existingProducts.map(product => (
+                  <option
+                    key={product.product_id}
+                    value={product.product_id}
+                  >
+                    {product.product_name}
+                    {' '}
+                    （庫存：{product.stock}）
+                  </option>
+                ))}
               </select>
               
               {form.prodName && (
@@ -356,21 +497,23 @@ function CampaignWizard({ open, onClose, onComplete, initialData }) {
   )
 }
 
-// ─── 假資料：KOC 申請名單 ──────────────────────────────────────────────────
-const mockKocList = [
-  { id: 1, name: '林小美', handle: '@xiaomei_beauty', platform: 'Instagram', followers: '45K', status: 'approved', orders: 12, gmv: 14400, avatar: '👩🏻' },
-  { id: 2, name: '陳大頭', handle: '@bighead_chen', platform: 'TikTok', followers: '120K', status: 'pending', orders: 0, gmv: 0, avatar: '👦🏽' },
-  { id: 3, name: 'Alice Wu', handle: '@alice_wuwu', platform: 'Instagram', followers: '88K', status: 'approved', orders: 35, gmv: 42000, avatar: '👱🏻‍♀️' },
-]
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Campaigns() {
-  const [items, setItems] = useState(initialCampaigns)
+  const [kocList, setKocList] = useState([])
+  const [kocLoading, setKocLoading] = useState(false)
+  const [kocError, setKocError] = useState('')
+  const vendorId = localStorage.getItem('vendor_id')
+  const [existingProducts, setExistingProducts] = useState([])
+  const [productLoading, setProductLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [items, setItems] = useState([])
+  const [campaignLoading, setCampaignLoading] = useState(true)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingDraft, setEditingDraft] = useState(null)
-  
   const [selectedTask, setSelectedTask] = useState(null)
   const [showKocList, setShowKocList] = useState(false)
+  const [reviewingApplicationId, setReviewingApplicationId] = useState(null)
 
   const handleCreateOrUpdate = (taskData) => {
     setItems(prev => {
@@ -381,6 +524,30 @@ export default function Campaigns() {
         return [taskData, ...prev]
       }
     })
+  }
+  const handleDeleteDraft = async campaign => {
+    const confirmed = window.confirm(
+      `確定要刪除草稿「${campaign.name || '未命名任務'}」嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      await deleteVendorCampaign({
+        vendor_id: vendorId,
+        campaign_id: campaign.id
+      })
+
+      setItems(previous =>
+        previous.filter(item => item.id !== campaign.id)
+      )
+    } catch (error) {
+      alert(
+        error.response?.data?.err ||
+        error.message ||
+        '刪除草稿失敗'
+      )
+    }
   }
 
   const handleOpenWizard = () => {
@@ -395,6 +562,230 @@ export default function Campaigns() {
     } else {
       setSelectedTask(c)
     }
+  }
+
+  const loadKocApplications = async campaign => {
+    if (!vendorId || !campaign?.id) return
+
+    try {
+      setKocLoading(true)
+      setKocError('')
+
+      const response = await getVendorApplications(
+        vendorId,
+        campaign.id
+      )
+
+      setKocList(
+        (response.data.applications || []).map(application => ({
+          id: application.application_id,
+          applicationId: application.application_id,
+          kocId: application.koc_id,
+          name:
+            application.koc_name ||
+            application.koc_id ||
+            '未命名 KOC',
+          campaignId: application.campaign_id,
+          campaignName: application.campaign_name,
+          status: application.status,
+          orderId: application.order_id,
+
+          handle: application.koc_id,
+          platform: '尚未提供',
+          followers: '—',
+          orders: 0,
+          gmv: 0,
+          avatar: '👤'
+        }))
+      )
+    } catch (error) {
+      setKocList([])
+
+      setKocError(
+        error.response?.data?.err ||
+        error.message ||
+        'KOC 報名名單載入失敗'
+      )
+    } finally {
+      setKocLoading(false)
+    }
+  }
+
+  const handleReviewApplication = async (
+    application,
+    reviewStatus
+  ) => {
+    const actionText =
+      reviewStatus === 'approved'
+        ? '通過'
+        : '拒絕'
+
+    const confirmed = window.confirm(
+      `確定要${actionText} KOC「${application.name}」的申請嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setReviewingApplicationId(
+        application.applicationId
+      )
+      setKocError('')
+
+      const response = await reviewVendorApplication({
+        vendor_id: vendorId,
+        application_id: application.applicationId,
+        status: reviewStatus
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(
+          response.data.err || '審核失敗'
+        )
+      }
+
+      setKocList(previous =>
+        previous.map(item =>
+          item.applicationId === application.applicationId
+            ? {
+                ...item,
+                status: reviewStatus,
+                promotionCode:
+                  response.data.promotion_code || null,
+                kocmissionId:
+                  response.data.kocmission_id || null
+              }
+            : item
+        )
+      )
+
+      alert(
+        reviewStatus === 'approved'
+          ? '申請已通過，已建立任務與未啟用優惠碼'
+          : '申請已拒絕'
+      )
+    } catch (error) {
+      console.error('審核 KOC 申請失敗：', error)
+
+      const apiError = error.response?.data?.err
+
+      setKocError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message || '審核失敗'
+      )
+    } finally {
+      setReviewingApplicationId(null)
+    }
+  }
+  
+  
+  function mapCampaignFromApi(campaign) {
+    const product = campaign.products?.[0] || {}
+
+    return {
+      id: campaign.campaign_id,
+      name: campaign.name,
+      description: campaign.description || '',
+      budget: Number(campaign.budget || 0),
+
+      startDate: campaign.start_date || '',
+      recruitEndDate: campaign.end_date || '',
+      endDate: campaign.end_date || '',
+
+      promoDays: String(campaign.promo_days || 7),
+      kocDiscount: String(campaign.discount_percent || 0),
+
+      prodId: product.product_id || '',
+      prodName: product.product_name || '',
+      prodDescription: product.description || '',
+      prodPrice: product.price || '',
+      prodDiscountedPrice: product.discounted_price ?? '',
+      prodStock: product.stock ?? '',
+      prodCategory: product.category || '',
+      prodImageUrl: product.image_url || '',
+      thumbnail: product.image_url || '📦',
+
+      status: campaign.status || 'draft',
+      spent: 0,
+      kocCount: 0,
+      orders: 0,
+      gmv: 0
+    }
+  }
+
+
+  useEffect(() => {
+    async function loadCampaigns() {
+      if (!vendorId) {
+        setError('尚未登入廠商帳號')
+        setCampaignLoading(false)
+        return
+      }
+
+      try {
+        setCampaignLoading(true)
+        setError('')
+
+        const response = await getVendorCampaigns(vendorId)
+
+        setItems(
+          (response.data.campaigns || []).map(mapCampaignFromApi)
+        )
+      } catch (error) {
+        setError(
+          error.response?.data?.err ||
+          error.message ||
+          '任務資料載入失敗'
+        )
+      } finally {
+        setCampaignLoading(false)
+      }
+    }
+
+    loadCampaigns()
+  }, [vendorId])
+
+  useEffect(() => {
+      async function loadProducts() {
+        if (!vendorId) {
+          setError('尚未登入廠商帳號')
+          setProductLoading(false)
+          return
+        }
+
+        try {
+          setProductLoading(true)
+          setError('')
+
+          const response = await getVendorProducts(vendorId)
+
+          setExistingProducts(
+            response.data.products || []
+          )
+        } catch (error) {
+          setError(
+            error.response?.data?.err ||
+            error.message ||
+            '商品資料載入失敗'
+          )
+        } finally {
+          setProductLoading(false)
+        }
+      }
+
+      loadProducts()
+    }, [vendorId])
+
+  
+  if (campaignLoading) {
+    return (
+      <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
+        任務資料載入中...
+      </div>
+    )
   }
 
   return (
@@ -431,7 +822,23 @@ export default function Campaigns() {
                     <Package size={14} /> 綁定：{c.prodName || '尚未選擇商品'}
                   </div>
                 </div>
-                <Badge status={displayStatus} />
+                <div className="flex items-center gap-2">
+                  <Badge status={displayStatus} />
+
+                  {c.status === 'draft' && (
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation()
+                        handleDeleteDraft(c)
+                      }}
+                      className="p-2 rounded-full text-[#8C8880] hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="刪除草稿"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4 text-center opacity-90">
@@ -453,11 +860,15 @@ export default function Campaigns() {
         })}
       </div>
 
-      <CampaignWizard 
-        open={wizardOpen} 
-        onClose={() => { setWizardOpen(false); setEditingDraft(null); }} 
-        onComplete={handleCreateOrUpdate} 
-        initialData={editingDraft} 
+      <CampaignWizard
+        open={wizardOpen}
+        onClose={() => {
+          setWizardOpen(false)
+          setEditingDraft(null)
+        }}
+        onComplete={handleCreateOrUpdate}
+        initialData={editingDraft}
+        existingProducts={existingProducts}
       />
 
       {/* 任務詳細資料 Modal */}
@@ -505,8 +916,15 @@ export default function Campaigns() {
               <div className="border border-[#E2DDD4] rounded-2xl p-5">
                 <div className="text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2">已參與 KOC</div>
                 <div className="text-2xl font-black text-[#1A1A18] mb-2">{selectedTask.kocCount || 0} <span className="text-sm text-[#8C8880]">人</span></div>
-                <button onClick={() => setShowKocList(true)} className="text-xs font-bold text-[#C8522A] hover:underline flex items-center gap-1 transition-all">
-                  查看完整名單 <ArrowRight size={12}/>
+                <button
+                  onClick={async () => {
+                    await loadKocApplications(selectedTask)
+                    setShowKocList(true)
+                  }}
+                  className="text-xs font-bold text-[#C8522A] hover:underline flex items-center gap-1 transition-all"
+                >
+                  查看完整名單
+                  <ArrowRight size={12} />
                 </button>
               </div>
             </div>
@@ -524,39 +942,146 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '帶來訂單', '創造 GMV'].map(h => (
+                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '帶來訂單', '創造 GMV', '審核'].map(h => (
                     <th key={h} className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
-                {mockKocList.map(koc => (
-                  <tr key={koc.id} className="hover:bg-[#F8F9FA] transition-colors">
-                    <td className="p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#F5F0E8] border border-[#E2DDD4] rounded-full flex items-center justify-center text-lg">{koc.avatar}</div>
-                        <div>
-                          <div className="text-sm font-bold text-[#1A1A18]">{koc.name}</div>
-                          <div className="text-[11px] font-bold text-[#8C8880]">{koc.handle}</div>
-                        </div>
-                      </div>
+                {kocLoading ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-[#8C8880]"
+                    >
+                      KOC 報名名單載入中...
                     </td>
-                    <td className="p-5">
-                      <div className="flex items-center gap-1.5 text-sm font-bold text-[#1A1A18]">
-                        <Instagram size={14} className="text-[#C8522A]"/> {koc.platform}
-                      </div>
-                      <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">{koc.followers} 粉絲</div>
-                    </td>
-                    <td className="p-5">
-                      {koc.status === 'approved' 
-                        ? <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F5F0E8] text-[#1A1A18] text-[11px] font-bold"><CheckCircle2 size={12}/> 合作中</span>
-                        : <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FDF0ED] text-[#C8522A] text-[11px] font-bold"><Clock size={12}/> 待審核</span>
-                      }
-                    </td>
-                    <td className="p-5 text-sm font-black text-[#1A1A18]">{koc.orders}</td>
-                    <td className="p-5 text-sm font-black text-[#C8522A]">{formatCurrency(koc.gmv)}</td>
                   </tr>
-                ))}
+                ) : kocError ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-red-600"
+                    >
+                      {kocError}
+                    </td>
+                  </tr>
+                ) : kocList.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm font-bold text-[#8C8880]"
+                    >
+                      目前尚無 KOC 報名
+                    </td>
+                  </tr>
+                ) : (
+                  kocList.map(koc => (
+                    <tr
+                      key={koc.id}
+                      className="hover:bg-[#F8F9FA] transition-colors"
+                    >
+                      <td className="p-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#F5F0E8] border border-[#E2DDD4] rounded-full flex items-center justify-center text-lg">
+                            {koc.avatar}
+                          </div>
+
+                          <div>
+                            <div className="text-sm font-bold text-[#1A1A18]">
+                              {koc.name}
+                            </div>
+
+                            <div className="text-[11px] font-bold text-[#8C8880]">
+                              {koc.kocId}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="text-sm font-bold text-[#1A1A18]">
+                          {koc.platform}
+                        </div>
+
+                        <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">
+                          {koc.followers}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold',
+                            koc.status === 'approved'
+                              ? 'bg-green-50 text-green-700'
+                              : koc.status === 'rejected'
+                                ? 'bg-red-50 text-red-600'
+                                : 'bg-[#FDF0ED] text-[#C8522A]'
+                          )}
+                        >
+                          {{
+                            pending: '待審核',
+                            approved: '已通過',
+                            rejected: '已拒絕'
+                          }[koc.status] || koc.status}
+                        </span>
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                        {koc.orders}
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#C8522A]">
+                        {formatCurrency(koc.gmv)}
+                      </td>
+
+                      <td className="p-5">
+                        {koc.status === 'pending' ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={
+                                reviewingApplicationId ===
+                                koc.applicationId
+                              }
+                              onClick={() =>
+                                handleReviewApplication(
+                                  koc,
+                                  'approved'
+                                )
+                              }
+                              className="px-3 py-1.5 rounded-full bg-[#1A1A18] text-white text-xs font-bold hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              通過
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                reviewingApplicationId ===
+                                koc.applicationId
+                              }
+                              onClick={() =>
+                                handleReviewApplication(
+                                  koc,
+                                  'rejected'
+                                )
+                              }
+                              className="px-3 py-1.5 rounded-full border border-[#E2DDD4] bg-white text-[#8C8880] text-xs font-bold hover:text-red-600 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              拒絕
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-bold text-[#8C8880]">
+                            已完成審核
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

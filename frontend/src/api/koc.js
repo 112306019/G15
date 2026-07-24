@@ -96,6 +96,7 @@ export const getAnalyticsDetail = (missionId, period) => {
 // 申請成為 KOC
 export const applyKOC = (data) => {
   return api.post('/koc/apply', data)
+
 }
 
 // 取得或建立任務對應的聊天室
@@ -113,4 +114,5 @@ export const getChatHistory = (roomId) => {
 // 發送聊天室訊息
 export const sendChatMessage = (data) => {
   return api.post('/koc/chat/sendMessage', data)
+
 }

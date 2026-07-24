@@ -20,4 +20,6 @@ class Migration(migrations.Migration):
             name='promo_days',
             field=models.IntegerField(db_column='promo_days', default=7),
         ),
+
     ]
+

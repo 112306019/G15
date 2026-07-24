@@ -89,9 +89,7 @@ export default function AdminApp() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800">
 
-      {/* =========================================
-          左側邊欄 (Sidebar)
-      ========================================== */}
+      
       <aside className="w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-10">
         <div className="h-20 flex items-center px-8 border-b border-[#E2DDD4]">
           <h1 className="text-xl font-black text-[#1A1A18] tracking-tight flex items-center gap-2">
@@ -131,9 +129,7 @@ export default function AdminApp() {
         </div>
       </aside>
 
-      {/* =========================================
-          右側主要內容區
-      ========================================== */}
+    
       <main className="flex-1 ml-64 flex flex-col min-h-screen">
 
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-end px-10">
@@ -167,25 +163,16 @@ export default function AdminApp() {
                 <AdminVendors />
               </ProtectedRoute>
             } />
-            <Route path="/vendors/:id" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
-                <AdminVendorDetail vendor={{
-                  id: 'V001',
-                  companyName: '美味餐飲企業',
-                  contactName: '王經理',
-                  email: 'service@yummy.com',
-                  taxId: '12345678',
-                  status: 'active',
-                  createdAt: '2026-02-10',
-                  walletId: 'W-98765432',
-                  balance: 45000,
-                  campaigns: [
-                    { campaignId: 'C1001', name: '夏季新品試吃推廣', budget: 50000, rewardType: '現金+公關品', startDate: '2026-06-01', endDate: '2026-06-30', status: 'active' },
-                    { campaignId: 'C1002', name: '秋季隱藏菜單曝光', budget: 80000, rewardType: '現金', startDate: '2026-08-01', endDate: '2026-08-31', status: 'pending' }
-                  ]
-                }} />
-              </ProtectedRoute>
-            } />
+
+            <Route
+              path="/vendors/:id"
+              element={
+                <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                  <AdminVendorDetail />
+                </ProtectedRoute>
+              }
+            />     
+
 
             {/* 🌟 KOC 管理模組 */}
             <Route path="/influencers" element={

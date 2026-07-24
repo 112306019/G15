@@ -21,6 +21,7 @@ from .views.platform import (
     admin_vendor_review,    # 新增
     admin_overview,         # 新增
     admin_coupon_usage,     # 新增
+    admin_performance,
     get_all_missions,
     get_earnings_tracking,
 )
@@ -124,17 +125,20 @@ urlpatterns = [
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),
     path('vendor/profile/update', vendor.vendor_profile_update, name='vendor-profile-update'),
+    path('vendor/profile/get', vendor.vendor_profile_get, name='vendor-profile-get'),
 
     # Vendor 商品 API
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
+   path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
 
     # Vendor 任務 / Campaign API
     path('vendor/campaign/create', vendor.vendor_campaign_create, name='vendor-campaign-create'),
     path('vendor/campaign/update', vendor.vendor_campaign_update, name='vendor-campaign-update'),
     path('vendor/campaign/getlist', vendor.vendor_campaign_getlist, name='vendor-campaign-getlist'),
+    path('vendor/campaign/delete', vendor.vendor_campaign_delete, name='vendor-campaign-delete'),
 
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),
@@ -153,6 +157,13 @@ urlpatterns = [
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),
     path('vendor/coupon/updateStatus', vendor.vendor_coupon_update_status, name='vendor-coupon-update-status'),
 
+    # Vendor 聊天室 API
+    path('vendor/chatroom/create', vendor.vendor_chatroom_create, name='vendor_chatroom_create'),
+    path('vendor/chatroom/getlist', vendor.vendor_chatroom_getlist, name='vendor_chatroom_getlist'),
+    path('vendor/chatroom/getMessages', vendor.vendor_chatroom_get_messages, name='vendor_chatroom_get_messages'),
+    path('vendor/chatroom/sendMessage', vendor.vendor_chatroom_send_message, name='vendor_chatroom_send_message'),
+    path('vendor/chatroom/markRead', vendor.vendor_chatroom_mark_read, name='vendor_chatroom_mark_read'),
+
     # Vendor 分析 API
     path('vendor/analytics/overview', vendor.vendor_analytics_overview, name='vendor-analytics-overview'),
     path('vendor/analytics/productPerformance', vendor.vendor_product_performance, name='vendor-product-performance'),
@@ -165,6 +176,7 @@ urlpatterns = [
     path('platform/vendor/review', admin_vendor_review, name='admin-vendor-review'),
     path('platform/overview', admin_overview, name='admin-overview'),
     path('platform/coupons', admin_coupon_usage, name='admin-coupon-usage'),
-    # path('platform/performance', platform.admin_performance, name='admin-performance'),
+    path('platform/performance', admin_performance, name='admin-performance'),
+
 ]
 

@@ -34,6 +34,7 @@ export default function AdminLogin() {
       if(email === 'admin@koc.com' && password === 'password') {
          localStorage.setItem('admin_token', 'super_secret_token_123');
          localStorage.setItem('admin_email', email);
+         localStorage.setItem('admin_id', '1');
          localStorage.setItem('admin_role', role); // 🌟 將選擇的權限存入 localStorage
          navigate('/admin');
       } else {

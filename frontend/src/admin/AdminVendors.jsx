@@ -1,16 +1,50 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ChevronRight, Building2 } from 'lucide-react';
+import { getAdminVendorList } from '../api/platform';
 
 export default function AdminVendors() {
   const navigate = useNavigate();
 
-  // 安全的虛構測試資料 (對應 GET /admin/vendors)
-  const [vendors] = useState([
-    { id: 'V001', companyName: '美味餐飲企業', contact: '王經理', email: 'service@yummy.com', taxId: '12345678', status: 'active', createdAt: '2026-02-10' },
-    { id: 'V002', companyName: '星姿態美妝', contact: '林總監', email: 'hello@starbeauty.com', taxId: '87654321', status: 'applying', createdAt: '2026-07-12' },
-    { id: 'V003', companyName: '潮流行銷公司', contact: '陳先生', email: 'contact@trend.com', taxId: '54321678', status: 'suspended', createdAt: '2026-01-05' },
-  ]);
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await getAdminVendorList();
+
+        const vendorData = response.data.vendors.map((vendor) => ({
+          id: vendor.Vendor_id,
+          companyName: vendor.Company_name,
+          contact: vendor.Contact_name,
+          email: vendor.Email,
+          taxId: vendor.Tax_ID,
+          status: vendor.Status,
+          createdAt: vendor.Created_at
+            ? new Date(vendor.Created_at).toLocaleDateString('zh-TW')
+            : '-',
+        }));
+
+        setVendors(vendorData);
+      } catch (err) {
+        console.error('取得廠商列表失敗：', err);
+
+        setError(
+          err.response?.data?.err ||
+          '取得廠商列表失敗'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVendors();
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -73,15 +107,32 @@ export default function AdminVendors() {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-[#8C8880]">{vendor.createdAt}</td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md border ${
-                      vendor.status === 'active' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 
-                      vendor.status === 'applying' ? 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30' :
-                      'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
-                    }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${
-                        vendor.status === 'active' ? 'bg-[#C8522A]' : vendor.status === 'applying' ? 'bg-[#B89B6A]' : 'bg-[#8C8880]'
-                      }`}></div>
-                      {vendor.status === 'active' ? '已啟用' : vendor.status === 'applying' ? '審核中' : '已停權'}
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md border ${
+                        vendor.status === 'approved'
+                          ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
+                          : vendor.status === 'pending'
+                          ? 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30'
+                          : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
+                      }`}
+                    >
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          vendor.status === 'approved'
+                            ? 'bg-[#C8522A]'
+                            : vendor.status === 'pending'
+                            ? 'bg-[#B89B6A]'
+                            : 'bg-[#8C8880]'
+                        }`}
+                      />
+
+                      {vendor.status === 'approved'
+                        ? '已通過'
+                        : vendor.status === 'pending'
+                        ? '待審核'
+                        : vendor.status === 'rejected'
+                        ? '已拒絕'
+                        : '未知狀態'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">

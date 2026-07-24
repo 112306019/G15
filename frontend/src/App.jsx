@@ -31,9 +31,11 @@ import SecurityPage from './authentication/SecurityPage';
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin';
 
+
 // === 平台管理端 (Admin) 相關頁面 ===
 import AdminLogin from './admin/AdminLogin';
 import AdminApp from './AdminApp';
+
 
 // 🌟 新增：引入 Heart icon
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
@@ -340,8 +342,10 @@ export default function App() {
       <Route path="/*" element={<MainSystem />} />
       <Route path="/vendor-login" element={<VendorLogin />} />
       <Route path="/vendor/*" element={<VendorApp />} />
+
       <Route path="/admin-login" element={<AdminLogin />} />
       <Route path="/admin/*" element={<AdminApp />} />
+
     </Routes>
   );
 }

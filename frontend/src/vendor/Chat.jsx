@@ -1,257 +1,1156 @@
-import { useState, useRef, useEffect } from 'react'
-import { Send, Smile, Search, Tag } from 'lucide-react'
-import { chatConversations as initial, kocs, kocApplications, products, campaigns } from './mock'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+
+import {
+  Send,
+  Search,
+  Tag,
+  Loader2,
+  MessageCircle,
+  RefreshCw,
+  AlertCircle
+} from 'lucide-react'
+
+import {
+  getVendorChatrooms,
+  getVendorChatMessages,
+  sendVendorChatMessage,
+  markVendorChatroomRead
+} from '../api/vendor'
+
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
 
-// 依 kocId 分組，列出每個 KOC 有哪些 appId 的對話
-function groupByKoc(convos) {
-  const map = {}
-  Object.entries(convos).forEach(([appId, convo]) => {
-    const { kocId } = convo
-    if (!map[kocId]) map[kocId] = []
-    map[kocId].push(appId)
-  })
-  return map
+
+const stageLabels = {
+  pending: '等待開始',
+  writing: '撰寫文案',
+  reviewing: '文案審核中',
+  publishing: '等待發布',
+  completed: '任務完成'
 }
 
-export default function Chat() {
-  const [convos, setConvos]     = useState(initial)
-  const [activeKocId, setActiveKocId] = useState('k2')
-  const [activeAppId, setActiveAppId] = useState('app-002')
-  const [input, setInput]       = useState('')
-  const bottomRef               = useRef(null)
 
-  const kocMap    = groupByKoc(convos)
-  const kocIdList = Object.keys(kocMap)
+function getTimeValue(value) {
+  if (!value) return 0
 
-  const msgs = convos[activeAppId]?.messages ?? []
+  const timestamp = new Date(value).getTime()
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, activeAppId])
+  return Number.isNaN(timestamp)
+    ? 0
+    : timestamp
+}
 
-  // 點選 KOC → 自動選第一個 tab
-  function selectKoc(kocId) {
-    setActiveKocId(kocId)
-    const firstApp = kocMap[kocId]?.[0]
-    if (firstApp) {
-      setActiveAppId(firstApp)
-      markRead(firstApp)
+
+function formatTime(value) {
+  if (!value) return ''
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return date.toLocaleTimeString('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+
+function formatMessageDate(value) {
+  if (!value) return ''
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const today = new Date()
+
+  const isToday =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+
+  if (isToday) {
+    return formatTime(value)
+  }
+
+  return date.toLocaleDateString('zh-TW', {
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
+
+function groupRoomsByKoc(rooms) {
+  const map = {}
+
+  rooms.forEach(room => {
+    const kocId =
+      room.kocId ||
+      `unknown-${room.roomId}`
+
+    if (!map[kocId]) {
+      map[kocId] = {
+        kocId,
+        kocName:
+          room.kocName ||
+          room.kocId ||
+          '未命名 KOC',
+
+        rooms: []
+      }
     }
-  }
 
-  // 點選 tab
-  function selectTab(appId) {
-    setActiveAppId(appId)
-    markRead(appId)
-  }
+    map[kocId].rooms.push(room)
+  })
 
-  function markRead(appId) {
-    setConvos(prev => ({
-      ...prev,
-      [appId]: { ...prev[appId], unread: 0 },
+  return Object.values(map)
+    .map(group => ({
+      ...group,
+
+      rooms: [...group.rooms].sort(
+        (left, right) =>
+          getTimeValue(
+            right.lastMessageTime ||
+            right.createdAt
+          ) -
+          getTimeValue(
+            left.lastMessageTime ||
+            left.createdAt
+          )
+      )
     }))
-  }
+    .sort((left, right) => {
+      const leftLatest =
+        left.rooms[0]?.lastMessageTime ||
+        left.rooms[0]?.createdAt
 
-  function send() {
-    if (!input.trim()) return
-    const msg = {
-      id: Date.now(),
-      sender: 'vendor',
-      text: input.trim(),
-      time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
-    }
-    setConvos(prev => ({
-      ...prev,
-      [activeAppId]: { ...prev[activeAppId], messages: [...prev[activeAppId].messages, msg] },
-    }))
-    setInput('')
-  }
+      const rightLatest =
+        right.rooms[0]?.lastMessageTime ||
+        right.rooms[0]?.createdAt
 
-  const totalUnread = Object.values(convos).reduce((s, c) => s + (c.unread || 0), 0)
-
-  // 取得 KOC 的 tab 資料（對應 kocApplications）
-  function getTabsForKoc(kocId) {
-    const appIds = kocMap[kocId] ?? []
-    return appIds.map(appId => {
-      const app  = kocApplications.find(a => a.id === appId)
-      const prod = app ? products.find(p => p.id === app.productId) : null
-      const unread = convos[appId]?.unread ?? 0
-      return { appId, app, prod, unread }
+      return (
+        getTimeValue(rightLatest) -
+        getTimeValue(leftLatest)
+      )
     })
+}
+
+
+export default function Chat() {
+  const vendorId =
+    localStorage.getItem('vendor_id')
+
+  const bottomRef = useRef(null)
+
+  const [rooms, setRooms] =
+    useState([])
+
+  const [
+    activeKocId,
+    setActiveKocId
+  ] = useState(null)
+
+  const [
+    activeRoomId,
+    setActiveRoomId
+  ] = useState(null)
+
+  const [
+    messagesByRoom,
+    setMessagesByRoom
+  ] = useState({})
+
+  const [input, setInput] =
+    useState('')
+
+  const [search, setSearch] =
+    useState('')
+
+  const [
+    roomLoading,
+    setRoomLoading
+  ] = useState(true)
+
+  const [
+    messageLoading,
+    setMessageLoading
+  ] = useState(false)
+
+  const [sending, setSending] =
+    useState(false)
+
+  const [error, setError] =
+    useState('')
+
+  const [
+    messageError,
+    setMessageError
+  ] = useState('')
+
+
+  const groupedKocs =
+    useMemo(
+      () => groupRoomsByKoc(rooms),
+      [rooms]
+    )
+
+
+  const filteredKocs =
+    useMemo(() => {
+      const keyword =
+        search.trim().toLowerCase()
+
+      if (!keyword) {
+        return groupedKocs
+      }
+
+      return groupedKocs.filter(group => {
+        const matchesKoc =
+          group.kocId
+            .toLowerCase()
+            .includes(keyword) ||
+          group.kocName
+            .toLowerCase()
+            .includes(keyword)
+
+        const matchesRoom =
+          group.rooms.some(room =>
+            room.campaignName
+              ?.toLowerCase()
+              .includes(keyword)
+          )
+
+        return matchesKoc || matchesRoom
+      })
+    }, [groupedKocs, search])
+
+
+  const activeGroup =
+    groupedKocs.find(
+      group =>
+        group.kocId === activeKocId
+    ) || null
+
+
+  const activeRoom =
+    rooms.find(
+      room =>
+        room.roomId === activeRoomId
+    ) || null
+
+
+  const messages =
+    activeRoomId
+      ? messagesByRoom[activeRoomId] || []
+      : []
+
+
+  const totalUnread =
+    rooms.reduce(
+      (sum, room) =>
+        sum +
+        Number(room.unreadCount || 0),
+      0
+    )
+
+
+  useEffect(() => {
+    loadChatrooms()
+  }, [vendorId])
+
+
+  useEffect(() => {
+    if (!activeRoomId) return
+
+    loadMessages(activeRoomId)
+  }, [activeRoomId])
+
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: 'smooth'
+    })
+  }, [messages, activeRoomId])
+
+
+  async function loadChatrooms() {
+    if (!vendorId) {
+      setError('尚未登入廠商帳號')
+      setRoomLoading(false)
+      return
+    }
+
+    try {
+      setRoomLoading(true)
+      setError('')
+
+      const response =
+        await getVendorChatrooms(
+          vendorId
+        )
+
+      if (
+        response.data?.success === false
+      ) {
+        throw new Error(
+          response.data.err ||
+          '聊天室清單載入失敗'
+        )
+      }
+
+      const roomData =
+        response.data?.chatrooms || []
+
+      const mappedRooms =
+        roomData.map(room => ({
+          roomId:
+            room.room_id,
+
+          kocMissionId:
+            room.kocmission_id,
+
+          kocId:
+            room.koc_id || '',
+
+          kocName:
+            room.koc_name ||
+            room.koc_id ||
+            '未命名 KOC',
+
+          campaignId:
+            room.campaign_id || '',
+
+          campaignName:
+            room.campaign_name ||
+            '未命名活動',
+
+          missionStage:
+            room.mission_stage || '',
+
+          lastMessage:
+            room.last_message || '',
+
+          lastMessageTime:
+            room.last_message_time ||
+            room.created_at,
+
+          lastSenderRole:
+            room.last_sender_role,
+
+          unreadCount:
+            Number(
+              room.unread_count || 0
+            ),
+
+          createdAt:
+            room.created_at
+        }))
+
+      setRooms(mappedRooms)
+
+      const selectedRoomStillExists =
+        mappedRooms.some(
+          room =>
+            room.roomId ===
+            activeRoomId
+        )
+
+      if (
+        !selectedRoomStillExists &&
+        mappedRooms.length > 0
+      ) {
+        const firstRoom =
+          mappedRooms[0]
+
+        setActiveKocId(
+          firstRoom.kocId
+        )
+
+        setActiveRoomId(
+          firstRoom.roomId
+        )
+      }
+
+      if (mappedRooms.length === 0) {
+        setActiveKocId(null)
+        setActiveRoomId(null)
+      }
+    } catch (requestError) {
+      console.error(
+        '聊天室清單載入失敗：',
+        requestError
+      )
+
+      const apiError =
+        requestError.response?.data?.err
+
+      setError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : requestError.message ||
+              '聊天室清單載入失敗'
+      )
+    } finally {
+      setRoomLoading(false)
+    }
   }
 
-  const activeKoc  = kocs.find(k => k.id === activeKocId)
-  const activeApp  = kocApplications.find(a => a.id === activeAppId)
-  const activeProd = activeApp ? products.find(p => p.id === activeApp.productId) : null
-  const activeCamp = activeApp ? campaigns.find(c => c.id === activeApp.campaignId) : null
-  const tabs       = getTabsForKoc(activeKocId)
+
+  async function loadMessages(roomId) {
+    if (!vendorId || !roomId) return
+
+    try {
+      setMessageLoading(true)
+      setMessageError('')
+
+      const response =
+        await getVendorChatMessages(
+          vendorId,
+          roomId
+        )
+
+      if (
+        response.data?.success === false
+      ) {
+        throw new Error(
+          response.data.err ||
+          '聊天室訊息載入失敗'
+        )
+      }
+
+      const messageData =
+        response.data?.messages || []
+
+      const mappedMessages =
+        messageData.map(message => ({
+          messageId:
+            message.message_id,
+
+          roomId:
+            message.room_id,
+
+          senderRole:
+            message.sender_role,
+
+          senderId:
+            message.sender_id,
+
+          content:
+            message.content,
+
+          isRead:
+            Boolean(message.is_read),
+
+          createdAt:
+            message.created_at
+        }))
+
+      setMessagesByRoom(previous => ({
+        ...previous,
+        [roomId]: mappedMessages
+      }))
+
+      const chatroom =
+        response.data?.chatroom
+
+      if (chatroom) {
+        setRooms(previous =>
+          previous.map(room =>
+            room.roomId === roomId
+              ? {
+                  ...room,
+
+                  kocMissionId:
+                    chatroom.kocmission_id ??
+                    room.kocMissionId,
+
+                  kocId:
+                    chatroom.koc_id ||
+                    room.kocId,
+
+                  kocName:
+                    chatroom.koc_name ||
+                    room.kocName,
+
+                  campaignId:
+                    chatroom.campaign_id ||
+                    room.campaignId,
+
+                  campaignName:
+                    chatroom.campaign_name ||
+                    room.campaignName,
+
+                  missionStage:
+                    chatroom.mission_stage ||
+                    room.missionStage
+                }
+              : room
+          )
+        )
+      }
+
+      await markRoomRead(roomId)
+    } catch (requestError) {
+      console.error(
+        '聊天室訊息載入失敗：',
+        requestError
+      )
+
+      const apiError =
+        requestError.response?.data?.err
+
+      setMessageError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : requestError.message ||
+              '聊天室訊息載入失敗'
+      )
+    } finally {
+      setMessageLoading(false)
+    }
+  }
+
+
+  async function markRoomRead(roomId) {
+    try {
+      await markVendorChatroomRead({
+        vendor_id: vendorId,
+        room_id: roomId
+      })
+
+      setRooms(previous =>
+        previous.map(room =>
+          room.roomId === roomId
+            ? {
+                ...room,
+                unreadCount: 0
+              }
+            : room
+        )
+      )
+    } catch (requestError) {
+      console.error(
+        '標記聊天室已讀失敗：',
+        requestError
+      )
+    }
+  }
+
+
+  function selectKoc(kocId) {
+    const group =
+      groupedKocs.find(
+        item =>
+          item.kocId === kocId
+      )
+
+    if (!group) return
+
+    const firstRoom =
+      group.rooms[0]
+
+    setActiveKocId(kocId)
+
+    if (firstRoom) {
+      setActiveRoomId(
+        firstRoom.roomId
+      )
+    }
+  }
+
+
+  function selectRoom(room) {
+    setActiveKocId(room.kocId)
+    setActiveRoomId(room.roomId)
+  }
+
+
+  async function sendMessage() {
+    const content =
+      input.trim()
+
+    if (
+      !content ||
+      !activeRoomId ||
+      sending
+    ) {
+      return
+    }
+
+    try {
+      setSending(true)
+      setMessageError('')
+
+      const response =
+        await sendVendorChatMessage({
+          vendor_id: vendorId,
+          room_id: activeRoomId,
+          content
+        })
+
+      if (
+        response.data?.success === false
+      ) {
+        throw new Error(
+          response.data.err ||
+          '訊息發送失敗'
+        )
+      }
+
+      const message =
+        response.data?.message
+
+      if (!message) {
+        throw new Error(
+          '後端未回傳訊息資料'
+        )
+      }
+
+      const newMessage = {
+        messageId:
+          message.message_id,
+
+        roomId:
+          message.room_id,
+
+        senderRole:
+          message.sender_role,
+
+        senderId:
+          message.sender_id,
+
+        content:
+          message.content,
+
+        isRead:
+          Boolean(message.is_read),
+
+        createdAt:
+          message.created_at
+      }
+
+      setMessagesByRoom(previous => ({
+        ...previous,
+
+        [activeRoomId]: [
+          ...(
+            previous[
+              activeRoomId
+            ] || []
+          ),
+          newMessage
+        ]
+      }))
+
+      setRooms(previous =>
+        previous.map(room =>
+          room.roomId === activeRoomId
+            ? {
+                ...room,
+                lastMessage:
+                  newMessage.content,
+
+                lastMessageTime:
+                  newMessage.createdAt,
+
+                lastSenderRole:
+                  newMessage.senderRole
+              }
+            : room
+        )
+      )
+
+      setInput('')
+    } catch (requestError) {
+      console.error(
+        '訊息發送失敗：',
+        requestError
+      )
+
+      const apiError =
+        requestError.response?.data?.err
+
+      setMessageError(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : requestError.message ||
+              '訊息發送失敗'
+      )
+    } finally {
+      setSending(false)
+    }
+  }
+
+
+  function handleInputKeyDown(event) {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
+      event.preventDefault()
+      sendMessage()
+    }
+  }
+
 
   return (
-    <div className="flex h-[calc(100vh-65px)]">
+    <div className="flex h-[calc(100vh-65px)] bg-white">
 
-      {/* ── 左側：KOC 列表 ──────────────────────────────────────────────── */}
-      <div className="w-64 border-r border-gray-100 flex flex-col bg-white shrink-0">
-        <div className="px-4 py-4 border-b border-gray-100">
+      {/* 左側：KOC 聊天室清單 */}
+      <div className="w-72 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0">
+        <div className="px-4 py-4 border-b border-[#E2DDD4]">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-slate-800 text-sm">聊天室</h2>
-            {totalUnread > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{totalUnread}</span>
-            )}
+            <h2 className="font-bold text-[#1A1A18] text-sm">
+              聊天室
+            </h2>
+
+            <div className="flex items-center gap-2">
+              {totalUnread > 0 && (
+                <span className="bg-[#C8522A] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {totalUnread}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={loadChatrooms}
+                disabled={roomLoading}
+                className="p-1.5 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                title="重新整理聊天室"
+              >
+                <RefreshCw
+                  size={14}
+                  className={cn(
+                    roomLoading
+                      ? 'animate-spin'
+                      : ''
+                  )}
+                />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-            <Search size={12} className="text-gray-300" />
-            <input placeholder="搜尋…" className="bg-transparent text-xs text-slate-800 placeholder:text-gray-300 outline-none w-full" />
+
+          <div className="flex items-center gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2">
+            <Search
+              size={13}
+              className="text-[#8C8880]"
+            />
+
+            <input
+              value={search}
+              onChange={event =>
+                setSearch(
+                  event.target.value
+                )
+              }
+              placeholder="搜尋 KOC 或活動…"
+              className="bg-transparent text-xs text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
+            />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {kocIdList.map(kocId => {
-            const koc     = kocs.find(k => k.id === kocId)
-            if (!koc) return null
-            const appIds  = kocMap[kocId]
-            const kocUnread = appIds.reduce((s, id) => s + (convos[id]?.unread ?? 0), 0)
-            const lastMsg = appIds
-              .flatMap(id => convos[id]?.messages ?? [])
-              .sort((a, b) => b.id - a.id)[0]
-            const isActive = kocId === activeKocId
 
-            return (
-              <div key={kocId} onClick={() => selectKoc(kocId)}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors border-l-2',
-                  isActive ? 'bg-amber-50 border-amber-400' : 'hover:bg-gray-50 border-transparent',
-                )}>
-                <div className="relative shrink-0">
-                  <Avatar name={koc.name} size="md" />
-                  <span className={cn(
-                    'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
-                    koc.platform === 'Instagram' ? 'bg-pink-500' : koc.platform === 'TikTok' ? 'bg-black' : 'bg-red-500',
-                  )} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 truncate">{koc.name}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0 ml-1">{lastMsg?.time}</span>
-                  </div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">
-                    {appIds.length} 個任務
-                  </div>
-                </div>
-                {kocUnread > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                    {kocUnread}
-                  </span>
-                )}
+        <div className="flex-1 overflow-y-auto">
+          {roomLoading ? (
+            <div className="py-16 text-center">
+              <Loader2
+                size={18}
+                className="animate-spin mx-auto text-[#C8522A]"
+              />
+
+              <div className="text-xs font-bold text-[#8C8880] mt-3">
+                聊天室載入中...
               </div>
-            )
-          })}
+            </div>
+          ) : error ? (
+            <div className="px-5 py-10 text-center">
+              <AlertCircle
+                size={22}
+                className="mx-auto text-red-500 mb-3"
+              />
+
+              <div className="text-xs font-bold text-red-600">
+                {error}
+              </div>
+            </div>
+          ) : filteredKocs.length === 0 ? (
+            <div className="px-5 py-16 text-center">
+              <MessageCircle
+                size={26}
+                className="mx-auto text-[#E2DDD4] mb-3"
+              />
+
+              <div className="text-xs font-bold text-[#8C8880]">
+                尚無聊天室
+              </div>
+            </div>
+          ) : (
+            filteredKocs.map(group => {
+              const isActive =
+                group.kocId ===
+                activeKocId
+
+              const unreadCount =
+                group.rooms.reduce(
+                  (sum, room) =>
+                    sum +
+                    room.unreadCount,
+                  0
+                )
+
+              const latestRoom =
+                group.rooms[0]
+
+              return (
+                <button
+                  type="button"
+                  key={group.kocId}
+                  onClick={() =>
+                    selectKoc(
+                      group.kocId
+                    )
+                  }
+                  className={cn(
+                    `
+                      w-full flex items-center
+                      gap-3 px-4 py-4
+                      text-left border-l-2
+                      transition-colors
+                    `,
+                    isActive
+                      ? 'bg-[#FDF0ED] border-[#C8522A]'
+                      : 'hover:bg-[#F8F9FA] border-transparent'
+                  )}
+                >
+                  <Avatar
+                    name={group.kocName}
+                    size="md"
+                  />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#1A1A18] truncate">
+                        {group.kocName}
+                      </span>
+
+                      <span className="text-[10px] text-[#8C8880] shrink-0">
+                        {formatMessageDate(
+                          latestRoom
+                            ?.lastMessageTime
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-[#8C8880] mt-1 truncate">
+                      {latestRoom
+                        ?.lastMessage ||
+                        `${group.rooms.length} 個任務聊天室`}
+                    </div>
+
+                    <div className="text-[9px] font-mono text-[#8C8880] mt-1">
+                      {group.kocId}
+                    </div>
+                  </div>
+
+                  {unreadCount > 0 && (
+                    <span className="bg-[#C8522A] text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center shrink-0">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })
+          )}
         </div>
       </div>
 
-      {/* ── 右側：對話區 ────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-gray-50 min-w-0">
 
-        {/* KOC 資訊列 */}
-        <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center gap-4 shrink-0">
-          <div className="relative shrink-0">
-            <Avatar name={activeKoc?.name ?? '?'} size="lg" />
-            <span className={cn(
-              'absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white',
-              activeKoc?.platform === 'Instagram' ? 'bg-pink-500' : activeKoc?.platform === 'TikTok' ? 'bg-black' : 'bg-red-500',
-            )} />
+      {/* 右側：對話內容 */}
+      <div className="flex-1 flex flex-col bg-[#F8F9FA] min-w-0">
+
+        {!activeRoom ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880]">
+            <MessageCircle
+              size={42}
+              className="mb-4 text-[#E2DDD4]"
+            />
+
+            <div className="text-sm font-bold">
+              請選擇聊天室
+            </div>
+
+            <div className="text-xs mt-2">
+              選擇左側 KOC 開始溝通
+            </div>
           </div>
-          <div>
-            <div className="font-bold text-slate-800">{activeKoc?.name}</div>
-            <div className="text-xs text-gray-400">{activeKoc?.handle} · {activeKoc?.platform} · {activeKoc?.followers?.toLocaleString()} 粉絲</div>
-          </div>
-        </div>
+        ) : (
+          <>
+            {/* KOC 資訊 */}
+            <div className="bg-white border-b border-[#E2DDD4] px-6 py-4 flex items-center gap-4 shrink-0">
+              <Avatar
+                name={
+                  activeRoom.kocName ||
+                  activeGroup?.kocName ||
+                  '?'
+                }
+                size="lg"
+              />
 
-        {/* 優惠碼 Tabs */}
-        <div className="bg-white border-b border-gray-100 px-6 flex gap-1 shrink-0">
-          {tabs.map(({ appId, app, prod, unread }) => (
-            <button key={appId} onClick={() => selectTab(appId)}
-              className={cn(
-                'flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap',
-                activeAppId === appId
-                  ? 'border-amber-500 text-amber-700'
-                  : 'border-transparent text-gray-400 hover:text-slate-700',
-              )}>
-              <Tag size={11} />
-              <span className="font-mono font-bold">{app?.couponCode ?? appId}</span>
-              <span className="text-gray-400 font-normal hidden sm:inline">
-                · {prod?.name?.length > 8 ? prod.name.slice(0, 8) + '…' : prod?.name}
-              </span>
-              {unread > 0 && (
-                <span className="bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unread}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-[#1A1A18]">
+                  {activeRoom.kocName}
+                </div>
 
-        {/* 目前 tab 的任務資訊小條 */}
-        {activeApp && (
-          <div className="bg-amber-50 border-b border-amber-100 px-6 py-2 flex items-center gap-4 text-xs text-amber-700 shrink-0">
-            <span className="font-bold">{activeProd?.thumbnail} {activeProd?.name}</span>
-            <span className="text-amber-400">·</span>
-            <span>{activeCamp?.name}</span>
-            <span className="text-amber-400">·</span>
-            <span className="font-mono font-bold">優惠碼：{activeApp.couponCode}</span>
-            <span className="text-amber-400">·</span>
-            <span className={{
-              pending_content:  '待提交文案',
-              submitted:        '文案審核中',
-              content_approved: '文案核准',
-              content_revision: '文案需修改',
-            }[activeApp.contentStatus] ?? '—'}></span>
-
-          </div>
-        )}
-
-        {/* 訊息區 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
-          {msgs.map(m => (
-            <div key={m.id} className={cn('flex', m.sender === 'vendor' ? 'justify-end' : 'justify-start')}>
-              <div className={cn(
-                'max-w-xs px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
-                m.sender === 'vendor'
-                  ? 'bg-slate-800 text-white rounded-br-sm'
-                  : 'bg-white border border-gray-100 text-slate-700 shadow-sm rounded-bl-sm',
-              )}>
-                {m.text}
-                <div className={cn('text-[10px] mt-1', m.sender === 'vendor' ? 'text-slate-400 text-right' : 'text-gray-400')}>
-                  {m.time}
+                <div className="text-xs text-[#8C8880] mt-1">
+                  {activeRoom.kocId}
+                  {' · '}
+                  {activeRoom.campaignName}
                 </div>
               </div>
-            </div>
-          ))}
-          {msgs.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-gray-300">
-              <Tag size={28} className="mb-3" />
-              <p className="text-sm">尚無訊息，開始與 KOC 溝通吧</p>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
 
-        {/* 輸入區 */}
-        <div className="bg-white border-t border-gray-100 px-6 py-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <Smile size={20} className="text-gray-300 cursor-pointer hover:text-amber-400 transition-colors shrink-0" />
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
-              placeholder="輸入訊息… (Enter 送出)"
-              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder:text-gray-300 outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all"
-            />
-            <button onClick={send} disabled={!input.trim()}
-              className="bg-amber-500 text-white p-2.5 rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
+              <button
+                type="button"
+                onClick={() =>
+                  loadMessages(
+                    activeRoom.roomId
+                  )
+                }
+                disabled={messageLoading}
+                className="p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                title="重新整理訊息"
+              >
+                <RefreshCw
+                  size={16}
+                  className={cn(
+                    messageLoading
+                      ? 'animate-spin'
+                      : ''
+                  )}
+                />
+              </button>
+            </div>
+
+
+            {/* 任務聊天室 Tabs */}
+            <div className="bg-white border-b border-[#E2DDD4] px-6 flex gap-1 shrink-0 overflow-x-auto">
+              {(activeGroup?.rooms || []).map(
+                room => (
+                  <button
+                    type="button"
+                    key={room.roomId}
+                    onClick={() =>
+                      selectRoom(room)
+                    }
+                    className={cn(
+                      `
+                        flex items-center gap-2
+                        px-4 py-3 text-xs
+                        font-semibold border-b-2
+                        transition-all
+                        whitespace-nowrap
+                      `,
+                      activeRoomId ===
+                        room.roomId
+                        ? 'border-[#C8522A] text-[#C8522A]'
+                        : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+                    )}
+                  >
+                    <Tag size={11} />
+
+                    <span className="font-bold">
+                      {room.campaignName}
+                    </span>
+
+                    <span className="font-mono text-[10px]">
+                      #{room.kocMissionId}
+                    </span>
+
+                    {room.unreadCount > 0 && (
+                      <span className="bg-[#C8522A] text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
+                        {room.unreadCount}
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+
+
+            {/* 任務資訊 */}
+            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-6 py-2.5 flex items-center gap-3 text-xs text-[#C8522A] shrink-0">
+              <span className="font-bold">
+                {activeRoom.campaignName}
+              </span>
+
+              <span>·</span>
+
+              <span>
+                任務 #
+                {activeRoom.kocMissionId}
+              </span>
+
+              <span>·</span>
+
+              <span className="font-bold">
+                {stageLabels[
+                  activeRoom.missionStage
+                ] ||
+                  activeRoom.missionStage ||
+                  '未知階段'}
+              </span>
+            </div>
+
+
+            {/* 錯誤訊息 */}
+            {messageError && (
+              <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
+                {messageError}
+              </div>
+            )}
+
+
+            {/* 訊息區 */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+              {messageLoading &&
+              messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center">
+                  <Loader2
+                    size={20}
+                    className="animate-spin text-[#C8522A]"
+                  />
+
+                  <div className="text-xs font-bold text-[#8C8880] mt-3">
+                    訊息載入中...
+                  </div>
+                </div>
+              ) : messages.length > 0 ? (
+                messages.map(message => {
+                  const isVendor =
+                    message.senderRole ===
+                    'vendor'
+
+                  return (
+                    <div
+                      key={message.messageId}
+                      className={cn(
+                        'flex',
+                        isVendor
+                          ? 'justify-end'
+                          : 'justify-start'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          `
+                            max-w-[75%]
+                            sm:max-w-md
+                            px-4 py-2.5
+                            rounded-2xl
+                            text-sm
+                            leading-relaxed
+                            whitespace-pre-wrap
+                            break-words
+                          `,
+                          isVendor
+                            ? 'bg-[#1A1A18] text-white rounded-br-sm'
+                            : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
+                        )}
+                      >
+                        {message.content}
+
+                        <div
+                          className={cn(
+                            'text-[10px] mt-1',
+                            isVendor
+                              ? 'text-white/50 text-right'
+                              : 'text-[#8C8880]'
+                          )}
+                        >
+                          {formatTime(
+                            message.createdAt
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
+                  <Tag
+                    size={28}
+                    className="mb-3 text-[#E2DDD4]"
+                  />
+
+                  <p className="text-sm font-bold">
+                    尚無訊息
+                  </p>
+
+                  <p className="text-xs mt-2">
+                    開始與 KOC 溝通吧
+                  </p>
+                </div>
+              )}
+
+              <div ref={bottomRef} />
+            </div>
+
+
+            {/* 輸入區 */}
+            <div className="bg-white border-t border-[#E2DDD4] px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <textarea
+                  rows={1}
+                  value={input}
+                  onChange={event =>
+                    setInput(
+                      event.target.value
+                    )
+                  }
+                  onKeyDown={
+                    handleInputKeyDown
+                  }
+                  disabled={sending}
+                  placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
+                  className="flex-1 max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+                />
+
+                <button
+                  type="button"
+                  onClick={sendMessage}
+                  disabled={
+                    !input.trim() ||
+                    sending
+                  }
+                  className="bg-[#1A1A18] text-white p-3 rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  {sending ? (
+                    <Loader2
+                      size={17}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Send size={17} />
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

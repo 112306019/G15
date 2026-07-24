@@ -23,7 +23,8 @@ from api.models import (
     KOC,
     Application,
     CampaignProduct,
-    Earnings,
+    Earnings
+
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
@@ -72,6 +73,7 @@ def admin_vendor_list(request):
     vendor_id = request.query_params.get('Vendor_id')
     company_name = request.query_params.get('Company_name')
     email = request.query_params.get('Email')
+    vendor_status = request.query_params.get('Status')
 
     vendors = Vendor.objects.all().order_by('-created_at')
 
@@ -83,6 +85,9 @@ def admin_vendor_list(request):
 
     if email:
         vendors = vendors.filter(email__icontains=email)
+
+    if vendor_status:
+        vendors = vendors.filter(status=vendor_status)
 
     data = []
 
@@ -99,7 +104,10 @@ def admin_vendor_list(request):
 
     return Response({
         "success": True,
-        "vendors": data
+        "err": "",
+        "total": len(data),
+        "vendors": data,
+
     }, status=status.HTTP_200_OK)
 
 
@@ -340,10 +348,17 @@ def admin_vendor_review(request):
     vendor.save()
 
     # 自動新增管理員操作紀錄
+    if review_status == "approved":
+        audit_action_type = "approve_vendor"
+    elif review_status == "rejected":
+        audit_action_type = "reject_vendor"
+    else:
+        audit_action_type = "review_vendor"
+
     audit_log = AdminAuditLogs.objects.create(
         admin_id=admin_obj,
-        action_type="review_vendor",
-        vendor_id=str(vendor.vendor_id),
+        action_type=audit_action_type,
+        vendor=vendor,
         action_reason=action_reason
     )
 
@@ -371,7 +386,7 @@ def admin_vendor_review(request):
 
 # ==============================================================================
 # Platform Admin - 查看優惠碼使用狀況
-# GET /platform_admin/coupons
+# GET /platform/coupons
 # ==============================================================================
 
 @api_view(['GET'])
@@ -381,17 +396,29 @@ def admin_coupon_usage(request):
     campaign_id = request.query_params.get('Campaign_id')
     coupon_status = request.query_params.get('Status')
 
-    coupons = CouponNew.objects.select_related('kocmission__application__campaign').all()
 
+    coupons = CouponNew.objects.select_related(
+        'kocmission__application__campaign',
+        'kocmission__koc',
+    ).all().order_by('-coupon_id')
+
+
+    # 依優惠碼模糊搜尋
     if promotion_code:
-        coupons = coupons.filter(promotion_code__icontains=promotion_code)
+        coupons = coupons.filter(
+            promotion_code__icontains=promotion_code
+        )
 
+    # 依狀態搜尋：inactive、active、expired
     if coupon_status:
         coupons = coupons.filter(status=coupon_status)
 
-    # CouponNew -> KOCMissionNew -> Application -> Campaigns
+    # 依活動編號搜尋
     if campaign_id:
-        coupons = coupons.filter(kocmission__application__campaign_id=campaign_id)
+        coupons = coupons.filter(
+            kocmission__application__campaign__campaign_id=campaign_id
+        )
+
 
     coupons = list(coupons)
 
@@ -403,44 +430,246 @@ def admin_coupon_usage(request):
 
     data = []
 
+
     for coupon in coupons:
         matching_orders = orders_by_code.get(coupon.promotion_code, [])
+        latest_order = orders.first()
+        actual_order_count = orders.count()
 
-        # 如果這個優惠碼有被訂單使用過，取最近一筆訂單當主要顯示
-        latest_order = matching_orders[0] if matching_orders else None
 
-        campaign = None
-        kocmission = coupon.kocmission
+        campaign = coupon.kocmission.application.campaign
+        koc = coupon.kocmission.koc
 
-        if kocmission and kocmission.application:
-            campaign = kocmission.application.campaign
-
-        data.append({
-            "Promotion_code": coupon.promotion_code,
+        coupon_data.append({
             "Coupon_id": coupon.coupon_id,
-            "Campaign_id": campaign.campaign_id if campaign else None,
+            "Promotion_code": coupon.promotion_code,
+            "Discount_value": coupon.discount_value,
             "Status": coupon.status,
-
-            # 目前沒有 TrackingLog / ClickLog 表，所以先回傳 None
-            "Tracking_id": None,
-            "Click_id": None,
-
-            # 訂單使用情況
-            "Order_id": latest_order.order_id if latest_order else None,
-            "User_id": latest_order.user_id if latest_order else None,
-            "Created_at": latest_order.created_at if latest_order else None,
-
-            # 額外補充統計
             "Usage_count": coupon.usage_count,
-            "Actual_order_count": len(matching_orders),
+            "Actual_order_count": actual_order_count,
             "Total_commission": coupon.total_commission,
+
+            "KOCMission_id": coupon.kocmission_id,
+            "KOC_id": koc.koc_id if koc else None,
+
+            "Campaign_id": str(campaign.campaign_id),
+            "Campaign_name": campaign.name,
+
+            "Latest_order": {
+                "Order_id": (
+                    str(latest_order.order_id)
+                    if latest_order
+                    else None
+                ),
+                "User_id": (
+                    latest_order.user_id
+                    if latest_order
+                    else None
+                ),
+                "Total_amount": (
+                    float(latest_order.total_amount)
+                    if latest_order
+                    else None
+                ),
+                "Payment_status": (
+                    latest_order.payment_status
+                    if latest_order
+                    else None
+                ),
+                "Created_at": (
+                    latest_order.created_at
+                    if latest_order
+                    else None
+                ),
+            }
+
         })
 
     return Response({
         "success": True,
-        "coupons": data
+        "err": "",
+        "total": len(coupon_data),
+        "coupons": coupon_data,
+
     }, status=status.HTTP_200_OK)
 
+# ==============================================================================
+# Platform Admin - 查看每月成效追蹤資料
+# GET /platform/performance
+# 可選參數：Year、Month、Campaign_id、Promotion_code
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_performance(request):
+    now = timezone.localtime()
+
+    # 沒有帶 Year、Month 時，預設查詢本月
+    try:
+        year = int(
+            request.query_params.get('Year', now.year)
+        )
+        month = int(
+            request.query_params.get('Month', now.month)
+        )
+    except (TypeError, ValueError):
+        return Response({
+            "success": False,
+            "err": "Year 和 Month 必須是整數"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if month < 1 or month > 12:
+        return Response({
+            "success": False,
+            "err": "Month 必須介於 1 到 12"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    campaign_id = request.query_params.get('Campaign_id')
+    promotion_code = request.query_params.get('Promotion_code')
+
+    coupons = CouponNew.objects.select_related(
+        'kocmission__application__campaign',
+        'kocmission__koc',
+    ).all().order_by('-coupon_id')
+
+    if campaign_id:
+        coupons = coupons.filter(
+            kocmission__application__campaign__campaign_id=campaign_id
+        )
+
+    if promotion_code:
+        coupons = coupons.filter(
+            promotion_code__icontains=promotion_code
+        )
+
+    performance_data = []
+
+    total_actual_orders = 0
+    total_completed_orders = 0
+    total_revenue = 0
+    total_commission = 0
+    coupons_used_this_month = 0
+
+    for coupon in coupons:
+        campaign = coupon.kocmission.application.campaign
+        koc = coupon.kocmission.koc
+
+        # 只查指定月份使用此優惠碼的訂單
+        monthly_orders = Order.objects.filter(
+            promotion_code=coupon.promotion_code,
+            created_at__year=year,
+            created_at__month=month,
+        )
+
+        # 只把付款完成的訂單算入營收
+        completed_orders = monthly_orders.filter(
+            payment_status__in=['completed', 'paid']
+        )
+
+        actual_order_count = monthly_orders.count()
+        completed_order_count = completed_orders.count()
+
+        if actual_order_count > 0:
+            coupons_used_this_month += 1
+
+        monthly_revenue = sum(
+            float(order.total_amount or 0)
+            for order in completed_orders
+        )
+
+        average_order_amount = (
+            monthly_revenue / completed_order_count
+            if completed_order_count > 0
+            else 0
+        )
+
+        # 從 Earnings 計算這個月實際產生的分潤
+        monthly_earnings = Earnings.objects.filter(
+            kocmission=coupon.kocmission,
+            order__in=completed_orders,
+            created_at__year=year,
+            created_at__month=month,
+        )
+
+        monthly_commission = sum(
+            float(earning.amount or 0)
+            for earning in monthly_earnings
+        )
+
+        total_actual_orders += actual_order_count
+        total_completed_orders += completed_order_count
+        total_revenue += monthly_revenue
+        total_commission += monthly_commission
+
+        performance_data.append({
+            "Coupon_id": coupon.coupon_id,
+            "Promotion_code": coupon.promotion_code,
+            "Coupon_status": coupon.status,
+
+            "KOCMission_id": coupon.kocmission_id,
+            "KOC_id": koc.koc_id if koc else None,
+
+            "Campaign_id": str(campaign.campaign_id),
+            "Campaign_name": campaign.name,
+
+            # 本月資料
+            "Usage_count": actual_order_count,
+            "Actual_order_count": actual_order_count,
+            "Completed_order_count": completed_order_count,
+            "Revenue": round(monthly_revenue, 2),
+            "Average_order_amount": round(
+                average_order_amount,
+                2
+            ),
+            "Total_commission": round(
+                monthly_commission,
+                2
+            ),
+
+            # 額外保留原本 Coupon 表的累計資料
+            "Usage_count_all_time": coupon.usage_count,
+            "Total_commission_all_time": float(
+                coupon.total_commission or 0
+            ),
+        })
+
+    overall_average_order_amount = (
+        total_revenue / total_completed_orders
+        if total_completed_orders > 0
+        else 0
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+
+        "period": {
+            "Year": year,
+            "Month": month,
+            "Label": f"{year}-{month:02d}",
+        },
+
+        "summary": {
+            "Total_coupons": coupons.count(),
+            "Coupons_used_this_month": coupons_used_this_month,
+
+            # 保留原本欄位名稱，前端不用大改
+            "Total_usage_count": total_actual_orders,
+            "Total_actual_orders": total_actual_orders,
+            "Total_completed_orders": total_completed_orders,
+            "Total_revenue": round(total_revenue, 2),
+            "Average_order_amount": round(
+                overall_average_order_amount,
+                2
+            ),
+            "Total_commission": round(
+                total_commission,
+                2
+            ),
+        },
+
+        "performance": performance_data,
+    }, status=status.HTTP_200_OK)
 
 
 # 同意koc申請
