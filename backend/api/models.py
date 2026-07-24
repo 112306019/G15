@@ -96,31 +96,67 @@ class Campaigns(models.Model):
         return self.name
 
 class CampaignProduct(models.Model):
-    """活動與商品的交叉關聯表（多對多中介表）"""
-    campaign_product_id = models.AutoField(primary_key=True, db_column='campaign_product_id')
-    
-    # 1. 關聯到活動表 (假設你的活動表類別叫 Campaign，主鍵或欄位叫 campaign_id)
+    """活動與商品的交叉關聯表"""
+
+    DISCOUNT_TYPE_CHOICES = [
+        ('percentage', '百分比折扣'),
+        ('fixed', '直接折價'),
+    ]
+
+    campaign_product_id = models.AutoField(
+        primary_key=True,
+        db_column='campaign_product_id'
+    )
+
     campaign = models.ForeignKey(
-        'Campaigns', 
-        on_delete=models.CASCADE, 
+        'Campaigns',
+        on_delete=models.CASCADE,
         db_column='campaign_id',
         related_name='campaign_products'
     )
-    # 2. 關聯到商品表 (假設你的商品表類別叫 Product，主鍵或欄位叫 product_id)
+
     product = models.ForeignKey(
-        'Product', 
-        on_delete=models.CASCADE, 
+        'Product',
+        on_delete=models.CASCADE,
         db_column='product_id',
         related_name='product_campaigns'
     )
-    # 💡 擴充小撇步：未來如果想記錄「某個商品在這個活動裡的限定活動價」或「分潤比例」，可以直接加欄位在這裡！
-    # activity_price = models.IntegerField(blank=True, null=True, db_column='activity_price'
+
+    # percentage：百分比折扣
+    # fixed：直接折價
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_TYPE_CHOICES,
+        default='percentage',
+        db_column='discount_type'
+    )
+
+    # percentage 時代表百分比，例如 15 = 折價 15%
+    # fixed 時代表金額，例如 150 = 直接折 150 元
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        db_column='discount_value'
+    )
+
+    # KOC 分潤比例，例如 20 = 20%
+    koc_commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        db_column='koc_commission_rate'
+    )
+
     class Meta:
-        db_table = 'Campaign_Product'  # 統一全小寫加底線命名規範
-        # 🌟 加上聯合唯一限制，防止同一個活動重複綁定同一個商品
+        db_table = 'Campaign_Product'
         unique_together = ('campaign', 'product')
+
     def __str__(self):
-        return f"Campaign: {self.campaign_id} - Product: {self.product_id}"
+        return (
+            f"Campaign: {self.campaign_id} "
+            f"- Product: {self.product_id}"
+        )
 
 class Order(models.Model):
     """訂單主表"""
@@ -240,18 +276,73 @@ class Submissions(models.Model):
 
 
 class CouponNew(models.Model):
+    DISCOUNT_TYPE_CHOICES = [
+        ('percentage', '百分比折扣'),
+        ('fixed', '直接折價'),
+    ]
+
     STATUS_CHOICES = [
         ('inactive', '未啟用'),
         ('active', '啟用中'),
         ('expired', '已過期'),
     ]
-    coupon_id = models.AutoField(primary_key=True, db_column='coupon_id')
-    kocmission = models.ForeignKey(KOCMissionNew, on_delete=models.CASCADE, db_column='kocmisson_id')
-    promotion_code = models.CharField(max_length=100, unique=True, db_column='promotion_code')
-    discount_value = models.IntegerField(db_column='discount_value')
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='inactive', db_column='status')
-    usage_count = models.IntegerField(default=0, db_column='usage_count')
-    total_commission = models.IntegerField(default=0, db_column='total_commission')
+
+    coupon_id = models.AutoField(
+        primary_key=True,
+        db_column='coupon_id'
+    )
+
+    kocmission = models.ForeignKey(
+        KOCMissionNew,
+        on_delete=models.CASCADE,
+        db_column='kocmisson_id'
+    )
+
+    promotion_code = models.CharField(
+        max_length=100,
+        unique=True,
+        db_column='promotion_code'
+    )
+
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_TYPE_CHOICES,
+        default='percentage',
+        db_column='discount_type'
+    )
+
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        db_column='discount_value'
+    )
+
+    koc_commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        db_column='koc_commission_rate'
+    )
+
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='inactive',
+        db_column='status'
+    )
+
+    usage_count = models.IntegerField(
+        default=0,
+        db_column='usage_count'
+    )
+
+    total_commission = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        db_column='total_commission'
+    )
 
     class Meta:
         db_table = 'Coupon'
