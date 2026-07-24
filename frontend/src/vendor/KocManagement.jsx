@@ -299,17 +299,48 @@ function CouponDetailModal({
                 stage={coupon.stage}
               />
             </div>
+            <div className="border border-[#E2DDD4] rounded-2xl p-5">
+              <div className="text-xs font-bold text-[#8C8880] mb-3">
+                KOC 發布連結
+              </div>
+
+              {coupon.contentUrl ? (
+                <a
+                  href={coupon.contentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#C8522A] break-all hover:border-[#C8522A] hover:underline transition-colors"
+                >
+                  {coupon.contentUrl}
+                </a>
+              ) : (
+                <div className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#8C8880]">
+                  KOC 尚未提交發布連結
+                </div>
+              )}
+
+              {coupon.linkSubmittedTime && (
+                <div className="mt-2 text-[10px] font-bold text-[#8C8880]">
+                  提交時間：
+                  {new Date(
+                    coupon.linkSubmittedTime
+                  ).toLocaleString('zh-TW')}
+                </div>
+              )}
+            </div>
           </div>
 
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SummaryCard
               icon={Ticket}
-              label="折扣值"
+              label="優惠類型"
               value={
-                coupon.discountValue
-                  ? `${coupon.discountValue}`
-                  : '0'
+                coupon.discountType === 'fixed'
+                  ? formatCurrency(
+                      coupon.discountValue
+                    )
+                  : `${coupon.discountValue}%`
               }
             />
 
@@ -317,6 +348,12 @@ function CouponDetailModal({
               icon={ShoppingBag}
               label="使用次數"
               value={coupon.usageCount}
+            />
+
+            <SummaryCard
+              icon={Wallet}
+              label="KOC 分潤比例"
+              value={`${coupon.kocCommissionRate}%`}
             />
 
             <SummaryCard
@@ -470,10 +507,18 @@ export default function KocManagement() {
             promotionCode:
               coupon.promotion_code,
 
+            discountType:
+              coupon.discount_type ||
+              'percentage',
+
             discountValue:
               Number(
-                coupon.discount_value ||
-                0
+                coupon.discount_value || 0
+              ),
+
+            kocCommissionRate:
+              Number(
+                coupon.koc_commission_rate || 0
               ),
 
             status:
@@ -498,6 +543,15 @@ export default function KocManagement() {
 
             stage:
               coupon.stage,
+
+            contentUrl:
+              coupon.content_url || '',
+
+            linkSubmissionStatus:
+              coupon.link_submission_status || '',
+
+            linkSubmittedTime:
+              coupon.link_submitted_time || null,
 
             applicationId:
               coupon.application_id,

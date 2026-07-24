@@ -100,11 +100,34 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   
   // 🌟 修改：加入 startDate，作為排程發佈日期
   const defaultForm = {
-    id: '', name: '', description: '', budget: '',
-    startDate: getTodayString(), recruitEndDate: '', promoDays: '7',
-    prodId: '', prodName: '', prodDescription: '', prodPrice: '', prodDiscountedPrice: '',
-    prodStock: '', prodCategory: '', prodImageUrl: '', thumbnail: '📦',
-    kocDiscount: '', status: 'draft', spent: 0, kocCount: 0, orders: 0, gmv: 0
+    id: '',
+    name: '',
+    description: '',
+    budget: '',
+
+    startDate: getTodayString(),
+    recruitEndDate: '',
+    promoDays: '7',
+
+    prodId: '',
+    prodName: '',
+    prodDescription: '',
+    prodPrice: '',
+    prodDiscountedPrice: '',
+    prodStock: '',
+    prodCategory: '',
+    prodImageUrl: '',
+    thumbnail: '📦',
+
+    discountType: 'percentage',
+    discountValue: '',
+    kocCommissionRate: '',
+
+    status: 'draft',
+    spent: 0,
+    kocCount: 0,
+    orders: 0,
+    gmv: 0
   }
   const [form, setForm] = useState(defaultForm)
   
@@ -122,6 +145,20 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   }, [open, initialData])
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const originalPrice = Number(form.prodPrice) || 0
+  const discountValue = Number(form.discountValue) || 0
+  const commissionRate = Number(form.kocCommissionRate) || 0
+
+  const estimatedPrice =
+    form.discountType === 'percentage'
+      ? originalPrice * (1 - discountValue / 100)
+      : originalPrice - discountValue
+
+  const safeEstimatedPrice = Math.max(estimatedPrice, 0)
+
+  const estimatedCommission =
+    safeEstimatedPrice * (commissionRate / 100)
 
   const handleSelectProduct = event => {
     const selected = existingProducts.find(
@@ -255,14 +292,22 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     }
   }
 
-    const buildPayload = campaignStatus => {
+  
+
+  const buildPayload = campaignStatus => {
     const basePayload = {
       vendor_id: localStorage.getItem('vendor_id'),
       name: form.name.trim(),
       description: form.description.trim(),
       budget: Number(form.budget),
       reward_type: 'commission',
-      discount_percent: Number(form.kocDiscount),
+
+      discount_type: form.discountType,
+      discount_value: Number(form.discountValue),
+      koc_commission_rate: Number(
+        form.kocCommissionRate
+      ),
+
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
       end_date: form.recruitEndDate,
@@ -405,17 +450,104 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
           )}
         </>}
 
-        {step === 2 && <>
-          <Input label="粉絲專屬折扣碼優惠 (%) *" type="number" value={form.kocDiscount} onChange={set('kocDiscount')} placeholder="15" />
-          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-5 mt-4">
-              <div className="flex justify-between items-center text-sm mb-2">
-                <span className="text-[#8C8880] font-bold">粉絲結帳預估價</span>
-                <span className="font-black text-[#1A1A18] text-lg">
-                  {form.prodPrice && form.kocDiscount ? formatCurrency(form.prodPrice * (1 - form.kocDiscount/100)) : '—'}
+        {step === 2 && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                優惠方式 *
+              </label>
+
+              <select
+                value={form.discountType}
+                onChange={set('discountType')}
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none"
+              >
+                <option value="percentage">
+                  百分比折扣
+                </option>
+
+                <option value="fixed">
+                  直接折價
+                </option>
+              </select>
+            </div>
+
+            <Input
+              label={
+                form.discountType === 'percentage'
+                  ? '折扣比例 (%) *'
+                  : '直接折價金額 (NT$) *'
+              }
+              type="number"
+              min="0"
+              max={
+                form.discountType === 'percentage'
+                  ? '100'
+                  : originalPrice || undefined
+              }
+              step="0.01"
+              value={form.discountValue}
+              onChange={set('discountValue')}
+              placeholder={
+                form.discountType === 'percentage'
+                  ? '例：15，代表折價 15%'
+                  : '例：150，代表直接折 150 元'
+              }
+            />
+
+            <Input
+              label="KOC 分潤比例 (%) *"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={form.kocCommissionRate}
+              onChange={set('kocCommissionRate')}
+              placeholder="例：20"
+            />
+
+            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-5 mt-4 space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-[#8C8880] font-bold">
+                  商品原價
+                </span>
+
+                <span className="font-bold text-[#1A1A18]">
+                  {originalPrice > 0
+                    ? formatCurrency(originalPrice)
+                    : '—'}
                 </span>
               </div>
-          </div>
-        </>}
+
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-[#8C8880] font-bold">
+                  優惠結帳預估價
+                </span>
+
+                <span className="font-black text-[#1A1A18] text-lg">
+                  {originalPrice > 0 &&
+                  form.discountValue !== ''
+                    ? formatCurrency(safeEstimatedPrice)
+                    : '—'}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-[#8C8880] font-bold">
+                  每件 KOC 預估分潤
+                </span>
+
+                <span className="font-black text-[#C8522A] text-lg">
+                  {originalPrice > 0 &&
+                  form.discountValue !== '' &&
+                  form.kocCommissionRate !== ''
+                    ? formatCurrency(estimatedCommission)
+                    : '—'}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
 
         {step === 3 && (
           <div className="space-y-4">
@@ -477,7 +609,40 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 variant="brand" 
                 onClick={() => setStep(s=>s+1)} 
                 // 🌟 修改：補上完整的防呆，第一關一定要有名字跟日期才能下一步
-                disabled={(step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) || (step === 1 && !form.prodName) || isSaving} 
+                disabled={
+                  (
+                    step === 0 &&
+                    (
+                      !form.name ||
+                      !form.startDate ||
+                      !form.recruitEndDate
+                    )
+                  ) ||
+                  (
+                    step === 1 &&
+                    !form.prodName
+                  ) ||
+                  (
+                    step === 2 &&
+                    (
+                      form.discountValue === '' ||
+                      form.kocCommissionRate === '' ||
+                      Number(form.discountValue) < 0 ||
+                      Number(form.kocCommissionRate) < 0 ||
+                      Number(form.kocCommissionRate) > 100 ||
+                      (
+                        form.discountType === 'percentage' &&
+                        Number(form.discountValue) > 100
+                      ) ||
+                      (
+                        form.discountType === 'fixed' &&
+                        Number(form.discountValue) >
+                          Number(form.prodPrice)
+                      )
+                    )
+                  ) ||
+                  isSaving
+                }
                 className="gap-1.5 px-8"
               >
                 下一步<ChevronRight size={14}/>
@@ -696,7 +861,18 @@ export default function Campaigns() {
       endDate: campaign.end_date || '',
 
       promoDays: String(campaign.promo_days || 7),
-      kocDiscount: String(campaign.discount_percent || 0),
+      discountType:
+        product.discount_type || 'percentage',
+
+      discountValue:
+        product.discount_value !== undefined
+          ? String(product.discount_value)
+          : '',
+
+      kocCommissionRate:
+        product.koc_commission_rate !== undefined
+          ? String(product.koc_commission_rate)
+          : '',
 
       prodId: product.product_id || '',
       prodName: product.product_name || '',
@@ -900,7 +1076,20 @@ export default function Campaigns() {
                   <div className="font-bold text-[#1A1A18] mb-1">{selectedTask.prodName || '預設活動商品'}</div>
                   <div className="flex gap-4 text-xs font-bold text-[#8C8880]">
                     <span>售價 {formatCurrency(selectedTask.prodPrice || 0)}</span>
-                    <span className="text-[#C8522A]">KOC 折扣 {selectedTask.kocDiscount || 0}%</span>
+                    <span className="text-[#C8522A]">
+                      {selectedTask.discountType === 'fixed'
+                        ? `直接折價 ${formatCurrency(
+                            Number(selectedTask.discountValue || 0)
+                          )}`
+                        : `折扣優惠 ${
+                            selectedTask.discountValue || 0
+                          }%`}
+                    </span>
+                    <span className="text-[#C8522A]">
+                      KOC 分潤 {
+                        selectedTask.kocCommissionRate || 0
+                      }%
+                    </span>
                   </div>
                 </div>
               </div>

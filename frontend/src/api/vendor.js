@@ -107,14 +107,24 @@ export const reviewVendorApplication = (data) => {
 // 獲取投稿內容
 export const getVendorSubmissions = (
   vendorId,
-  submissionType = 'text'
-) =>
-  api.get('/vendor/mission/getSubmissionDetail', {
-    params: {
-      vendor_id: vendorId,
-      submission_type: submissionType
+  submissionType = ''
+) => {
+  const params = {
+    vendor_id: vendorId
+  }
+
+  if (submissionType) {
+    params.submission_type =
+      submissionType
+  }
+
+  return api.get(
+    '/vendor/mission/getSubmissionDetail',
+    {
+      params
     }
-  })
+  )
+}
 
 
 
