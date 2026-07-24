@@ -5,7 +5,8 @@ import { Star, ShoppingCart, User } from 'lucide-react';
 export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 }) {
   
   const allNavItems = [
-    { label: '購物頁面', key: 'shop', isKocOnly: false }, 
+    { label: '購物頁面', key: 'shop', isKocOnly: false },
+    { label: '任務中心', key: 'home', isKocOnly: true },
   ];
 
   const navItems = allNavItems.filter(item => {

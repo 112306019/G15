@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import api from '../api/index';
 
-const user_id = 'U00001'; // 暫時寫死，等登入機制做好再改
-
 export default function AnalysisPage({ onBack, onViewData }) {
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [analytics, setAnalytics] = useState([]);
   const [loading, setLoading] = useState(true);
 

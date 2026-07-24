@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import api from '../api/index';
 
-const user_id = 'U00001'; // 暫時寫死，等登入機制做好再改
-
 function Field({ label, value, onChange, disabled, type = "text", placeholder }) {
   return (
     <div>
@@ -28,6 +26,7 @@ function Field({ label, value, onChange, disabled, type = "text", placeholder })
 
 // 🟢 新增 isKOC prop，預設為 false (一般消費者)
 export default function ProfileInfo({ isKOC = false }) {
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, message: "" });
