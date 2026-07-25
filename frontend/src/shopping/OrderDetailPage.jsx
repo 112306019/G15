@@ -103,8 +103,8 @@ export default function OrderDetailPage({ onBack, orderId }) {
         訂單狀態：<strong className="text-[#1A1A18] tracking-wider">
           {orderData?.order_status === "pending" ? "處理中"
             : orderData?.order_status === "completed" ? "已完成"
-            : orderData?.order_status === "cancelled" ? "已取消"
-            : "處理中"}
+              : orderData?.order_status === "cancelled" ? "已取消"
+                : "處理中"}
         </strong>
       </p>
 
@@ -123,13 +123,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
             return (
               <div key={s.label} className="flex flex-col items-center gap-4 w-24 group">
                 <div
-                  className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 bg-white ${
-                    isDone
+                  className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 bg-white ${isDone
                       ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
                       : isActive
-                      ? "border-[#C8522A] text-[#C8522A] shadow-sm"
-                      : "border-[#E2DDD4] text-[#8C8880]"
-                  }`}
+                        ? "border-[#C8522A] text-[#C8522A] shadow-sm"
+                        : "border-[#E2DDD4] text-[#8C8880]"
+                    }`}
                 >
                   <DotIcon size={20} className={isDone ? "text-white" : ""} />
                 </div>
@@ -139,22 +138,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
               </div>
             );
           })}
-        </div>
-
-        {/* 測試用按鈕 */}
-        <div className="mt-10 flex justify-center gap-4">
-          <button
-            onClick={() => setStep((v) => Math.max(0, v - 1))}
-            className="text-xs text-[#8C8880] hover:text-[#1A1A18] font-bold px-5 py-2.5 border border-[#E2DDD4] rounded-full hover:bg-[#F8F9FA] transition-colors"
-          >
-            上一步 (測試)
-          </button>
-          <button
-            onClick={() => setStep((v) => Math.min(3, v + 1))}
-            className="text-xs text-[#8C8880] hover:text-[#1A1A18] font-bold px-5 py-2.5 border border-[#E2DDD4] rounded-full hover:bg-[#F8F9FA] transition-colors"
-          >
-            下一步 (測試)
-          </button>
         </div>
       </div>
 
@@ -187,9 +170,8 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 <div className="absolute left-[11px] top-8 h-full w-[2px] bg-[#E2DDD4]" />
               )}
               <div
-                className={`mt-1 h-6 w-6 rounded-full border-4 flex-shrink-0 z-10 bg-white transition-colors ${
-                  item.active ? "border-[#C8522A]" : "border-[#E2DDD4]"
-                }`}
+                className={`mt-1 h-6 w-6 rounded-full border-4 flex-shrink-0 z-10 bg-white transition-colors ${item.active ? "border-[#C8522A]" : "border-[#E2DDD4]"
+                  }`}
               />
               <div>
                 <div className={`mb-1 text-base font-bold ${item.active ? "text-[#1A1A18]" : "text-[#8C8880]"}`}>
@@ -267,7 +249,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
             <span className="text-[#1A1A18] font-bold">
               {orderData?.shipping_status === "shipped" ? "已出貨"
                 : orderData?.shipping_status === "delivered" ? "已送達"
-                : "待出貨"}
+                  : "待出貨"}
             </span>
           </div>
           {orderData?.promotion_code && (
@@ -278,6 +260,31 @@ export default function OrderDetailPage({ onBack, orderId }) {
           )}
         </div>
       </div>
+
+      {orderData?.shipping_status === 'delivered' && orderData?.order_status !== 'completed' && (
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={async () => {
+              try {
+                await fetch("http://127.0.0.1:8000/api/consumer/order/update", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    Order_id: orderId,
+                    order_status: "completed",
+                  }),
+                });
+                setOrderData((prev) => ({ ...prev, order_status: "completed" }));
+              } catch (err) {
+                console.error("確認收貨失敗", err);
+              }
+            }}
+            className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all hover:-translate-y-0.5"
+          >
+            確認收貨
+          </button>
+        </div>
+      )}
 
     </div>
   );
