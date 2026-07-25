@@ -161,6 +161,7 @@ function MainSystem() {
     }
   };
   const [cartItems, setCartItems] = useState([]);
+  const [checkoutSummary, setCheckoutSummary] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [appToast, setAppToast] = useState("");
@@ -251,8 +252,7 @@ function MainSystem() {
             handleNavigate(mappedRole === 'koc' ? 'home' : 'shop', null, mappedRole);
           }}
           onRegisterSuccess={() => {
-            setUserRole('shopper');
-            handleNavigate('profile', null, 'shopper');
+            handleNavigate('login');
           }}
           onSkipToShop={() => {
             setUserRole('guest');
@@ -277,8 +277,21 @@ function MainSystem() {
         />
       )}
 
-      {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={(data) => { setCartItems(data?.items || []); handleNavigate('checkout'); }} />}
-      {view === 'checkout' && <CheckoutPage cartItems={cartItems} onPaid={() => handleNavigate('orders')} />}
+      {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={(data) => { setCartItems(data?.items || []); setCheckoutSummary(data); handleNavigate('checkout'); }} />}
+      {view === 'checkout' && <CheckoutPage
+        cartItems={cartItems}
+        onPaid={() => handleNavigate('orders')}
+        onBack={() => handleNavigate('cart')}
+        initialSummary={checkoutSummary ? {
+          items: `$${checkoutSummary.subtotal} x ${checkoutSummary.items?.length}`,
+          itemsAmount: checkoutSummary.subtotal,
+          shippingAmount: 0,
+          couponDiscount: checkoutSummary.couponDiscount || 0,
+          pointsDiscount: 0,
+          currency: "NTD",
+          total: checkoutSummary.grandTotal,
+        } : undefined}
+      />}
 
       {shellViews.includes(view) && (
         <div className="flex p-8 max-w-7xl mx-auto">

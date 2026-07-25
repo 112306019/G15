@@ -75,6 +75,7 @@ function formatExpiry(raw) {
 
 export default function CheckoutPage({
   onPaid,
+  onBack,
   cartItems = [],
   initialSummary = {
     items: "$20 x 2",
@@ -96,6 +97,10 @@ export default function CheckoutPage({
 
   const [submitState, setSubmitState] = useState("idle");
   const [payError, setPayError] = useState("");
+
+  const [recipient, setRecipient] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientAddress, setRecipientAddress] = useState("");
 
   // 優惠碼
   const [couponCode, setCouponCode] = useState("");
@@ -119,7 +124,8 @@ export default function CheckoutPage({
   const expiryValid = method === "card" ? expiryDigits.length >= 4 : true;
   const cvcValid = method === "card" ? cvc.trim().length >= 3 : true;
 
-  const canPay = method !== "card" ? true : cardNumValid && cardNameValid && expiryValid && cvcValid;
+  const shippingValid = recipient.trim().length > 0 && recipientPhone.trim().length > 0 && recipientAddress.trim().length > 0;
+  const canPay = shippingValid && (method !== "card" ? true : cardNumValid && cardNameValid && expiryValid && cvcValid);
 
   const inputBase =
     "w-full rounded-[10px] border-[1.5px] px-4 py-[13px] pr-11 outline-none transition-colors tracking-[0.05em] font-mono text-[14px]";
@@ -202,6 +208,9 @@ export default function CheckoutPage({
           total_amount: grandTotal,
           promotion_code: couponApplied ? couponCode.trim() : null,
           address_id: initialSummary.addressId || "default",
+          recipient: recipient,
+          recipient_phone: recipientPhone,
+          recipient_address: recipientAddress,
         }),
       });
       const orderData = await orderRes.json();
@@ -280,7 +289,7 @@ export default function CheckoutPage({
         <div>
           <button
             type="button"
-            onClick={() => window.history.back()}
+            onClick={() => onBack?.()}
             className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm group w-fit"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" strokeWidth="2">
@@ -290,6 +299,38 @@ export default function CheckoutPage({
             返回購物車
           </button>
           <h1 className="font-['DM_Serif_Display'] text-[40px] leading-none mb-7">結帳</h1>
+          <div className="h-px bg-[#E2DDD4] mb-7" />
+
+          <div className="mb-7">
+            <div className="text-[18px] font-bold mb-5">配送資訊</div>
+            <div className="mb-4">
+              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">收件人姓名</label>
+              <input
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="請輸入收件人姓名"
+                className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${recipient.trim() ? "border-[#6BBF6B] bg-white" : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"}`}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">收件人電話</label>
+              <input
+                value={recipientPhone}
+                onChange={(e) => setRecipientPhone(e.target.value)}
+                placeholder="請輸入收件人電話"
+                className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${recipientPhone.trim() ? "border-[#6BBF6B] bg-white" : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"}`}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">配送地址</label>
+              <input
+                value={recipientAddress}
+                onChange={(e) => setRecipientAddress(e.target.value)}
+                placeholder="請輸入配送地址"
+                className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${recipientAddress.trim() ? "border-[#6BBF6B] bg-white" : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"}`}
+              />
+            </div>
+          </div>
           <div className="h-px bg-[#E2DDD4] mb-7" />
 
           <div className="flex items-center justify-between mb-5">
