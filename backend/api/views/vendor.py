@@ -8,9 +8,10 @@ from django.utils import timezone
 from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Sum, Count
+from decimal import Decimal, ROUND_HALF_UP
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, ChatRoom, Message
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -406,9 +407,37 @@ def vendor_product_getlist(request):
     if product_status:
         products = products.filter(status=product_status)
 
+    # 透過 OrderItem 加總每個商品「實際」賣出的數量與銷售額，
+    # 而不是讓前端顯示寫死的 0。
+    sold_data = (
+        OrderItem.objects
+        .filter(
+            product__vendor_id=vendor_id,
+            order__payment_status__in=["paid", "completed"]
+        )
+        .values("product_id")
+        .annotate(
+            quantity_sold=Sum("quantity"),
+            total_sales=Sum("subtotal")
+        )
+    )
+
+    sold_map = {
+        row["product_id"]: {
+            "quantity_sold": row["quantity_sold"] or 0,
+            "total_sales": row["total_sales"] or 0
+        }
+        for row in sold_data
+    }
+
     product_list = []
 
     for product in products:
+        sold_info = sold_map.get(
+            product.product_id,
+            {"quantity_sold": 0, "total_sales": 0}
+        )
+
         product_list.append({
             "product_id": product.product_id,
             "product_name": product.product_name,
@@ -417,6 +446,8 @@ def vendor_product_getlist(request):
             "price": product.price,
             "discounted_price": product.discounted_price,
             "stock": product.stock,
+            "quantity_sold": sold_info["quantity_sold"],
+            "total_sales": int(sold_info["total_sales"]),
             "category": product.category,
             "status": product.status,
         })
@@ -639,6 +670,34 @@ def vendor_campaign_update(request):
             "success": False,
             "err": "Campaign not found"
         }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign_product = CampaignProduct.objects.filter(
+        campaign=campaign
+    ).first()
+
+    # 該活動只要有任何優惠碼已被使用過，折扣、分潤比例與綁定商品就鎖定，
+    # 避免事後更動讓已發生的訂單/分潤跟畫面顯示對不起來。
+    coupon_used = CouponNew.objects.filter(
+        kocmission__application__campaign=campaign,
+        usage_count__gt=0
+    ).exists()
+
+    if coupon_used and campaign_product:
+        locked_field_changed = (
+            str(campaign_product.discount_type) != str(data["discount_type"])
+            or Decimal(str(campaign_product.discount_value)) != Decimal(str(data["discount_value"]))
+            or Decimal(str(campaign_product.koc_commission_rate)) != Decimal(str(data["koc_commission_rate"]))
+            or (
+                product_id is not None
+                and str(campaign_product.product_id) != str(product_id)
+            )
+        )
+
+        if locked_field_changed:
+            return Response({
+                "success": False,
+                "err": "此活動已有優惠碼被使用，折扣、分潤比例與綁定商品無法再修改"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     start_datetime = timezone.make_aware(
         datetime.combine(
@@ -867,6 +926,13 @@ def vendor_campaign_getlist(request):
             campaign=campaign
         )
 
+        # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
+        # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
+        coupon_used = CouponNew.objects.filter(
+            kocmission__application__campaign=campaign,
+            usage_count__gt=0
+        ).exists()
+
         products = []
 
         for campaign_product in campaign_products:
@@ -911,6 +977,7 @@ def vendor_campaign_getlist(request):
                 else None
             ),
             "status": campaign.status,
+            "coupon_used": coupon_used,
             "products": products,
         })
 
@@ -1501,6 +1568,7 @@ def vendor_order_getlist(request):
                 "order_status": order.order_status,
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
+                "has_address": bool(order.address_id),
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": []
             }
@@ -1555,6 +1623,43 @@ def vendor_order_get_detail(request):
 
     payment = Payment.objects.filter(order_id=order_id).first()
 
+    # 收件資訊：出貨作業必須要有的收件人姓名、電話、地址。
+    # 之前這裡只回傳 address_id（一個數字），前端完全沒地方能看到實際地址。
+    recipient_name = None
+    recipient_phone = None
+    address_data = None
+
+    if order.user_id:
+        member = User.objects.filter(user_id=order.user_id).first()
+        if member:
+            recipient_name = member.display_name or member.name
+            recipient_phone = member.phone
+
+    if order.address_id:
+        address = Address.objects.filter(
+            address_id=order.address_id
+        ).first()
+
+        if address:
+            address_data = {
+                "address_id": address.address_id,
+                "phone": address.phone,
+                "city": address.city,
+                "district": address.district,
+                "detail_address": address.detail_address,
+                "postal_code": address.postal_code,
+            }
+
+            # 地址上留的電話優先於會員資料的電話（收件人可能不是本人）
+            if address.phone:
+                recipient_phone = address.phone
+
+    shipping_info = {
+        "recipient_name": recipient_name,
+        "recipient_phone": recipient_phone,
+        "address": address_data,
+    }
+
     items = []
     for item in order_items:
         items.append({
@@ -1590,11 +1695,196 @@ def vendor_order_get_detail(request):
             "payment_status": order.payment_status,
             "shipping_status": order.shipping_status,
             "address_id": order.address_id,
+            "shipping_info": shipping_info,
             "created_at": order.created_at.isoformat() if order.created_at else None,
             "items": items,
             "payment": payment_data
         }
     }, status=status.HTTP_200_OK)
+
+def calculate_order_commission(order):
+    """
+    訂單完成後計算並寫入 KOC 分潤。
+
+    暫時沿用現有 Earnings model：
+    - 不修改 amount 欄位型態
+    - 透過程式檢查避免重複建立
+    """
+
+    promotion_code = (
+        order.promotion_code or ""
+    ).strip()
+
+    if not promotion_code:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "訂單未使用優惠碼"
+        }
+
+    try:
+        coupon = (
+            CouponNew.objects
+            .select_related(
+                "kocmission__koc__user",
+                "kocmission__application__campaign"
+            )
+            .get(
+                promotion_code=promotion_code
+            )
+        )
+    except CouponNew.DoesNotExist:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "找不到優惠碼"
+        }
+
+    if coupon.status != "active":
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "優惠碼尚未啟用"
+        }
+
+    mission = coupon.kocmission
+
+    if not mission.koc_id:
+        raise ValueError(
+            "此任務沒有綁定 KOC"
+        )
+
+    if not mission.koc or not mission.koc.user:
+        raise ValueError(
+            "找不到 KOC 對應的使用者"
+        )
+
+    # 程式層避免同一張訂單重複建立分潤
+    existing_earning = (
+        Earnings.objects
+        .filter(
+            order=order,
+            kocmission=mission
+        )
+        .first()
+    )
+
+    if existing_earning:
+        return {
+            "created": False,
+            "earning": existing_earning,
+            "commission_amount": (
+                existing_earning.amount
+            ),
+            "message": "此訂單已計算過分潤"
+        }
+
+    campaign = (
+        mission.application.campaign
+    )
+
+    campaign_product_ids = (
+        CampaignProduct.objects
+        .filter(campaign=campaign)
+        .values_list(
+            "product_id",
+            flat=True
+        )
+    )
+
+    commission_items = (
+        OrderItem.objects
+        .filter(
+            order=order,
+            product_id__in=campaign_product_ids
+        )
+    )
+
+    commission_base = sum(
+        (
+            Decimal(str(item.subtotal))
+            for item in commission_items
+        ),
+        Decimal("0.00")
+    )
+
+    if commission_base <= 0:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "沒有符合活動的訂單商品"
+        }
+
+    commission_rate = Decimal(
+        str(coupon.koc_commission_rate)
+    )
+
+    raw_commission = (
+        commission_base
+        * commission_rate
+        / Decimal("100")
+    )
+
+    # 目前 Earnings.amount 若是 IntegerField，
+    # 先四捨五入成整數
+    commission_amount = int(
+        raw_commission.quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP
+        )
+    )
+
+    if commission_amount <= 0:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "計算後分潤為 0"
+        }
+
+    earning = Earnings.objects.create(
+        user=mission.koc.user,
+        kocmission=mission,
+        order=order,
+        amount=commission_amount,
+        status="withdrawable"
+    )
+
+    coupon.usage_count = (
+        coupon.usage_count or 0
+    ) + 1
+
+    coupon.total_commission = (
+        Decimal(
+            str(
+                coupon.total_commission
+                or 0
+            )
+        )
+        + Decimal(
+            str(commission_amount)
+        )
+    )
+
+    coupon.save(
+        update_fields=[
+            "usage_count",
+            "total_commission"
+        ]
+    )
+
+    return {
+        "created": True,
+        "earning": earning,
+        "commission_amount": (
+            commission_amount
+        ),
+        "message": "分潤建立成功"
+    }
 
 
 @api_view(["POST"])
@@ -1827,9 +2117,10 @@ def vendor_analytics_overview(request):
         vendor_id=vendor_id
     ).count()
 
-    # 2. 這個廠商商品相關的訂單明細
+    # 2. 這個廠商商品相關的訂單明細（只計算已付款訂單，未付款/未完成付款不算實際銷售）
     order_items = OrderItem.objects.filter(
-        product__vendor_id=vendor_id
+        product__vendor_id=vendor_id,
+        order__payment_status__in=["paid", "completed"]
     ).select_related("order", "product")
 
     # 3. 訂單總數，不重複計算同一張訂單
@@ -1895,7 +2186,8 @@ def vendor_product_performance(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     order_items = OrderItem.objects.filter(
-        product__vendor_id=vendor_id
+        product__vendor_id=vendor_id,
+        order__payment_status__in=["paid", "completed"]
     ).select_related("order", "product")
 
     if start_date:
@@ -2359,4 +2651,3 @@ def vendor_chatroom_mark_read(request):
         "room_id": chatroom.room_id,
         "updated_count": updated_count
     }, status=status.HTTP_200_OK)
-

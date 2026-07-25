@@ -23,7 +23,8 @@ function mapProductFromApi(product) {
         ? null
         : Number(product.discounted_price),
     stock: Number(product.stock || 0),
-    sold: 0,
+    sold: Number(product.quantity_sold || 0),
+    totalSales: Number(product.total_sales || 0),
     thumbnail: product.image_url || '📦',
     imageUrl: product.image_url || '',
     description: product.description || '',
@@ -197,14 +198,14 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="商品價格 *"
+              label="商品定價 *"
               type="number"
               value={form.price}
               onChange={set('price')}
             />
 
             <Input
-              label="折扣價格"
+              label="通路折扣價格"
               type="number"
               value={form.discountedPrice}
               onChange={set('discountedPrice')}
@@ -446,6 +447,7 @@ export default function Products() {
           : Number(form.discountedPrice),
       stock: Number(form.stock),
       sold: 0,
+      totalSales: 0,
       thumbnail: form.imageUrl || '📦',
       imageUrl: form.imageUrl,
       description: form.description,
@@ -516,7 +518,7 @@ export default function Products() {
     total:     prods.length,
     active:    prods.filter(p => p.status === 'active').length,
     totalSold: prods.reduce((s,p) => s+p.sold, 0),
-    gmv:       prods.reduce((s,p) => s+p.price*p.sold, 0),
+    gmv:       prods.reduce((s,p) => s+(p.totalSales || 0), 0),
   }
 
   if (loading) {
@@ -630,7 +632,21 @@ export default function Products() {
 
                 <div className="flex items-end justify-between mt-2">
                   <div>
-                    <div className="text-lg font-black text-[#1A1A18]">{formatCurrency(p.price)}</div>
+                    <div className="flex items-baseline gap-2">
+                      <div className={cn(
+                        'text-lg font-black',
+                        p.discountedPrice !== null && p.discountedPrice < p.price
+                          ? 'text-[#8C8880] line-through text-sm'
+                          : 'text-[#1A1A18]'
+                      )}>
+                        {formatCurrency(p.price)}
+                      </div>
+                      {p.discountedPrice !== null && p.discountedPrice < p.price && (
+                        <div className="text-lg font-black text-[#C8522A]">
+                          {formatCurrency(p.discountedPrice)}
+                        </div>
+                      )}
+                    </div>
                     <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">{p.category}</div>
                   </div>
                   <ProductBadge status={p.status}/>
@@ -672,7 +688,21 @@ export default function Products() {
                       </div>
                     </td>
                     <td className="p-5 text-xs font-bold text-[#8C8880]">{p.category}</td>
-                    <td className="p-5"><div className="text-sm font-black text-[#1A1A18]">{formatCurrency(p.price)}</div></td>
+                    <td className="p-5">
+                      <div className={cn(
+                        'text-sm font-black',
+                        p.discountedPrice !== null && p.discountedPrice < p.price
+                          ? 'text-[#8C8880] line-through'
+                          : 'text-[#1A1A18]'
+                      )}>
+                        {formatCurrency(p.price)}
+                      </div>
+                      {p.discountedPrice !== null && p.discountedPrice < p.price && (
+                        <div className="text-sm font-black text-[#C8522A]">
+                          {formatCurrency(p.discountedPrice)}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-5 text-sm font-bold text-[#8C8880]">{p.stock}</td>
                     <td className="p-5 text-sm font-black text-[#C8522A]">{p.sold}</td>
                     <td className="p-5"><ProductBadge status={p.status}/></td>

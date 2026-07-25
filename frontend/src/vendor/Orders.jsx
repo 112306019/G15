@@ -7,7 +7,8 @@ import {
   User,
   Ticket,
   Loader2,
-  ChevronRight
+  ChevronRight,
+  AlertTriangle
 } from 'lucide-react'
 
 import {
@@ -477,6 +478,59 @@ function OrderDetailModal({
 
 
             <Card className="p-6">
+              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-4">
+                <Truck size={17} />
+                收件資訊
+              </div>
+
+              {order.shippingInfo?.address ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      收件人
+                    </div>
+
+                    <div className="font-bold text-[#1A1A18]">
+                      {order.shippingInfo.recipientName || '—'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      聯絡電話
+                    </div>
+
+                    <div className="font-bold text-[#1A1A18]">
+                      {order.shippingInfo.recipientPhone || '—'}
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      收件地址
+                    </div>
+
+                    <div className="font-bold text-[#1A1A18]">
+                      {order.shippingInfo.address.postalCode && (
+                        <span className="font-mono text-[#8C8880] mr-1">
+                          {order.shippingInfo.address.postalCode}
+                        </span>
+                      )}
+                      {order.shippingInfo.address.city}
+                      {order.shippingInfo.address.district}
+                      {order.shippingInfo.address.detailAddress}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 text-sm font-bold">
+                  此訂單尚未留有收件地址，請先聯繫顧客確認後再安排出貨
+                </div>
+              )}
+            </Card>
+
+
+            <Card className="p-6">
               <div className="text-sm font-bold text-[#1A1A18] mb-4">
                 更新出貨狀態
               </div>
@@ -591,6 +645,15 @@ export default function Orders() {
     setShippingUpdating
   ] = useState(false)
 
+  const [selectedOrderIds, setSelectedOrderIds] =
+    useState([])
+
+  const [bulkStatus, setBulkStatus] =
+    useState('preparing')
+
+  const [bulkUpdating, setBulkUpdating] =
+    useState(false)
+
 
   useEffect(() => {
     async function loadOrders() {
@@ -649,6 +712,9 @@ export default function Orders() {
 
             shippingStatus:
               order.shipping_status,
+
+            hasAddress:
+              Boolean(order.has_address),
 
             createdAt:
               order.created_at,
@@ -710,6 +776,11 @@ export default function Orders() {
 
     loadOrders()
   }, [vendorId])
+
+
+  useEffect(() => {
+    setSelectedOrderIds([])
+  }, [filter])
 
 
   const filteredOrders =
@@ -797,6 +868,34 @@ export default function Orders() {
 
         addressId:
           detail.address_id,
+
+        shippingInfo:
+          detail.shipping_info
+            ? {
+                recipientName:
+                  detail.shipping_info.recipient_name || '',
+
+                recipientPhone:
+                  detail.shipping_info.recipient_phone || '',
+
+                address:
+                  detail.shipping_info.address
+                    ? {
+                        city:
+                          detail.shipping_info.address.city || '',
+
+                        district:
+                          detail.shipping_info.address.district || '',
+
+                        detailAddress:
+                          detail.shipping_info.address.detail_address || '',
+
+                        postalCode:
+                          detail.shipping_info.address.postal_code || ''
+                      }
+                    : null
+              }
+            : null,
 
         createdAt:
           detail.created_at,
@@ -962,6 +1061,83 @@ export default function Orders() {
   }
 
 
+  function toggleSelectOrder(orderId) {
+    setSelectedOrderIds(previous =>
+      previous.includes(orderId)
+        ? previous.filter(id => id !== orderId)
+        : [...previous, orderId]
+    )
+  }
+
+  function toggleSelectAll(event) {
+    if (event.target.checked) {
+      setSelectedOrderIds(
+        filteredOrders.map(order => order.orderId)
+      )
+    } else {
+      setSelectedOrderIds([])
+    }
+  }
+
+  async function handleBulkUpdateShipping() {
+    if (selectedOrderIds.length === 0) return
+
+    const confirmed = window.confirm(
+      `確定要將選取的 ${selectedOrderIds.length} 筆訂單出貨狀態改為「${shippingLabels[bulkStatus]}」嗎？`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setBulkUpdating(true)
+
+      const results = await Promise.allSettled(
+        selectedOrderIds.map(orderId =>
+          updateVendorShipping({
+            vendor_id: vendorId,
+            order_id: orderId,
+            shipping_status: bulkStatus
+          })
+        )
+      )
+
+      const succeededIds = []
+      let failedCount = 0
+
+      results.forEach((result, index) => {
+        const orderId = selectedOrderIds[index]
+
+        if (
+          result.status === 'fulfilled' &&
+          result.value?.data?.success !== false
+        ) {
+          succeededIds.push(orderId)
+        } else {
+          failedCount += 1
+        }
+      })
+
+      setOrders(previous =>
+        previous.map(order =>
+          succeededIds.includes(order.orderId)
+            ? { ...order, shippingStatus: bulkStatus }
+            : order
+        )
+      )
+
+      setSelectedOrderIds([])
+
+      alert(
+        failedCount === 0
+          ? `已更新 ${succeededIds.length} 筆訂單的出貨狀態`
+          : `已更新 ${succeededIds.length} 筆，${failedCount} 筆更新失敗，請個別確認`
+      )
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+
   if (loading) {
     return (
       <div className="py-24 text-center">
@@ -1033,6 +1209,49 @@ export default function Orders() {
       </div>
 
 
+      {selectedOrderIds.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl px-6 py-4">
+          <span className="text-sm font-bold text-[#C8522A]">
+            已選取 {selectedOrderIds.length} 筆訂單
+          </span>
+
+          <select
+            value={bulkStatus}
+            onChange={event => setBulkStatus(event.target.value)}
+            className="bg-white border border-[#E2DDD4] rounded-xl px-4 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+          >
+            {shippingFilters
+              .filter(status => status !== 'all')
+              .map(status => (
+                <option key={status} value={status}>
+                  批次改為「{shippingLabels[status]}」
+                </option>
+              ))}
+          </select>
+
+          <Button
+            variant="brand"
+            disabled={bulkUpdating}
+            onClick={handleBulkUpdateShipping}
+            className="gap-2"
+          >
+            {bulkUpdating && (
+              <Loader2 size={15} className="animate-spin" />
+            )}
+            套用
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedOrderIds([])}
+            className="text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] ml-auto"
+          >
+            取消選取
+          </button>
+        </div>
+      )}
+
+
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm font-bold text-red-600">
           {error}
@@ -1045,6 +1264,18 @@ export default function Orders() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                <th className="p-5 pl-6 w-10">
+                  <input
+                    type="checkbox"
+                    onChange={toggleSelectAll}
+                    checked={
+                      filteredOrders.length > 0 &&
+                      selectedOrderIds.length === filteredOrders.length
+                    }
+                    className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
+                  />
+                </th>
+
                 {[
                   '訂單編號',
                   '顧客',
@@ -1092,6 +1323,18 @@ export default function Orders() {
                         }
                         className="hover:bg-[#F8F9FA] transition-colors cursor-pointer group"
                       >
+                        <td
+                          className="p-5 pl-6"
+                          onClick={event => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderIds.includes(order.orderId)}
+                            onChange={() => toggleSelectOrder(order.orderId)}
+                            className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
+                          />
+                        </td>
+
                         <td className="p-5 text-sm font-mono font-medium text-[#8C8880]">
                           {order.orderId}
                         </td>
@@ -1176,11 +1419,23 @@ export default function Orders() {
                         </td>
 
                         <td className="p-5">
-                          <ShippingBadge
-                            status={
-                              order.shippingStatus
-                            }
-                          />
+                          <div className="flex items-center gap-2">
+                            <ShippingBadge
+                              status={
+                                order.shippingStatus
+                              }
+                            />
+
+                            {!order.hasAddress &&
+                              order.shippingStatus !== 'cancelled' && (
+                                <span title="尚無收件地址">
+                                  <AlertTriangle
+                                    size={14}
+                                    className="text-[#C8522A]"
+                                  />
+                                </span>
+                              )}
+                          </div>
                         </td>
 
                         <td className="p-5 text-sm font-medium text-[#8C8880] whitespace-nowrap">
@@ -1206,7 +1461,7 @@ export default function Orders() {
               ) : (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="py-20 text-center text-sm font-bold text-[#8C8880]"
                   >
                     目前沒有符合狀態的訂單記錄

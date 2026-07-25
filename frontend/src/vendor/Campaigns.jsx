@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer } from 'lucide-react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 
@@ -124,6 +124,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     kocCommissionRate: '',
 
     status: 'draft',
+    couponUsed: false,
     spent: 0,
     kocCount: 0,
     orders: 0,
@@ -146,7 +147,23 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const originalPrice = Number(form.prodPrice) || 0
+  const locked = Boolean(form.couponUsed)
+
+  const isEditingPublished =
+    Boolean(initialData) && initialData.status !== 'draft'
+
+  const listPrice = Number(form.prodPrice) || 0
+
+  const channelDiscountedPrice =
+    form.prodDiscountedPrice !== '' &&
+    form.prodDiscountedPrice !== null &&
+    Number(form.prodDiscountedPrice) < listPrice
+      ? Number(form.prodDiscountedPrice)
+      : null
+
+  // 活動折扣是疊加在「目前實際售價」上——如果商品已經有通路優惠價，
+  // 就以優惠價為基準去算折扣後金額，而不是用原價。
+  const originalPrice = channelDiscountedPrice ?? listPrice
   const discountValue = Number(form.discountValue) || 0
   const commissionRate = Number(form.kocCommissionRate) || 0
 
@@ -255,7 +272,9 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     try {
       setIsSaving(true)
 
-      const payload = buildPayload('active')
+      const payload = buildPayload(
+        isEditingPublished ? form.status : 'active'
+      )
 
       let response
 
@@ -273,7 +292,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         id: response.data.campaign_id,
         prodId:
           response.data.product_id || form.prodId,
-        status: 'active',
+        status: isEditingPublished ? form.status : 'active',
         spent: form.spent || 0,
         kocCount: form.kocCount || 0,
         orders: form.orders || 0,
@@ -344,7 +363,11 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       <div className="px-8 pt-8 pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] shrink-0">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-serif text-2xl font-bold text-[#1A1A18]">
-            {initialData && initialData.status === 'draft' ? '編輯任務草稿' : '發佈 KOC 專屬任務'}
+            {initialData && initialData.status === 'draft'
+              ? '編輯任務草稿'
+              : initialData
+                ? '編輯任務'
+                : '發佈 KOC 專屬任務'}
           </h2>
           <button onClick={onClose} className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] transition-colors"><X size={18}/></button>
         </div>
@@ -403,15 +426,21 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         </>}
 
         {step === 1 && <>
+          {locked && (
+            <div className="flex items-start gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 text-xs font-bold text-[#8C8880]">
+              <Lock size={14} className="shrink-0 mt-0.5" />
+              此活動已有優惠碼被使用，綁定商品無法再變更
+            </div>
+          )}
           <div className="flex bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-1 mb-4">
-            <button onClick={() => setProdMode('existing')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all", prodMode === 'existing' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880] hover:text-[#1A1A18]")}>選擇庫存商品</button>
-            <button onClick={() => setProdMode('new')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all", prodMode === 'new' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880] hover:text-[#1A1A18]")}>建立新商品</button>
+            <button disabled={locked} onClick={() => setProdMode('existing')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed", prodMode === 'existing' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880] hover:text-[#1A1A18]")}>選擇庫存商品</button>
+            <button disabled={locked} onClick={() => setProdMode('new')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed", prodMode === 'new' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880] hover:text-[#1A1A18]")}>建立新商品</button>
           </div>
 
           {prodMode === 'existing' ? (
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">從商品庫選擇 *</label>
-              <select value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none">
+              <select disabled={locked} value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed">
                 <option value="">請選擇要推廣的商品...</option>
                 {existingProducts.map(product => (
                   <option
@@ -430,7 +459,16 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                    <Thumb emoji={form.thumbnail} size="sm" />
                    <div>
                      <div className="font-bold text-sm text-[#1A1A18]">{form.prodName}</div>
-                     <div className="text-xs text-[#8C8880] font-mono mt-0.5">售價: {formatCurrency(form.prodPrice)}</div>
+                     <div className="text-xs text-[#8C8880] font-mono mt-0.5 flex items-center gap-2">
+                       {channelDiscountedPrice ? (
+                         <>
+                           <span className="line-through">售價: {formatCurrency(form.prodPrice)}</span>
+                           <span className="text-[#C8522A] font-bold">{formatCurrency(channelDiscountedPrice)}</span>
+                         </>
+                       ) : (
+                         <span>售價: {formatCurrency(form.prodPrice)}</span>
+                       )}
+                     </div>
                    </div>
                 </div>
               )}
@@ -439,11 +477,11 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
             <>
               <div className="flex items-center gap-5 p-5 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-2xl">
                 <Thumb emoji={form.thumbnail} size="lg" />
-                <button className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all"><Upload size={14}/>上傳新圖片</button>
+                <button disabled={locked} className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"><Upload size={14}/>上傳新圖片</button>
               </div>
-              <Input label="新商品名稱 *" value={form.prodName} onChange={set('prodName')} placeholder="例：極致防曬乳 SPF50+" />
+              <Input label="新商品名稱 *" disabled={locked} value={form.prodName} onChange={set('prodName')} placeholder="例：極致防曬乳 SPF50+" />
               <div className="grid grid-cols-2 gap-4">
-                <Input label="商品售價 (NT$) *" type="number" value={form.prodPrice} onChange={set('prodPrice')} placeholder="1200" />
+                <Input label="商品售價 (NT$) *" type="number" disabled={locked} value={form.prodPrice} onChange={set('prodPrice')} placeholder="1200" />
                 <Input label="提供庫存 *" type="number" value={form.prodStock} onChange={set('prodStock')} placeholder="100" />
               </div>
             </>
@@ -452,15 +490,22 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
         {step === 2 && (
           <>
+            {locked && (
+              <div className="flex items-start gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 text-xs font-bold text-[#8C8880]">
+                <Lock size={14} className="shrink-0 mt-0.5" />
+                此活動已有優惠碼被使用，折扣與 KOC 分潤比例無法再修改
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
                 優惠方式 *
               </label>
 
               <select
+                disabled={locked}
                 value={form.discountType}
                 onChange={set('discountType')}
-                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none"
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="percentage">
                   百分比折扣
@@ -486,6 +531,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                   : originalPrice || undefined
               }
               step="0.01"
+              disabled={locked}
               value={form.discountValue}
               onChange={set('discountValue')}
               placeholder={
@@ -501,6 +547,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               min="0"
               max="100"
               step="0.01"
+              disabled={locked}
               value={form.kocCommissionRate}
               onChange={set('kocCommissionRate')}
               placeholder="例：20"
@@ -512,12 +559,27 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                   商品原價
                 </span>
 
-                <span className="font-bold text-[#1A1A18]">
-                  {originalPrice > 0
-                    ? formatCurrency(originalPrice)
+                <span className={cn(
+                  'font-bold',
+                  channelDiscountedPrice ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'
+                )}>
+                  {listPrice > 0
+                    ? formatCurrency(listPrice)
                     : '—'}
                 </span>
               </div>
+
+              {channelDiscountedPrice && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-[#8C8880] font-bold">
+                    通路優惠價
+                  </span>
+
+                  <span className="font-bold text-[#C8522A]">
+                    {formatCurrency(channelDiscountedPrice)}
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between items-center text-sm">
                 <span className="text-[#8C8880] font-bold">
@@ -594,15 +656,17 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         </Button>
         
         <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            onClick={handleSaveDraft} 
-            disabled={isSaving || !form.name} 
-            className="gap-2 px-6"
-          >
-            {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
-            {isSaving ? '儲存中...' : '儲存草稿'}
-          </Button>
+          {!isEditingPublished && (
+            <Button 
+              variant="outline" 
+              onClick={handleSaveDraft} 
+              disabled={isSaving || !form.name} 
+              className="gap-2 px-6"
+            >
+              {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>}
+              {isSaving ? '儲存中...' : '儲存草稿'}
+            </Button>
+          )}
 
           {step < STEPS.length-1
             ? <Button 
@@ -653,7 +717,9 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={isSaving || !form.name} 
                 className="gap-2 px-8"
               >
-                <Plus size={14}/>確認發佈任務
+                {isEditingPublished
+                  ? <><Save size={14}/>儲存修改</>
+                  : <><Plus size={14}/>確認發佈任務</>}
               </Button>
           }
         </div>
@@ -885,6 +951,7 @@ export default function Campaigns() {
       thumbnail: product.image_url || '📦',
 
       status: campaign.status || 'draft',
+      couponUsed: Boolean(campaign.coupon_used),
       spent: 0,
       kocCount: 0,
       orders: 0,
@@ -978,6 +1045,12 @@ export default function Campaigns() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {items.length === 0 && (
+          <div className="col-span-full py-20 text-center text-sm font-bold text-[#8C8880]">
+            目前尚無任務，點擊右上角「發佈 KOC 任務」開始你的第一個活動
+          </div>
+        )}
+
         {items.map(c => {
           const pct = budgetUsedPct(c.spent, c.budget)
           
@@ -1075,7 +1148,19 @@ export default function Campaigns() {
                 <div className="flex-1">
                   <div className="font-bold text-[#1A1A18] mb-1">{selectedTask.prodName || '預設活動商品'}</div>
                   <div className="flex gap-4 text-xs font-bold text-[#8C8880]">
-                    <span>售價 {formatCurrency(selectedTask.prodPrice || 0)}</span>
+                    <span>
+                      {selectedTask.prodDiscountedPrice !== '' &&
+                      selectedTask.prodDiscountedPrice !== null &&
+                      Number(selectedTask.prodDiscountedPrice) < Number(selectedTask.prodPrice || 0) ? (
+                        <>
+                          <span className="line-through">售價 {formatCurrency(selectedTask.prodPrice || 0)}</span>
+                          {' '}
+                          <span className="text-[#C8522A]">{formatCurrency(selectedTask.prodDiscountedPrice)}</span>
+                        </>
+                      ) : (
+                        `售價 ${formatCurrency(selectedTask.prodPrice || 0)}`
+                      )}
+                    </span>
                     <span className="text-[#C8522A]">
                       {selectedTask.discountType === 'fixed'
                         ? `直接折價 ${formatCurrency(
@@ -1118,8 +1203,20 @@ export default function Campaigns() {
               </div>
             </div>
           </div>
-          <div className="px-8 py-5 border-t border-[#E2DDD4] bg-[#F8F9FA] flex justify-end shrink-0">
+          <div className="px-8 py-5 border-t border-[#E2DDD4] bg-[#F8F9FA] flex justify-between items-center shrink-0">
             <Button variant="outline" onClick={() => setSelectedTask(null)}>關閉</Button>
+            <Button
+              variant="brand"
+              className="gap-2"
+              onClick={() => {
+                const task = selectedTask
+                setSelectedTask(null)
+                setEditingDraft(task)
+                setWizardOpen(true)
+              }}
+            >
+              <Edit3 size={14} /> 編輯任務
+            </Button>
           </div>
         </Modal>
       )}
