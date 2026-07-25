@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Heart, ShoppingBag, Star } from 'lucide-react';
 
-export default function ProductDetailPage({ 
-  onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, 
+export default function ProductDetailPage({
+  onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, product,
   favorites = [], // 🟢 接收全域的收藏清單
   onToggleFavorite // 🟢 接收切換收藏的函式
 }) {
   const [toastMsg, setToastMsg] = useState("");
-  const [quantity, setQuantity] = useState(1); 
-  const [activeTab, setActiveTab] = useState('description'); 
+  const [quantity, setQuantity] = useState(1);
+  const [activeTab, setActiveTab] = useState('description');
   const [isLoading, setIsLoading] = useState(false);
 
   const [productDetail, setProductDetail] = useState({
@@ -26,22 +26,63 @@ export default function ProductDetailPage({
   const isFavorited = favorites.some(item => item.id === productDetail.id);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  window.scrollTo(0, 0);
+  if (product) {
+    setProductDetail({
+      id: product.Product_id,
+      name: product.Product_name,
+      price: `NTD$ ${product.discounted_price || product.price}`,
+      rating: 4.8,
+      reviewsCount: 0,
+      vendorName: product.Vendor_id || "",
+      promoDesc: "",
+      gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
+    });
+  }
+}, [product]);
 
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 3500);
   };
 
-  const handleAddCart = () => {
-    if (userRole === 'guest') {
-      showToast("需先登入或註冊才能加入購物車喔！");
-      return;
+  const handleAddCart = async () => {
+  if (userRole === 'guest') {
+    showToast("需先登入或註冊才能加入購物車喔！");
+    return;
+  }
+
+  const userId = localStorage.getItem("userId");
+
+  try {
+    const cartRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ User_id: userId }),
+    });
+    const cartData = await cartRes.json();
+    const cartId = cartData.Cart_id;
+
+    const addRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/item/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        Cart_id: cartId,
+        Product_id: productDetail.id,
+        Quantity: 1,
+      }),
+    });
+
+    if (addRes.ok) {
+      if (onAddToCart) onAddToCart();
+      showToast("✓ 已成功加入購物車！");
+    } else {
+      showToast("加入購物車失敗，請再試一次");
     }
-    if (onAddToCart) onAddToCart();
-    showToast("✓ 已成功加入購物車！");
-  };
+  } catch (err) {
+    showToast("網路錯誤，請稍後再試");
+  }
+};
 
   const handleBuyNow = () => {
     if (userRole === 'guest') {
@@ -54,7 +95,7 @@ export default function ProductDetailPage({
   const handleRecommendClick = (p) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsLoading(true);
-    
+
     setTimeout(() => {
       setProductDetail({
         ...productDetail,
@@ -63,8 +104,8 @@ export default function ProductDetailPage({
         price: p.price,
         gradient: p.gradient
       });
-      setQuantity(1); 
-      setIsLoading(false); 
+      setQuantity(1);
+      setIsLoading(false);
     }, 400);
   };
 
@@ -81,8 +122,15 @@ export default function ProductDetailPage({
   return (
     <div className="min-h-screen bg-[#F5F0E8] font-sans text-[#1A1A18] pb-24 relative">
       <div className="max-w-5xl mx-auto px-6 py-12">
+        <button
+          onClick={() => onBack?.()}
+          className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm group w-fit"
+        >
+          <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
+          返回商品列表
+        </button>
         <div className={`flex flex-col md:flex-row gap-12 lg:gap-16 mb-16 transition-opacity duration-300 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
-          
+
           <div className="w-full md:w-[45%] aspect-square rounded-3xl flex items-center justify-center shadow-sm relative overflow-hidden transition-all duration-500" style={{ background: productDetail.gradient }}>
             <svg className="h-24 w-24 text-black/10" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" /></svg>
           </div>
@@ -91,14 +139,14 @@ export default function ProductDetailPage({
             <div className="flex items-start justify-between gap-4 mb-4">
               <h1 className="font-serif text-2xl md:text-3xl leading-snug">{productDetail.name}</h1>
               {/* 🟢 修改愛心按鈕綁定 */}
-              <button 
+              <button
                 onClick={handleHeartClick}
                 className={`flex-shrink-0 p-2.5 rounded-full border transition-all ${isFavorited ? 'bg-[#FDF0ED] border-[#C8522A] text-[#C8522A]' : 'bg-white border-[#E2DDD4] text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]'}`}
               >
                 <Heart size={20} fill={isFavorited ? "currentColor" : "none"} />
               </button>
             </div>
-            
+
             <div className="font-black text-2xl text-[#1A1A18] mb-4">{productDetail.price}</div>
             <p className="text-[#8C8880] text-sm leading-relaxed mb-4">商品敘述：這是一件高品質的商品，採用優質材料製成，舒適耐用。適合日常穿著，多種顏色可供選擇，簡約設計百搭各種場合。</p>
 

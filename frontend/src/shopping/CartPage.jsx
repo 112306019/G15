@@ -67,7 +67,6 @@ export default function CartPage({
       try {
         const res = await fetch(
           `http://127.0.0.1:8000/api/consumer/cart/view?User_id=${userId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await res.json();
         if (data.Cart_id) {
@@ -116,7 +115,6 @@ export default function CartPage({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ Cart_item_id: item.cartItemId, Quantity: newQty }),
       });
@@ -126,6 +124,7 @@ export default function CartPage({
   };
 
   const toggleWish = async (id) => {
+    console.log("toggleWish called", id);
     const item = items.find((it) => it.id === id);
     if (!item) return;
 
@@ -136,7 +135,6 @@ export default function CartPage({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             User_id: userId,
@@ -154,7 +152,6 @@ export default function CartPage({
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             User_id: userId,
@@ -177,7 +174,6 @@ export default function CartPage({
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ Cart_item_id: item.cartItemId }),
       });
@@ -299,46 +295,6 @@ export default function CartPage({
               })}
             </div>
 
-            {/* Coupon + Points */}
-            <div className="mb-7 flex flex-col gap-5">
-              <div className="flex items-center gap-4 flex-wrap">
-                <span className="min-w-12 text-[13px] tracking-[0.03em]">優惠碼</span>
-                <div className={["flex items-center overflow-hidden rounded-full border-[1.5px] bg-white transition-colors", couponApplied ? "border-[#6BBF6B]" : "border-[#E2DDD4]", couponMsg.show && !couponMsg.ok ? "border-[#C8522A]" : ""].join(" ")}>
-                  <input
-                    className="w-[140px] bg-transparent px-4 py-2 font-mono text-[13px] tracking-[0.08em] outline-none"
-                    value={coupon}
-                    onChange={(e) => setCoupon(e.target.value)}
-                    placeholder="輸入優惠碼"
-                  />
-                  <button type="button" onClick={applyCoupon} className={["h-9 w-9 flex items-center justify-center transition-colors", couponApplied ? "text-[#6BBF6B]" : "text-[#8C8880]", couponMsg.show && !couponMsg.ok ? "text-[#C8522A]" : ""].join(" ")} aria-label="apply coupon">
-                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </button>
-                </div>
-                {couponMsg.show && (
-                  <span className={`text-[13px] font-bold ${couponMsg.ok ? "text-[#6BBF6B]" : "text-[#C8522A]"}`}>
-                    {couponMsg.text}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-4 flex-wrap">
-                <span className="min-w-[120px] text-[13px]">可抵用點數：{pointsAvailable} 點</span>
-                <div className="flex items-center gap-2.5">
-                  <button type="button" onClick={() => setPointsApplied((v) => !v)} className={["relative h-[22px] w-10 rounded-full border-none transition-colors", pointsApplied ? "bg-[#1A1A18]" : "bg-[#E2DDD4]"].join(" ")} aria-label="toggle points">
-                    <span className={["absolute top-[3px] left-[3px] h-4 w-4 rounded-full bg-white transition-transform", pointsApplied ? "translate-x-[18px]" : "translate-x-0"].join(" ")} />
-                  </button>
-                  <span className="text-[13px] text-[#8C8880]">抵用點數</span>
-                </div>
-                <div className="ml-auto flex items-center gap-3 text-[13px] text-[#8C8880]" style={{ opacity: pointsApplied ? 1 : 0.4 }}>
-                  <span>總共折抵：</span>
-                  <span className="font-mono text-[14px] font-bold text-[#1A1A18]">{fmt(pointsDiscountAmount)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-7 h-px bg-[#E2DDD4]" />
 
             {/* Footer */}
             <div className="flex items-center gap-6">

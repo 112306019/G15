@@ -12,7 +12,7 @@ import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyPage from './koc/ApplyPage';
-import ApplyKOCPage from './koc/ApplyKOCPage';  
+import ApplyKOCPage from './koc/ApplyKOCPage';
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -121,12 +121,28 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 
 function MainSystem() {
   const [view, setView] = useState('welcome');
-  const [selectedProduct, setSelectedProduct] = useState(null); 
   const [selectedTask, setSelectedTask] = useState(null);
   const [homeJumpStage, setHomeJumpStage] = useState(null);
 
   const [userRole, setUserRole] = useState('guest');
   const [cartCount, setCartCount] = useState(0);
+  // 從後端同步購物車數量
+  const syncCartCount = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/consumer/cart/view?User_id=${userId}`);
+      const data = await res.json();
+      if (data.items) {
+        setCartCount(data.items.length);
+      }
+    } catch (err) {
+      console.error("購物車數量同步失敗", err);
+    }
+  };
+  const [cartItems, setCartItems] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
 
@@ -170,6 +186,11 @@ function MainSystem() {
     if (data) {
       if (targetView === 'sales_data') setSelectedProduct(data);
       if (targetView === 'task_detail') setSelectedTask(data);
+      if (targetView === 'product_detail') {
+        setSelectedProduct(data);
+        setTimeout(() => setView(targetView), 0);
+        return;
+      }
     }
 
     setView(targetView);
@@ -216,6 +237,7 @@ function MainSystem() {
           onLoginSuccess={({ userId, role, token }) => {
             const mappedRole = role === 1 ? 'koc' : 'shopper';
             setUserRole(mappedRole);
+            syncCartCount();
             handleNavigate(mappedRole === 'koc' ? 'home' : 'shop');
           }}
           onRegisterSuccess={() => {
@@ -228,7 +250,7 @@ function MainSystem() {
           }}
         />
       )}
-      {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => setCartCount(c => c + 1)} />}
+      {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => syncCartCount()} />}
 
       {/* 🌟 修改：傳遞 favorites 與 onToggleFavorite 給 ProductDetailPage */}
       {view === 'product_detail' && (
@@ -238,14 +260,15 @@ function MainSystem() {
           onBuyNow={() => handleNavigate('checkout')}
           onNavigate={handleNavigate}
           userRole={userRole}
-          onAddToCart={() => setCartCount(c => c + 1)}
+          onAddToCart={() => syncCartCount()}
           favorites={favorites}
           onToggleFavorite={handleToggleFavorite}
+          product={selectedProduct}
         />
       )}
 
-      {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={() => handleNavigate('checkout')} />}
-      {view === 'checkout' && <CheckoutPage onPaid={() => handleNavigate('orders')} />}
+      {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={(data) => { setCartItems(data?.items || []); handleNavigate('checkout'); }} />}
+      {view === 'checkout' && <CheckoutPage cartItems={cartItems} onPaid={() => handleNavigate('orders')} />}
 
       {shellViews.includes(view) && (
         <div className="flex p-8 max-w-7xl mx-auto">
@@ -258,11 +281,11 @@ function MainSystem() {
                 onJumpHandled={() => setHomeJumpStage(null)}
               />
             )}
-            {view === 'apply' && <ApplyPage />} 
-            
+            {view === 'apply' && <ApplyPage />}
+
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
-            
+
             {view === 'task_detail' && (
               <TaskDetailPage
                 task={selectedTask}
@@ -272,7 +295,7 @@ function MainSystem() {
                 }}
               />
             )}
-            
+
             {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
 
             {view === 'security' && (
@@ -287,8 +310,11 @@ function MainSystem() {
                 }}
               />
             )}
-            {view === 'orders' && <OrdersPage onTrackOrder={() => handleNavigate('order_detail')} onOpenOrderDetail={() => handleNavigate('order_detail')} />}
-            {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} />}
+            {view === 'orders' && <OrdersPage
+              onTrackOrder={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
+              onOpenOrderDetail={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
+            />}
+            {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} orderId={selectedOrderId} />}
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
             {view === 'earnings_detail' && <EarningsDetailPage onBack={() => handleNavigate('earnings')} />}
             {view === 'pending_detail' && <PendingEarningsPage onBack={() => handleNavigate('earnings')} />}

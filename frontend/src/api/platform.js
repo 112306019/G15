@@ -94,10 +94,12 @@ export const getAdminPerformance = (params = {}) => {
 
 }
 
-export const getAllMissions = () => {
-  return api.get('/platform/mission/getAll');
-};
+// 取得所有任務列表
+export const getAllMissions = (params = {}) => {
+  return api.get('/platform/koc/getList', { params })
+}
 
-export const getEarningsTracking = () => {
-  return api.get('/platform/mission/getEarningsTracking');
-};
+// 取得收益追蹤
+export const getEarningsTracking = (params = {}) => {
+  return api.get('/platform/transactions', { params })
+}
