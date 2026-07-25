@@ -24,6 +24,9 @@ from .views.platform import (
     admin_performance,
     get_all_missions,
     get_earnings_tracking,
+    admin_settle_campaign_earnings,
+    admin_get_earnings,
+    admin_list_settleable_campaigns,
 )
 from .views.consumer import (
     get_products,
@@ -47,7 +50,7 @@ from .views.consumer import (
     get_product_campaign,
 )
 
-from .views import koc, platform, vendor
+from .views import koc, vendor
 
 urlpatterns = [
     # koc
@@ -65,6 +68,7 @@ urlpatterns = [
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
     path('koc/revenue/getPendingDetail', views.get_pending_earnings_detail, name='koc-revenue-get-pending-detail'),
+    path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
     path('koc/analytics/getList', views.get_analytics_list, name='koc-analytics-get-list'),
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
     path('koc/mission/saveDraft', views.save_draft, name='koc-mission-save-draft'),
@@ -86,6 +90,9 @@ urlpatterns = [
     path('platform/kocmission/stage/update', koc_mission_stage_update, name='platform-kocmission-stage-update'),
     path('platform/mission/getAll', get_all_missions, name='platform-mission-get-all'),
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
+    path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
+    path('platform/earnings', admin_get_earnings, name='platform-earnings'),
+    path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
 
     # auth
     path('user/signUp', user_signup, name='user-signup'),
@@ -136,7 +143,7 @@ urlpatterns = [
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
-    path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
+   path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
 
     # Vendor 任務 / Campaign API
@@ -184,4 +191,3 @@ urlpatterns = [
     path('platform/performance', admin_performance, name='admin-performance'),
 
 ]
-

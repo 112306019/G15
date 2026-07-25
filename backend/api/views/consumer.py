@@ -129,10 +129,10 @@ def add_cart_item(request):
         )
 
     try:
-        product = Product.objects.get(product_id=product_id)
+        product = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
         return Response(
-            {'success': False, 'err': '商品不存在'},
+            {'success': False, 'err': '商品不存在或已下架'},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -382,8 +382,8 @@ def delete_wishlist(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    user_id = wishlist.user_id.user_id
-    product_id = wishlist.product_id.product_id
+    user_id = wishlist.user.user_id
+    product_id = wishlist.product.product_id
     wishlist.delete()
 
     return Response({
@@ -509,9 +509,25 @@ def view_order(request):
     if order_id:
         orders = orders.filter(order_id=order_id)
 
+    order_list = list(orders)
+    items_by_order = {}
+    vendor_ids = set()
+    for order in order_list:
+        items = list(OrderItem.objects.filter(order=order).select_related('product'))
+        items_by_order[order.order_id] = items
+        for item in items:
+            if item.product and item.product.vendor_id:
+                vendor_ids.add(item.product.vendor_id)
+
+    vendor_name_by_id = {
+        v.vendor_id: v.company_name
+        for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
+    }
+
     result = []
-    for order in orders:
-        items = OrderItem.objects.filter(order=order)
+    for order in order_list:
+        items = items_by_order[order.order_id]
+        first_vendor_id = items[0].product.vendor_id if items and items[0].product else None
         order_data = {
             'Order_id': str(order.order_id),
             'User_id': order.user_id,
@@ -523,10 +539,13 @@ def view_order(request):
             'shipping_status': order.shipping_status,
             'Address_id': order.address_id,
             'created_at': order.created_at,
+            'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
             'items': [
                 {
                     'Order_item_id': str(item.order_item_id),
                     'Product_id': item.product_id,
+                    'product_name': item.product.product_name,
+                    'image_url': item.product.image_url,
                     'quantity': item.quantity,
                     'Unit_price': float(item.unit_price),
                     'subtotal': float(item.subtotal),
@@ -543,8 +562,12 @@ def view_order(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_transaction(request):
-    print("request.data:", request.data)
-    wallet_type = request.data.get('wallet_type', 'koc')
+    """
+    暫時停用內部錢包扣款/帳務邏輯，等第三方金流 API 串接後再實作真正的
+    Transactions 寫入。koc_wallet/vendor_wallet 目前都拿不到真實錢包，
+    若照舊寫入會違反 transactions_exactly_one_wallet 這個 Check Constraint，
+    這裡先直接回傳模擬成功。
+    """
     type_ = request.data.get('Type') or request.data.get('type')
     amount = request.data.get('Amount')
     reference_type = request.data.get('Reference_type')
@@ -556,22 +579,23 @@ def create_transaction(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    transaction = Transactions.objects.create(
-        koc_wallet=None,
-        vendor_wallet=None,
-        type=type_,
-        amount=amount,
-        reference_type=reference_type,
-        reference_id=str(reference_id) if reference_id else None,
-    )
+    # transaction = Transactions.objects.create(
+    #     koc_wallet=None,
+    #     vendor_wallet=None,
+    #     type=type_,
+    #     amount=amount,
+    #     reference_type=reference_type,
+    #     reference_id=str(reference_id) if reference_id else None,
+    # )
 
     return Response({
-        'Transaction_ID': transaction.transaction_id,
-        'Type': transaction.type,
-        'Amount': transaction.amount,
-        'Reference_type': transaction.reference_type,
-        'Reference_id': transaction.reference_id,
-    }, status=status.HTTP_201_CREATED)
+        'success': True,
+        'Transaction_ID': None,
+        'Type': type_,
+        'Amount': amount,
+        'Reference_type': reference_type,
+        'Reference_id': str(reference_id) if reference_id else None,
+    }, status=status.HTTP_200_OK)
 
 
 # ── 更新付款狀態 ──
@@ -658,6 +682,8 @@ def payment_result(request):
 def update_order_status(request):
     order_id = request.data.get('Order_id')
     order_status = request.data.get('order_status')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
 
     if not order_id or not order_status:
         return Response(
@@ -673,10 +699,60 @@ def update_order_status(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    order.order_status = order_status
-    order.save()
+    commission_result = None
 
-    return Response({
+    # 「完成訂單」是分潤唯一的觸發點，需要額外驗證，
+    # 避免商品送達前、或已取消/退款的訂單被算進分潤。
+    if order_status == 'completed':
+        if user_id and str(order.user_id) != str(user_id):
+            return Response(
+                {'success': False, 'err': '無權限操作此訂單'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if guest_id and str(order.guest_id) != str(guest_id):
+            return Response(
+                {'success': False, 'err': '無權限操作此訂單'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if order.order_status == 'cancelled':
+            return Response(
+                {'success': False, 'err': '此訂單已取消，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.payment_status not in ('paid', 'completed'):
+            return Response(
+                {'success': False, 'err': '此訂單尚未完成付款，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.shipping_status != 'delivered':
+            return Response(
+                {'success': False, 'err': '此訂單尚未送達，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        already_completed = order.order_status == 'completed'
+
+        order.order_status = 'completed'
+        order.save()
+
+        if not already_completed:
+            try:
+                commission_result = calculate_order_commission(order)
+            except ValueError as commission_error:
+                commission_result = {
+                    'created': False,
+                    'commission_amount': 0,
+                    'message': str(commission_error)
+                }
+    else:
+        order.order_status = order_status
+        order.save()
+
+    response_data = {
         'success': True,
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
