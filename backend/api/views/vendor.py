@@ -1667,9 +1667,12 @@ def vendor_order_get_detail(request):
                 "postal_code": address.postal_code,
             }
 
-            # 地址上留的電話優先於會員資料的電話（收件人可能不是本人）
+            # 地址上留的電話跟收件人姓名優先於會員資料（收件人可能不是本人，
+            # 例如送禮），這是結帳當下實際填的收件資訊。
             if address.phone:
                 recipient_phone = address.phone
+            if address.recipient_name:
+                recipient_name = address.recipient_name
 
     shipping_info = {
         "recipient_name": recipient_name,
