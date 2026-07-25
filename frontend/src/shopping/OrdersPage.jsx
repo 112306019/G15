@@ -40,39 +40,35 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderCard({ id, eta, progress = 0.5, onTrack }) {
-  const pct = Math.max(0, Math.min(1, progress)) * 100;
+function OrderCard({ vendorName, items = [], onTrack }) {
   return (
-    <div className="cursor-pointer rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
-      <div className="mb-6 flex items-center justify-between">
-        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">訂單編號 #{id}</span>
+    <div className="cursor-pointer flex flex-col gap-5 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
+      <span className="block text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+
+      <div className="flex flex-col gap-3">
+        {items.map((it, idx) => (
+          <div key={idx} className="flex items-center gap-3">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
+              {it.image && (
+                <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
+              )}
+            </div>
+            <span className="text-sm font-bold text-[#1A1A18] line-clamp-1">{it.name}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="mb-6 flex items-center gap-4">
-        <span className="text-[#8C8880] bg-[#F5F0E8] p-3 rounded-full">
-          <IconClock className="h-5 w-5" />
-        </span>
-
-        <div>
-          <div className="text-xs font-bold tracking-wider text-[#8C8880] mb-1">預計將抵達日期</div>
-          {/* 🟢 換回系統統一的 font-serif 高級襯線字體 */}
-          <div className="font-serif font-bold text-2xl leading-tight text-[#1A1A18]">{eta}</div>
-        </div>
-
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onTrack?.();
           }}
-          className="ml-auto whitespace-nowrap rounded-full bg-[#1A1A18] px-6 py-3 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
+          className="whitespace-nowrap rounded-full bg-[#1A1A18] px-6 py-3 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
         >
           追蹤訂單
         </button>
-      </div>
-
-      <div className="h-1.5 overflow-hidden rounded-full bg-[#F5F0E8]">
-        <div className="h-full rounded-full bg-[#C8522A] transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -89,7 +85,7 @@ function HistoryCard({ order, onOpenDetail }) {
     <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-shadow hover:shadow-[0_8px_28px_rgba(26,26,24,0.04)]">
       <div className="mb-4 flex items-center justify-between">
         <span className="text-sm font-bold text-[#1A1A18] tracking-wide">
-          {order.title || `訂單編號 #${order.id}`}
+          {order.vendorName || order.title || "廠商"}
         </span>
         {order.status && <StatusBadge status={order.status} />}
       </div>
@@ -219,14 +215,18 @@ export default function OrdersPage({
     (o) => o.order_status === "pending" || o.shipping_status === "shipped"
   ).map((o) => ({
     id: o.Order_id,
-    eta: "待確認",
-    progress: o.shipping_status === "shipped" ? 0.6 : 0.2,
+    vendorName: o.vendor_name,
+    items: (o.items || []).map((item) => ({
+      name: item.product_name || `商品 ${item.Product_id}`,
+      image: item.image_url,
+    })),
   }));
 
   const historyOrders = orders.filter(
     (o) => o.order_status === "completed" || o.order_status === "cancelled"
   ).map((o) => ({
     id: o.Order_id,
+    vendorName: o.vendor_name,
     status: o.order_status === "completed" ? "complete" : "cancelled",
     date: new Date(o.created_at).toLocaleDateString("zh-TW"),
     time: new Date(o.created_at).toLocaleTimeString("zh-TW"),
@@ -262,9 +262,8 @@ export default function OrdersPage({
           {activeOrders.map((o) => (
             <OrderCard
               key={o.id}
-              id={o.id}
-              eta={o.eta}
-              progress={o.progress}
+              vendorName={o.vendorName}
+              items={o.items}
               onTrack={() => onTrackOrder?.(o.id)}
             />
           ))}

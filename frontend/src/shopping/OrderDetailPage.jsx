@@ -47,8 +47,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
     { label: "抵達", icon: Heart },
   ];
 
-  const orderIdShort = orderData?.Order_id?.slice(0, 8) || orderId?.slice(0, 8) || "20260712001";
-  const totalAmount = orderData?.total_amount || "0";
+  const totalAmount = orderData?.total_amount ?? 0;
   const createdAt = orderData?.created_at
     ? new Date(orderData.created_at)
     : new Date();
@@ -70,6 +69,21 @@ export default function OrderDetailPage({ onBack, orderId }) {
     );
   }
 
+  if (!orderData) {
+    return (
+      <div className="animate-in fade-in duration-500 max-w-5xl">
+        <button
+          onClick={onBack}
+          className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
+        >
+          <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
+          返回訂單列表
+        </button>
+        <div className="py-20 text-center text-[#8C8880]">找不到訂單資料，請返回訂單列表重新查看</div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl">
 
@@ -87,7 +101,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
       {/* 訂單摘要卡片 */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2.5rem] border border-[#E2DDD4] bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
         <div>
-          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">#{orderIdShort}</div>
+          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">#{orderData.Order_id}</div>
           <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
             <span>訂購於 {createdDate}</span>
             <span>•</span>
@@ -201,27 +215,49 @@ export default function OrderDetailPage({ onBack, orderId }) {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                <td className="py-6 pr-4">
-                  <div className="flex items-center gap-5">
-                    <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4]">
-                      <Smartphone size={24} className="text-[#8C8880]" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
-                        訂單 #{orderIdShort}
+              {(orderData.items || []).map((item) => (
+                <tr
+                  key={item.Order_item_id}
+                  className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors"
+                >
+                  <td className="py-6 pr-4">
+                    <div className="flex items-center gap-5">
+                      <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4]">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.product_name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Smartphone size={24} className="text-[#8C8880]" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
+                          {item.product_name || `商品 ${item.Product_id}`}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
-                  NTD$ {totalAmount}
-                </td>
-                <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">x1</td>
-                <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
-                  NTD$ {totalAmount}
-                </td>
-              </tr>
+                  </td>
+                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    NTD$ {item.Unit_price}
+                  </td>
+                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    x{item.quantity}
+                  </td>
+                  <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
+                    NTD$ {item.subtotal}
+                  </td>
+                </tr>
+              ))}
+              {(!orderData.items || orderData.items.length === 0) && (
+                <tr>
+                  <td colSpan={4} className="py-10 text-center text-sm font-bold text-[#8C8880]">
+                    沒有商品資料
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
