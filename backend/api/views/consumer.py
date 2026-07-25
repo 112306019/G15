@@ -756,7 +756,12 @@ def update_order_status(request):
         'success': True,
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
-    }, status=status.HTTP_200_OK)
+    }, 
+    
+    if commission_result:
+        response_data['commission'] = commission_result
+    
+    return Response(response_data, status=status.HTTP_200_OK)
     
 @api_view(['GET'])
 @permission_classes([AllowAny])
