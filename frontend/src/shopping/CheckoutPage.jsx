@@ -75,12 +75,13 @@ function formatExpiry(raw) {
 
 export default function CheckoutPage({
   onPaid,
+  cartItems = [],
   initialSummary = {
     items: "$20 x 2",
     itemsAmount: 40,
     shippingAmount: 0,
     couponDiscount: 0,
-    pointsDiscount: 7.66,
+    pointsDiscount: 0,
     currency: "USD",
     total: 68.94,
   },
@@ -107,8 +108,7 @@ export default function CheckoutPage({
     0,
     initialSummary.itemsAmount +
     initialSummary.shippingAmount -
-    couponDiscount -
-    initialSummary.pointsDiscount
+    couponDiscount
   );
 
   const cardNumDigits = useMemo(() => digitsOnly(cardNum), [cardNum]);
@@ -206,13 +206,12 @@ export default function CheckoutPage({
       });
       const orderData = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderData.err || "建立訂單失敗");
-      const orderId = orderData.Order_id;
+      const orderId = orderData.Order_id || orderData.orderId;
 
       const txRes = await fetch("http://127.0.0.1:8000/api/consumer/transaction/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           wallet_type: "koc",
@@ -223,8 +222,8 @@ export default function CheckoutPage({
           Reference_id: orderId,
         }),
       });
-      const txData = await txRes.json();
-      if (!txRes.ok) throw new Error(txData.err || "建立交易失敗");
+      const txData = await txRes.json().catch(() => ({}));
+      // 不管交易是否成功都繼續（不擋結帳流程）
 
       await fetch("http://127.0.0.1:8000/api/consumer/payment/update", {
         method: "POST",
@@ -252,6 +251,14 @@ export default function CheckoutPage({
         }),
       });
 
+      for (const item of cartItems) {
+        await fetch("http://127.0.0.1:8000/api/consumer/cart/item/delete", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Cart_item_id: item.id }),
+        }).catch(() => { });
+      }
+
       setSubmitState("success");
       setTimeout(() => {
         setSubmitState("idle");
@@ -271,6 +278,17 @@ export default function CheckoutPage({
       <div className="mx-auto max-w-[1000px] px-6 pb-20 pt-12 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-10 lg:gap-14 items-start">
         {/* LEFT */}
         <div>
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm group w-fit"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5" />
+              <path d="M12 5l-7 7 7 7" />
+            </svg>
+            返回購物車
+          </button>
           <h1 className="font-['DM_Serif_Display'] text-[40px] leading-none mb-7">結帳</h1>
           <div className="h-px bg-[#E2DDD4] mb-7" />
 
@@ -446,15 +464,11 @@ export default function CheckoutPage({
                 <span>運費</span>
                 <span className="font-mono text-[#1A1A18]">${initialSummary.shippingAmount.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between border-b border-[#E2DDD4] py-2.5">
+              <div className="flex items-center justify-between py-2.5">
                 <span>優惠碼折扣</span>
                 <span className={`font-mono ${couponDiscount > 0 ? "text-[#6BBF6B]" : "text-[#8C8880]"}`}>
                   {couponDiscount > 0 ? `−$${couponDiscount}` : "$0"}
                 </span>
-              </div>
-              <div className="flex items-center justify-between py-2.5">
-                <span>點數折抵</span>
-                <span className="font-mono text-[#6BBF6B]">−${initialSummary.pointsDiscount.toFixed(2)}</span>
               </div>
             </div>
 
@@ -486,9 +500,9 @@ export default function CheckoutPage({
                     type="button"
                     onClick={handleApplyCoupon}
                     disabled={couponLoading || !couponCode.trim()}
-                    className="rounded-[10px] bg-[#1A1A18] px-4 py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="rounded-[10px] bg-[#1A1A18] px-2.5 py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
-                    {couponLoading ? "驗證中..." : "套用"}
+                    {couponLoading ? "驗證中" : "套用"}
                   </button>
                 </div>
               )}
