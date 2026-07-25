@@ -47,6 +47,7 @@ from .views.consumer import (
     update_payment,
     payment_result,
     update_order_status,
+    get_product_campaign,
 )
 
 from .views import koc, vendor
@@ -129,7 +130,9 @@ urlpatterns = [
     path('consumer/payment/update', update_payment, name='update-payment'),
     path('consumer/payments/result', payment_result, name='payment-result'),
     path('consumer/order/update', update_order_status, name='update-order-status'),
-
+    
+    path('consumer/product/campaign', get_product_campaign, name='get-product-campaign'),
+    
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),

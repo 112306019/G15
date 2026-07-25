@@ -301,12 +301,15 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
               <div className="flex-1">
                 <h1 className="font-serif text-4xl md:text-5xl font-bold tracking-wide leading-tight mb-8 text-[#1A1A18]">
                   本期主打<br />商品
+                  {products[0] && (
+                    <p className="text-[#8C8880] text-sm mt-2">{products[0].Product_name}</p>
+                  )}
                 </h1>
-                <button onClick={() => onNavigate?.("product_detail")} className="inline-flex items-center justify-center rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-transform hover:-translate-y-1 hover:bg-[#C8522A] active:translate-y-0 shadow-lg">
+                <button onClick={() => products[0] && onNavigate?.("product_detail", products[0])} className="inline-flex items-center justify-center rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-transform hover:-translate-y-1 hover:bg-[#C8522A] active:translate-y-0 shadow-lg">
                   商品介紹
                 </button>
               </div>
-              <div className="w-full md:w-[450px] aspect-[4/3] bg-gradient-to-br from-[#D8D4CC] to-[#C4BDB4] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow" onClick={() => onNavigate?.("product_detail")}>
+              <div className="w-full md:w-[450px] aspect-[4/3] bg-gradient-to-br from-[#D8D4CC] to-[#C4BDB4] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow" onClick={() => products[0] && onNavigate?.("product_detail", products[0])}>
                 <svg className="h-20 w-20 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
                 </svg>

@@ -281,7 +281,7 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
                 submitting ? "opacity-90" : ""
               )}
             >
-              {success ? "✓ 註冊成功！" : submitting ? "註冊中..." : "註冊"}
+              {success ? "✓ 註冊成功！請由左側重新登入" : submitting ? "註冊中..." : "註冊"}
             </button>
 
             {/* Login link */}
