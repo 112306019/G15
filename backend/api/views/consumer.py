@@ -2,7 +2,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor
+from django.db import transaction
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address
+from .platform import calculate_order_commission
 
 ## 商品查詢
 @api_view(['GET'])
@@ -55,7 +57,7 @@ def get_product_detail(request):
         p = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
         return Response(
-            {'success': False, 'err': '商品不存在'},
+            {'success': False, 'err': '商品不存在或已下架'},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -455,9 +457,13 @@ def create_guest(request):
 @permission_classes([AllowAny])
 def create_order(request):
     user_id = request.data.get('User_id', None)
-    guest_id = request.data.get('Guest_id', None)
     promotion_code = request.data.get('Promotion_code', None)
     total_amount = request.data.get('total_amount')
+    items_data = request.data.get('items') or []
+
+    recipient_name = request.data.get('recipient')
+    recipient_phone = request.data.get('recipient_phone')
+    recipient_address = request.data.get('recipient_address')
 
     if not total_amount:
         return Response(
@@ -465,22 +471,87 @@ def create_order(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    if not user_id and not guest_id:
+    if not user_id:
         return Response(
-            {'success': False, 'err': 'User_id 或 Guest_id 至少填一個'},
+            {'success': False, 'err': 'User_id 為必填，需登入會員才能下單'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    order = Order.objects.create(
-        user_id=user_id or '',
-        guest_id=guest_id or '',
-        promotion_code=promotion_code or '',
-        total_amount=total_amount,
-        order_status='pending',
-        payment_status='unpaid',
-        shipping_status='unshipped',
-        address_id='',
-    )
+    if not items_data:
+        return Response(
+            {'success': False, 'err': 'items 為必填，訂單至少需要一項商品'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 先把商品都查出來，任何一項商品不存在或庫存不足就整單擋下，
+    # 不要建立一張「買了不存在商品」的訂單。
+    product_ids = [item.get('Product_id') for item in items_data]
+    products_by_id = {
+        p.product_id: p
+        for p in Product.objects.filter(product_id__in=product_ids)
+    }
+
+    for item in items_data:
+        product_id = item.get('Product_id')
+        quantity = int(item.get('Quantity') or 1)
+        product = products_by_id.get(product_id)
+
+        if not product:
+            return Response(
+                {'success': False, 'err': f'商品 {product_id} 不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if product.stock < quantity:
+            return Response(
+                {'success': False, 'err': f'{product.product_name} 庫存不足'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    with transaction.atomic():
+        # 結帳頁有收集收件人姓名、電話跟地址，把它們存成一筆 Address，
+        # 綁在下單的會員身上（不支援訪客結帳，所以一定有 user_id）。
+        address = None
+        if recipient_name or recipient_phone or recipient_address:
+            address = Address.objects.create(
+                user_id=user_id,
+                recipient_name=recipient_name or '',
+                phone=recipient_phone or '',
+                detail_address=recipient_address or '',
+            )
+
+        order = Order.objects.create(
+            user_id=user_id,
+            promotion_code=promotion_code or '',
+            total_amount=total_amount,
+            order_status='pending',
+            payment_status='unpaid',
+            shipping_status='unshipped',
+            address=address,
+        )
+
+        created_items = []
+        for item in items_data:
+            product_id = item.get('Product_id')
+            quantity = int(item.get('Quantity') or 1)
+            product = products_by_id[product_id]
+
+            # 價格用商品目前實際售價重算，不採信前端傳來的金額，
+            # 避免被竄改請求內容占便宜。
+            unit_price = product.discounted_price if product.discounted_price else product.price
+            subtotal = unit_price * quantity
+
+            order_item = OrderItem.objects.create(
+                order=order,
+                product=product,
+                quantity=quantity,
+                unit_price=unit_price,
+                subtotal=subtotal,
+            )
+            created_items.append(order_item)
+
+            product.stock = max(0, product.stock - quantity)
+            product.save(update_fields=['stock'])
 
     return Response({
         'success': True,
@@ -489,6 +560,7 @@ def create_order(request):
         'paymentStatus': order.payment_status,
         'shippingStatus': order.shipping_status,
         'totalAmount': float(order.total_amount),
+        'itemCount': len(created_items),
     }, status=status.HTTP_201_CREATED)
 
 
@@ -675,7 +747,8 @@ def payment_result(request):
         'Order_id': str(order.order_id),
         'payment_status': order.payment_status,
     }, status=status.HTTP_200_OK)
-    
+
+
 # ── 完成訂單 ──
 @api_view(['PATCH'])
 @permission_classes([AllowAny])
@@ -756,13 +829,15 @@ def update_order_status(request):
         'success': True,
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
-    }, 
-    
+    }
+
     if commission_result:
         response_data['commission'] = commission_result
-    
+
     return Response(response_data, status=status.HTTP_200_OK)
-    
+
+
+# ── 查看商品所屬活動 ──
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_product_campaign(request):
@@ -775,7 +850,7 @@ def get_product_campaign(request):
         campaign_product = CampaignProduct.objects.filter(product__product_id=product_id).first()
         if not campaign_product:
             return Response({'success': False, 'err': '找不到對應活動'}, status=status.HTTP_404_NOT_FOUND)
-        
+
         campaign = Campaigns.objects.get(campaign_id=campaign_product.campaign_id)
         return Response({
             'campaign_id': str(campaign.campaign_id),
