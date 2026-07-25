@@ -215,7 +215,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
     }
     if (search.trim()) {
       result = result.filter((p) =>
-        (p.product_name || "").toLowerCase().includes(search.toLowerCase())
+        (p.Product_name || "").toLowerCase().includes(search.toLowerCase())
       );
     }
     if (sortType === "asc") {
@@ -356,11 +356,11 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   {featured.map((p) => (
                     <ProductCard
                       key={p.product_id}
-                      name={p.product_name}
+                      name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
                       onAdd={() => handleAdd(p.product_id)}
-                      onClick={() => onNavigate?.("product_detail", p.product_id)}
+                      onClick={() => onNavigate?.("product_detail", p)}
                     />
                   ))}
                 </div>
@@ -378,11 +378,11 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   {bestSellers.map((p) => (
                     <ProductCard
                       key={p.product_id}
-                      name={p.product_name}
+                      name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
                       onAdd={() => handleAdd(p.product_id)}
-                      onClick={() => onNavigate?.("product_detail", p.product_id)}
+                      onClick={() => onNavigate?.("product_detail", p)}
                     />
                   ))}
                 </div>
@@ -416,11 +416,11 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                 {displayProducts.map((p) => (
                   <ProductCard
                     key={p.product_id}
-                    name={p.product_name}
+                    name={p.Product_name}
                     price={`NTD$ ${p.discounted_price || p.price}`}
                     gradient={p.gradient}
                     onAdd={() => handleAdd(p.product_id)}
-                    onClick={() => onNavigate?.("product_detail", p.product_id)}
+                    onClick={() => onNavigate?.("product_detail", p)}
                   />
                 ))}
               </div>

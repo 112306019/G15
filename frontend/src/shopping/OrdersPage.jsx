@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 function IconClock(props) {
   return (
@@ -187,60 +187,73 @@ function HistoryCard({ order, onOpenDetail }) {
 }
 
 export default function OrdersPage({
-  onTrackOrder, 
-  onOpenOrderDetail, 
+  onTrackOrder,
+  onOpenOrderDetail,
 }) {
-  const activeOrders = useMemo(
-    () => [
-      { id: "123456", eta: "2026/01/31", progress: 0.65 },
-      { id: "11112", eta: "2026/02/17", progress: 0.3 },
-    ],
-    []
-  );
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const historyOrders = useMemo(
-    () => [
-      {
-        id: "14256",
-        status: "complete",
-        date: "九月 16, 2026",
-        time: "11:54 PM",
-        items: [
-          { qty: 1, name: "茶壺" },
-          { qty: 1, name: "茶具" },
-        ],
-        detail: {
-          address: "台中市西區民生路 100 號",
-          payment: "信用卡 **** 1234",
-          amount: "$48.50",
-          shipping: "標準快遞",
-        },
-      },
-      {
-        id: "32561",
-        status: "cancelled",
-        date: "八月 29, 2026",
-        time: "12:06 AM",
-        items: [
-          { qty: 3, name: "衛生紙" },
-          { qty: 1, name: "濕紙巾" },
-          { qty: 2, name: "紙巾盒" },
-        ],
-        detail: {
-          address: "台中市北區進化路 55 號",
-          payment: "轉帳",
-          amount: "$22.80",
-          reason: "買家申請取消",
-        },
-      },
-    ],
-    []
-  );
+  const userId = localStorage.getItem("userId");
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await fetch(
+          `http://127.0.0.1:8000/api/consumer/order/view?User_id=${userId}`
+        );
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setOrders(data);
+        }
+      } catch (err) {
+        console.error("訂單載入失敗", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (userId) fetchOrders();
+    else setLoading(false);
+  }, [userId]);
+
+  const activeOrders = orders.filter(
+    (o) => o.order_status === "pending" || o.shipping_status === "shipped"
+  ).map((o) => ({
+    id: o.Order_id,
+    eta: "待確認",
+    progress: o.shipping_status === "shipped" ? 0.6 : 0.2,
+  }));
+
+  const historyOrders = orders.filter(
+    (o) => o.order_status === "completed" || o.order_status === "cancelled"
+  ).map((o) => ({
+    id: o.Order_id,
+    status: o.order_status === "completed" ? "complete" : "cancelled",
+    date: new Date(o.created_at).toLocaleDateString("zh-TW"),
+    time: new Date(o.created_at).toLocaleTimeString("zh-TW"),
+    items: (o.items || []).map(item => ({
+      qty: item.quantity,
+      name: item.product_name || `商品 ${item.Product_id}`,
+    })),
+    detail: {
+      address: o.Address_id || "未填寫",
+      payment: o.payment_status,
+      amount: `NTD$ ${o.total_amount}`,
+      shipping: o.shipping_status,
+    },
+  }));
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl animate-in fade-in duration-500 space-y-12">
+        <div className="py-20 text-center text-[#8C8880]">訂單載入中...</div>
+      </div>
+    );
+  }
 
   return (
     // 🟢 加上統一大寬度的 max-w-5xl
     <div className="max-w-5xl animate-in fade-in duration-500 space-y-12">
-      
+
       {/* Active orders */}
       <section>
         <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">購買清單</h2>

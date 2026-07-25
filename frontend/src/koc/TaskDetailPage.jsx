@@ -3,9 +3,8 @@ import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, C
 import api from '../api/index';
 import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
 
-const user_id = localStorage.getItem('userId'); // 登入後存於 localStorage
-
 export default function TaskDetailPage({ task, onBack }) {
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -224,7 +223,7 @@ export default function TaskDetailPage({ task, onBack }) {
       {/* 左側：主要內容區 */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        <button onClick={onBack} className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit">
+        <button onClick={() => onBack(task.stage)} className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit">
           <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
           返回任務中心
         </button>
@@ -368,7 +367,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
               </p>
               <button
-                onClick={onBack}
+                onClick={() => onBack(task.stage)}
                 className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
               >
                 返回任務中心

@@ -2,11 +2,10 @@ import React, { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import api from '../api/index';
 
-const user_id = localStorage.getItem('userId'); // 登入後存於 localStorage
-
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ApplyKOCPage({ onSubmit }) {
+    const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
     const [displayName, setDisplayName] = useState("");
     const [email, setEmail] = useState("");
     const [fbUrl, setFbUrl] = useState("");

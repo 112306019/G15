@@ -1296,7 +1296,7 @@ def get_chat_history(request):
         "sender_role": m.sender_role,
         "sender_id": m.sender_id,
         "content": m.content,
-        "created_at": m.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        "created_at": timezone.localtime(m.created_at).strftime('%Y-%m-%d %H:%M:%S'),
         "is_read": m.is_read,
     } for m in messages]
 
@@ -1351,7 +1351,7 @@ def send_chat_message(request):
             "sender_role": message.sender_role,
             "sender_id": message.sender_id,
             "content": message.content,
-            "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "created_at": timezone.localtime(message.created_at).strftime('%Y-%m-%d %H:%M:%S'),
             "is_read": message.is_read,
         }
     }, status=http_status.HTTP_200_OK)
