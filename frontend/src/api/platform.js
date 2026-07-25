@@ -88,7 +88,6 @@ export const getAdminCouponUsage = (params = {}) => {
 }
 
 // 取得成效分析
-// 後端尚未完成 /platform/performance
 export const getAdminPerformance = (params = {}) => {
   return api.get('/platform/performance', { params })
 
@@ -96,10 +95,10 @@ export const getAdminPerformance = (params = {}) => {
 
 // 取得所有任務列表
 export const getAllMissions = (params = {}) => {
-  return api.get('/platform/koc/getList', { params })
+  return api.get('/platform/mission/getAll', { params })
 }
 
 // 取得收益追蹤
 export const getEarningsTracking = (params = {}) => {
-  return api.get('/platform/transactions', { params })
+  return api.get('/platform/mission/getEarningsTracking', { params })
 }

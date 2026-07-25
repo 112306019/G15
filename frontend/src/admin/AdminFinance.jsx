@@ -1,17 +1,93 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Filter, CreditCard, DollarSign, Wallet,
-  ArrowUpRight, ArrowDownRight, CheckCircle, Clock
+  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark
 } from 'lucide-react';
 
 export default function AdminFinance() {
   const [activeTab, setActiveTab] = useState('payments');
   const [payments, setPayments] = useState([]);
   const [transactions, setTransactions] = useState([]);
-  const [earnings] = useState([]);
+  const [earnings, setEarnings] = useState([]);
+  const [settleableCampaigns, setSettleableCampaigns] = useState([]);
+  const [settlingId, setSettlingId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem("admin_token");
+
+  const fetchEarningsData = async () => {
+    try {
+      const earnRes = await fetch("http://127.0.0.1:8000/api/platform/earnings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const earnData = await earnRes.json();
+      if (Array.isArray(earnData)) {
+        setEarnings(earnData.map((e) => ({
+          earningId: e.Earnings_id,
+          kocMissionId: e.KOCMission_id,
+          influencerId: e.Influencer_name || e.Influencer_id,
+          campaignName: e.Campaign_name,
+          amount: e.amount,
+          payoutDate: e.status === 'transferred' && e.created_at
+            ? new Date(e.created_at).toLocaleDateString("zh-TW")
+            : null,
+          status: e.status === 'transferred' ? '已撥款'
+            : e.status === 'withdrawable' ? '可提領'
+              : '待定',
+        })));
+      }
+
+      const settleRes = await fetch("http://127.0.0.1:8000/api/platform/campaigns/settleable", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const settleData = await settleRes.json();
+      if (Array.isArray(settleData)) {
+        setSettleableCampaigns(settleData.map((c) => ({
+          campaignId: c.Campaign_id,
+          campaignName: c.Campaign_name,
+          vendorName: c.Vendor_name,
+          eligibleAt: c.Settlement_eligible_at,
+          isEligible: c.Is_eligible,
+          pendingCount: c.Pending_count,
+          pendingAmount: c.Pending_amount,
+        })));
+      }
+    } catch (err) {
+      console.error("收益資料載入失敗", err);
+    }
+  };
+
+  const handleSettle = async (campaignId) => {
+    if (!window.confirm("確定要結算這個活動的所有可提領分潤，並匯入 KOC 錢包嗎？")) {
+      return;
+    }
+
+    setSettlingId(campaignId);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/platform/campaign/settle-earnings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ Campaign_id: campaignId }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        alert(data.err || "結算失敗，請稍後再試");
+        return;
+      }
+
+      alert(`已結算 ${data.settled_count} 筆分潤，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
+      fetchEarningsData();
+    } catch (err) {
+      console.error("結算失敗", err);
+      alert("結算失敗，請稍後再試");
+    } finally {
+      setSettlingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -46,6 +122,8 @@ export default function AdminFinance() {
             date: t.created_at ? new Date(t.created_at).toLocaleDateString("zh-TW") : "-",
           })));
         }
+
+        await fetchEarningsData();
       } catch (err) {
         console.error("財務資料載入失敗", err);
       } finally {
@@ -150,39 +228,74 @@ export default function AdminFinance() {
 
             {/* TAB 2: KOC 收益與撥款 */}
             {activeTab === 'earnings' && (
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益編號 / 任務 ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">KOC 用戶 ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">撥款日期</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益狀態</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2DDD4]">
-                  {earnings.length === 0 ? (
-                    <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有收益資料</td></tr>
-                  ) : earnings.map((earn, idx) => (
-                    <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-[#1A1A18] text-sm">{earn.earningId}</div>
-                        <div className="text-xs font-bold text-[#B89B6A] mt-1">{earn.kocMissionId}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{earn.influencerId}</td>
-                      <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">NT$ {earn.amount?.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-[#1A1A18]">{earn.payoutDate || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                          earn.status === '已撥款' ? 'bg-white border-[#E2DDD4] text-[#1A1A18]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
-                        }`}>
-                          {earn.status}
-                        </span>
-                      </td>
+              <>
+                {settleableCampaigns.length > 0 && (
+                  <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-1">
+                      <Landmark size={16} /> 待結算活動
+                    </div>
+                    {settleableCampaigns.map((c) => (
+                      <div
+                        key={c.campaignId}
+                        className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-2xl px-5 py-4"
+                      >
+                        <div>
+                          <div className="text-sm font-bold text-[#1A1A18]">{c.campaignName}</div>
+                          <div className="text-xs font-medium text-[#8C8880] mt-1">
+                            {c.vendorName} ・ {c.pendingCount} 筆可提領分潤 ・ NT$ {c.pendingAmount?.toLocaleString?.() ?? c.pendingAmount}
+                          </div>
+                          {!c.isEligible && (
+                            <div className="text-xs font-bold text-[#C8522A] mt-1">
+                              優惠碼效期至 {new Date(c.eligibleAt).toLocaleDateString("zh-TW")} 才能結算
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleSettle(c.campaignId)}
+                          disabled={!c.isEligible || settlingId === c.campaignId}
+                          className="shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {settlingId === c.campaignId ? '結算中...' : '結算分潤'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益編號 / 任務 ID</th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">KOC</th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">撥款日期</th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益狀態</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {earnings.length === 0 ? (
+                      <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有收益資料</td></tr>
+                    ) : earnings.map((earn, idx) => (
+                      <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-[#1A1A18] text-sm">{earn.earningId}</div>
+                          <div className="text-xs font-bold text-[#B89B6A] mt-1">{earn.kocMissionId}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{earn.influencerId}</td>
+                        <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">NT$ {earn.amount?.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-[#1A1A18]">{earn.payoutDate || '-'}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
+                            earn.status === '已撥款' ? 'bg-white border-[#E2DDD4] text-[#1A1A18]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
+                          }`}>
+                            {earn.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
 
             {/* TAB 3: 廠商交易與錢包 */}

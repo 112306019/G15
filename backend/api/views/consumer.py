@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Payment
 from api.models import User
+from .platform import calculate_order_commission
 
 ## 商品查詢
 @api_view(['GET'])
@@ -130,10 +131,10 @@ def add_cart_item(request):
         )
 
     try:
-        product = Product.objects.get(product_id=product_id)
+        product = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
         return Response(
-            {'success': False, 'err': '商品不存在'},
+            {'success': False, 'err': '商品不存在或已下架'},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -383,8 +384,8 @@ def delete_wishlist(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    user_id = wishlist.user_id.user_id
-    product_id = wishlist.product_id.product_id
+    user_id = wishlist.user.user_id
+    product_id = wishlist.product.product_id
     wishlist.delete()
 
     return Response({
@@ -664,6 +665,8 @@ def payment_result(request):
 def update_order_status(request):
     order_id = request.data.get('Order_id')
     order_status = request.data.get('order_status')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
 
     if not order_id or not order_status:
         return Response(
@@ -679,11 +682,70 @@ def update_order_status(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    order.order_status = order_status
-    order.save()
+    commission_result = None
 
-    return Response({
+    # 「完成訂單」是分潤唯一的觸發點，需要額外驗證，
+    # 避免商品送達前、或已取消/退款的訂單被算進分潤。
+    if order_status == 'completed':
+        if user_id and str(order.user_id) != str(user_id):
+            return Response(
+                {'success': False, 'err': '無權限操作此訂單'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if guest_id and str(order.guest_id) != str(guest_id):
+            return Response(
+                {'success': False, 'err': '無權限操作此訂單'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if order.order_status == 'cancelled':
+            return Response(
+                {'success': False, 'err': '此訂單已取消，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.payment_status not in ('paid', 'completed'):
+            return Response(
+                {'success': False, 'err': '此訂單尚未完成付款，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.shipping_status != 'delivered':
+            return Response(
+                {'success': False, 'err': '此訂單尚未送達，無法確認完成'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        already_completed = order.order_status == 'completed'
+
+        order.order_status = 'completed'
+        order.save()
+
+        if not already_completed:
+            try:
+                commission_result = calculate_order_commission(order)
+            except ValueError as commission_error:
+                commission_result = {
+                    'created': False,
+                    'commission_amount': 0,
+                    'message': str(commission_error)
+                }
+    else:
+        order.order_status = order_status
+        order.save()
+
+    response_data = {
         'success': True,
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
-    }, status=status.HTTP_200_OK)
+    }
+
+    if commission_result is not None:
+        response_data['commission'] = {
+            'created': commission_result['created'],
+            'amount': commission_result['commission_amount'],
+            'message': commission_result['message'],
+        }
+
+    return Response(response_data, status=status.HTTP_200_OK)

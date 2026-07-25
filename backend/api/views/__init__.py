@@ -14,6 +14,7 @@ from .koc import (
     get_revenue_total,
     get_revenue_history,
     get_pending_earnings_detail,
+    request_payout,
     get_analytics_list,
     get_analytics_detail,
     save_draft,

@@ -1,6 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import timedelta
 
 from django.utils import timezone
+from django.db import transaction
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -26,12 +28,13 @@ from api.models import (
     Application,
     CampaignProduct,
     Earnings,
-    OrderItem
+    OrderItem,
+    KocWallet
 
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP
 
 
 # ==============================================================================
@@ -187,8 +190,15 @@ def calculate_order_commission(order):
         kocmission=mission,
         order=order,
         amount=commission_amount,
-        status="withdrawable"
+        status=EARNINGS_STATUS_CHOICES_MAP["pending"]
     )
+
+    # 分潤剛算出來時，錢還不能直接動用：先記錄在 KOC 錢包的
+    # 凍結餘額（balance_frozen），等活動正式結算（見
+    # admin_settle_campaign_earnings）才會轉成可提領餘額。
+    wallet, _ = KocWallet.objects.get_or_create(koc=mission.koc)
+    wallet.balance_frozen = wallet.balance_frozen + commission_amount
+    wallet.save(update_fields=["balance_frozen", "updated_at"])
 
     coupon.usage_count = (
         coupon.usage_count or 0
@@ -221,6 +231,186 @@ def calculate_order_commission(order):
         ),
         "message": "分潤建立成功"
     }
+
+
+# ==============================================================================
+# 活動結算：活動結束後，把該活動所有「可提領」的分潤一次匯入 KOC 錢包
+# POST /platform_admin/campaign/settle-earnings
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_get_earnings(request):
+    earnings = Earnings.objects.select_related(
+        'user', 'kocmission__application__campaign'
+    ).order_by('-created_at')
+
+    result = []
+    for earning in earnings:
+        campaign = None
+        if earning.kocmission and earning.kocmission.application:
+            campaign = earning.kocmission.application.campaign
+
+        result.append({
+            'Earnings_id': earning.earnings_id,
+            'KOCMission_id': earning.kocmission_id,
+            'Influencer_id': earning.user_id,
+            'Influencer_name': earning.user.name if earning.user else None,
+            'Campaign_id': str(campaign.campaign_id) if campaign else None,
+            'Campaign_name': campaign.name if campaign else None,
+            'amount': earning.amount,
+            'status': earning.status,
+            'created_at': earning.created_at,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+# 列出「有可提領分潤」的活動，並標出是否已經過了 end_date + promo_days，
+# 可以讓前端知道要顯示可結算還是要等待。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_settleable_campaigns(request):
+    now = timezone.now()
+
+    campaigns = Campaigns.objects.select_related('vendor').all()
+
+    result = []
+    for campaign in campaigns:
+        pending = Earnings.objects.filter(
+            kocmission__application__campaign=campaign,
+            status=EARNINGS_STATUS_CHOICES_MAP['pending']
+        )
+
+        pending_count = pending.count()
+
+        if pending_count == 0:
+            continue
+
+        pending_amount = sum(item.amount for item in pending)
+        eligible_at = campaign.end_date + timedelta(
+            days=campaign.promo_days or 0
+        )
+
+        result.append({
+            'Campaign_id': str(campaign.campaign_id),
+            'Campaign_name': campaign.name,
+            'Vendor_name': campaign.vendor.company_name if campaign.vendor else None,
+            'End_date': campaign.end_date,
+            'Settlement_eligible_at': eligible_at,
+            'Is_eligible': eligible_at <= now,
+            'Pending_count': pending_count,
+            'Pending_amount': pending_amount,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_settle_campaign_earnings(request):
+    campaign_id = request.data.get('Campaign_id')
+
+    if not campaign_id:
+        return Response({
+            'success': False,
+            'err': 'Campaign_id 為必填'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        campaign = Campaigns.objects.get(campaign_id=campaign_id)
+    except Campaigns.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '活動不存在'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 活動真正「結束」要等優惠碼最後效期（end_date 之後還有 promo_days 天）
+    # 也過了，不然這段期間下的訂單用的優惠碼還有效，還是可能產生新的分潤。
+    settlement_eligible_at = campaign.end_date + timedelta(
+        days=campaign.promo_days or 0
+    )
+
+    if settlement_eligible_at > timezone.now():
+        return Response({
+            'success': False,
+            'err': f'活動優惠碼最後效期到 {settlement_eligible_at.isoformat()} 才結束，尚不能結算分潤'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 這個活動底下、狀態還是「待結算」的分潤，才是這次要從凍結餘額
+    # 轉成可提領餘額的對象。
+    earnings = (
+        Earnings.objects
+        .select_related('kocmission__koc', 'user')
+        .filter(
+            kocmission__application__campaign=campaign,
+            status=EARNINGS_STATUS_CHOICES_MAP['pending']
+        )
+    )
+
+    settled = []
+    skipped = []
+
+    for earning in earnings:
+        mission = earning.kocmission
+
+        if not mission or not mission.koc:
+            skipped.append({
+                'earnings_id': earning.earnings_id,
+                'reason': '找不到對應的 KOC'
+            })
+            continue
+
+        with transaction.atomic():
+            # 用 select_for_update 鎖住這筆錢包餘額，避免同時間有其他請求
+            # （例如另一個活動的結算，或 KOC 剛好在提領）一起改到餘額造成誤差
+            wallet, _ = KocWallet.objects.select_for_update().get_or_create(
+                koc=mission.koc
+            )
+
+            # 結算就是把錢從「凍結」轉成「可提領」，不是憑空多加一筆錢進去
+            wallet.balance_frozen = max(
+                0, wallet.balance_frozen - earning.amount
+            )
+            wallet.balance_available = (
+                wallet.balance_available + earning.amount
+            )
+            wallet.save(
+                update_fields=[
+                    'balance_frozen',
+                    'balance_available',
+                    'updated_at'
+                ]
+            )
+
+            Transactions.objects.create(
+                koc_wallet=wallet,
+                type='reward',
+                amount=earning.amount,
+                reference_type='earning',
+                reference_id=str(earning.earnings_id)
+            )
+
+            earning.status = 'withdrawable'
+            earning.save(update_fields=['status'])
+
+        settled.append({
+            'earnings_id': earning.earnings_id,
+            'koc_id': mission.koc.koc_id,
+            'amount': earning.amount
+        })
+
+    total_amount = sum(item['amount'] for item in settled)
+
+    return Response({
+        'success': True,
+        'err': '',
+        'campaign_id': str(campaign.campaign_id),
+        'settled_count': len(settled),
+        'total_amount': total_amount,
+        'settled': settled,
+        'skipped': skipped
+    }, status=status.HTTP_200_OK)
 
 
 # ==============================================================================
