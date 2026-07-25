@@ -56,10 +56,7 @@ def get_koc_profile(request):
     try:
         koc = user.koc_profile
     except KOC.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "此使用者尚未成為 KOC"
-        }, status=http_status.HTTP_404_NOT_FOUND)
+        koc = None
 
     return Response({
         "success": True,
@@ -68,12 +65,12 @@ def get_koc_profile(request):
         "real_name": user.name,
         "phone": user.phone,
         "email": user.email,
-        "address": koc.address,
-        "bank_account": koc.bank_account,
-        "bank_number": koc.bank_number,
-        "ig_account": koc.ig_account,
-        "fb_account": koc.fb_account,
-        "threads_account": koc.threads_account,
+        "address": koc.address if koc else None,
+        "bank_account": koc.bank_account if koc else None,
+        "bank_number": koc.bank_number if koc else None,
+        "ig_account": koc.ig_account if koc else None,
+        "fb_account": koc.fb_account if koc else None,
+        "threads_account": koc.threads_account if koc else None,
     }, status=http_status.HTTP_200_OK)
 
 # 修改KOC資料 
@@ -1229,13 +1226,19 @@ def get_analytics_detail(request):
             "y_value": orders_dict.get(day, 0),
         })
 
+    # 直接從 Earnings 表加總這個任務(kocmission)的分潤，
+    # 不用 coupon.total_commission 這個快取計數欄位，避免兩邊資料不同步
+    mission_commission = Earnings.objects.filter(
+        kocmission=mission
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
     return Response({
         "success": True,
         "err": "",
         "campaign_image": campaign_image,
         "campaign_name": campaign.name,
         "usage_count": coupon.usage_count,
-        "total_commision": coupon.total_commission,
+        "total_commision": mission_commission,
         "chart_data": chart_data,
     }, status=http_status.HTTP_200_OK)
 
