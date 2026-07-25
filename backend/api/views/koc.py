@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from rest_framework.decorators import api_view, permission_classes
@@ -20,7 +21,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -891,6 +892,95 @@ def get_revenue_total(request):
         "hasBankAccount": has_bank_account,
     }, status=http_status.HTTP_200_OK)
 
+
+# 申請撥款：把可提領餘額（balance_available）送出撥款申請，
+# 建立 Payouts 紀錄，並把對應的 Earnings 標記為已轉帳。
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_payout(request):
+    user_id = request.data.get('user_id')
+    amount = request.data.get('amount')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        koc = KOC.objects.select_related('wallet', 'user').get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if not koc.bank_account:
+        return Response({
+            "success": False,
+            "err": "尚未綁定銀行帳戶，無法申請撥款"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        wallet = koc.wallet
+    except KocWallet.DoesNotExist:
+        wallet = None
+
+    available = wallet.balance_available if wallet else 0
+
+    if available <= 0:
+        return Response({
+            "success": False,
+            "err": "目前沒有可提領的餘額"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    # 沒有指定金額就預設全部提領；有指定金額則不能超過可提領餘額
+    payout_amount = int(amount) if amount else available
+
+    if payout_amount <= 0 or payout_amount > available:
+        return Response({
+            "success": False,
+            "err": "申請金額不可小於等於 0 或超過可提領餘額"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        wallet = KocWallet.objects.select_for_update().get(koc=koc)
+        wallet.balance_available = wallet.balance_available - payout_amount
+        wallet.save(update_fields=['balance_available', 'updated_at'])
+
+        payout = Payouts.objects.create(
+            koc=koc.user,
+            amount=payout_amount,
+            payout_date=timezone.localdate(),
+            status='pending'
+        )
+
+        # 把這筆撥款金額對應到的「可提領」分潤標記為已轉帳，
+        # 依建立時間先後扣抵，扣到申請金額為止
+        remaining = payout_amount
+        withdrawable_earnings = (
+            Earnings.objects
+            .filter(user=koc.user, status='withdrawable')
+            .order_by('created_at')
+        )
+
+        for earning in withdrawable_earnings:
+            if remaining <= 0:
+                break
+            earning.status = 'transferred'
+            earning.save(update_fields=['status'])
+            remaining -= earning.amount
+
+    return Response({
+        "success": True,
+        "err": "",
+        "payout_id": payout.payout_id,
+        "amount": payout.amount,
+        "payout_date": payout.payout_date,
+        "status": payout.status,
+        "remaining_balance": wallet.balance_available,
+    }, status=http_status.HTTP_200_OK)
+
 # 獲取收益明細
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -1296,7 +1386,7 @@ def get_chat_history(request):
         "sender_role": m.sender_role,
         "sender_id": m.sender_id,
         "content": m.content,
-        "created_at": timezone.localtime(m.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+        "created_at": m.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         "is_read": m.is_read,
     } for m in messages]
 
@@ -1351,7 +1441,7 @@ def send_chat_message(request):
             "sender_role": message.sender_role,
             "sender_id": message.sender_id,
             "content": message.content,
-            "created_at": timezone.localtime(message.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+            "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             "is_read": message.is_read,
         }
     }, status=http_status.HTTP_200_OK)
