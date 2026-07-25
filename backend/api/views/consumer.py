@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Payment
 from api.models import User
 
 ## 商品查詢
@@ -544,8 +544,12 @@ def view_order(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_transaction(request):
-    print("request.data:", request.data)
-    wallet_type = request.data.get('wallet_type', 'koc')
+    """
+    暫時停用內部錢包扣款/帳務邏輯，等第三方金流 API 串接後再實作真正的
+    Transactions 寫入。koc_wallet/vendor_wallet 目前都拿不到真實錢包，
+    若照舊寫入會違反 transactions_exactly_one_wallet 這個 Check Constraint，
+    這裡先直接回傳模擬成功。
+    """
     type_ = request.data.get('Type') or request.data.get('type')
     amount = request.data.get('Amount')
     reference_type = request.data.get('Reference_type')
@@ -557,22 +561,23 @@ def create_transaction(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    transaction = Transactions.objects.create(
-        koc_wallet=None,
-        vendor_wallet=None,
-        type=type_,
-        amount=amount,
-        reference_type=reference_type,
-        reference_id=str(reference_id) if reference_id else None,
-    )
+    # transaction = Transactions.objects.create(
+    #     koc_wallet=None,
+    #     vendor_wallet=None,
+    #     type=type_,
+    #     amount=amount,
+    #     reference_type=reference_type,
+    #     reference_id=str(reference_id) if reference_id else None,
+    # )
 
     return Response({
-        'Transaction_ID': transaction.transaction_id,
-        'Type': transaction.type,
-        'Amount': transaction.amount,
-        'Reference_type': transaction.reference_type,
-        'Reference_id': transaction.reference_id,
-    }, status=status.HTTP_201_CREATED)
+        'success': True,
+        'Transaction_ID': None,
+        'Type': type_,
+        'Amount': amount,
+        'Reference_type': reference_type,
+        'Reference_id': str(reference_id) if reference_id else None,
+    }, status=status.HTTP_200_OK)
 
 
 # ── 更新付款狀態 ──
