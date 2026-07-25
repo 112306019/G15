@@ -119,32 +119,12 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   );
 }
 
-// 刷新後這些頁面需要的資料（selectedTask/selectedProduct）只存在記憶體、不會留下來，
-// 還原時不能停在這些頁面，只能退回各自的清單頁
-const VIEWS_NEEDING_TRANSIENT_DATA = ['task_detail', 'sales_data', 'product_detail'];
-
-// 從 localStorage 恢復登入狀態與刷新前所在頁面；role 一律存字串，比對時需轉型
-function getRestoredAuth() {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
-  if (token && role) {
-    const mappedRole = Number(role) === 1 ? 'koc' : 'shopper';
-    const defaultView = mappedRole === 'koc' ? 'home' : 'shop';
-    const savedView = localStorage.getItem('view');
-    const restoredView = savedView && !VIEWS_NEEDING_TRANSIENT_DATA.includes(savedView)
-      ? savedView
-      : defaultView;
-    return { view: restoredView, userRole: mappedRole };
-  }
-  return { view: 'welcome', userRole: 'guest' };
-}
-
 function MainSystem() {
-  const [view, setView] = useState(() => getRestoredAuth().view);
+  const [view, setView] = useState('welcome');
   const [selectedTask, setSelectedTask] = useState(null);
   const [homeJumpStage, setHomeJumpStage] = useState(null);
 
-  const [userRole, setUserRole] = useState(() => getRestoredAuth().userRole);
+  const [userRole, setUserRole] = useState('guest');
   const [cartCount, setCartCount] = useState(0);
   // 從後端同步購物車數量
   const syncCartCount = async () => {
@@ -167,27 +147,37 @@ function MainSystem() {
   const [shopKey, setShopKey] = useState(0);
 
   const [favorites, setFavorites] = useState([]);
+  const [isInitializing, setIsInitializing] = useState(true); // 新增
 
   const navigate = useNavigate();
 
-  // 登入狀態下，記住每次切換的 view，刷新時才能還原到原本所在的頁面（而非固定跳回預設頁）
+  // 新增：App 啟動時恢復登入狀態
   useEffect(() => {
-    if (localStorage.getItem('token')) {
-      localStorage.setItem('view', view);
-    }
-  }, [view]);
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
 
-  // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
-  const handleNavigate = (targetView, data = null, roleOverride = null) => {
+    if (token && role) {
+      const mappedRole = role === "1" || role === 1 ? 'koc' : 'shopper';
+      setUserRole(mappedRole);
+      setView(mappedRole === 'koc' ? 'home' : 'shop');
+    }
+    setIsInitializing(false);
+  }, []);
+
+  // 避免恢復狀態前畫面閃一下 welcome/login
+  if (isInitializing) {
+    return null; // 或是一個 loading spinner
+  }
+
+  const handleNavigate = (targetView, data = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail',
       'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'apply', 'cart', 'review', 'favorites'
     ];
-    const effectiveRole = roleOverride ?? userRole;
 
     if (targetView === 'shop') setShopKey(prev => prev + 1);
 
-    if (effectiveRole === 'guest' && protectedViews.includes(targetView)) {
+    if (userRole === 'guest' && protectedViews.includes(targetView)) {
       setAppToast("需先登入或註冊才能使用此功能喔！");
       setTimeout(() => setAppToast(""), 3500);
       return;
@@ -248,11 +238,11 @@ function MainSystem() {
             const mappedRole = role === 1 ? 'koc' : 'shopper';
             setUserRole(mappedRole);
             syncCartCount();
-            handleNavigate(mappedRole === 'koc' ? 'home' : 'shop', null, mappedRole);
+            handleNavigate(mappedRole === 'koc' ? 'home' : 'shop');
           }}
           onRegisterSuccess={() => {
             setUserRole('shopper');
-            handleNavigate('profile', null, 'shopper');
+            handleNavigate('profile');
           }}
           onSkipToShop={() => {
             setUserRole('guest');
@@ -311,13 +301,12 @@ function MainSystem() {
             {view === 'security' && (
               <SecurityPage
                 onLogout={() => {
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('userId');
-                  localStorage.removeItem('role');
-                  localStorage.removeItem('view');
+                  localStorage.removeItem("token");
+                  localStorage.removeItem("userId");
+                  localStorage.removeItem("role");
                   setUserRole('guest');
                   setCartCount(0);
-                  setView('welcome');
+                  setView('login'); // 或 'welcome'，看你們想登出後導去哪個頁面
                 }}
               />
             )}
