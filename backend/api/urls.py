@@ -143,7 +143,7 @@ urlpatterns = [
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
-   path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
+    path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
 
     # Vendor 任務 / Campaign API
