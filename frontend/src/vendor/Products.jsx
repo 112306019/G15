@@ -6,9 +6,10 @@ import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVend
 
 // 🟢 專屬品牌色狀態設定 (配合新商業邏輯)
 const statusCfg = {
-  active: { label: '推廣中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' }, // 正在某個任務裡
-  idle:   { label: '庫存中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' }, // 閒置在資料庫
-  empty:  { label: '已售完', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+  active:   { label: '推廣中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' }, // 掛在一個進行中的活動
+  idle:     { label: '庫存中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' }, // 上架中，但沒有進行中的活動
+  empty:    { label: '已售完', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
+  delisted: { label: '已下架', cls: 'bg-[#F5F0E8] text-[#8C8880]', dot: 'bg-[#8C8880]' },
 }
 
 function mapProductFromApi(product) {
@@ -29,12 +30,15 @@ function mapProductFromApi(product) {
     imageUrl: product.image_url || '',
     description: product.description || '',
     apiStatus: product.status,
+    isPromoting: Boolean(product.is_promoting),
     status:
-      Number(product.stock) === 0
-        ? 'empty'
-        : product.status === 'active'
-          ? 'active'
-          : 'idle'
+      product.status !== 'active'
+        ? 'delisted'
+        : Number(product.stock) === 0
+          ? 'empty'
+          : product.is_promoting
+            ? 'active'
+            : 'idle'
   }
 }
 
@@ -198,14 +202,14 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="商品定價 *"
+              label="商品價格 *"
               type="number"
               value={form.price}
               onChange={set('price')}
             />
 
             <Input
-              label="通路折扣價格"
+              label="折扣價格"
               type="number"
               value={form.discountedPrice}
               onChange={set('discountedPrice')}
@@ -419,11 +423,13 @@ export default function Products() {
                 imageUrl: form.imageUrl,
                 thumbnail: form.imageUrl || '📦',
                 status:
-                  Number(form.stock) === 0
-                    ? 'empty'
-                    : payload.status === 'active'
-                      ? 'active'
-                      : 'idle'
+                  payload.status !== 'active'
+                    ? 'delisted'
+                    : Number(form.stock) === 0
+                      ? 'empty'
+                      : product.isPromoting
+                        ? 'active'
+                        : 'idle'
               }
             : product
         )
@@ -452,7 +458,8 @@ export default function Products() {
       imageUrl: form.imageUrl,
       description: form.description,
       apiStatus: 'inactive',
-      status: Number(form.stock) === 0 ? 'empty' : 'inactive'
+      isPromoting: false,
+      status: 'delisted'
     }
 
     setProds(previous => [newProduct, ...previous])
@@ -495,11 +502,13 @@ export default function Products() {
                 ...item,
                 apiStatus: nextStatus,
                 status:
-                  item.stock === 0
-                    ? 'empty'
-                    : nextStatus === 'active'
-                      ? 'active'
-                      : 'inactive'
+                  nextStatus !== 'active'
+                    ? 'delisted'
+                    : item.stock === 0
+                      ? 'empty'
+                      : item.isPromoting
+                        ? 'active'
+                        : 'idle'
               }
             : item
         )

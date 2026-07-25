@@ -430,6 +430,22 @@ def vendor_product_getlist(request):
         for row in sold_data
     }
 
+    # 「推廣中」要看商品是否真的掛在一個「進行中」的活動上
+    # （活動狀態為 active，且現在時間落在 start_date ~ end_date 之間），
+    # 不是單純看商品自己的上架/下架狀態。
+    now = timezone.now()
+
+    promoting_product_ids = set(
+        CampaignProduct.objects
+        .filter(
+            product__vendor_id=vendor_id,
+            campaign__status="active",
+            campaign__start_date__lte=now,
+            campaign__end_date__gte=now
+        )
+        .values_list("product_id", flat=True)
+    )
+
     product_list = []
 
     for product in products:
@@ -448,6 +464,7 @@ def vendor_product_getlist(request):
             "stock": product.stock,
             "quantity_sold": sold_info["quantity_sold"],
             "total_sales": int(sold_info["total_sales"]),
+            "is_promoting": product.product_id in promoting_product_ids,
             "category": product.category,
             "status": product.status,
         })
@@ -1702,189 +1719,6 @@ def vendor_order_get_detail(request):
         }
     }, status=status.HTTP_200_OK)
 
-def calculate_order_commission(order):
-    """
-    訂單完成後計算並寫入 KOC 分潤。
-
-    暫時沿用現有 Earnings model：
-    - 不修改 amount 欄位型態
-    - 透過程式檢查避免重複建立
-    """
-
-    promotion_code = (
-        order.promotion_code or ""
-    ).strip()
-
-    if not promotion_code:
-        return {
-            "created": False,
-            "earning": None,
-            "commission_amount": 0,
-            "message": "訂單未使用優惠碼"
-        }
-
-    try:
-        coupon = (
-            CouponNew.objects
-            .select_related(
-                "kocmission__koc__user",
-                "kocmission__application__campaign"
-            )
-            .get(
-                promotion_code=promotion_code
-            )
-        )
-    except CouponNew.DoesNotExist:
-        return {
-            "created": False,
-            "earning": None,
-            "commission_amount": 0,
-            "message": "找不到優惠碼"
-        }
-
-    if coupon.status != "active":
-        return {
-            "created": False,
-            "earning": None,
-            "commission_amount": 0,
-            "message": "優惠碼尚未啟用"
-        }
-
-    mission = coupon.kocmission
-
-    if not mission.koc_id:
-        raise ValueError(
-            "此任務沒有綁定 KOC"
-        )
-
-    if not mission.koc or not mission.koc.user:
-        raise ValueError(
-            "找不到 KOC 對應的使用者"
-        )
-
-    # 程式層避免同一張訂單重複建立分潤
-    existing_earning = (
-        Earnings.objects
-        .filter(
-            order=order,
-            kocmission=mission
-        )
-        .first()
-    )
-
-    if existing_earning:
-        return {
-            "created": False,
-            "earning": existing_earning,
-            "commission_amount": (
-                existing_earning.amount
-            ),
-            "message": "此訂單已計算過分潤"
-        }
-
-    campaign = (
-        mission.application.campaign
-    )
-
-    campaign_product_ids = (
-        CampaignProduct.objects
-        .filter(campaign=campaign)
-        .values_list(
-            "product_id",
-            flat=True
-        )
-    )
-
-    commission_items = (
-        OrderItem.objects
-        .filter(
-            order=order,
-            product_id__in=campaign_product_ids
-        )
-    )
-
-    commission_base = sum(
-        (
-            Decimal(str(item.subtotal))
-            for item in commission_items
-        ),
-        Decimal("0.00")
-    )
-
-    if commission_base <= 0:
-        return {
-            "created": False,
-            "earning": None,
-            "commission_amount": 0,
-            "message": "沒有符合活動的訂單商品"
-        }
-
-    commission_rate = Decimal(
-        str(coupon.koc_commission_rate)
-    )
-
-    raw_commission = (
-        commission_base
-        * commission_rate
-        / Decimal("100")
-    )
-
-    # 目前 Earnings.amount 若是 IntegerField，
-    # 先四捨五入成整數
-    commission_amount = int(
-        raw_commission.quantize(
-            Decimal("1"),
-            rounding=ROUND_HALF_UP
-        )
-    )
-
-    if commission_amount <= 0:
-        return {
-            "created": False,
-            "earning": None,
-            "commission_amount": 0,
-            "message": "計算後分潤為 0"
-        }
-
-    earning = Earnings.objects.create(
-        user=mission.koc.user,
-        kocmission=mission,
-        order=order,
-        amount=commission_amount,
-        status="withdrawable"
-    )
-
-    coupon.usage_count = (
-        coupon.usage_count or 0
-    ) + 1
-
-    coupon.total_commission = (
-        Decimal(
-            str(
-                coupon.total_commission
-                or 0
-            )
-        )
-        + Decimal(
-            str(commission_amount)
-        )
-    )
-
-    coupon.save(
-        update_fields=[
-            "usage_count",
-            "total_commission"
-        ]
-    )
-
-    return {
-        "created": True,
-        "earning": earning,
-        "commission_amount": (
-            commission_amount
-        ),
-        "message": "分潤建立成功"
-    }
 
 
 @api_view(["POST"])

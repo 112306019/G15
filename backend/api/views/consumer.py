@@ -13,7 +13,7 @@ def get_products(request):
     category = request.query_params.get('category', None)
     product_status = request.query_params.get('status', None)
 
-    products = Product.objects.all()
+    products = Product.objects.filter(status='active')
 
     # 過濾條件
     if product_name:
@@ -53,7 +53,7 @@ def get_product_detail(request):
         )
 
     try:
-        p = Product.objects.get(product_id=product_id)
+        p = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
         return Response(
             {'success': False, 'err': '商品不存在'},
