@@ -2,8 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment
-from api.models import User
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct
 
 ## 商品查詢
 @api_view(['GET'])
@@ -682,3 +681,30 @@ def update_order_status(request):
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
     }, status=status.HTTP_200_OK)
+    
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_product_campaign(request):
+    product_id = request.query_params.get('Product_id')
+
+    if not product_id:
+        return Response({'success': False, 'err': 'Product_id 為必填'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        campaign_product = CampaignProduct.objects.filter(product__product_id=product_id).first()
+        if not campaign_product:
+            return Response({'success': False, 'err': '找不到對應活動'}, status=status.HTTP_404_NOT_FOUND)
+        
+        campaign = Campaigns.objects.get(campaign_id=campaign_product.campaign_id)
+        return Response({
+            'campaign_id': str(campaign.campaign_id),
+            'name': campaign.name,
+            'description': campaign.description or "",
+            'reward_type': campaign.reward_type,
+            'discount_percent': campaign.discount_percent,
+            'start_date': campaign.start_date,
+            'end_date': campaign.end_date,
+            'status': campaign.status,
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({'success': False, 'err': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

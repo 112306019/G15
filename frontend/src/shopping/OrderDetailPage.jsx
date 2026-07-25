@@ -124,10 +124,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
               <div key={s.label} className="flex flex-col items-center gap-4 w-24 group">
                 <div
                   className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 bg-white ${isDone
-                      ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
-                      : isActive
-                        ? "border-[#C8522A] text-[#C8522A] shadow-sm"
-                        : "border-[#E2DDD4] text-[#8C8880]"
+                    ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
+                    : isActive
+                      ? "border-[#C8522A] text-[#C8522A] shadow-sm"
+                      : "border-[#E2DDD4] text-[#8C8880]"
                     }`}
                 >
                   <DotIcon size={20} className={isDone ? "text-white" : ""} />
@@ -201,27 +201,35 @@ export default function OrderDetailPage({ onBack, orderId }) {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                <td className="py-6 pr-4">
-                  <div className="flex items-center gap-5">
-                    <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4]">
-                      <Smartphone size={24} className="text-[#8C8880]" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
-                        訂單 #{orderIdShort}
+              {(orderData?.items || []).length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-[#8C8880]">無商品資料</td>
+                </tr>
+              ) : (orderData?.items || []).map((item, idx) => (
+                <tr key={idx} className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors">
+                  <td className="py-6 pr-4">
+                    <div className="flex items-center gap-5">
+                      <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4]">
+                        <Smartphone size={24} className="text-[#8C8880]" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
+                          {item.product_name || `商品 ${item.Product_id}`}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
-                  NTD$ {totalAmount}
-                </td>
-                <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">x1</td>
-                <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
-                  NTD$ {totalAmount}
-                </td>
-              </tr>
+                  </td>
+                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    NTD$ {item.Unit_price}
+                  </td>
+                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    x{item.quantity}
+                  </td>
+                  <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
+                    NTD$ {item.subtotal}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
