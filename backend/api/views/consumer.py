@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Payment
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Payment, Vendor
 from api.models import User
 from .platform import calculate_order_commission
 
@@ -511,9 +511,25 @@ def view_order(request):
     if order_id:
         orders = orders.filter(order_id=order_id)
 
+    order_list = list(orders)
+    items_by_order = {}
+    vendor_ids = set()
+    for order in order_list:
+        items = list(OrderItem.objects.filter(order=order).select_related('product'))
+        items_by_order[order.order_id] = items
+        for item in items:
+            if item.product and item.product.vendor_id:
+                vendor_ids.add(item.product.vendor_id)
+
+    vendor_name_by_id = {
+        v.vendor_id: v.company_name
+        for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
+    }
+
     result = []
-    for order in orders:
-        items = OrderItem.objects.filter(order=order)
+    for order in order_list:
+        items = items_by_order[order.order_id]
+        first_vendor_id = items[0].product.vendor_id if items and items[0].product else None
         order_data = {
             'Order_id': str(order.order_id),
             'User_id': order.user_id,
@@ -525,10 +541,13 @@ def view_order(request):
             'shipping_status': order.shipping_status,
             'Address_id': order.address_id,
             'created_at': order.created_at,
+            'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
             'items': [
                 {
                     'Order_item_id': str(item.order_item_id),
                     'Product_id': item.product_id,
+                    'product_name': item.product.product_name,
+                    'image_url': item.product.image_url,
                     'quantity': item.quantity,
                     'Unit_price': float(item.unit_price),
                     'subtotal': float(item.subtotal),
