@@ -8,9 +8,10 @@ from django.utils import timezone
 from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Sum, Count
+from decimal import Decimal, ROUND_HALF_UP
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, ChatRoom, Message
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -406,9 +407,37 @@ def vendor_product_getlist(request):
     if product_status:
         products = products.filter(status=product_status)
 
+    # 透過 OrderItem 加總每個商品「實際」賣出的數量與銷售額，
+    # 而不是讓前端顯示寫死的 0。
+    sold_data = (
+        OrderItem.objects
+        .filter(
+            product__vendor_id=vendor_id,
+            order__payment_status__in=["paid", "completed"]
+        )
+        .values("product_id")
+        .annotate(
+            quantity_sold=Sum("quantity"),
+            total_sales=Sum("subtotal")
+        )
+    )
+
+    sold_map = {
+        row["product_id"]: {
+            "quantity_sold": row["quantity_sold"] or 0,
+            "total_sales": row["total_sales"] or 0
+        }
+        for row in sold_data
+    }
+
     product_list = []
 
     for product in products:
+        sold_info = sold_map.get(
+            product.product_id,
+            {"quantity_sold": 0, "total_sales": 0}
+        )
+
         product_list.append({
             "product_id": product.product_id,
             "product_name": product.product_name,
@@ -417,6 +446,8 @@ def vendor_product_getlist(request):
             "price": product.price,
             "discounted_price": product.discounted_price,
             "stock": product.stock,
+            "quantity_sold": sold_info["quantity_sold"],
+            "total_sales": int(sold_info["total_sales"]),
             "category": product.category,
             "status": product.status,
         })
@@ -483,40 +514,58 @@ def vendor_campaign_create(request):
         )
     )
 
+    # 先準備商品價格，還不寫入資料庫
+    existing_product = None
+
+    if product_id is not None:
+        try:
+            existing_product = Product.objects.get(
+                product_id=product_id,
+                vendor_id=vendor_id
+            )
+        except Product.DoesNotExist:
+            return Response({
+                "success": False,
+                "err": "Product not found or does not belong to this vendor"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        product_price = existing_product.price
+
+    else:
+        if not product_data:
+            return Response({
+                "success": False,
+                "err": "請選擇既有商品或提供新商品資料"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 新商品還沒建立，可以直接從 request 資料取得價格
+        product_price = product_data["price"]
+
+
+    # 所有折扣驗證都在寫入資料庫前完成
+    if (
+        data["discount_type"] == "fixed"
+        and data["discount_value"] > product_price
+    ):
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "直接折價金額不能高於商品原價"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         with transaction.atomic():
 
-            # 情況一：選擇既有商品
-            if product_id is not None:
-                try:
-                    product = Product.objects.get(
-                        product_id=product_id,
-                        vendor_id=vendor_id
-                    )
-                except Product.DoesNotExist:
-                    return Response({
-                        "success": False,
-                        "err": (
-                            "Product not found or does not "
-                            "belong to this vendor"
-                        )
-                    }, status=status.HTTP_404_NOT_FOUND)
+            # 既有商品直接使用前面查到的資料
+            if existing_product is not None:
+                product = existing_product
 
-            # 情況二：建立活動時同步建立新商品
+            # 新商品現在才寫入資料庫
             else:
-                if not product_data:
-                    return Response({
-                        "success": False,
-                        "err": (
-                            "請選擇既有商品或提供新商品資料"
-                        )
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
                 product = Product.objects.create(
                     vendor_id=vendor.vendor_id,
-                    product_name=product_data[
-                        "product_name"
-                    ],
+                    product_name=product_data["product_name"],
                     description=product_data.get(
                         "description",
                         ""
@@ -540,18 +589,17 @@ def vendor_campaign_create(request):
             campaign = Campaigns.objects.create(
                 vendor=vendor,
                 name=data["name"],
-                description=data.get(
-                    "description",
-                    ""
-                ),
+                description=data.get("description", ""),
                 budget=data["budget"],
                 reward_type=data.get(
                     "reward_type",
                     "commission"
                 ),
-                discount_percent=data[
-                    "discount_percent"
-                ],
+                discount_percent=(
+                    int(data["discount_value"])
+                    if data["discount_type"] == "percentage"
+                    else 0
+                ),
                 promo_days=data["promo_days"],
                 start_date=start_datetime,
                 end_date=end_datetime,
@@ -560,7 +608,12 @@ def vendor_campaign_create(request):
 
             CampaignProduct.objects.create(
                 campaign=campaign,
-                product=product
+                product=product,
+                discount_type=data["discount_type"],
+                discount_value=data["discount_value"],
+                koc_commission_rate=data[
+                    "koc_commission_rate"
+                ]
             )
 
     except Exception as error:
@@ -618,6 +671,34 @@ def vendor_campaign_update(request):
             "err": "Campaign not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
+    campaign_product = CampaignProduct.objects.filter(
+        campaign=campaign
+    ).first()
+
+    # 該活動只要有任何優惠碼已被使用過，折扣、分潤比例與綁定商品就鎖定，
+    # 避免事後更動讓已發生的訂單/分潤跟畫面顯示對不起來。
+    coupon_used = CouponNew.objects.filter(
+        kocmission__application__campaign=campaign,
+        usage_count__gt=0
+    ).exists()
+
+    if coupon_used and campaign_product:
+        locked_field_changed = (
+            str(campaign_product.discount_type) != str(data["discount_type"])
+            or Decimal(str(campaign_product.discount_value)) != Decimal(str(data["discount_value"]))
+            or Decimal(str(campaign_product.koc_commission_rate)) != Decimal(str(data["koc_commission_rate"]))
+            or (
+                product_id is not None
+                and str(campaign_product.product_id) != str(product_id)
+            )
+        )
+
+        if locked_field_changed:
+            return Response({
+                "success": False,
+                "err": "此活動已有優惠碼被使用，折扣、分潤比例與綁定商品無法再修改"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     start_datetime = timezone.make_aware(
         datetime.combine(
             data["start_date"],
@@ -632,38 +713,52 @@ def vendor_campaign_update(request):
         )
     )
 
+    existing_product = None
+
+    if product_id is not None:
+        try:
+            existing_product = Product.objects.get(
+                product_id=product_id,
+                vendor_id=vendor_id
+            )
+        except Product.DoesNotExist:
+            return Response({
+                "success": False,
+                "err": "Product not found or does not belong to this vendor"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        product_price = existing_product.price
+
+    else:
+        if not product_data:
+            return Response({
+                "success": False,
+                "err": "New product data is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        product_price = product_data["price"]
+
+
+    if (
+        data["discount_type"] == "fixed"
+        and data["discount_value"] > product_price
+    ):
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "直接折價金額不能高於商品原價"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     try:
         with transaction.atomic():
 
-            # 選擇既有商品
-            if product_id is not None:
-                try:
-                    product = Product.objects.get(
-                        product_id=product_id,
-                        vendor_id=vendor_id
-                    )
-                except Product.DoesNotExist:
-                    return Response({
-                        "success": False,
-                        "err": (
-                            "Product not found or does not "
-                            "belong to this vendor"
-                        )
-                    }, status=status.HTTP_404_NOT_FOUND)
-
-            # 改成新建商品
+            if existing_product is not None:
+                product = existing_product
             else:
-                if not product_data:
-                    return Response({
-                        "success": False,
-                        "err": "New product data is required"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
                 product = Product.objects.create(
                     vendor_id=vendor_id,
-                    product_name=product_data[
-                        "product_name"
-                    ],
+                    product_name=product_data["product_name"],
                     description=product_data.get(
                         "description",
                         ""
@@ -694,29 +789,50 @@ def vendor_campaign_update(request):
                 "reward_type",
                 "commission"
             )
-            campaign.discount_percent = data[
-                "discount_percent"
-            ]
+            campaign.discount_percent = (
+                int(data["discount_value"])
+                if data["discount_type"] == "percentage"
+                else 0
+            )
             campaign.promo_days = data["promo_days"]
             campaign.start_date = start_datetime
             campaign.end_date = end_datetime
             campaign.status = data["status"]
             campaign.save()
 
-            # 更新原有關聯；沒有關聯時就建立
             campaign_product = CampaignProduct.objects.filter(
                 campaign=campaign
             ).first()
 
             if campaign_product:
                 campaign_product.product = product
+                campaign_product.discount_type = data[
+                    "discount_type"
+                ]
+                campaign_product.discount_value = data[
+                    "discount_value"
+                ]
+                campaign_product.koc_commission_rate = data[
+                    "koc_commission_rate"
+                ]
+
                 campaign_product.save(
-                    update_fields=["product"]
+                    update_fields=[
+                        "product",
+                        "discount_type",
+                        "discount_value",
+                        "koc_commission_rate",
+                    ]
                 )
             else:
                 CampaignProduct.objects.create(
                     campaign=campaign,
-                    product=product
+                    product=product,
+                    discount_type=data["discount_type"],
+                    discount_value=data["discount_value"],
+                    koc_commission_rate=data[
+                        "koc_commission_rate"
+                    ]
                 )
 
     except Exception as error:
@@ -810,6 +926,13 @@ def vendor_campaign_getlist(request):
             campaign=campaign
         )
 
+        # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
+        # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
+        coupon_used = CouponNew.objects.filter(
+            kocmission__application__campaign=campaign,
+            usage_count__gt=0
+        ).exists()
+
         products = []
 
         for campaign_product in campaign_products:
@@ -824,6 +947,14 @@ def vendor_campaign_getlist(request):
                 "category": product.category,
                 "image_url": product.image_url,
                 "status": product.status,
+
+                "discount_type": campaign_product.discount_type,
+                "discount_value": str(
+                    campaign_product.discount_value
+                ),
+                "koc_commission_rate": str(
+                    campaign_product.koc_commission_rate
+                ),
             })
 
         campaign_list.append({
@@ -846,6 +977,7 @@ def vendor_campaign_getlist(request):
                 else None
             ),
             "status": campaign.status,
+            "coupon_used": coupon_used,
             "products": products,
         })
 
@@ -887,15 +1019,72 @@ def vendor_application_getlist(request):
     application_list = []
 
     for application in applications:
+        mission = (
+            KOCMissionNew.objects
+            .filter(application=application)
+            .first()
+        )
+
+        coupon = None
+
+        if mission:
+            coupon = (
+                CouponNew.objects
+                .filter(kocmission=mission)
+                .first()
+            )
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
             "koc_name": "",
-            "campaign_id": application.campaign.campaign_id,
+            "campaign_id": str(
+                application.campaign.campaign_id
+            ),
             "campaign_name": application.campaign.name,
             "status": application.status,
             "detail_status": application.status,
-            "order_id": application.order_id,
+            "order_id": (
+                str(application.order_id)
+                if application.order_id
+                else None
+            ),
+
+            "kocmission_id": (
+                mission.kocmission_id
+                if mission
+                else None
+            ),
+
+            "promotion_code": (
+                coupon.promotion_code
+                if coupon
+                else None
+            ),
+
+            "coupon_status": (
+                coupon.status
+                if coupon
+                else None
+            ),
+
+            "discount_type": (
+                coupon.discount_type
+                if coupon
+                else None
+            ),
+
+            "discount_value": (
+                str(coupon.discount_value)
+                if coupon
+                else None
+            ),
+
+            "koc_commission_rate": (
+                str(coupon.koc_commission_rate)
+                if coupon
+                else None
+            ),
         })
 
     return Response({
@@ -1047,6 +1236,18 @@ def vendor_application_review(request):
                 ).first()
 
                 if not coupon:
+                    # 取得這個任務所綁定商品的折扣與分潤設定
+                    campaign_product = (
+                        CampaignProduct.objects
+                        .filter(campaign=application.campaign)
+                        .first()
+                    )
+
+                    if not campaign_product:
+                        raise ValueError(
+                            "Campaign product configuration not found"
+                        )
+
                     promotion_code = generate_promotion_code(
                         application.koc_id
                     )
@@ -1054,11 +1255,11 @@ def vendor_application_review(request):
                     coupon = CouponNew.objects.create(
                         kocmission=mission,
                         promotion_code=promotion_code,
-
-                        # 暫時保留你原本設定的固定折扣值
-                        discount_value=50,
-
-                        # 接案通過時只建立，不啟用
+                        discount_type=campaign_product.discount_type,
+                        discount_value=campaign_product.discount_value,
+                        koc_commission_rate=(
+                            campaign_product.koc_commission_rate
+                        ),
                         status="inactive",
                         usage_count=0,
                         total_commission=0
@@ -1367,6 +1568,7 @@ def vendor_order_getlist(request):
                 "order_status": order.order_status,
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
+                "has_address": bool(order.address_id),
                 "created_at": order.created_at.isoformat() if order.created_at else None,
                 "items": []
             }
@@ -1421,6 +1623,43 @@ def vendor_order_get_detail(request):
 
     payment = Payment.objects.filter(order_id=order_id).first()
 
+    # 收件資訊：出貨作業必須要有的收件人姓名、電話、地址。
+    # 之前這裡只回傳 address_id（一個數字），前端完全沒地方能看到實際地址。
+    recipient_name = None
+    recipient_phone = None
+    address_data = None
+
+    if order.user_id:
+        member = User.objects.filter(user_id=order.user_id).first()
+        if member:
+            recipient_name = member.display_name or member.name
+            recipient_phone = member.phone
+
+    if order.address_id:
+        address = Address.objects.filter(
+            address_id=order.address_id
+        ).first()
+
+        if address:
+            address_data = {
+                "address_id": address.address_id,
+                "phone": address.phone,
+                "city": address.city,
+                "district": address.district,
+                "detail_address": address.detail_address,
+                "postal_code": address.postal_code,
+            }
+
+            # 地址上留的電話優先於會員資料的電話（收件人可能不是本人）
+            if address.phone:
+                recipient_phone = address.phone
+
+    shipping_info = {
+        "recipient_name": recipient_name,
+        "recipient_phone": recipient_phone,
+        "address": address_data,
+    }
+
     items = []
     for item in order_items:
         items.append({
@@ -1456,11 +1695,196 @@ def vendor_order_get_detail(request):
             "payment_status": order.payment_status,
             "shipping_status": order.shipping_status,
             "address_id": order.address_id,
+            "shipping_info": shipping_info,
             "created_at": order.created_at.isoformat() if order.created_at else None,
             "items": items,
             "payment": payment_data
         }
     }, status=status.HTTP_200_OK)
+
+def calculate_order_commission(order):
+    """
+    訂單完成後計算並寫入 KOC 分潤。
+
+    暫時沿用現有 Earnings model：
+    - 不修改 amount 欄位型態
+    - 透過程式檢查避免重複建立
+    """
+
+    promotion_code = (
+        order.promotion_code or ""
+    ).strip()
+
+    if not promotion_code:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "訂單未使用優惠碼"
+        }
+
+    try:
+        coupon = (
+            CouponNew.objects
+            .select_related(
+                "kocmission__koc__user",
+                "kocmission__application__campaign"
+            )
+            .get(
+                promotion_code=promotion_code
+            )
+        )
+    except CouponNew.DoesNotExist:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "找不到優惠碼"
+        }
+
+    if coupon.status != "active":
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "優惠碼尚未啟用"
+        }
+
+    mission = coupon.kocmission
+
+    if not mission.koc_id:
+        raise ValueError(
+            "此任務沒有綁定 KOC"
+        )
+
+    if not mission.koc or not mission.koc.user:
+        raise ValueError(
+            "找不到 KOC 對應的使用者"
+        )
+
+    # 程式層避免同一張訂單重複建立分潤
+    existing_earning = (
+        Earnings.objects
+        .filter(
+            order=order,
+            kocmission=mission
+        )
+        .first()
+    )
+
+    if existing_earning:
+        return {
+            "created": False,
+            "earning": existing_earning,
+            "commission_amount": (
+                existing_earning.amount
+            ),
+            "message": "此訂單已計算過分潤"
+        }
+
+    campaign = (
+        mission.application.campaign
+    )
+
+    campaign_product_ids = (
+        CampaignProduct.objects
+        .filter(campaign=campaign)
+        .values_list(
+            "product_id",
+            flat=True
+        )
+    )
+
+    commission_items = (
+        OrderItem.objects
+        .filter(
+            order=order,
+            product_id__in=campaign_product_ids
+        )
+    )
+
+    commission_base = sum(
+        (
+            Decimal(str(item.subtotal))
+            for item in commission_items
+        ),
+        Decimal("0.00")
+    )
+
+    if commission_base <= 0:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "沒有符合活動的訂單商品"
+        }
+
+    commission_rate = Decimal(
+        str(coupon.koc_commission_rate)
+    )
+
+    raw_commission = (
+        commission_base
+        * commission_rate
+        / Decimal("100")
+    )
+
+    # 目前 Earnings.amount 若是 IntegerField，
+    # 先四捨五入成整數
+    commission_amount = int(
+        raw_commission.quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP
+        )
+    )
+
+    if commission_amount <= 0:
+        return {
+            "created": False,
+            "earning": None,
+            "commission_amount": 0,
+            "message": "計算後分潤為 0"
+        }
+
+    earning = Earnings.objects.create(
+        user=mission.koc.user,
+        kocmission=mission,
+        order=order,
+        amount=commission_amount,
+        status="withdrawable"
+    )
+
+    coupon.usage_count = (
+        coupon.usage_count or 0
+    ) + 1
+
+    coupon.total_commission = (
+        Decimal(
+            str(
+                coupon.total_commission
+                or 0
+            )
+        )
+        + Decimal(
+            str(commission_amount)
+        )
+    )
+
+    coupon.save(
+        update_fields=[
+            "usage_count",
+            "total_commission"
+        ]
+    )
+
+    return {
+        "created": True,
+        "earning": earning,
+        "commission_amount": (
+            commission_amount
+        ),
+        "message": "分潤建立成功"
+    }
 
 
 @api_view(["POST"])
@@ -1554,11 +1978,24 @@ def vendor_coupon_get_usage_list(request):
         mission = coupon.kocmission
         application = mission.application
         campaign = application.campaign
+        link_submission = (
+            Submissions.objects
+            .filter(
+                kocmission=mission,
+                submission_type="link"
+            )
+            .order_by("-submitted_time")
+            .first()
+        )
 
         coupon_list.append({
             "coupon_id": coupon.coupon_id,
             "promotion_code": coupon.promotion_code,
-            "discount_value": coupon.discount_value,
+            "discount_type": coupon.discount_type,
+            "discount_value": str(coupon.discount_value),
+            "koc_commission_rate": str(
+                coupon.koc_commission_rate
+            ),
             "status": coupon.status,
             "usage_count": coupon.usage_count,
             "total_commission": coupon.total_commission,
@@ -1570,7 +2007,25 @@ def vendor_coupon_get_usage_list(request):
             "application_id": application.application_id,
             "campaign_id": str(campaign.campaign_id),
             "campaign_name": campaign.name,
-            "vendor_id": campaign.vendor_id
+            "vendor_id": campaign.vendor_id,
+
+            "content_url": (
+                link_submission.content_url
+                if link_submission
+                else None
+            ),
+
+            "link_submission_status": (
+                link_submission.status
+                if link_submission
+                else None
+            ),
+
+            "link_submitted_time": (
+                link_submission.submitted_time
+                if link_submission
+                else None
+            )
         })
 
     return Response({
@@ -1609,7 +2064,7 @@ def vendor_coupon_update_status(request):
             "err": "status is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    valid_status = ["active", "inactive", "disabled"]
+    valid_status = ["active", "inactive", "expired"]
 
     if coupon_status not in valid_status:
         return Response({
@@ -1662,9 +2117,10 @@ def vendor_analytics_overview(request):
         vendor_id=vendor_id
     ).count()
 
-    # 2. 這個廠商商品相關的訂單明細
+    # 2. 這個廠商商品相關的訂單明細（只計算已付款訂單，未付款/未完成付款不算實際銷售）
     order_items = OrderItem.objects.filter(
-        product__vendor_id=vendor_id
+        product__vendor_id=vendor_id,
+        order__payment_status__in=["paid", "completed"]
     ).select_related("order", "product")
 
     # 3. 訂單總數，不重複計算同一張訂單
@@ -1730,7 +2186,8 @@ def vendor_product_performance(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     order_items = OrderItem.objects.filter(
-        product__vendor_id=vendor_id
+        product__vendor_id=vendor_id,
+        order__payment_status__in=["paid", "completed"]
     ).select_related("order", "product")
 
     if start_date:
@@ -2194,4 +2651,3 @@ def vendor_chatroom_mark_read(request):
         "room_id": chatroom.room_id,
         "updated_count": updated_count
     }, status=status.HTTP_200_OK)
-

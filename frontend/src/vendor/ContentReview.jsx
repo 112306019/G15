@@ -347,7 +347,10 @@ export default function ContentReview() {
               item.promotion_code || '',
 
             couponStatus:
-              item.coupon_status || ''
+              item.coupon_status || '',
+
+            kocMissionId:
+              item.kocmission_id || null
           }))
         )
       } catch (error) {

@@ -337,7 +337,7 @@ export default function Overview() {
           value={formatCurrency(
             analytics?.totalRevenue || 0
           )}
-          sub="廠商商品銷售小計"
+          sub="已付款(paid/completed)訂單的商品銷售小計"
           icon={DollarSign}
           accent
         />
@@ -347,7 +347,7 @@ export default function Overview() {
           value={(
             analytics?.totalOrders || 0
           ).toLocaleString()}
-          sub="包含廠商商品的訂單"
+          sub="含廠商商品且已付款(paid/completed)的不重複訂單"
           icon={ShoppingBag}
         />
 
@@ -455,7 +455,7 @@ export default function Overview() {
               </div>
 
               <div className="text-xs text-[#8C8880] mt-1">
-                加總該廠商所有訂單商品的 subtotal
+                加總該廠商所有「已付款(paid/completed)」訂單商品的 subtotal（未付款、取消中的訂單不計入）
               </div>
             </div>
 
@@ -465,7 +465,7 @@ export default function Overview() {
               </div>
 
               <div className="text-xs text-[#8C8880] mt-1">
-                計算包含廠商商品的不重複訂單
+                計算包含廠商商品且已付款(paid/completed)的不重複訂單
               </div>
             </div>
 

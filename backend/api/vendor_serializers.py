@@ -151,7 +151,19 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         default="commission"
     )
 
-    discount_percent = serializers.IntegerField(
+    discount_type = serializers.ChoiceField(
+        choices=["percentage", "fixed"]
+    )
+
+    discount_value = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0
+    )
+
+    koc_commission_rate = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
         min_value=0,
         max_value=100
     )
@@ -185,13 +197,11 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         product_id = data.get("product_id")
         product_data = data.get("product")
 
-        # 兩種商品來源至少要有一種
         if product_id is None and not product_data:
             raise serializers.ValidationError({
                 "product": "請選擇既有商品或建立新商品"
             })
 
-        # 不允許兩種同時傳送
         if product_id is not None and product_data:
             raise serializers.ValidationError({
                 "product": "product_id 與 product 只能擇一傳入"
@@ -202,19 +212,42 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
                 "end_date": "申請截止日期不能早於任務開始日期"
             })
 
+        discount_type = data.get("discount_type")
+        discount_value = data.get("discount_value")
+
+        if (
+            discount_type == "percentage"
+            and discount_value > 100
+        ):
+            raise serializers.ValidationError({
+                "discount_value": "百分比折扣不能超過 100%"
+            })
+
         if product_data:
             discounted_price = product_data.get(
                 "discounted_price"
             )
 
+            product_price = product_data.get("price")
+
             if (
                 discounted_price is not None
-                and discounted_price > product_data["price"]
+                and product_price is not None
+                and discounted_price > product_price
             ):
                 raise serializers.ValidationError({
                     "product": {
                         "discounted_price": "優惠價不能高於商品原價"
                     }
+                })
+
+            if (
+                discount_type == "fixed"
+                and product_price is not None
+                and discount_value > product_price
+            ):
+                raise serializers.ValidationError({
+                    "discount_value": "直接折價金額不能高於商品原價"
                 })
 
         return data
@@ -244,7 +277,19 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
         default="commission"
     )
 
-    discount_percent = serializers.IntegerField(
+    discount_type = serializers.ChoiceField(
+        choices=["percentage", "fixed"]
+    )
+
+    discount_value = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0
+    )
+
+    koc_commission_rate = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
         min_value=0,
         max_value=100
     )
@@ -292,6 +337,17 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
                 "end_date": "申請截止日期不能早於任務開始日期"
             })
 
+        discount_type = data.get("discount_type")
+        discount_value = data.get("discount_value")
+
+        if (
+            discount_type == "percentage"
+            and discount_value > 100
+        ):
+            raise serializers.ValidationError({
+                "discount_value": "百分比折扣不能超過 100%"
+            })
+
         if product_data:
             discounted_price = product_data.get(
                 "discounted_price"
@@ -308,6 +364,15 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
                     "product": {
                         "discounted_price": "優惠價不能高於商品原價"
                     }
+                })
+
+            if (
+                discount_type == "fixed"
+                and product_price is not None
+                and discount_value > product_price
+            ):
+                raise serializers.ValidationError({
+                    "discount_value": "直接折價金額不能高於商品原價"
                 })
 
         return data
