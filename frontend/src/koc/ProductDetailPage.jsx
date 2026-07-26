@@ -134,10 +134,11 @@ export default function ProductDetailPage({
     setTimeout(() => {
       setProductDetail({
         ...productDetail,
-        id: p.id || Math.random(), // 確保推薦商品有獨立 ID
-        name: p.name,
-        price: p.price,
-        gradient: p.gradient
+        id: p.Product_id,
+        name: p.Product_name,
+        price: `NTD$ ${p.discounted_price || p.price}`,
+        description: p.description || "",
+        gradient: productDetail.gradient,
       });
       setQuantity(1);
       setIsLoading(false);
