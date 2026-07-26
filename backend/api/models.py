@@ -634,7 +634,7 @@ class Earnings(models.Model):
     STATUS_CHOICES = [
         ('pending', '待定'),
         ('withdrawable', '可提領'),
-         ('transferred', '已轉帳'),
+        ('transferred', '已轉帳'),
     ]
 
     earnings_id = models.AutoField(primary_key=True)

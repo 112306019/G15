@@ -154,7 +154,8 @@ function MainSystem() {
       const res = await fetch(`http://127.0.0.1:8000/api/consumer/cart/view?User_id=${userId}`);
       const data = await res.json();
       if (data.items) {
-        setCartCount(data.items.length);
+        const uniqueProducts = new Set(data.items.map(item => item.Product_id));
+        setCartCount(uniqueProducts.size);
       }
     } catch (err) {
       console.error("購物車數量同步失敗", err);
