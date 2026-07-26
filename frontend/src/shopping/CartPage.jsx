@@ -62,6 +62,8 @@ export default function CartPage({
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
   useEffect(() => {
     const fetchCart = async () => {
       try {
@@ -83,6 +85,7 @@ export default function CartPage({
               gradient: GRADIENTS[i % GRADIENTS.length],
             }))
           );
+          setSelectedIds(new Set((data.items || []).map(item => item.Cart_item_id)));
         }
       } catch (err) {
         console.error("購物車載入失敗", err);
@@ -94,11 +97,20 @@ export default function CartPage({
     else setLoading(false);
   }, [userId]);
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const count = items.filter((it) => !it.removing).length;
 
   const subtotal = useMemo(
-    () => items.reduce((sum, it) => sum + (it.removing ? 0 : it.price * it.qty), 0),
-    [items]
+    () => items.reduce((sum, it) => sum + (it.removing || !selectedIds.has(it.id) ? 0 : it.price * it.qty), 0),
+    [items, selectedIds]
   );
 
   const couponDiscount = couponApplied ? subtotal * couponDiscountRate : 0;
@@ -254,6 +266,12 @@ export default function CartPage({
                     ].join(" ")}
                   >
                     <div className="flex items-center gap-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(it.id)}
+                        onChange={() => toggleSelect(it.id)}
+                        className="h-4 w-4"
+                      />
                       <div className={`h-14 w-14 shrink-0 rounded-[10px] bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60`}>
                         <ImgIcon />
                       </div>
@@ -307,7 +325,7 @@ export default function CartPage({
                 <span className="font-mono text-[22px] font-bold">{fmt(grandTotal)}</span>
                 <button
                   type="button"
-                  onClick={() => onCheckout?.({ subtotal, couponDiscount, pointsDiscount, grandTotal, items })}
+                  onClick={() => onCheckout?.({ subtotal, couponDiscount, pointsDiscount, grandTotal, items: items.filter(it => selectedIds.has(it.id)) })}
                   className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-[15px] tracking-[0.05em] text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-[1px] whitespace-nowrap"
                 >
                   結帳

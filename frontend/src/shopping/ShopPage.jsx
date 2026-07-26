@@ -66,10 +66,6 @@ function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#
           {name}
         </h3>
         <div className="mt-2 text-base font-black text-[#1A1A18]">{price}</div>
-        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-[#8C8880]">
-          <span className="text-[#B89B6A] tracking-widest text-[10px]">★★★★★</span>
-          <span className="font-sans">(120)</span>
-        </div>
       </div>
     </div>
   );
@@ -362,7 +358,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
-                      onAdd={() => handleAdd(p.product_id)}
+                      onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
                     />
                   ))}
@@ -384,7 +380,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
-                      onAdd={() => handleAdd(p.product_id)}
+                      onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
                     />
                   ))}
@@ -422,7 +418,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     name={p.Product_name}
                     price={`NTD$ ${p.discounted_price || p.price}`}
                     gradient={p.gradient}
-                    onAdd={() => handleAdd(p.product_id)}
+                    onAdd={() => handleAdd(p.Product_id)}
                     onClick={() => onNavigate?.("product_detail", p)}
                   />
                 ))}
