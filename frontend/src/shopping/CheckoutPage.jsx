@@ -76,6 +76,7 @@ function formatExpiry(raw) {
 export default function CheckoutPage({
   onPaid,
   onBack,
+  onGoToLogin,
   cartItems = [],
   initialSummary = {
     items: "$20 x 2",
@@ -87,6 +88,9 @@ export default function CheckoutPage({
     total: 68.94,
   },
 }) {
+  const userId = localStorage.getItem("userId");
+  const isLoggedIn = Boolean(userId);
+
   const [method, setMethod] = useState("card");
 
   const [cardNum, setCardNum] = useState("999999999999");
@@ -125,7 +129,7 @@ export default function CheckoutPage({
   const cvcValid = method === "card" ? cvc.trim().length >= 3 : true;
 
   const shippingValid = recipient.trim().length > 0 && recipientPhone.trim().length > 0 && recipientAddress.trim().length > 0;
-  const canPay = shippingValid && (method !== "card" ? true : cardNumValid && cardNameValid && expiryValid && cvcValid);
+  const canPay = isLoggedIn && shippingValid && (method !== "card" ? true : cardNumValid && cardNameValid && expiryValid && cvcValid);
 
   const inputBase =
     "w-full rounded-[10px] border-[1.5px] px-4 py-[13px] pr-11 outline-none transition-colors tracking-[0.05em] font-mono text-[14px]";
@@ -172,28 +176,22 @@ export default function CheckoutPage({
 
   const handlePay = async () => {
     if (!canPay) return;
+
+    if (!isLoggedIn) {
+      onGoToLogin?.();
+      return;
+    }
+
     setSubmitState("loading");
     setPayError("");
 
-    const userId = localStorage.getItem("userId");
     const token = localStorage.getItem("token");
-    const isGuest = !userId;
 
-    // 如果是訪客，先建立 guest record
-    let guestId = null;
-    if (isGuest) {
-      try {
-        const guestRes = await fetch("http://127.0.0.1:8000/api/consumer/guest/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ Order_id: null }),
-        });
-        const guestData = await guestRes.json();
-        guestId = guestData.Guest_id;
-      } catch (err) {
-        throw new Error("建立訪客資料失敗");
-      }
-    }
+    // cartItems 來自 CartPage.jsx 的 items 狀態，欄位是 { id, cartItemId, productId, price, qty }
+    const orderItems = cartItems.map((item) => ({
+      Product_id: item.productId ?? item.Product_id ?? item.product_id ?? item.id,
+      Quantity: item.qty ?? item.quantity ?? item.Quantity ?? 1,
+    }));
 
     try {
       const orderRes = await fetch("http://127.0.0.1:8000/api/consumer/order/create", {
@@ -203,14 +201,13 @@ export default function CheckoutPage({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          User_id: isGuest ? null : userId,
-          Guest_id: guestId,
+          User_id: userId,
           total_amount: grandTotal,
-          promotion_code: couponApplied ? couponCode.trim() : null,
-          address_id: initialSummary.addressId || "default",
+          Promotion_code: couponApplied ? couponCode.trim() : null,
           recipient: recipient,
           recipient_phone: recipientPhone,
           recipient_address: recipientAddress,
+          items: orderItems,
         }),
       });
       const orderData = await orderRes.json();
@@ -299,6 +296,20 @@ export default function CheckoutPage({
             返回購物車
           </button>
           <h1 className="font-['DM_Serif_Display'] text-[40px] leading-none mb-7">結帳</h1>
+
+          {!isLoggedIn && (
+            <div className="mb-7 flex items-center justify-between gap-4 rounded-[14px] border-[1.5px] border-[#C8522A] bg-[#FBEAE3] px-5 py-4">
+              <span className="text-[14px] text-[#1A1A18]">需要登入會員才能結帳，目前不提供訪客結帳。</span>
+              <button
+                type="button"
+                onClick={() => onGoToLogin?.()}
+                className="whitespace-nowrap rounded-full bg-[#1A1A18] px-5 py-2 text-[13px] font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
+              >
+                前往登入
+              </button>
+            </div>
+          )}
+
           <div className="h-px bg-[#E2DDD4] mb-7" />
 
           <div className="mb-7">
@@ -481,7 +492,11 @@ export default function CheckoutPage({
             )}
           </button>
 
-          {!canPay && method === "card" && (
+          {!isLoggedIn ? (
+            <p className="mt-3 text-[12px] text-[#C8522A] font-bold">
+              請先登入會員才能結帳。
+            </p>
+          ) : !canPay && method === "card" && (
             <p className="mt-3 text-[12px] text-[#8C8880]">
               請完成信用卡資訊後再付款（卡號 16 碼、姓名、到期日、CVC）。
             </p>
