@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
 
-const user_id = 'U00001'; // 暫時寫死，等登入機制做好再改
-
 export default function EarningsPage({ onDetail, onTrack }) {
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
   const [withdrawable, setWithdrawable] = useState(0);
   const [pending, setPending] = useState(0);

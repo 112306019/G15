@@ -87,10 +87,10 @@ class EarningsAdmin(admin.ModelAdmin):
 
 @admin.register(CouponNew)
 class CouponNewAdmin(admin.ModelAdmin):
-    list_display = ('coupon_id', 'kocmission', 'promotion_code', 'discount_value', 'status', 'usage_count', 'total_commission')
+    list_display = ('coupon_id', 'kocmission', 'promotion_code', 'status', 'usage_count')
     list_filter = ('status',)
     search_fields = ('promotion_code', 'kocmission__kocmission_id')
-    list_editable = ('status', 'usage_count', 'total_commission')  # 加進來
+    list_editable = ('status', 'usage_count')
 
 @admin.register(Admins)
 class AdminsAdmin(admin.ModelAdmin):

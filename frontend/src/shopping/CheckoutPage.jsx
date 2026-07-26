@@ -106,29 +106,30 @@ export default function CheckoutPage({
   const [recipientPhone, setRecipientPhone] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
 
-  // 優惠碼
+  // 優惠碼：一張訂單只能套用一組優惠碼(對應後端 Order.promotion_code 是單一欄位)，
+  // 折扣規則要看 appliedCoupon.productDiscounts 裡每個商品各自的 discount_type/discount_value
+  // (來自 CampaignProduct)，不是優惠碼本身的欄位。
   const [couponCode, setCouponCode] = useState("");
-  const [couponApplied, setCouponApplied] = useState(false);
-  const [couponDiscount, setCouponDiscount] = useState(initialSummary.couponDiscount || 0);
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // {code, couponId, campaignName, productDiscounts, matchedItemNames}
   const [couponMsg, setCouponMsg] = useState({ text: "", ok: false, show: false });
   const [couponLoading, setCouponLoading] = useState(false);
-  const [appliedCoupons, setAppliedCoupons] = useState([]); // [{code, discountType, discountValue, campaignName, productIds}]
 
-  const getItemDiscountedPrice = (item) => {
-    let price = item.price;
-    for (const coupon of appliedCoupons) {
-      if (coupon.productIds.includes(item.productId)) {
-        if (coupon.discountType === 'percentage') {
-          price = price * (1 - coupon.discountValue / 100);
-        } else {
-          price = Math.max(0, price - coupon.discountValue);
-        }
-      }
+  // 跟後端 create_order 算法一致：整張商品小計(單價 x 數量)套用該商品自己的折扣規則，
+  // 不是先折扣單價再乘數量
+  const getItemDiscountedSubtotal = (item) => {
+    const baseSubtotal = item.price * item.qty;
+    const rule = appliedCoupon?.productDiscounts.find((pd) => pd.product_id === item.productId);
+    if (!rule) return baseSubtotal;
+
+    if (rule.discount_type === 'percentage') {
+      return Math.max(0, baseSubtotal * (1 - rule.discount_value / 100));
     }
-    return price;
+    return Math.max(0, baseSubtotal - rule.discount_value);
   };
 
-  const itemsTotal = cartItems.reduce((sum, item) => sum + getItemDiscountedPrice(item) * item.qty, 0);
+  const rawItemsTotal = cartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const itemsTotal = cartItems.reduce((sum, item) => sum + getItemDiscountedSubtotal(item), 0);
+  const couponDiscount = rawItemsTotal - itemsTotal;
   const grandTotal = itemsTotal + initialSummary.shippingAmount;
 
   const cardNumDigits = useMemo(() => digitsOnly(cardNum), [cardNum]);
@@ -150,6 +151,10 @@ export default function CheckoutPage({
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
+    if (appliedCoupon) {
+      setCouponMsg({ text: "請先移除目前的優惠碼再套用新的", ok: false, show: true });
+      return;
+    }
     setCouponLoading(true);
     setCouponMsg({ text: "", ok: false, show: false });
 
@@ -173,15 +178,13 @@ export default function CheckoutPage({
           return;
         }
 
-        setAppliedCoupons(prev => [...prev, {
+        setAppliedCoupon({
           code: data.Promotion_code,
           couponId: data.Coupon_id,
-          discountType: data.Discount_type,
-          discountValue: data.Discount_value,
           campaignName: data.Campaign_name,
-          productIds: data.applicable_product_ids,
+          productDiscounts: data.product_discounts,
           matchedItemNames: matchedItems.map(i => i.name),
-        }]);
+        });
         setCouponCode("");
         setCouponMsg({ text: `✓ 已套用於：${matchedItems.map(i => i.name).join("、")}`, ok: true, show: true });
       } else {
@@ -194,8 +197,9 @@ export default function CheckoutPage({
     }
   };
 
-  const handleRemoveCoupon = (code) => {
-    setAppliedCoupons(prev => prev.filter(c => c.code !== code));
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponMsg({ text: "", ok: false, show: false });
   };
 
   const handlePay = async () => {
@@ -227,7 +231,7 @@ export default function CheckoutPage({
         body: JSON.stringify({
           User_id: userId,
           total_amount: grandTotal,
-          Promotion_code: couponApplied ? couponCode.trim() : null,
+          Promotion_code: appliedCoupon ? appliedCoupon.code : null,
           recipient: recipient,
           recipient_phone: recipientPhone,
           recipient_address: recipientAddress,
@@ -537,14 +541,15 @@ export default function CheckoutPage({
 
             <div className="text-[13px] text-[#8C8880]">
               {(cartItems || []).map((item, idx) => {
-                const discountedPrice = getItemDiscountedPrice(item);
-                const hasDiscount = discountedPrice < item.price;
+                const baseSubtotal = item.price * item.qty;
+                const discountedSubtotal = getItemDiscountedSubtotal(item);
+                const hasDiscount = discountedSubtotal < baseSubtotal;
                 return (
                   <div key={idx} className="flex items-center justify-between py-2.5">
                     <span>{item.name} × {item.qty}</span>
                     <span className="font-mono text-[#1A1A18]">
-                      {hasDiscount && <span className="line-through text-[#8C8880] mr-2">${(item.price * item.qty).toFixed(2)}</span>}
-                      ${(discountedPrice * item.qty).toFixed(2)}
+                      {hasDiscount && <span className="line-through text-[#8C8880] mr-2">${baseSubtotal.toFixed(2)}</span>}
+                      ${discountedSubtotal.toFixed(2)}
                     </span>
                   </div>
                 );
@@ -556,7 +561,7 @@ export default function CheckoutPage({
               <div className="flex items-center justify-between py-2.5">
                 <span>優惠碼折扣</span>
                 <span className={`font-mono ${couponDiscount > 0 ? "text-[#6BBF6B]" : "text-[#8C8880]"}`}>
-                  {couponDiscount > 0 ? `−$${couponDiscount}` : "$0"}
+                  {couponDiscount > 0 ? `−$${couponDiscount.toFixed(2)}` : "$0"}
                 </span>
               </div>
             </div>
@@ -566,9 +571,12 @@ export default function CheckoutPage({
               <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
                 輸入優惠碼
               </label>
-              {couponApplied ? (
-                <div className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-3">
-                  <span className="font-mono text-[13px] font-bold text-[#6BBF6B]">{couponCode}</span>
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-2.5">
+                  <div>
+                    <div className="font-mono text-[13px] font-bold text-[#6BBF6B]">{appliedCoupon.code}</div>
+                    <div className="text-[11px] text-[#8C8880]">適用於：{appliedCoupon.matchedItemNames.join("、")}</div>
+                  </div>
                   <button
                     type="button"
                     onClick={handleRemoveCoupon}
@@ -599,25 +607,6 @@ export default function CheckoutPage({
                 <p className={`mt-2 text-[12px] font-bold ${couponMsg.ok ? "text-[#6BBF6B]" : "text-[#C8522A]"}`}>
                   {couponMsg.text}
                 </p>
-              )}
-              {appliedCoupons.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {appliedCoupons.map((c) => (
-                    <div key={c.code} className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-2.5">
-                      <div>
-                        <div className="font-mono text-[13px] font-bold text-[#6BBF6B]">{c.code}</div>
-                        <div className="text-[11px] text-[#8C8880]">適用於：{c.matchedItemNames.join("、")}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCoupon(c.code)}
-                        className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
-                      >
-                        移除
-                      </button>
-                    </div>
-                  ))}
-                </div>
               )}
             </div>
 

@@ -19,10 +19,8 @@ const STAGE_MAP = {
   5: 3,           // 已結案：stage=3(completed)
 };
 
-const user_id = 'U00001';   // 暫時寫死，等登入機制做好再改
-const koc_id = 'KOC00001';  // 暫時寫死
-
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [activeStage, setActiveStage] = useState(1);
   const [stageCounts, setStageCounts] = useState({
     qualification: 0,

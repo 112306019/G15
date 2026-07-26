@@ -83,7 +83,6 @@ class Campaigns(models.Model):
     description = models.TextField(blank=True, null=True)
     budget = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     reward_type = models.CharField(max_length=100)
-    discount_percent = models.IntegerField(default=0, db_column='discount_percent')
     promo_days = models.IntegerField(default=7, db_column='promo_days')
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
@@ -276,11 +275,6 @@ class Submissions(models.Model):
 
 
 class CouponNew(models.Model):
-    DISCOUNT_TYPE_CHOICES = [
-        ('percentage', '百分比折扣'),
-        ('fixed', '直接折價'),
-    ]
-
     STATUS_CHOICES = [
         ('inactive', '未啟用'),
         ('active', '啟用中'),
@@ -304,27 +298,6 @@ class CouponNew(models.Model):
         db_column='promotion_code'
     )
 
-    discount_type = models.CharField(
-        max_length=20,
-        choices=DISCOUNT_TYPE_CHOICES,
-        default='percentage',
-        db_column='discount_type'
-    )
-
-    discount_value = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-        db_column='discount_value'
-    )
-
-    koc_commission_rate = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=0,
-        db_column='koc_commission_rate'
-    )
-
     status = models.CharField(
         max_length=50,
         choices=STATUS_CHOICES,
@@ -335,13 +308,6 @@ class CouponNew(models.Model):
     usage_count = models.IntegerField(
         default=0,
         db_column='usage_count'
-    )
-
-    total_commission = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        default=0,
-        db_column='total_commission'
     )
 
     class Meta:

@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_HALF_UP
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -437,24 +439,32 @@ def verify_coupon(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    campaign_product_ids = list(
-        CampaignProduct.objects.filter(campaign=campaign).values_list('product__product_id', flat=True)
-    )
+    campaign_products = CampaignProduct.objects.filter(campaign=campaign).select_related('product')
 
-    if not campaign_product_ids:
+    if not campaign_products:
         return Response(
             {'success': False, 'err': '此優惠碼沒有適用的商品'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # 折扣規則是每個商品各自在 CampaignProduct 裡的 discount_type/discount_value，
+    # 不是 coupon 本身的欄位；promotion_code 只是啟用這個活動折扣的開關。
+    product_discounts = [
+        {
+            'product_id': cp.product.product_id,
+            'discount_type': cp.discount_type,
+            'discount_value': float(cp.discount_value),
+        }
+        for cp in campaign_products
+    ]
+
     return Response({
         'Coupon_id': coupon.coupon_id,
         'Promotion_code': coupon.promotion_code,
-        'Discount_type': coupon.discount_type,
-        'Discount_value': float(coupon.discount_value),
         'Campaign_id': str(campaign.campaign_id),
         'Campaign_name': campaign.name,
-        'applicable_product_ids': campaign_product_ids,
+        'applicable_product_ids': [pd['product_id'] for pd in product_discounts],
+        'product_discounts': product_discounts,
     }, status=status.HTTP_200_OK)
 
 
@@ -492,18 +502,11 @@ def create_guest(request):
 def create_order(request):
     user_id = request.data.get('User_id', None)
     promotion_code = request.data.get('Promotion_code', None)
-    total_amount = request.data.get('total_amount')
     items_data = request.data.get('items') or []
 
     recipient_name = request.data.get('recipient')
     recipient_phone = request.data.get('recipient_phone')
     recipient_address = request.data.get('recipient_address')
-
-    if not total_amount:
-        return Response(
-            {'success': False, 'err': 'total_amount 為必填'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
 
     if not user_id:
         return Response(
@@ -542,6 +545,76 @@ def create_order(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    # 金額一律由後端重新計算，不採信前端傳來的 total_amount，避免被竄改請求內容占便宜。
+    # base_subtotal 是套用優惠碼前，商品本身售價(discounted_price 或 price) x 數量的小計。
+    line_items = []
+    for item in items_data:
+        product_id = item.get('Product_id')
+        quantity = int(item.get('Quantity') or 1)
+        product = products_by_id[product_id]
+
+        unit_price = Decimal(product.discounted_price if product.discounted_price else product.price)
+        base_subtotal = unit_price * quantity
+
+        line_items.append({
+            'product': product,
+            'quantity': quantity,
+            'unit_price': unit_price,
+            'base_subtotal': base_subtotal,
+            'eligible': False,
+            'final_subtotal': base_subtotal,
+        })
+
+    # 套用優惠碼：promotion_code 只是「啟用該活動折扣」的開關，
+    # 實際折扣規則要看 CampaignProduct 裡每個商品各自的 discount_type/discount_value，
+    # 不是 CouponNew 自己的 discount_type/discount_value。
+    if promotion_code:
+        coupon = CouponNew.objects.filter(promotion_code=promotion_code).first()
+        if not coupon:
+            return Response(
+                {'success': False, 'err': '優惠碼不存在'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if coupon.status != 'active':
+            return Response(
+                {'success': False, 'err': '優惠碼未啟用或已失效'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            campaign = coupon.kocmission.application.campaign
+        except Exception:
+            return Response(
+                {'success': False, 'err': '優惠碼未綁定任何活動'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        campaign_products_by_product_id = {
+            cp.product_id: cp
+            for cp in CampaignProduct.objects.filter(campaign=campaign)
+        }
+
+        for line in line_items:
+            campaign_product = campaign_products_by_product_id.get(line['product'].product_id)
+            if not campaign_product:
+                continue  # 不屬於這個活動的商品，維持原價
+
+            line['eligible'] = True
+            discount_value = campaign_product.discount_value
+
+            if campaign_product.discount_type == 'percentage':
+                discounted = line['base_subtotal'] * (Decimal('1') - discount_value / Decimal('100'))
+            else:
+                discounted = line['base_subtotal'] - discount_value
+
+            line['final_subtotal'] = max(discounted, Decimal('0')).quantize(
+                Decimal('0.01'), rounding=ROUND_HALF_UP
+            )
+
+    total_amount = sum(
+        (line['final_subtotal'] for line in line_items), Decimal('0')
+    ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     with transaction.atomic():
         # 結帳頁有收集收件人姓名、電話跟地址，把它們存成一筆 Address，
         # 綁在下單的會員身上（不支援訪客結帳，所以一定有 user_id）。
@@ -565,26 +638,19 @@ def create_order(request):
         )
 
         created_items = []
-        for item in items_data:
-            product_id = item.get('Product_id')
-            quantity = int(item.get('Quantity') or 1)
-            product = products_by_id[product_id]
-
-            # 價格用商品目前實際售價重算，不採信前端傳來的金額，
-            # 避免被竄改請求內容占便宜。
-            unit_price = product.discounted_price if product.discounted_price else product.price
-            subtotal = unit_price * quantity
+        for line in line_items:
+            product = line['product']
 
             order_item = OrderItem.objects.create(
                 order=order,
                 product=product,
-                quantity=quantity,
-                unit_price=unit_price,
-                subtotal=subtotal,
+                quantity=line['quantity'],
+                unit_price=line['unit_price'],
+                subtotal=line['final_subtotal'],
             )
             created_items.append(order_item)
 
-            product.stock = max(0, product.stock - quantity)
+            product.stock = max(0, product.stock - line['quantity'])
             product.save(update_fields=['stock'])
 
     return Response({
@@ -891,7 +957,8 @@ def get_product_campaign(request):
             'name': campaign.name,
             'description': campaign.description or "",
             'reward_type': campaign.reward_type,
-            'discount_percent': campaign.discount_percent,
+            'discount_type': campaign_product.discount_type,
+            'discount_value': float(campaign_product.discount_value),
             'start_date': campaign.start_date,
             'end_date': campaign.end_date,
             'status': campaign.status,

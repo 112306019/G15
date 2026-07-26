@@ -225,7 +225,11 @@ export default function ProductDetailPage({
                   </div>
                   <div>
                     <h3 className="font-bold text-[#1A1A18] mb-2">優惠折扣</h3>
-                    <p className="text-[#C8522A] font-medium">{campaignData.discount_percent}% off</p>
+                    <p className="text-[#C8522A] font-medium">
+                      {campaignData.discount_type === 'percentage'
+                        ? `${campaignData.discount_value}% off`
+                        : `折 $${campaignData.discount_value}`}
+                    </p>
                   </div>
                   <div>
                     <h3 className="font-bold text-[#1A1A18] mb-2">活動期間</h3>

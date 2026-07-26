@@ -65,6 +65,7 @@ def get_koc_profile(request):
         "real_name": user.name,
         "phone": user.phone,
         "email": user.email,
+        "koc_id": koc.koc_id if koc else None,
         "address": koc.address if koc else None,
         "bank_account": koc.bank_account if koc else None,
         "bank_number": koc.bank_number if koc else None,
