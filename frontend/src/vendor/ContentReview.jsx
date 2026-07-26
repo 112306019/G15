@@ -29,7 +29,6 @@ import {
   reviewVendorSubmission
 } from '../api/vendor'
 
-
 // ─── 共用 UI 元件 ─────────────────────────────────────────────
 
 function Card({ children, className = '' }) {
@@ -289,7 +288,28 @@ export default function ContentReview() {
     setReviewingSubmissionId
   ] = useState(null)
 
-  
+  const [category, setCategory] = useState('food')
+  const [aiResult, setAiResult] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const handleAiCheck = async (caption) => {
+    if (!caption) return
+    setAiLoading(true)
+    setAiResult(null)
+    try {
+      const res = await fetch("http://127.0.0.1:8001/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: caption, category }),
+      })
+      const data = await res.json()
+      setAiResult(data)
+    } catch (err) {
+      console.error("AI 審核失敗", err)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   // ─── 載入接案申請 ──────────────────────────────────────────
   useEffect(() => {
@@ -365,7 +385,7 @@ export default function ContentReview() {
             : apiError
               ? JSON.stringify(apiError)
               : error.message ||
-                '接案申請載入失敗'
+              '接案申請載入失敗'
         )
       } finally {
         setApplicationLoading(false)
@@ -376,7 +396,7 @@ export default function ContentReview() {
   }, [vendorId])
 
 
-  
+
   // ─── 載入文案投稿 ──────────────────────────────────────────
 
   useEffect(() => {
@@ -482,7 +502,7 @@ export default function ContentReview() {
             : apiError
               ? JSON.stringify(apiError)
               : error.message ||
-                '文案投稿載入失敗'
+              '文案投稿載入失敗'
         )
       } finally {
         setSubmissionLoading(false)
@@ -538,50 +558,50 @@ export default function ContentReview() {
   const selectedApplication =
     selectedApplicationId
       ? applications.find(
-          item =>
-            item.applicationId ===
-            selectedApplicationId
-        )
+        item =>
+          item.applicationId ===
+          selectedApplicationId
+      )
       : null
 
 
   const selectedKoc =
     selectedApplication
       ? kocs.find(
-          koc =>
-            koc.id ===
-            selectedApplication.kocId
-        )
+        koc =>
+          koc.id ===
+          selectedApplication.kocId
+      )
       : null
 
 
   const selectedCampaign =
     selectedApplication
       ? campaigns.find(
-          campaign =>
-            campaign.id ===
-            selectedApplication.campaignId
-        )
+        campaign =>
+          campaign.id ===
+          selectedApplication.campaignId
+      )
       : null
 
 
   const selectedProduct =
     selectedApplication
       ? products.find(
-          product =>
-            product.id ===
-            selectedApplication.productId
-        )
+        product =>
+          product.id ===
+          selectedApplication.productId
+      )
       : null
 
 
   const selectedSubmission =
     selectedSubmissionId
       ? submissions.find(
-          submission =>
-            submission.id ===
-            selectedSubmissionId
-        )
+        submission =>
+          submission.id ===
+          selectedSubmissionId
+      )
       : null
 
 
@@ -638,32 +658,32 @@ export default function ContentReview() {
       setApplications(previous =>
         previous.map(item =>
           item.applicationId ===
-          application.applicationId
+            application.applicationId
             ? {
-                ...item,
-                status:
-                  response.data?.status ||
-                  reviewStatus,
+              ...item,
+              status:
+                response.data?.status ||
+                reviewStatus,
 
-                couponCode:
-                  response.data
-                    ?.promotion_code ||
-                  item.couponCode,
+              couponCode:
+                response.data
+                  ?.promotion_code ||
+                item.couponCode,
 
-                couponStatus:
-                  response.data
-                    ?.coupon_status ||
-                  (
-                    reviewStatus === 'approved'
-                      ? 'inactive'
-                      : item.couponStatus
-                  ),
+              couponStatus:
+                response.data
+                  ?.coupon_status ||
+                (
+                  reviewStatus === 'approved'
+                    ? 'inactive'
+                    : item.couponStatus
+                ),
 
-                kocMissionId:
-                  response.data
-                    ?.kocmission_id ||
-                  null
-              }
+              kocMissionId:
+                response.data
+                  ?.kocmission_id ||
+                null
+            }
             : item
         )
       )
@@ -691,7 +711,7 @@ export default function ContentReview() {
           : apiError
             ? JSON.stringify(apiError)
             : error.message ||
-              '接案申請審核失敗'
+            '接案申請審核失敗'
       )
     } finally {
       setReviewingApplicationId(null)
@@ -703,7 +723,7 @@ export default function ContentReview() {
 
     navigator.clipboard
       .writeText(code)
-      .catch(() => {})
+      .catch(() => { })
 
     setCopied(code)
 
@@ -777,33 +797,33 @@ export default function ContentReview() {
       setSubmissions(previous =>
         previous.map(item =>
           item.submissionId ===
-          submission.submissionId
+            submission.submissionId
             ? {
-                ...item,
+              ...item,
 
-                status:
-                  response.data?.status ||
-                  reviewStatus,
+              status:
+                response.data?.status ||
+                reviewStatus,
 
-                vendorFeedback:
-                  response.data
-                    ?.vendor_feedback ||
-                  submissionNote.trim(),
+              vendorFeedback:
+                response.data
+                  ?.vendor_feedback ||
+                submissionNote.trim(),
 
-                reviewedAt:
-                  response.data
-                    ?.reviewed_time ||
-                  new Date().toISOString(),
+              reviewedAt:
+                response.data
+                  ?.reviewed_time ||
+                new Date().toISOString(),
 
-                couponStatus:
-                  response.data
-                    ?.coupon_status ||
-                  item.couponStatus,
+              couponStatus:
+                response.data
+                  ?.coupon_status ||
+                item.couponStatus,
 
-                missionStage:
-                  response.data?.stage ||
-                  item.missionStage
-              }
+              missionStage:
+                response.data?.stage ||
+                item.missionStage
+            }
             : item
         )
       )
@@ -831,7 +851,7 @@ export default function ContentReview() {
           : apiError
             ? JSON.stringify(apiError)
             : error.message ||
-              '文案審核失敗'
+            '文案審核失敗'
       )
     } finally {
       setReviewingSubmissionId(null)
@@ -1033,8 +1053,8 @@ export default function ContentReview() {
                           <td className="p-5 text-xs font-medium text-[#8C8880] whitespace-nowrap">
                             {application.appliedAt
                               ? new Date(
-                                  application.appliedAt
-                                ).toLocaleString('zh-TW')
+                                application.appliedAt
+                              ).toLocaleString('zh-TW')
                               : '—'}
                           </td>
 
@@ -1042,7 +1062,7 @@ export default function ContentReview() {
                             <Pill
                               cfg={
                                 qualificationBadge[
-                                  application.status
+                                application.status
                                 ]
                               }
                             />
@@ -1057,7 +1077,7 @@ export default function ContentReview() {
 
                                 <div className="text-[10px] font-bold text-[#8C8880] mt-1">
                                   {application.couponStatus ===
-                                  'active'
+                                    'active'
                                     ? '已啟用'
                                     : '尚未啟用'}
                                 </div>
@@ -1076,7 +1096,7 @@ export default function ContentReview() {
               </table>
             </div>
           </Card>
-          
+
 
 
           {/* 接案審核 Modal */}
@@ -1196,7 +1216,7 @@ export default function ContentReview() {
                       disabled={
                         !qualificationNote.trim() ||
                         reviewingApplicationId ===
-                          selectedApplication.applicationId
+                        selectedApplication.applicationId
                       }
                       className="flex-1 gap-2"
                     >
@@ -1323,11 +1343,11 @@ export default function ContentReview() {
                     submissions.map(submission => {
                       const canReview =
                         submission.status ===
-                          'pending' ||
+                        'pending' ||
                         submission.status ===
-                          'submitted' ||
+                        'submitted' ||
                         submission.status ===
-                          'revising'
+                        'revising'
 
                       return (
                         <tr
@@ -1344,6 +1364,8 @@ export default function ContentReview() {
                                 .vendorFeedback ||
                               ''
                             )
+
+                            setAiResult(null)
                           }}
                           className={cn(
                             'transition-colors',
@@ -1412,10 +1434,10 @@ export default function ContentReview() {
                           <td className="p-5 text-xs font-medium text-[#8C8880] whitespace-nowrap">
                             {submission.submittedAt
                               ? new Date(
-                                  submission.submittedAt
-                                ).toLocaleString(
-                                  'zh-TW'
-                                )
+                                submission.submittedAt
+                              ).toLocaleString(
+                                'zh-TW'
+                              )
                               : '—'}
                           </td>
 
@@ -1423,7 +1445,7 @@ export default function ContentReview() {
                             <Pill
                               cfg={
                                 submissionBadge[
-                                  submission.status
+                                submission.status
                                 ]
                               }
                             />
@@ -1442,11 +1464,11 @@ export default function ContentReview() {
           {selectedSubmission &&
             (
               selectedSubmission.status ===
-                'pending' ||
+              'pending' ||
               selectedSubmission.status ===
-                'submitted' ||
+              'submitted' ||
               selectedSubmission.status ===
-                'revising'
+              'revising'
             ) && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-4">
                 <div className="relative w-full max-w-4xl bg-white rounded-[2.5rem] p-10 shadow-2xl border border-[#E2DDD4] max-h-[92vh] overflow-y-auto">
@@ -1486,8 +1508,8 @@ export default function ContentReview() {
                         <Pill
                           cfg={
                             submissionBadge[
-                              selectedSubmission
-                                .status
+                            selectedSubmission
+                              .status
                             ]
                           }
                         />
@@ -1539,6 +1561,73 @@ export default function ContentReview() {
 
                     {/* 右側：合規檢查與審核意見 */}
                     <div className="flex flex-col">
+                      <div className="mb-6">
+                        <div className="text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-3">
+                          AI 文案合規檢測
+                        </div>
+                        <div className="flex gap-2 mb-3">
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#C8522A]"
+                          >
+                            <option value="food">食品</option>
+                            <option value="cosmetic">化妝品</option>
+                            <option value="medical_device">醫療器材</option>
+                            <option value="drug">藥品</option>
+                          </select>
+                          <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption)} disabled={aiLoading} className="px-6">
+                            {aiLoading ? "分析中..." : "AI 審核"}
+                          </Button>
+                        </div>
+
+                        {aiResult && (
+                          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-5 space-y-3 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[#1A1A18]">合規分數</span>
+                              <span className={`font-black text-lg ${aiResult.risk_level === 'none' ? 'text-[#1A1A18]'
+                                : aiResult.risk_level === 'low' ? 'text-[#B89B6A]'
+                                  : aiResult.risk_level === 'medium' ? 'text-[#C8522A]'
+                                    : 'text-[#D93025]'
+                                }`}>{aiResult.score} 分</span>
+                            </div>
+
+                            {aiResult.violations?.length > 0 && (
+                              <div>
+                                <div className="font-bold text-[#D93025] mb-1">違規詞（{aiResult.violations.length}）</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {aiResult.violations.map((v, i) => (
+                                    <span key={i} className="text-xs bg-[#FFF0F0] text-[#D93025] px-2 py-1 rounded-md font-bold">{v.word}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {aiResult.gray_areas?.length > 0 && (
+                              <div>
+                                <div className="font-bold text-[#C8522A] mb-1">灰色地帶（{aiResult.gray_areas.length}）</div>
+                                {aiResult.gray_areas.map((g, i) => (
+                                  <div key={i} className="text-xs bg-[#FDF0ED] text-[#8C8880] px-3 py-2 rounded-lg mb-1">
+                                    <span className="font-bold text-[#C8522A]">「{g.phrase}」</span> — {g.reason}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {aiResult.ai_analysis && (
+                              <div>
+                                <div className="font-bold text-[#1A1A18] mb-1">AI 整體評估</div>
+                                <p className="text-[#8C8880] text-xs leading-relaxed">{aiResult.ai_analysis.overall_assessment}</p>
+                                {aiResult.ai_analysis.suggestions?.length > 0 && (
+                                  <ul className="mt-2 list-disc list-inside text-xs text-[#8C8880] space-y-1">
+                                    {aiResult.ai_analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                                  </ul>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div className="text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-3">
                         合規檢查
                       </div>
@@ -1620,13 +1709,13 @@ export default function ContentReview() {
                       disabled={
                         !submissionNote.trim() ||
                         reviewingSubmissionId ===
-                          selectedSubmission
-                            .submissionId
+                        selectedSubmission
+                          .submissionId
                       }
                     >
                       {reviewingSubmissionId ===
-                      selectedSubmission
-                        .submissionId ? (
+                        selectedSubmission
+                          .submissionId ? (
                         <Loader2
                           size={16}
                           className="animate-spin"
@@ -1654,8 +1743,8 @@ export default function ContentReview() {
                       }
                     >
                       {reviewingSubmissionId ===
-                      selectedSubmission
-                        .submissionId ? (
+                        selectedSubmission
+                          .submissionId ? (
                         <Loader2
                           size={16}
                           className="animate-spin"
