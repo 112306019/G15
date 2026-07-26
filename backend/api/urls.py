@@ -15,12 +15,12 @@ from .views.platform import (
     koc_get_list,       
     koc_get_detail,     
     koc_mission_stage_update,  
-    admin_vendor_list,      # 新增
-    admin_vendor_detail,    # 新增
-    admin_vendor_audit,     # 新增
-    admin_vendor_review,    # 新增
-    admin_overview,         # 新增
-    admin_coupon_usage,     # 新增
+    admin_vendor_list,      
+    admin_vendor_detail,    
+    admin_vendor_audit,     
+    admin_vendor_review,    
+    admin_overview,         
+    admin_coupon_usage,     
     admin_performance,
     get_all_missions,
     get_earnings_tracking,

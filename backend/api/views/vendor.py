@@ -612,11 +612,6 @@ def vendor_campaign_create(request):
                     "reward_type",
                     "commission"
                 ),
-                discount_percent=(
-                    int(data["discount_value"])
-                    if data["discount_type"] == "percentage"
-                    else 0
-                ),
                 promo_days=data["promo_days"],
                 start_date=start_datetime,
                 end_date=end_datetime,
@@ -806,11 +801,6 @@ def vendor_campaign_update(request):
                 "reward_type",
                 "commission"
             )
-            campaign.discount_percent = (
-                int(data["discount_value"])
-                if data["discount_type"] == "percentage"
-                else 0
-            )
             campaign.promo_days = data["promo_days"]
             campaign.start_date = start_datetime
             campaign.end_date = end_datetime
@@ -981,7 +971,6 @@ def vendor_campaign_getlist(request):
             "description": campaign.description,
             "budget": str(campaign.budget),
             "reward_type": campaign.reward_type,
-            "discount_percent": campaign.discount_percent,
             "promo_days": campaign.promo_days,
             "start_date": (
                 campaign.start_date.date().isoformat()
@@ -1051,6 +1040,13 @@ def vendor_application_getlist(request):
                 .first()
             )
 
+        # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位
+        campaign_product = (
+            CampaignProduct.objects
+            .filter(campaign=application.campaign)
+            .first()
+        )
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
@@ -1086,20 +1082,20 @@ def vendor_application_getlist(request):
             ),
 
             "discount_type": (
-                coupon.discount_type
-                if coupon
+                campaign_product.discount_type
+                if campaign_product
                 else None
             ),
 
             "discount_value": (
-                str(coupon.discount_value)
-                if coupon
+                str(campaign_product.discount_value)
+                if campaign_product
                 else None
             ),
 
             "koc_commission_rate": (
-                str(coupon.koc_commission_rate)
-                if coupon
+                str(campaign_product.koc_commission_rate)
+                if campaign_product
                 else None
             ),
         })
@@ -1272,14 +1268,8 @@ def vendor_application_review(request):
                     coupon = CouponNew.objects.create(
                         kocmission=mission,
                         promotion_code=promotion_code,
-                        discount_type=campaign_product.discount_type,
-                        discount_value=campaign_product.discount_value,
-                        koc_commission_rate=(
-                            campaign_product.koc_commission_rate
-                        ),
                         status="inactive",
                         usage_count=0,
-                        total_commission=0
                     )
 
                     coupon_created = True
@@ -1809,12 +1799,32 @@ def vendor_coupon_get_usage_list(request):
     if status_filter:
         coupons = coupons.filter(status=status_filter)
 
+    coupons = list(coupons)
+
+    # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位；
+    # total_commission 也不用 coupon 上的快取欄位，直接從 Earnings 帳本算。
+    campaign_ids = {
+        coupon.kocmission.application.campaign_id for coupon in coupons
+    }
+    campaign_product_by_campaign_id = {}
+    for cp in CampaignProduct.objects.filter(campaign_id__in=campaign_ids):
+        campaign_product_by_campaign_id.setdefault(cp.campaign_id, cp)
+
+    kocmission_ids = [coupon.kocmission_id for coupon in coupons]
+    commission_by_kocmission_id = {
+        row['kocmission']: row['total']
+        for row in Earnings.objects.filter(kocmission_id__in=kocmission_ids)
+        .values('kocmission')
+        .annotate(total=Sum('amount'))
+    }
+
     coupon_list = []
 
     for coupon in coupons:
         mission = coupon.kocmission
         application = mission.application
         campaign = application.campaign
+        campaign_product = campaign_product_by_campaign_id.get(campaign.campaign_id)
         link_submission = (
             Submissions.objects
             .filter(
@@ -1828,14 +1838,18 @@ def vendor_coupon_get_usage_list(request):
         coupon_list.append({
             "coupon_id": coupon.coupon_id,
             "promotion_code": coupon.promotion_code,
-            "discount_type": coupon.discount_type,
-            "discount_value": str(coupon.discount_value),
-            "koc_commission_rate": str(
-                coupon.koc_commission_rate
+            "discount_type": (
+                campaign_product.discount_type if campaign_product else None
+            ),
+            "discount_value": (
+                str(campaign_product.discount_value) if campaign_product else None
+            ),
+            "koc_commission_rate": (
+                str(campaign_product.koc_commission_rate) if campaign_product else None
             ),
             "status": coupon.status,
             "usage_count": coupon.usage_count,
-            "total_commission": coupon.total_commission,
+            "total_commission": commission_by_kocmission_id.get(mission.kocmission_id, 0),
 
             "kocmission_id": mission.kocmission_id,
             "koc_id": mission.koc_id,
@@ -1976,11 +1990,14 @@ def vendor_analytics_overview(request):
 
     coupon_usage_result = coupons.aggregate(
         total_coupon_usage=Sum("usage_count"),
-        total_commission=Sum("total_commission")
     )
 
     total_coupon_usage = coupon_usage_result["total_coupon_usage"] or 0
-    total_commission = coupon_usage_result["total_commission"] or 0
+
+    # 不用 coupon.total_commission 這個快取欄位，直接從 Earnings 帳本算才準
+    total_commission = Earnings.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).aggregate(total=Sum("amount"))["total"] or 0
 
     # 6. KOC 報名數
     total_applications = Application.objects.filter(
@@ -2080,11 +2097,14 @@ def vendor_product_performance(request):
             "order_id"
         ).distinct().count()
 
-        coupon_result = CouponNew.objects.filter(
+        # 不用 coupon.total_commission 這個快取欄位，直接從 Earnings 帳本算才準
+        kocmission_ids_for_coupons = CouponNew.objects.filter(
             promotion_code__in=coupon_codes
-        ).aggregate(
-            total_commission=Sum("total_commission")
-        )
+        ).values_list("kocmission_id", flat=True)
+
+        commission_result = Earnings.objects.filter(
+            kocmission_id__in=kocmission_ids_for_coupons
+        ).aggregate(total=Sum("amount"))
 
         products.append({
             "product_id": str(product_id),
@@ -2093,7 +2113,7 @@ def vendor_product_performance(request):
             "total_sales": int(item["total_sales"] or 0),
             "total_orders": item["total_orders"] or 0,
             "coupon_orders": coupon_orders,
-            "total_commission": coupon_result["total_commission"] or 0
+            "total_commission": commission_result["total"] or 0
         })
 
     return Response({

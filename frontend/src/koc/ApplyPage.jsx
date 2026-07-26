@@ -10,9 +10,9 @@ export default function ApplyPage() {
   const [appliedProducts, setAppliedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [kocId, setKocId] = useState(null);
 
-  const user_id = 'U00001';
-  const koc_id = 'KOC00001';
+  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
 
   useEffect(() => {
     const controller = new AbortController();
@@ -20,7 +20,7 @@ export default function ApplyPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [availableRes, appliedRes] = await Promise.all([
+        const [availableRes, appliedRes, profileRes] = await Promise.all([
           api.get('/koc/application/getAvailableList', {
             params: { user_id },
             signal: controller.signal
@@ -28,8 +28,16 @@ export default function ApplyPage() {
           api.get('/koc/application/getAppliedList', {
             params: { user_id },
             signal: controller.signal
+          }),
+          api.get('/koc/profile/getProfile', {
+            params: { user_id },
+            signal: controller.signal
           })
         ]);
+
+        if (profileRes.data.success) {
+          setKocId(profileRes.data.koc_id);
+        }
 
         if (availableRes.data.success) {
           setPendingProducts(availableRes.data.campaigns.map(c => ({
@@ -62,9 +70,13 @@ export default function ApplyPage() {
   }, []);
 
   const handleApply = async (product) => {
+    if (!kocId) {
+      alert('尚未取得 KOC 身份資料，請稍後再試');
+      return;
+    }
     try {
       const res = await api.post('/koc/application/applyMission', {
-        koc_id: koc_id,
+        koc_id: kocId,
         campaign_id: product.id,
         order_id: product.order_id,
       });

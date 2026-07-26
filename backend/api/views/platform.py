@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Sum
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -125,32 +126,22 @@ def calculate_order_commission(order):
         mission.application.campaign
     )
 
-    campaign_product_ids = (
-        CampaignProduct.objects
-        .filter(campaign=campaign)
-        .values_list(
-            "product_id",
-            flat=True
-        )
-    )
+    # 分潤比例要看每個商品自己在 CampaignProduct 裡的 koc_commission_rate，
+    # 不是 coupon 自己的欄位——不同商品在同一個活動裡可以有不同的分潤比例。
+    campaign_products_by_product_id = {
+        cp.product_id: cp
+        for cp in CampaignProduct.objects.filter(campaign=campaign)
+    }
 
-    commission_items = (
+    commission_items = list(
         OrderItem.objects
         .filter(
             order=order,
-            product_id__in=campaign_product_ids
+            product_id__in=campaign_products_by_product_id.keys()
         )
     )
 
-    commission_base = sum(
-        (
-            Decimal(str(item.subtotal))
-            for item in commission_items
-        ),
-        Decimal("0.00")
-    )
-
-    if commission_base <= 0:
+    if not commission_items:
         return {
             "created": False,
             "earning": None,
@@ -158,15 +149,12 @@ def calculate_order_commission(order):
             "message": "沒有符合活動的訂單商品"
         }
 
-    commission_rate = Decimal(
-        str(coupon.koc_commission_rate)
-    )
-
-    raw_commission = (
-        commission_base
-        * commission_rate
-        / Decimal("100")
-    )
+    raw_commission = Decimal("0.00")
+    for item in commission_items:
+        campaign_product = campaign_products_by_product_id[item.product_id]
+        item_subtotal = Decimal(str(item.subtotal))
+        item_rate = Decimal(str(campaign_product.koc_commission_rate))
+        raw_commission += item_subtotal * item_rate / Decimal("100")
 
     # 目前 Earnings.amount 若是 IntegerField，
     # 先四捨五入成整數
@@ -204,22 +192,9 @@ def calculate_order_commission(order):
         coupon.usage_count or 0
     ) + 1
 
-    coupon.total_commission = (
-        Decimal(
-            str(
-                coupon.total_commission
-                or 0
-            )
-        )
-        + Decimal(
-            str(commission_amount)
-        )
-    )
-
     coupon.save(
         update_fields=[
             "usage_count",
-            "total_commission"
         ]
     )
 
@@ -810,26 +785,33 @@ def admin_coupon_usage(request):
     for order in Order.objects.filter(promotion_code__in=promotion_codes).order_by('-created_at'):
         orders_by_code.setdefault(order.promotion_code, []).append(order)
 
-    data = []
+    # 🔥 批次查出每個任務(kocmission)累積的分潤總額，避免迴圈內逐一查詢。
+    # 不用 coupon.total_commission 這個快取欄位，直接從 Earnings 帳本算才準。
+    kocmission_ids = [coupon.kocmission_id for coupon in coupons]
+    commission_by_kocmission_id = {
+        row['kocmission']: row['total']
+        for row in Earnings.objects.filter(kocmission_id__in=kocmission_ids)
+        .values('kocmission')
+        .annotate(total=Sum('amount'))
+    }
 
+    data = []
 
     for coupon in coupons:
         matching_orders = orders_by_code.get(coupon.promotion_code, [])
-        latest_order = orders.first()
-        actual_order_count = orders.count()
-
+        latest_order = matching_orders[0] if matching_orders else None
+        actual_order_count = len(matching_orders)
 
         campaign = coupon.kocmission.application.campaign
         koc = coupon.kocmission.koc
 
-        coupon_data.append({
+        data.append({
             "Coupon_id": coupon.coupon_id,
             "Promotion_code": coupon.promotion_code,
-            "Discount_value": coupon.discount_value,
             "Status": coupon.status,
             "Usage_count": coupon.usage_count,
             "Actual_order_count": actual_order_count,
-            "Total_commission": coupon.total_commission,
+            "Total_commission": commission_by_kocmission_id.get(coupon.kocmission_id, 0),
 
             "KOCMission_id": coupon.kocmission_id,
             "KOC_id": koc.koc_id if koc else None,
@@ -870,8 +852,8 @@ def admin_coupon_usage(request):
     return Response({
         "success": True,
         "err": "",
-        "total": len(coupon_data),
-        "coupons": coupon_data,
+        "total": len(data),
+        "coupons": data,
 
     }, status=status.HTTP_200_OK)
 
@@ -923,6 +905,18 @@ def admin_performance(request):
         coupons = coupons.filter(
             promotion_code__icontains=promotion_code
         )
+
+    coupons = list(coupons)
+
+    # 🔥 批次查出每個任務(kocmission)歷史累積的分潤總額，避免迴圈內逐一查詢。
+    # 不用 coupon.total_commission 這個快取欄位，直接從 Earnings 帳本算才準。
+    kocmission_ids = [coupon.kocmission_id for coupon in coupons]
+    all_time_commission_by_kocmission_id = {
+        row['kocmission']: row['total']
+        for row in Earnings.objects.filter(kocmission_id__in=kocmission_ids)
+        .values('kocmission')
+        .annotate(total=Sum('amount'))
+    }
 
     performance_data = []
 
@@ -1011,7 +1005,7 @@ def admin_performance(request):
             # 額外保留原本 Coupon 表的累計資料
             "Usage_count_all_time": coupon.usage_count,
             "Total_commission_all_time": float(
-                coupon.total_commission or 0
+                all_time_commission_by_kocmission_id.get(coupon.kocmission_id, 0)
             ),
         })
 
@@ -1032,7 +1026,7 @@ def admin_performance(request):
         },
 
         "summary": {
-            "Total_coupons": coupons.count(),
+            "Total_coupons": len(coupons),
             "Coupons_used_this_month": coupons_used_this_month,
 
             # 保留原本欄位名稱，前端不用大改
