@@ -112,13 +112,24 @@ export default function CheckoutPage({
   const [couponDiscount, setCouponDiscount] = useState(initialSummary.couponDiscount || 0);
   const [couponMsg, setCouponMsg] = useState({ text: "", ok: false, show: false });
   const [couponLoading, setCouponLoading] = useState(false);
+  const [appliedCoupons, setAppliedCoupons] = useState([]); // [{code, discountType, discountValue, campaignName, productIds}]
 
-  const grandTotal = Math.max(
-    0,
-    initialSummary.itemsAmount +
-    initialSummary.shippingAmount -
-    couponDiscount
-  );
+  const getItemDiscountedPrice = (item) => {
+    let price = item.price;
+    for (const coupon of appliedCoupons) {
+      if (coupon.productIds.includes(item.productId)) {
+        if (coupon.discountType === 'percentage') {
+          price = price * (1 - coupon.discountValue / 100);
+        } else {
+          price = Math.max(0, price - coupon.discountValue);
+        }
+      }
+    }
+    return price;
+  };
+
+  const itemsTotal = cartItems.reduce((sum, item) => sum + getItemDiscountedPrice(item) * item.qty, 0);
+  const grandTotal = itemsTotal + initialSummary.shippingAmount;
 
   const cardNumDigits = useMemo(() => digitsOnly(cardNum), [cardNum]);
   const expiryDigits = useMemo(() => digitsOnly(expiry), [expiry]);
@@ -151,13 +162,29 @@ export default function CheckoutPage({
       const data = await res.json();
 
       if (res.ok) {
-        const discountValue = data.Discount_value || 0;
-        setCouponDiscount(discountValue);
-        setCouponApplied(true);
-        setCouponMsg({ text: `✓ 優惠碼已套用，折抵 $${discountValue}`, ok: true, show: true });
+        // 找出購物車裡符合這個優惠碼的商品
+        const matchedItems = cartItems.filter(item =>
+          data.applicable_product_ids.includes(item.productId)
+        );
+
+        if (matchedItems.length === 0) {
+          setCouponMsg({ text: "此優惠碼不適用於購物車中的商品", ok: false, show: true });
+          setCouponLoading(false);
+          return;
+        }
+
+        setAppliedCoupons(prev => [...prev, {
+          code: data.Promotion_code,
+          couponId: data.Coupon_id,
+          discountType: data.Discount_type,
+          discountValue: data.Discount_value,
+          campaignName: data.Campaign_name,
+          productIds: data.applicable_product_ids,
+          matchedItemNames: matchedItems.map(i => i.name),
+        }]);
+        setCouponCode("");
+        setCouponMsg({ text: `✓ 已套用於：${matchedItems.map(i => i.name).join("、")}`, ok: true, show: true });
       } else {
-        setCouponApplied(false);
-        setCouponDiscount(0);
         setCouponMsg({ text: data.err || "優惠碼無效或已過期", ok: false, show: true });
       }
     } catch (err) {
@@ -167,11 +194,8 @@ export default function CheckoutPage({
     }
   };
 
-  const handleRemoveCoupon = () => {
-    setCouponCode("");
-    setCouponApplied(false);
-    setCouponDiscount(0);
-    setCouponMsg({ text: "", ok: false, show: false });
+  const handleRemoveCoupon = (code) => {
+    setAppliedCoupons(prev => prev.filter(c => c.code !== code));
   };
 
   const handlePay = async () => {
@@ -512,11 +536,20 @@ export default function CheckoutPage({
             </div>
 
             <div className="text-[13px] text-[#8C8880]">
-              <div className="flex items-center justify-between border-b border-[#E2DDD4] py-2.5">
-                <span>{initialSummary.items}</span>
-                <span className="font-mono text-[#1A1A18]">${initialSummary.itemsAmount}</span>
-              </div>
-              <div className="flex items-center justify-between border-b border-[#E2DDD4] py-2.5">
+              {(cartItems || []).map((item, idx) => {
+                const discountedPrice = getItemDiscountedPrice(item);
+                const hasDiscount = discountedPrice < item.price;
+                return (
+                  <div key={idx} className="flex items-center justify-between py-2.5">
+                    <span>{item.name} × {item.qty}</span>
+                    <span className="font-mono text-[#1A1A18]">
+                      {hasDiscount && <span className="line-through text-[#8C8880] mr-2">${(item.price * item.qty).toFixed(2)}</span>}
+                      ${(discountedPrice * item.qty).toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between border-b border-t border-[#E2DDD4] py-2.5">
                 <span>運費</span>
                 <span className="font-mono text-[#1A1A18]">${initialSummary.shippingAmount.toFixed(2)}</span>
               </div>
@@ -566,6 +599,25 @@ export default function CheckoutPage({
                 <p className={`mt-2 text-[12px] font-bold ${couponMsg.ok ? "text-[#6BBF6B]" : "text-[#C8522A]"}`}>
                   {couponMsg.text}
                 </p>
+              )}
+              {appliedCoupons.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {appliedCoupons.map((c) => (
+                    <div key={c.code} className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-2.5">
+                      <div>
+                        <div className="font-mono text-[13px] font-bold text-[#6BBF6B]">{c.code}</div>
+                        <div className="text-[11px] text-[#8C8880]">適用於：{c.matchedItemNames.join("、")}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCoupon(c.code)}
+                        className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

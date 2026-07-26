@@ -141,13 +141,21 @@ def add_cart_item(request):
     unit_price = product.discounted_price if product.discounted_price else product.price
     subtotal = unit_price * quantity
 
-    item = CartItem.objects.create(
-    cart=cart,
-    product=product,
-    quantity=quantity,
-    unit_price=unit_price,
-    subtotal=subtotal,
-    )
+    existing_item = CartItem.objects.filter(cart=cart, product=product).first()
+    
+    if existing_item:
+        existing_item.quantity += quantity
+        existing_item.subtotal = existing_item.unit_price * existing_item.quantity
+        existing_item.save()
+        item = existing_item
+    else:
+        item = CartItem.objects.create(
+            cart=cart,
+            product=product,
+            quantity=quantity,
+            unit_price=unit_price,
+            subtotal=subtotal,
+        )
 
     return Response({
     'Cart_item_id': item.cart_item_id,
@@ -415,12 +423,38 @@ def verify_coupon(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    if coupon.status != 'active':
+        return Response(
+            {'success': False, 'err': '優惠碼未啟用或已失效'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        campaign = coupon.kocmission.application.campaign
+    except Exception:
+        return Response(
+            {'success': False, 'err': '優惠碼未綁定任何活動'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    campaign_product_ids = list(
+        CampaignProduct.objects.filter(campaign=campaign).values_list('product__product_id', flat=True)
+    )
+
+    if not campaign_product_ids:
+        return Response(
+            {'success': False, 'err': '此優惠碼沒有適用的商品'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     return Response({
         'Coupon_id': coupon.coupon_id,
-        'KOCMisson_id': coupon.kocmission.kocmission_id if coupon.kocmission else None,
         'Promotion_code': coupon.promotion_code,
-        'Discount_value': coupon.discount_value,
-        'Status': coupon.status,
+        'Discount_type': coupon.discount_type,
+        'Discount_value': float(coupon.discount_value),
+        'Campaign_id': str(campaign.campaign_id),
+        'Campaign_name': campaign.name,
+        'applicable_product_ids': campaign_product_ids,
     }, status=status.HTTP_200_OK)
 
 
