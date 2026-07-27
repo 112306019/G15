@@ -5,8 +5,21 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
+from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address
 from .platform import calculate_order_commission
+
+
+def _has_active_campaign(product_id):
+    """商品是否目前綁定一個「進行中」的活動（狀態 active 且落在 start_date ~ end_date 之間）"""
+    now = timezone.now()
+    return CampaignProduct.objects.filter(
+        product_id=product_id,
+        campaign__status='active',
+        campaign__start_date__lte=now,
+        campaign__end_date__gte=now
+    ).exists()
+
 
 ## 商品查詢
 @api_view(['GET'])
@@ -18,6 +31,15 @@ def get_products(request):
 
     products = Product.objects.filter(status='active')
 
+    # 只顯示目前有「進行中」活動的商品——活動狀態要是 active，
+    # 而且現在時間要落在 start_date ~ end_date 之間，跟廠商端判斷「推廣中」用同一套規則。
+    now = timezone.now()
+    promoted_product_ids = CampaignProduct.objects.filter(
+        campaign__status='active',
+        campaign__start_date__lte=now,
+        campaign__end_date__gte=now
+    ).values_list('product_id', flat=True)
+    products = products.filter(product_id__in=promoted_product_ids)
     # 過濾條件
     if product_name:
         products = products.filter(product_name__icontains=product_name)
@@ -58,6 +80,12 @@ def get_product_detail(request):
     try:
         p = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '商品不存在或已下架'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not _has_active_campaign(product_id):
         return Response(
             {'success': False, 'err': '商品不存在或已下架'},
             status=status.HTTP_404_NOT_FOUND
@@ -135,6 +163,12 @@ def add_cart_item(request):
     try:
         product = Product.objects.get(product_id=product_id, status='active')
     except Product.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '商品不存在或已下架'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not _has_active_campaign(product_id):
         return Response(
             {'success': False, 'err': '商品不存在或已下架'},
             status=status.HTTP_404_NOT_FOUND
