@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ArrowLeft } from "lucide-react";
 
 function AppleIcon() {
   return (
@@ -24,6 +25,7 @@ function InputField({ label, hint, ...props }) {
 }
 
 export default function LoginPage({
+  onBack,
   onLoginSuccess,
   onRegisterSuccess,
   onSkipToShop,
@@ -120,7 +122,17 @@ export default function LoginPage({
     <div className="flex min-h-screen flex-col bg-[#F5F0E8] font-sans text-[#1A1A18] duration-500 animate-in fade-in">
 
       {/* 頂部橫幅 */}
-      <div className="flex w-full items-center justify-center border-b border-[#E2DDD4] bg-white py-16">
+      <div className="relative flex w-full items-center justify-center border-b border-[#E2DDD4] bg-white py-16">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
+          >
+            <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
+            返回
+          </button>
+        )}
         <h1 className="relative text-center font-serif text-3xl tracking-widest text-[#1A1A18] md:text-4xl">
           選擇登入或註冊
           <span className="absolute left-1/2 top-full mt-3 h-0.5 w-12 -translate-x-1/2 rounded bg-[#C8522A]" />

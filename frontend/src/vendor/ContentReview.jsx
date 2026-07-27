@@ -644,7 +644,7 @@ export default function ContentReview() {
           application_id:
             application.applicationId,
           status: reviewStatus,
-          vendor_feedback:
+          reject_reason:
             qualificationNote.trim()
         })
 

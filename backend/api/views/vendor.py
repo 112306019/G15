@@ -1153,6 +1153,7 @@ def vendor_application_review(request):
     vendor_id = serializer.validated_data["vendor_id"]
     application_id = serializer.validated_data["application_id"]
     review_result = serializer.validated_data["status"]
+    reject_reason = serializer.validated_data.get("reject_reason", "")
 
     if review_result not in ["approved", "rejected"]:
         return Response({
@@ -1206,9 +1207,13 @@ def vendor_application_review(request):
         with transaction.atomic():
             # 更新接案申請狀態
             application.status = review_result
-            application.save(
-                update_fields=["status"]
-            )
+            update_fields = ["status"]
+
+            if review_result == "rejected":
+                application.reject_reason = reject_reason or ""
+                update_fields.append("reject_reason")
+
+            application.save(update_fields=update_fields)
 
             if review_result == "approved":
                 # 建立或取得 KOC 任務

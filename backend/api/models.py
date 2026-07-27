@@ -211,6 +211,7 @@ class Application(models.Model):
     )
     campaign = models.ForeignKey(Campaigns, on_delete=models.CASCADE, db_column='campaign_id',related_name='applications')
     status = models.CharField(max_length=50, db_column='status', default='pending')
+    reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
 
     class Meta:
         db_table = 'Application'

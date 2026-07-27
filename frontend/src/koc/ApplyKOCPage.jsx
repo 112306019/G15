@@ -23,8 +23,9 @@ export default function ApplyKOCPage({ onSubmit }) {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [igVerify, setIgVerify] = useState({ status: "idle" }); 
     const [threadsVerify, setThreadsVerify] = useState({ status: "idle" });
-    const [submitState, setSubmitState] = useState("idle"); 
+    const [submitState, setSubmitState] = useState("idle");
     const [toast, setToast] = useState({ show: false, msg: "" });
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     const showToast = (msg) => {
         setToast({ show: true, msg });
@@ -115,11 +116,7 @@ export default function ApplyKOCPage({ onSubmit }) {
 
             if (res.data.success) {
                 setSubmitState("success");
-                showToast("✓ KOC 申請已送出，請等待審核！");
-                // 成功後通知父元件
-                setTimeout(() => {
-                    onSubmit?.();
-                }, 1500);
+                setShowSuccessModal(true);
             } else {
                 setSubmitState("idle");
                 showToast("✗ " + (res.data.err || '申請失敗，請稍後再試'));
@@ -281,6 +278,32 @@ export default function ApplyKOCPage({ onSubmit }) {
             >
                 {toast.msg}
             </div>
+
+            {/* 🟢 申請成功彈窗 */}
+            {showSuccessModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+                    <div className="bg-white rounded-[2rem] p-10 max-w-md w-full shadow-2xl text-center">
+                        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                            <Check size={32} className="text-green-600" strokeWidth={3} />
+                        </div>
+                        <h3 className="mb-3 text-xl font-bold text-slate-900">申請已送出</h3>
+                        <p className="mb-8 text-sm leading-relaxed text-gray-500">
+                            您的 KOC 申請已成功送出，請等待平台審核。<br />
+                            審核通過後，請重新登入即可進入 KOC 專屬功能。
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowSuccessModal(false);
+                                onSubmit?.();
+                            }}
+                            className="w-full rounded-full bg-black py-4 text-sm font-bold text-white transition-all hover:bg-gray-800 active:scale-95"
+                        >
+                            我知道了
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
