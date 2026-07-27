@@ -604,6 +604,7 @@ def get_application_list(request):
             "coupon_status": coupon_status,
             "vendor_name": app.campaign.vendor.company_name,  # 新增廠商名稱
             "deadline": app.campaign.end_date.strftime('%Y-%m-%d') if app.campaign.end_date else None,  # 新增截止時間
+            "reject_reason": app.reject_reason if app.status == 'rejected' else None,
         })
 
     return Response({

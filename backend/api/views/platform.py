@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import timedelta
 
@@ -36,6 +37,9 @@ from api.models import (
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP
+from api.emails import send_koc_approval_email
+
+logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -1090,7 +1094,7 @@ def koc_approve(request):
 
     # 同步更新 User.role
     user = koc.user
-    user.role = 'koc'
+    user.role = '1'
     user.save()
 
     # 寫入 AdminAuditLogs
@@ -1101,8 +1105,11 @@ def koc_approve(request):
         action_reason=None,
     )
 
-    # TODO: 寄送審核通過通知(信件或簡訊)
-    # send_approval_notification(user)
+    # 寄送審核通過通知信；寄信失敗不影響審核結果，只記錄下來
+    try:
+        send_koc_approval_email(user)
+    except Exception as email_error:
+        logger.warning(f"寄送 KOC 審核通過通知信失敗（koc_id={koc.koc_id}）: {email_error}")
 
     return Response({
         "success": True,
