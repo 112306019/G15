@@ -357,10 +357,9 @@ function MainSystem() {
             {view === 'applyKoc' && (
               <ApplyKOCPage
                 onSubmit={() => {
-                  setTimeout(() => {
-                    setUserRole('koc');
-                    handleNavigate('home');
-                  }, 1500);
+                  // 申請只是送出審核，還不是 KOC；要等平台審核通過、
+                  // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
+                  handleNavigate('shop');
                 }}
               />
             )}
