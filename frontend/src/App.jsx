@@ -246,6 +246,7 @@ function MainSystem() {
 
       {view === 'login' && (
         <LoginPage
+          onBack={() => handleNavigate('welcome')}
           onLoginSuccess={({ userId, role, token }) => {
             const mappedRole = role === 1 ? 'koc' : 'shopper';
             setUserRole(mappedRole);
