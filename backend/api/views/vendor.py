@@ -1044,17 +1044,36 @@ def vendor_application_getlist(request):
         campaign_product = (
             CampaignProduct.objects
             .filter(campaign=application.campaign)
+            .select_related("product")
             .first()
         )
+
+        koc_name = ""
+        if application.koc and application.koc.user:
+            koc_name = (
+                application.koc.user.display_name
+                or application.koc.user.name
+                or ""
+            )
 
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
-            "koc_name": "",
+            "koc_name": koc_name,
             "campaign_id": str(
                 application.campaign.campaign_id
             ),
             "campaign_name": application.campaign.name,
+            "product_id": (
+                campaign_product.product.product_id
+                if campaign_product
+                else None
+            ),
+            "product_name": (
+                campaign_product.product.product_name
+                if campaign_product
+                else None
+            ),
             "status": application.status,
             "detail_status": application.status,
             "order_id": (
