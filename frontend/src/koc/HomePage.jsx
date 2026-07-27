@@ -31,6 +31,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   });
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [viewingReason, setViewingReason] = useState(null);
 
   // 從 TaskDetailPage 跳回時，如果有指定要切換的分頁就切過去
   useEffect(() => {
@@ -157,10 +158,16 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         if (task.isRejected) {
           return (
             <div className="flex flex-col gap-2">
-              <div className="bg-[#FDF0ED] text-[#C8522A] p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-start gap-2">
-                <XCircle size={14} className="shrink-0 mt-0.5" />
-                <span>抱歉，資格未符。<br/><span className="text-[#8C8880] font-normal">{task.rejectReason}</span></span>
-              </div>
+              <button
+                onClick={() => setViewingReason(task)}
+                className="bg-[#FDF0ED] text-[#C8522A] p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
+              >
+                <span className="flex items-center gap-2">
+                  <XCircle size={14} className="shrink-0" />
+                  抱歉，資格未符
+                </span>
+                <span className="text-[10px] underline underline-offset-2 shrink-0">查看原因</span>
+              </button>
               <button
                 onClick={() => dismissTask(task.id)}
                 className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5"
@@ -340,6 +347,34 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <p className="text-[#1A1A18] font-bold">這個階段目前沒有任務喔！</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 拒絕原因彈出視窗 */}
+      {viewingReason && (
+        <div
+          className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4"
+          onClick={() => setViewingReason(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 text-[#C8522A]">
+              <XCircle size={24} />
+            </div>
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">申請未通過</h3>
+            <p className="text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
+            <div className="bg-[#F8F9FA] rounded-2xl p-5 text-sm text-[#1A1A18] leading-relaxed mb-6 whitespace-pre-wrap">
+              {viewingReason.rejectReason || '廠商未填寫拒絕原因'}
+            </div>
+            <button
+              onClick={() => setViewingReason(null)}
+              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 rounded-xl font-bold text-sm hover:bg-[#C8522A] transition-all"
+            >
+              關閉
+            </button>
+          </div>
         </div>
       )}
     </div>

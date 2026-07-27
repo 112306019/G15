@@ -386,6 +386,7 @@ class VendorApplicationReviewSerializer(serializers.Serializer):
     vendor_id = serializers.CharField()
     application_id = serializers.IntegerField()
     status = serializers.CharField()
+    reject_reason = serializers.CharField(required=False, allow_blank=True)
 
 
 # ──────────────────────────────────────────────

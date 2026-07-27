@@ -851,11 +851,22 @@ export default function Campaigns() {
         ? '通過'
         : '拒絕'
 
-    const confirmed = window.confirm(
-      `確定要${actionText} KOC「${application.name}」的申請嗎？`
-    )
-
-    if (!confirmed) return
+    let rejectReason = ''
+    if (reviewStatus === 'rejected') {
+      rejectReason = window.prompt(
+        `請填寫拒絕 KOC「${application.name}」申請的原因：`
+      )
+      if (rejectReason === null) return // 使用者按取消
+      if (!rejectReason.trim()) {
+        alert('拒絕申請時請填寫原因')
+        return
+      }
+    } else {
+      const confirmed = window.confirm(
+        `確定要${actionText} KOC「${application.name}」的申請嗎？`
+      )
+      if (!confirmed) return
+    }
 
     try {
       setReviewingApplicationId(
@@ -866,7 +877,8 @@ export default function Campaigns() {
       const response = await reviewVendorApplication({
         vendor_id: vendorId,
         application_id: application.applicationId,
-        status: reviewStatus
+        status: reviewStatus,
+        ...(reviewStatus === 'rejected' ? { reject_reason: rejectReason.trim() } : {})
       })
 
       if (response.data?.success === false) {

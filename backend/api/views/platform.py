@@ -1090,7 +1090,7 @@ def koc_approve(request):
 
     # 同步更新 User.role
     user = koc.user
-    user.role = 'koc'
+    user.role = '1'
     user.save()
 
     # 寫入 AdminAuditLogs
