@@ -14,7 +14,7 @@ export default function VendorHeader() {
     { label: '訂單管理', path: '/vendor/orders' },
     { label: '金流管理', path: '/vendor/finance' },
     { label: 'KOC管理', path: '/vendor/koc' },
-    { label: '文案審核', path: '/vendor/review' },
+    { label: '審核管理', path: '/vendor/review' },
     { label: '成效分析', path: '/vendor/analytics' }
   ];
 
