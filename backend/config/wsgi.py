@@ -7,6 +7,10 @@ For more information on this file, see
 https://docs.djangoproject.com/en/6.0/howto/deployment/wsgi/
 """
 
+import pymysql
+pymysql.install_as_MySQLdb()
+pymysql.version_info = (2, 2, 1, "final", 0)
+
 import os
 
 from django.core.wsgi import get_wsgi_application
