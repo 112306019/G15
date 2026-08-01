@@ -38,6 +38,18 @@ export const createVendorProduct = (data) => {
   return api.post('/vendor/product/create', data)
 }
 
+// 上傳商品圖片
+export const uploadVendorProductImage = (file) => {
+  const formData = new FormData()
+  formData.append('image', file)
+
+  return api.post('/vendor/product/uploadImage', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+}
+
 // 修改商品
 export const updateVendorProduct = (data) => {
   return api.post('/vendor/product/update', data)

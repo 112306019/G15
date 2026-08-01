@@ -43,17 +43,27 @@ function ShoppingBagIcon() {
   );
 }
 
-function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", onAdd, onClick }) {
+// 🟢 修正：加入 imageUrl，有真實圖片時顯示 <img>；
+// 沒有圖片時（廠商還沒上傳）才 fallback 顯示原本的漸層底色 + 裝飾 icon。
+function ProductCard({ name, price, imageUrl, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", onAdd, onClick }) {
   return (
     <div className="group flex flex-col gap-3 transition-all hover:-translate-y-1 relative">
       <div
         onClick={onClick}
         className="relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-2xl overflow-hidden shadow-sm"
-        style={{ background: gradient }}
+        style={imageUrl ? undefined : { background: gradient }}
       >
-        <svg className="h-10 w-10 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-        </svg>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <svg className="h-10 w-10 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+          </svg>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onAdd(); }}
           className="absolute bottom-4 right-4 translate-y-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 bg-[#1A1A18] text-[#F5F0E8] p-2.5 rounded-full hover:bg-[#C8522A] shadow-md"
@@ -305,10 +315,22 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   商品介紹
                 </button>
               </div>
-              <div className="w-full md:w-[450px] aspect-[4/3] bg-gradient-to-br from-[#D8D4CC] to-[#C4BDB4] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow" onClick={() => products[0] && onNavigate?.("product_detail", products[0])}>
-                <svg className="h-20 w-20 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-                </svg>
+              <div
+                className="w-full md:w-[450px] aspect-[4/3] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow overflow-hidden"
+                style={products[0]?.image_url ? undefined : { background: "linear-gradient(135deg,#D8D4CC,#C4BDB4)" }}
+                onClick={() => products[0] && onNavigate?.("product_detail", products[0])}
+              >
+                {products[0]?.image_url ? (
+                  <img
+                    src={products[0].image_url}
+                    alt={products[0].Product_name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <svg className="h-20 w-20 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+                  </svg>
+                )}
               </div>
             </div>
 
@@ -354,9 +376,10 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
                   {featured.map((p) => (
                     <ProductCard
-                      key={p.product_id}
+                      key={p.Product_id}
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
+                      imageUrl={p.image_url}
                       gradient={p.gradient}
                       onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
@@ -376,9 +399,10 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
                   {bestSellers.map((p) => (
                     <ProductCard
-                      key={p.product_id}
+                      key={p.Product_id}
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
+                      imageUrl={p.image_url}
                       gradient={p.gradient}
                       onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
@@ -414,9 +438,10 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
               <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
                 {displayProducts.map((p) => (
                   <ProductCard
-                    key={p.product_id}
+                    key={p.Product_id}
                     name={p.Product_name}
                     price={`NTD$ ${p.discounted_price || p.price}`}
+                    imageUrl={p.image_url}
                     gradient={p.gradient}
                     onAdd={() => handleAdd(p.Product_id)}
                     onClick={() => onNavigate?.("product_detail", p)}
