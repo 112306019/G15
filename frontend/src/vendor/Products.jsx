@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, ShoppingCart, TrendingUp, Archive } from 'lucide-react'
-import { productCategories } from './mock'
+// 🟢 精簡成基礎類別，不再依賴 mock.js 裡那份太雜的清單
+const BASIC_CATEGORIES = ['美妝保養', '服飾配件', '食品飲料', '3C家電', '生活用品', '其他']
 import { formatCurrency, cn } from './lib/utils'
 import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct} from '../api/vendor'
 
@@ -236,7 +237,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
               >
                 <option value="">選擇類別</option>
 
-                {productCategories.map(category => (
+                {BASIC_CATEGORIES.map(category => (
                   <option key={category} value={category}>
                     {category}
                   </option>

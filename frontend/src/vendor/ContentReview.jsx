@@ -955,7 +955,6 @@ export default function ContentReview() {
                       'KOC 資訊',
                       '申請活動',
                       '申請商品',
-                      '申請時間',
                       '審核狀態',
                       '優惠碼'
                     ].map(header => (
@@ -1048,14 +1047,6 @@ export default function ContentReview() {
 
                           <td className="p-5 text-xs font-medium text-[#8C8880]">
                             {application.productName}
-                          </td>
-
-                          <td className="p-5 text-xs font-medium text-[#8C8880] whitespace-nowrap">
-                            {application.appliedAt
-                              ? new Date(
-                                application.appliedAt
-                              ).toLocaleString('zh-TW')
-                              : '—'}
                           </td>
 
                           <td className="p-5">
