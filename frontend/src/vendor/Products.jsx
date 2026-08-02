@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, ShoppingCart, TrendingUp, Archive } from 'lucide-react'
-// 🟢 精簡成基礎類別，不再依賴 mock.js 裡那份太雜的清單
-const BASIC_CATEGORIES = ['美妝保養', '服飾配件', '食品飲料', '3C家電', '生活用品', '其他']
+import { productCategories } from './mock'
 import { formatCurrency, cn } from './lib/utils'
-import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct, uploadVendorProductImage } from '../api/vendor'
+import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct} from '../api/vendor'
 
 // 🟢 專屬品牌色狀態設定 (配合新商業邏輯)
 const statusCfg = {
@@ -95,20 +94,8 @@ function ProductBadge({ status }) {
   )
 }
 
-// 🟢 修正：emoji 參數如果是圖片網址（http 開頭），就真的顯示圖片；
-// 沒有圖片時才 fallback 顯示 emoji 文字（例如預設的 📦）。
 function Thumb({ emoji, size = 'md' }) {
   const s = { sm: 'w-11 h-11 text-xl rounded-lg', md: 'w-14 h-14 text-3xl rounded-xl', lg: 'w-20 h-20 text-4xl rounded-2xl' }[size]
-  const isImageUrl = typeof emoji === 'string' && emoji.startsWith('http')
-
-  if (isImageUrl) {
-    return (
-      <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] overflow-hidden shrink-0', s)}>
-        <img src={emoji} alt="商品圖片" className="w-full h-full object-cover" />
-      </div>
-    )
-  }
-
   return <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] flex items-center justify-center shrink-0', s)}>{emoji}</div>
 }
 
@@ -128,7 +115,6 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
   
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -152,31 +138,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
     setError('')
   }, [editingProduct, open])
 
-  async function handleImageUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-
-    setUploading(true)
-    setError('')
-
-    try {
-      const res = await uploadVendorProductImage(file)
-      const imageUrl = res.data.image_url
-
-      setForm(f => ({ ...f, imageUrl, thumbnail: imageUrl }))
-    } catch (err) {
-      setError(
-        err.response?.data?.err?.image ||
-        err.message ||
-        '圖片上傳失敗，請稍後再試'
-      )
-    } finally {
-      setUploading(false)
-      // 讓同一個檔案可以重複選取觸發 onChange
-      e.target.value = ''
-    }
-  }
-
+  
   async function finish() {
     try {
       setSaving(true)
@@ -222,20 +184,8 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
         <div className="px-8 py-6 max-h-[60vh] overflow-y-auto space-y-5">
           <div className="flex items-center gap-5 p-5 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-2xl">
             <Thumb emoji={form.thumbnail} size="lg" />
-
-            <label className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all cursor-pointer">
-              <Upload size={14}/>
-              {uploading ? '上傳中...' : form.imageUrl ? '更換圖片' : '上傳圖片'}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={handleImageUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
+            <button className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all"><Upload size={14}/>上傳圖片</button>
           </div>
-
           <Input
             label="商品名稱 *"
             value={form.name}
@@ -286,7 +236,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
               >
                 <option value="">選擇類別</option>
 
-                {BASIC_CATEGORIES.map(category => (
+                {productCategories.map(category => (
                   <option key={category} value={category}>
                     {category}
                   </option>
@@ -294,6 +244,13 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
               </select>
             </div>
           </div>
+
+          <Input
+            label="商品圖片網址"
+            value={form.imageUrl}
+            onChange={set('imageUrl')}
+            placeholder="https://..."
+          />
         </div>
         
         {error && (
@@ -307,7 +264,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
           <Button
             variant="brand"
             onClick={finish}
-            disabled={saving || uploading || !form.name || !form.price || form.stock === ''}
+            disabled={saving || !form.name || !form.price || form.stock === ''}
           >
             {saving
               ? '儲存中...'

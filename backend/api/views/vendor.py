@@ -1,17 +1,14 @@
 import random, string
-import uuid
 from django.contrib.auth.hashers import make_password, check_password
-from rest_framework.decorators import api_view, permission_classes, parser_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from django.utils import timezone
 from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
-from django.core.files.storage import default_storage
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
@@ -2535,45 +2532,3 @@ def vendor_chatroom_mark_read(request):
         "room_id": chatroom.room_id,
         "updated_count": updated_count
     }, status=status.HTTP_200_OK)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-@parser_classes([MultiPartParser, FormParser])
-def vendor_upload_product_image(request):
-    """
-    廠商上傳商品圖片，回傳可直接存進 image_url 的公開網址
-    URL: /vendor/products/upload-image
-    """
-    file_obj = request.FILES.get("image")
-
-    if not file_obj:
-        return Response({
-            "success": False,
-            "err": {"image": "請選擇要上傳的圖片"}
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    if file_obj.content_type not in allowed_types:
-        return Response({
-            "success": False,
-            "err": {"image": "檔案格式不支援，請上傳 JPG / PNG / WEBP / GIF"}
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    max_size = 5 * 1024 * 1024  # 5MB
-    if file_obj.size > max_size:
-        return Response({
-            "success": False,
-            "err": {"image": "圖片檔案不能超過 5MB"}
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    ext = file_obj.name.split(".")[-1]
-    filename = f"products/{uuid.uuid4()}.{ext}"
-
-    saved_path = default_storage.save(filename, file_obj)
-    image_url = default_storage.url(saved_path)
-
-    return Response({
-        "success": True,
-        "image_url": image_url
-    }, status=status.HTTP_201_CREATED)
