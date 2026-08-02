@@ -60,16 +60,6 @@ function Input({ label, ...props }) {
 
 function Thumb({ emoji, size = 'md' }) {
   const s = { sm: 'w-11 h-11 text-xl rounded-lg', md: 'w-14 h-14 text-3xl rounded-xl', lg: 'w-20 h-20 text-4xl rounded-2xl' }[size]
-  const isImageUrl = typeof emoji === 'string' && emoji.startsWith('http')
-
-  if (isImageUrl) {
-    return (
-      <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] overflow-hidden shrink-0', s)}>
-        <img src={emoji} alt="商品圖片" className="w-full h-full object-cover" />
-      </div>
-    )
-  }
-
   return <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] flex items-center justify-center shrink-0', s)}>{emoji}</div>
 }
 
