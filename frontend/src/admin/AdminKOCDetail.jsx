@@ -6,13 +6,14 @@ import {
 } from 'lucide-react';
 import { getKOCList, getKOCDetail, updateKOCMissionStage } from '../api/platform';
 
-const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '已結案' };
-const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'completed' };
+const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
+const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
 
 const STAGE_OPTIONS = [
   { value: 'writing', label: '撰寫文案' },
   { value: 'reviewing', label: '文案審核中' },
   { value: 'publishing', label: '待發佈' },
+  { value: 'promoting', label: '推廣中' },
   { value: 'completed', label: '已結案' },
 ];
 

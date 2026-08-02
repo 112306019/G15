@@ -158,6 +158,6 @@ class PlatformKOCDetailSerializer(serializers.Serializer):
 class KOCMissionStageUpdateSerializer(serializers.Serializer):
     KOCMisson_id = serializers.IntegerField(required=True)
     Stage = serializers.ChoiceField(
-        choices=['writing', 'reviewing', 'publishing', 'completed'],
+        choices=['writing', 'reviewing', 'publishing', 'promoting', 'completed'],
         required=True
     )

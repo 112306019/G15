@@ -32,6 +32,13 @@ export default function FavoritesPage({ onNavigate }) {
             name: item.product_name || `商品 ${item.Product_id}`,
             price: `NTD$ ${item.price || ""}`,
             gradient: GRADIENTS[i % GRADIENTS.length],
+            // 商品詳情頁需要的是原始商品欄位格式（Product_id / Product_name / price），
+            // 跟這個畫面自己顯示用的格式不一樣，點進商品詳情時要傳這個而不是整個 item
+            raw: {
+              Product_id: item.Product_id,
+              Product_name: item.product_name,
+              price: item.price,
+            },
           })));
         }
       } catch (err) {
@@ -153,7 +160,7 @@ export default function FavoritesPage({ onNavigate }) {
 
               {/* 商品圖片 */}
               <div
-                onClick={() => onNavigate?.('product_detail', product)}
+                onClick={() => onNavigate?.('product_detail', product.raw)}
                 className="relative flex aspect-square w-full items-center justify-center rounded-2xl overflow-hidden cursor-pointer"
                 style={{ background: product.gradient }}
               >
@@ -166,7 +173,7 @@ export default function FavoritesPage({ onNavigate }) {
               <div className="flex-1 flex flex-col px-1">
                 <div
                   className="text-sm font-bold text-[#1A1A18] mb-1 line-clamp-2 cursor-pointer hover:text-[#C8522A] transition-colors"
-                  onClick={() => onNavigate?.('product_detail', product)}
+                  onClick={() => onNavigate?.('product_detail', product.raw)}
                 >
                   {product.name}
                 </div>

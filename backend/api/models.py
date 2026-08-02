@@ -461,6 +461,9 @@ class Wishlist(models.Model):
 
     class Meta:
         db_table = 'Wishlist'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'product'], name='unique_wishlist_user_product')
+        ]
 
     def __str__(self):
         return f"Wishlist {self.wishlist_id}"
