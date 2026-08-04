@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -19,7 +20,7 @@ export default function AdminConsumerDetail() {
       try {
         // 拉使用者資料
         const userRes = await fetch(
-          `http://127.0.0.1:8000/api/platform/consumers?User_id=${id}`,
+          `${API_BASE_URL}/api/platform/consumers?User_id=${id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const userData = await userRes.json();
@@ -39,7 +40,7 @@ export default function AdminConsumerDetail() {
 
         // 拉訂單資料
         const orderRes = await fetch(
-          `http://127.0.0.1:8000/api/platform/consumer/orders?User_id=${id}`,
+          `${API_BASE_URL}/api/platform/consumer/orders?User_id=${id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const orderData = await orderRes.json();

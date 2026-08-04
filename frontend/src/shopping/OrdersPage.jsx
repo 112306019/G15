@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
 
 function IconClock(props) {
@@ -195,7 +196,7 @@ export default function OrdersPage({
     const fetchOrders = async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/consumer/order/view?User_id=${userId}`
+          `${API_BASE_URL}/api/consumer/order/view?User_id=${userId}`
         );
         const data = await res.json();
         if (Array.isArray(data)) {

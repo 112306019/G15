@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useRef, useEffect } from "react";
 
 function SearchIcon() {
@@ -103,7 +104,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/consumer/products");
+        const res = await fetch(`${API_BASE_URL}/api/consumer/products`);
         const data = await res.json();
         if (Array.isArray(data)) {
           setProducts(data.map((p, i) => ({
@@ -148,7 +149,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
     const token = localStorage.getItem("token");
 
     try {
-      const cartRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/create", {
+      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -159,7 +160,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
       const cartData = await cartRes.json();
       const cartId = cartData.Cart_id;
 
-      const addRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/item/add", {
+      const addRes = await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

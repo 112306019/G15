@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import { API_BASE_URL } from '../config';
+import React, { useEffect, useState, useRef } from 'react'
 import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, ShoppingCart, TrendingUp, Archive } from 'lucide-react'
 import { productCategories } from './mock'
 import { formatCurrency, cn } from './lib/utils'
@@ -114,9 +115,37 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
   }
   
   const [form, setForm] = useState(emptyForm)
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setUploading(true);
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vendor/product/upload-image`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      setForm(prev => ({ ...prev, imageUrl: data.image_url, thumbnail: data.image_url }));
+    } else {
+      alert(data.err || "上傳失敗");
+    }
+  } catch (err) {
+    alert("上傳失敗，請確認後端是否正常運作");
+  } finally {
+    setUploading(false);
+  }
+};
 
   useEffect(() => {
     if (editingProduct) {
@@ -184,7 +213,20 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
         <div className="px-8 py-6 max-h-[60vh] overflow-y-auto space-y-5">
           <div className="flex items-center gap-5 p-5 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-2xl">
             <Thumb emoji={form.thumbnail} size="lg" />
-            <button className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all"><Upload size={14}/>上傳圖片</button>
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50"
+            >
+              <Upload size={14} />{uploading ? "上傳中..." : "上傳圖片"}
+            </button>
           </div>
           <Input
             label="商品名稱 *"

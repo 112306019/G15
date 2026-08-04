@@ -9,6 +9,7 @@ from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
+from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
@@ -2532,3 +2533,30 @@ def vendor_chatroom_mark_read(request):
         "room_id": chatroom.room_id,
         "updated_count": updated_count
     }, status=status.HTTP_200_OK)
+    
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_upload_image(request):
+    """
+    上傳商品圖片到 R2，回傳圖片網址
+    URL: /vendor/product/upload-image
+    """
+    file_obj = request.FILES.get('image')
+
+    if not file_obj:
+        return Response({
+            "success": False,
+            "err": "請提供圖片檔案（欄位名稱：image）"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        image_url = upload_image_to_r2(file_obj, file_obj.name)
+        return Response({
+            "success": True,
+            "image_url": image_url
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
