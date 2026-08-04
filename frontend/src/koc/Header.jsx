@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, ShoppingCart, User, Heart } from 'lucide-react';
+import { Star, ShoppingCart, User, Heart, MessageCircle } from 'lucide-react';
 
 // 🟢 接收 cartCount
 export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 }) {
@@ -18,7 +18,6 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 
     if (['home', 'task_detail', 'review', 'analysis', 'sales_data'].includes(tab)) return 'home';
     if (['earnings', 'earnings_detail', 'pending_detail'].includes(tab)) return 'earnings';
     if (['shop', 'product_detail', 'cart', 'checkout'].includes(tab)) return 'shop';
-    if (tab === 'apply') return 'apply';
     return '';
   };
 
@@ -74,6 +73,15 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 
             </span>
           )}
         </div>
+
+        {userRole === 'koc' && (
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+            onClick={() => onNavigate?.('chat')}
+          >
+            <MessageCircle size={24} className={activeTab === 'chat' ? 'text-black' : 'text-gray-400'} />
+          </div>
+        )}
 
         <div
           className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"

@@ -116,3 +116,15 @@ export const sendChatMessage = (data) => {
   return api.post('/koc/chat/sendMessage', data)
 
 }
+
+// 取得 KOC 的聊天室清單（依廠商分組）
+export const getKocChatrooms = (userId) => {
+  return api.get('/koc/chatroom/getlist', {
+    params: { user_id: userId }
+  })
+}
+
+// KOC 開啟聊天室後，將廠商訊息標記為已讀
+export const markKocChatroomRead = (data) => {
+  return api.post('/koc/chatroom/markRead', data)
+}

@@ -53,6 +53,7 @@ const missionStageLabels = {
   writing: '撰寫文案',
   reviewing: '文案審核中',
   publishing: '等待發布',
+  promoting: '推廣中',
   completed: '任務完成'
 }
 
@@ -134,6 +135,9 @@ function MissionStageBadge({
 
     publishing:
       'bg-[#F5F0E8] text-[#1A1A18]',
+
+    promoting:
+      'bg-[#FDF0ED] text-[#C8522A]',
 
     completed:
       'bg-green-50 text-green-700'

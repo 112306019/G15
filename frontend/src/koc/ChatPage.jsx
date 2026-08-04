@@ -16,21 +16,40 @@ import {
 } from 'lucide-react'
 
 import {
-  getVendorChatrooms,
-  getVendorChatMessages,
-  sendVendorChatMessage,
-  markVendorChatroomRead
-} from '../api/vendor'
+  getKocChatrooms,
+  getChatHistory,
+  sendChatMessage,
+  markKocChatroomRead
+} from '../api/koc'
 
-import { Avatar } from './components/ui'
-import { cn } from './lib/utils'
+
+function cn(...classes) {
+  return classes.filter(Boolean).join(' ')
+}
+
+const avatarCls = [
+  'bg-[#F5F0E8] text-[#1A1A18]',
+  'bg-[#FDF0ED] text-[#C8522A]',
+  'bg-[#E2DDD4] text-[#1A1A18]',
+  'bg-[#1A1A18] text-[#F5F0E8]',
+  'bg-[#B89B6A] text-white'
+]
+
+function Avatar({ name = '?', size = 'md' }) {
+  const idx = (name.charCodeAt(0) || 0) % avatarCls.length
+  const sz = size === 'sm' ? 'w-10 h-10 text-sm' : size === 'lg' ? 'w-16 h-16 text-xl' : 'w-12 h-12 text-base'
+  return (
+    <div className={cn('rounded-full flex items-center justify-center font-bold shrink-0 border border-[#E2DDD4]/50 shadow-sm', sz, avatarCls[idx])}>
+      {name.slice(0, 1)}
+    </div>
+  )
+}
 
 
 const stageLabels = {
-  pending: '等待開始',
   writing: '撰寫文案',
   reviewing: '文案審核中',
-  publishing: '等待發布',
+  publishing: '上傳作品',
   promoting: '推廣中',
   completed: '任務完成'
 }
@@ -90,27 +109,27 @@ function formatMessageDate(value) {
 }
 
 
-function groupRoomsByKoc(rooms) {
+function groupRoomsByVendor(rooms) {
   const map = {}
 
   rooms.forEach(room => {
-    const kocId =
-      room.kocId ||
+    const vendorId =
+      room.vendorId ||
       `unknown-${room.roomId}`
 
-    if (!map[kocId]) {
-      map[kocId] = {
-        kocId,
-        kocName:
-          room.kocName ||
-          room.kocId ||
-          '未命名 KOC',
+    if (!map[vendorId]) {
+      map[vendorId] = {
+        vendorId,
+        vendorName:
+          room.vendorName ||
+          room.vendorId ||
+          '未命名廠商',
 
         rooms: []
       }
     }
 
-    map[kocId].rooms.push(room)
+    map[vendorId].rooms.push(room)
   })
 
   return Object.values(map)
@@ -146,9 +165,9 @@ function groupRoomsByKoc(rooms) {
 }
 
 
-export default function Chat() {
-  const vendorId =
-    localStorage.getItem('vendor_id')
+export default function ChatPage() {
+  const userId =
+    localStorage.getItem('userId')
 
   const bottomRef = useRef(null)
 
@@ -156,8 +175,8 @@ export default function Chat() {
     useState([])
 
   const [
-    activeKocId,
-    setActiveKocId
+    activeVendorId,
+    setActiveVendorId
   ] = useState(null)
 
   const [
@@ -198,28 +217,28 @@ export default function Chat() {
   ] = useState('')
 
 
-  const groupedKocs =
+  const groupedVendors =
     useMemo(
-      () => groupRoomsByKoc(rooms),
+      () => groupRoomsByVendor(rooms),
       [rooms]
     )
 
 
-  const filteredKocs =
+  const filteredVendors =
     useMemo(() => {
       const keyword =
         search.trim().toLowerCase()
 
       if (!keyword) {
-        return groupedKocs
+        return groupedVendors
       }
 
-      return groupedKocs.filter(group => {
-        const matchesKoc =
-          group.kocId
-            .toLowerCase()
+      return groupedVendors.filter(group => {
+        const matchesVendor =
+          group.vendorId
+            ?.toLowerCase()
             .includes(keyword) ||
-          group.kocName
+          group.vendorName
             .toLowerCase()
             .includes(keyword)
 
@@ -230,15 +249,15 @@ export default function Chat() {
               .includes(keyword)
           )
 
-        return matchesKoc || matchesRoom
+        return matchesVendor || matchesRoom
       })
-    }, [groupedKocs, search])
+    }, [groupedVendors, search])
 
 
   const activeGroup =
-    groupedKocs.find(
+    groupedVendors.find(
       group =>
-        group.kocId === activeKocId
+        group.vendorId === activeVendorId
     ) || null
 
 
@@ -266,13 +285,15 @@ export default function Chat() {
 
   useEffect(() => {
     loadChatrooms()
-  }, [vendorId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
 
   useEffect(() => {
     if (!activeRoomId) return
 
     loadMessages(activeRoomId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoomId])
 
 
@@ -284,8 +305,8 @@ export default function Chat() {
 
 
   async function loadChatrooms() {
-    if (!vendorId) {
-      setError('尚未登入廠商帳號')
+    if (!userId) {
+      setError('尚未登入 KOC 帳號')
       setRoomLoading(false)
       return
     }
@@ -295,8 +316,8 @@ export default function Chat() {
       setError('')
 
       const response =
-        await getVendorChatrooms(
-          vendorId
+        await getKocChatrooms(
+          userId
         )
 
       if (
@@ -319,13 +340,13 @@ export default function Chat() {
           kocMissionId:
             room.kocmission_id,
 
-          kocId:
-            room.koc_id || '',
+          vendorId:
+            room.vendor_id || '',
 
-          kocName:
-            room.koc_name ||
-            room.koc_id ||
-            '未命名 KOC',
+          vendorName:
+            room.vendor_name ||
+            room.vendor_id ||
+            '未命名廠商',
 
           campaignId:
             room.campaign_id || '',
@@ -372,8 +393,8 @@ export default function Chat() {
         const firstRoom =
           mappedRooms[0]
 
-        setActiveKocId(
-          firstRoom.kocId
+        setActiveVendorId(
+          firstRoom.vendorId
         )
 
         setActiveRoomId(
@@ -382,7 +403,7 @@ export default function Chat() {
       }
 
       if (mappedRooms.length === 0) {
-        setActiveKocId(null)
+        setActiveVendorId(null)
         setActiveRoomId(null)
       }
     } catch (requestError) {
@@ -409,15 +430,14 @@ export default function Chat() {
 
 
   async function loadMessages(roomId) {
-    if (!vendorId || !roomId) return
+    if (!roomId) return
 
     try {
       setMessageLoading(true)
       setMessageError('')
 
       const response =
-        await getVendorChatMessages(
-          vendorId,
+        await getChatHistory(
           roomId
         )
 
@@ -438,8 +458,7 @@ export default function Chat() {
           messageId:
             message.message_id,
 
-          roomId:
-            message.room_id,
+          roomId,
 
           senderRole:
             message.sender_role,
@@ -461,45 +480,6 @@ export default function Chat() {
         ...previous,
         [roomId]: mappedMessages
       }))
-
-      const chatroom =
-        response.data?.chatroom
-
-      if (chatroom) {
-        setRooms(previous =>
-          previous.map(room =>
-            room.roomId === roomId
-              ? {
-                  ...room,
-
-                  kocMissionId:
-                    chatroom.kocmission_id ??
-                    room.kocMissionId,
-
-                  kocId:
-                    chatroom.koc_id ||
-                    room.kocId,
-
-                  kocName:
-                    chatroom.koc_name ||
-                    room.kocName,
-
-                  campaignId:
-                    chatroom.campaign_id ||
-                    room.campaignId,
-
-                  campaignName:
-                    chatroom.campaign_name ||
-                    room.campaignName,
-
-                  missionStage:
-                    chatroom.mission_stage ||
-                    room.missionStage
-                }
-              : room
-          )
-        )
-      }
 
       await markRoomRead(roomId)
     } catch (requestError) {
@@ -527,8 +507,8 @@ export default function Chat() {
 
   async function markRoomRead(roomId) {
     try {
-      await markVendorChatroomRead({
-        vendor_id: vendorId,
+      await markKocChatroomRead({
+        user_id: userId,
         room_id: roomId
       })
 
@@ -551,11 +531,11 @@ export default function Chat() {
   }
 
 
-  function selectKoc(kocId) {
+  function selectVendor(vendorId) {
     const group =
-      groupedKocs.find(
+      groupedVendors.find(
         item =>
-          item.kocId === kocId
+          item.vendorId === vendorId
       )
 
     if (!group) return
@@ -563,7 +543,7 @@ export default function Chat() {
     const firstRoom =
       group.rooms[0]
 
-    setActiveKocId(kocId)
+    setActiveVendorId(vendorId)
 
     if (firstRoom) {
       setActiveRoomId(
@@ -574,7 +554,7 @@ export default function Chat() {
 
 
   function selectRoom(room) {
-    setActiveKocId(room.kocId)
+    setActiveVendorId(room.vendorId)
     setActiveRoomId(room.roomId)
   }
 
@@ -596,9 +576,10 @@ export default function Chat() {
       setMessageError('')
 
       const response =
-        await sendVendorChatMessage({
-          vendor_id: vendorId,
+        await sendChatMessage({
           room_id: activeRoomId,
+          sender_role: 'koc',
+          sender_id: userId,
           content
         })
 
@@ -625,7 +606,7 @@ export default function Chat() {
           message.message_id,
 
         roomId:
-          message.room_id,
+          activeRoomId,
 
         senderRole:
           message.sender_role,
@@ -712,7 +693,7 @@ export default function Chat() {
   return (
     <div className="flex h-[calc(100vh-65px)] bg-white">
 
-      {/* 左側：KOC 聊天室清單 */}
+      {/* 左側：廠商聊天室清單 */}
       <div className="w-72 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0">
         <div className="px-4 py-4 border-b border-[#E2DDD4]">
           <div className="flex items-center justify-between mb-3">
@@ -759,7 +740,7 @@ export default function Chat() {
                   event.target.value
                 )
               }
-              placeholder="搜尋 KOC 或活動…"
+              placeholder="搜尋廠商或活動…"
               className="bg-transparent text-xs text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
             />
           </div>
@@ -789,7 +770,7 @@ export default function Chat() {
                 {error}
               </div>
             </div>
-          ) : filteredKocs.length === 0 ? (
+          ) : filteredVendors.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <MessageCircle
                 size={26}
@@ -801,10 +782,10 @@ export default function Chat() {
               </div>
             </div>
           ) : (
-            filteredKocs.map(group => {
+            filteredVendors.map(group => {
               const isActive =
-                group.kocId ===
-                activeKocId
+                group.vendorId ===
+                activeVendorId
 
               const unreadCount =
                 group.rooms.reduce(
@@ -820,10 +801,10 @@ export default function Chat() {
               return (
                 <button
                   type="button"
-                  key={group.kocId}
+                  key={group.vendorId}
                   onClick={() =>
-                    selectKoc(
-                      group.kocId
+                    selectVendor(
+                      group.vendorId
                     )
                   }
                   className={cn(
@@ -839,14 +820,14 @@ export default function Chat() {
                   )}
                 >
                   <Avatar
-                    name={group.kocName}
+                    name={group.vendorName}
                     size="md"
                   />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-[#1A1A18] truncate">
-                        {group.kocName}
+                        {group.vendorName}
                       </span>
 
                       <span className="text-[10px] text-[#8C8880] shrink-0">
@@ -864,7 +845,7 @@ export default function Chat() {
                     </div>
 
                     <div className="text-[9px] font-mono text-[#8C8880] mt-1">
-                      {group.kocId}
+                      {group.vendorId}
                     </div>
                   </div>
 
@@ -896,17 +877,17 @@ export default function Chat() {
             </div>
 
             <div className="text-xs mt-2">
-              選擇左側 KOC 開始溝通
+              選擇左側廠商開始溝通
             </div>
           </div>
         ) : (
           <>
-            {/* KOC 資訊 */}
+            {/* 廠商資訊 */}
             <div className="bg-white border-b border-[#E2DDD4] px-6 py-4 flex items-center gap-4 shrink-0">
               <Avatar
                 name={
-                  activeRoom.kocName ||
-                  activeGroup?.kocName ||
+                  activeRoom.vendorName ||
+                  activeGroup?.vendorName ||
                   '?'
                 }
                 size="lg"
@@ -914,11 +895,11 @@ export default function Chat() {
 
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-[#1A1A18]">
-                  {activeRoom.kocName}
+                  {activeRoom.vendorName}
                 </div>
 
                 <div className="text-xs text-[#8C8880] mt-1">
-                  {activeRoom.kocId}
+                  {activeRoom.vendorId}
                   {' · '}
                   {activeRoom.campaignName}
                 </div>
@@ -1041,16 +1022,16 @@ export default function Chat() {
                 </div>
               ) : messages.length > 0 ? (
                 messages.map(message => {
-                  const isVendor =
+                  const isKoc =
                     message.senderRole ===
-                    'vendor'
+                    'koc'
 
                   return (
                     <div
                       key={message.messageId}
                       className={cn(
                         'flex',
-                        isVendor
+                        isKoc
                           ? 'justify-end'
                           : 'justify-start'
                       )}
@@ -1067,7 +1048,7 @@ export default function Chat() {
                             whitespace-pre-wrap
                             break-words
                           `,
-                          isVendor
+                          isKoc
                             ? 'bg-[#1A1A18] text-white rounded-br-sm'
                             : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
                         )}
@@ -1077,7 +1058,7 @@ export default function Chat() {
                         <div
                           className={cn(
                             'text-[10px] mt-1',
-                            isVendor
+                            isKoc
                               ? 'text-white/50 text-right'
                               : 'text-[#8C8880]'
                           )}
@@ -1102,7 +1083,7 @@ export default function Chat() {
                   </p>
 
                   <p className="text-xs mt-2">
-                    開始與 KOC 溝通吧
+                    開始與廠商溝通吧
                   </p>
                 </div>
               )}

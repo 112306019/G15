@@ -31,7 +31,8 @@ from .constants import (
     SUBMISSION_STATUS_CODE_MAP,
     STAGE_ALLOWED_SUBMISSION_TYPE,
     EARNINGS_STATUS_CHOICES_MAP,
-    EARNINGS_STATUS_CODE_MAP
+    EARNINGS_STATUS_CODE_MAP,
+    sync_expired_promoting_missions
 )
 # 獲取koc個人資料
 @api_view(['GET'])
@@ -457,8 +458,8 @@ def mission_submit(request):
         except CouponNew.DoesNotExist:
             # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
             pass
-        # 連結提交後任務即完成本階段任務，直接結案
-        mission.stage = 'completed'
+        # 連結提交後進入推廣中，等活動截止日到期才會自動轉為已結案
+        mission.stage = 'promoting'
         mission.save()
 
     return Response({
@@ -618,6 +619,8 @@ def get_application_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def mission_get_detail(request):
+    sync_expired_promoting_missions()
+
     mission_id = request.query_params.get('KOCMission_id')
 
     if not mission_id:
@@ -650,6 +653,13 @@ def mission_get_detail(request):
     # 查詢這個任務對應的優惠碼
     coupon = CouponNew.objects.filter(kocmission=mission).first()
 
+    earnings_total = 0
+    if mission.stage in ('promoting', 'completed'):
+        earnings_total = Earnings.objects.filter(
+            kocmission=mission,
+            status__in=['pending', 'withdrawable', 'transferred']
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
     return Response({
         "success": True,
         "err": "",
@@ -663,12 +673,15 @@ def mission_get_detail(request):
         "draft_content": draft.text_content if draft else None,  # 新增這個
         "promotion_code": coupon.promotion_code if coupon else None,
         "coupon_status": coupon.status if coupon else None,
+        "earnings_total": earnings_total,
     }, status=http_status.HTTP_200_OK)
 
 #獲取任務完整狀態
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_mission_list(request):
+    sync_expired_promoting_missions()
+
     user_id = request.query_params.get('User_id')
     stage_param = request.query_params.get('stage')
 
@@ -700,13 +713,6 @@ def get_mission_list(request):
             }, status=http_status.HTTP_400_BAD_REQUEST)
         missions = missions.filter(stage=db_stage)
 
-    # 已結案的任務，只顯示活動截止日還沒到期的（到期的不再顯示）
-    today = timezone.localdate()
-    missions = missions.exclude(
-        stage='completed',
-        application__campaign__end_date__date__lt=today
-    )
-
     missions = list(missions)
 
     # 🔥 批次查出所有任務對應活動的商品圖片，避免迴圈內逐一查詢
@@ -719,11 +725,14 @@ def get_mission_list(request):
         if cp.campaign_id not in image_map and cp.product:
             image_map[cp.campaign_id] = cp.product.image_url
 
-    # 🔥 批次查出所有已結案任務的分潤總額，避免迴圈內逐一查詢
-    completed_mission_ids = [mission.kocmission_id for mission in missions if mission.stage == 'completed']
+    # 🔥 批次查出所有推廣中／已結案任務的分潤總額，避免迴圈內逐一查詢
+    earning_visible_mission_ids = [
+        mission.kocmission_id for mission in missions
+        if mission.stage in ('promoting', 'completed')
+    ]
     earnings_totals = (
         Earnings.objects.filter(
-            kocmission_id__in=completed_mission_ids,
+            kocmission_id__in=earning_visible_mission_ids,
             status__in=['pending','withdrawable', 'transferred']
         )
         .values('kocmission_id')
@@ -743,7 +752,7 @@ def get_mission_list(request):
             "stage": STAGE_CODE_MAP[mission.stage],
             "vendor_name": campaign.vendor.company_name,
             "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
-            "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage == 'completed' else 0,
+            "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage in ('promoting', 'completed') else 0,
         })
 
     return Response({
@@ -756,6 +765,8 @@ def get_mission_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_mission_stage_counts(request):
+    sync_expired_promoting_missions()
+
     user_id = request.query_params.get('User_id')
 
     if not user_id:
@@ -804,6 +815,7 @@ def get_mission_stage_counts(request):
         "writing": mission_result['writing'],
         "reviewing": mission_result['reviewing'],
         "publishing": mission_result['publishing'],
+        "promoting": mission_result['promoting'],
         "completed": mission_result['completed'],
     }, status=http_status.HTTP_200_OK)
 
@@ -1011,6 +1023,7 @@ def get_revenue_history(request):
     for earning in earnings:
         # date: 目前先回 null，等轉帳 API 做好後再補上實際匯款日期
         result.append({
+            "earnings_no": str(earning.earnings_id).zfill(8),
             "date": None,
             "amount": earning.amount,
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
@@ -1396,7 +1409,7 @@ def get_chat_history(request):
         "sender_role": m.sender_role,
         "sender_id": m.sender_id,
         "content": m.content,
-        "created_at": m.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        "created_at": m.created_at,
         "is_read": m.is_read,
     } for m in messages]
 
@@ -1451,7 +1464,140 @@ def send_chat_message(request):
             "sender_role": message.sender_role,
             "sender_id": message.sender_id,
             "content": message.content,
-            "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "created_at": message.created_at,
             "is_read": message.is_read,
         }
+    }, status=http_status.HTTP_200_OK)
+
+
+# 取得 KOC 的聊天室清單（依廠商分組，畫面用法比照廠商端 vendor_chatroom_getlist）
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def koc_chatroom_getlist(request):
+    sync_expired_promoting_missions()
+
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    chatrooms = (
+        ChatRoom.objects
+        .filter(kocmission__koc__user_id=user_id)
+        .select_related(
+            "kocmission",
+            "kocmission__application__campaign",
+            "kocmission__application__campaign__vendor",
+        )
+        .prefetch_related("messages")
+        .order_by("-created_at")
+    )
+
+    chatroom_list = []
+
+    for chatroom in chatrooms:
+        mission = chatroom.kocmission
+        campaign = mission.application.campaign
+        vendor = campaign.vendor
+
+        last_message = (
+            chatroom.messages
+            .order_by("-created_at")
+            .first()
+        )
+
+        unread_count = chatroom.messages.filter(
+            sender_role="vendor",
+            is_read=False
+        ).count()
+
+        chatroom_list.append({
+            "room_id": chatroom.room_id,
+            "kocmission_id": mission.kocmission_id,
+            "vendor_id": vendor.vendor_id if vendor else None,
+            "vendor_name": vendor.company_name if vendor else "",
+            "campaign_id": str(campaign.campaign_id),
+            "campaign_name": campaign.name,
+            "mission_stage": mission.stage,
+            "last_message": (
+                last_message.content
+                if last_message
+                else ""
+            ),
+            "last_message_time": (
+                last_message.created_at
+                if last_message
+                else chatroom.created_at
+            ),
+            "last_sender_role": (
+                last_message.sender_role
+                if last_message
+                else None
+            ),
+            "unread_count": unread_count,
+            "created_at": chatroom.created_at,
+        })
+
+    chatroom_list.sort(
+        key=lambda room: room["last_message_time"],
+        reverse=True
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "chatrooms": chatroom_list
+    }, status=http_status.HTTP_200_OK)
+
+
+# KOC 開啟聊天室後，將廠商訊息標記為已讀
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def koc_chatroom_mark_read(request):
+    user_id = request.data.get('user_id')
+    room_id = request.data.get('room_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    if not room_id:
+        return Response({
+            "success": False,
+            "err": "room_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        chatroom = (
+            ChatRoom.objects
+            .select_related("kocmission__koc")
+            .get(room_id=room_id)
+        )
+    except ChatRoom.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的聊天室"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if str(chatroom.kocmission.koc.user_id) != str(user_id):
+        return Response({
+            "success": False,
+            "err": "此聊天室不屬於這位 KOC"
+        }, status=http_status.HTTP_403_FORBIDDEN)
+
+    updated_count = chatroom.messages.filter(
+        sender_role="vendor",
+        is_read=False
+    ).update(is_read=True)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "room_id": chatroom.room_id,
+        "updated_count": updated_count
     }, status=http_status.HTTP_200_OK)

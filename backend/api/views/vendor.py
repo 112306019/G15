@@ -11,7 +11,7 @@ from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
-from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE
+from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
 from api.vendor_serializers import (
     VendorRegisterSerializer,
@@ -1365,6 +1365,8 @@ def vendor_application_review(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_mission_get_submission_detail(request):
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
     submission_id = request.GET.get("submission_id")
     kocmission_id = request.GET.get("kocmission_id")
@@ -1532,12 +1534,10 @@ def vendor_mission_review_submission(request):
         if submission.submission_type == "text":
             # 文案審核通過：進入待發佈
             mission.stage = "publishing"
-
-        elif submission.submission_type == "link":
-            # 發佈連結審核通過：任務完成
-            mission.stage = "completed"
-
-        mission.save(update_fields=["stage"])
+            mission.save(update_fields=["stage"])
+        # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
+        # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
+        # "reviewing"，會被上面的檢查擋掉。
 
     elif review_result == "revising":
         # 審核退回：依 submission 的類型回到對應的撰寫階段
@@ -1798,6 +1798,8 @@ def vendor_order_update_shipping(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_coupon_get_usage_list(request):
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
     campaign_id = request.GET.get("campaign_id")
     status_filter = request.GET.get("status")
@@ -2229,6 +2231,8 @@ def vendor_chatroom_getlist(request):
     取得廠商聊天室清單
     URL: /vendor/chatroom/getlist
     """
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
 
     if not vendor_id:
@@ -2321,6 +2325,8 @@ def vendor_chatroom_get_messages(request):
     取得聊天室訊息
     URL: /vendor/chatroom/getMessages
     """
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
     room_id = request.GET.get("room_id")
 

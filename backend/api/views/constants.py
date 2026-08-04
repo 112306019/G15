@@ -11,8 +11,25 @@ STAGE_CODE_MAP = {
     'writing': 0,
     'reviewing': 1,
     'publishing': 2,
-    'completed': 3,
+    'promoting': 3,
+    'completed': 4,
 }
+
+
+def sync_expired_promoting_missions():
+    """
+    Lazy-write：把 stage='promoting' 且所屬 Campaign.end_date 已過期的任務，
+    直接寫回 DB 轉成 stage='completed'。冪等、無參數，可在任何會讀取/顯示
+    mission.stage 的 view 最前面呼叫，重複呼叫是安全的（update 影響 0 筆時是 no-op）。
+    """
+    from django.utils import timezone
+    from api.models import KOCMissionNew
+
+    today = timezone.localdate()
+    return KOCMissionNew.objects.filter(
+        stage='promoting',
+        application__campaign__end_date__date__lt=today
+    ).update(stage='completed')
 
 # Submissions.status: 資料庫字串 <-> API 對外 integer
 SUBMISSION_STATUS_CODE_MAP = {
