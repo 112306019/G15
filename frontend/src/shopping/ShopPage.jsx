@@ -44,17 +44,21 @@ function ShoppingBagIcon() {
   );
 }
 
-function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", onAdd, onClick }) {
+function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
   return (
     <div className="group flex flex-col gap-3 transition-all hover:-translate-y-1 relative">
       <div
         onClick={onClick}
         className="relative flex aspect-square w-full cursor-pointer items-center justify-center rounded-2xl overflow-hidden shadow-sm"
-        style={{ background: gradient }}
+        style={imageUrl ? undefined : { background: gradient }}
       >
-        <svg className="h-10 w-10 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-        </svg>
+        {imageUrl ? (
+          <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          <svg className="h-10 w-10 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+          </svg>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onAdd(); }}
           className="absolute bottom-4 right-4 translate-y-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 bg-[#1A1A18] text-[#F5F0E8] p-2.5 rounded-full hover:bg-[#C8522A] shadow-md"
@@ -359,6 +363,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
+                      imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
                     />
@@ -381,6 +386,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={`NTD$ ${p.discounted_price || p.price}`}
                       gradient={p.gradient}
+                      imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
                       onClick={() => onNavigate?.("product_detail", p)}
                     />
@@ -419,6 +425,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     name={p.Product_name}
                     price={`NTD$ ${p.discounted_price || p.price}`}
                     gradient={p.gradient}
+                      imageUrl={p.image_url}
                     onAdd={() => handleAdd(p.Product_id)}
                     onClick={() => onNavigate?.("product_detail", p)}
                   />
