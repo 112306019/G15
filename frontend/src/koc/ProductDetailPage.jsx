@@ -154,6 +154,7 @@ export default function ProductDetailPage({
         price: `NTD$ ${p.discounted_price || p.price}`,
         description: p.description || "",
         gradient: productDetail.gradient,
+        imageUrl: p.image_url || "",
       });
       setQuantity(1);
       setIsLoading(false);
