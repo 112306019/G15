@@ -243,7 +243,32 @@ function MainSystem() {
         <ProductDetailPage
           onBack={() => handleNavigate('shop')}
           onGoCart={() => handleNavigate('cart')}
-          onBuyNow={() => handleNavigate('checkout')}
+          onBuyNow={(item) => {
+            const price = Number(item.price) || 0;
+            const qty = Number(item.qty) || 1;
+            const subtotal = price * qty;
+
+            const checkoutItem = {
+              productId: item.productId,
+              name: item.name,
+              price,
+              qty,
+              imageUrl: item.imageUrl || "",
+              buyNow: true,
+            };
+
+            const summary = {
+              subtotal,
+              couponDiscount: 0,
+              pointsDiscount: 0,
+              grandTotal: subtotal,
+              items: [checkoutItem],
+            };
+
+            setCartItems([checkoutItem]);
+            setCheckoutSummary(summary);
+            setView('checkout');
+          }}
           onNavigate={handleNavigate}
           userRole={userRole}
           onAddToCart={() => syncCartCount()}

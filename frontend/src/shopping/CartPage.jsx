@@ -37,7 +37,10 @@ function BackIcon() {
   );
 }
 
-const fmt = (n) => `$${Number(n).toFixed(2)}`;
+const fmt = (n) => {
+  const value = Number(n);
+  return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+};
 
 const GRADIENTS = [
   "from-[#C8C4BC] to-[#A8A49C]",
