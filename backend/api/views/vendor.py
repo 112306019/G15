@@ -1076,6 +1076,11 @@ def vendor_application_getlist(request):
             ),
             "status": application.status,
             "detail_status": application.status,
+            "created_at": (
+                application.created_at.isoformat()
+                if application.created_at
+                else None
+            ),
             "order_id": (
                 str(application.order_id)
                 if application.order_id
