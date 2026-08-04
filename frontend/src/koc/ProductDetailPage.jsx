@@ -60,6 +60,7 @@ export default function ProductDetailPage({
         vendorName: product.Vendor_id || "",
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
+        imageUrl: product.image_url || "",
       });
     }
   }, [product]);
@@ -203,8 +204,12 @@ export default function ProductDetailPage({
         </button>
         <div className={`flex flex-col md:flex-row gap-12 lg:gap-16 mb-16 transition-opacity duration-300 ${isLoading ? 'opacity-30' : 'opacity-100'}`}>
 
-          <div className="w-full md:w-[45%] aspect-square rounded-3xl flex items-center justify-center shadow-sm relative overflow-hidden transition-all duration-500" style={{ background: productDetail.gradient }}>
-            <svg className="h-24 w-24 text-black/10" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" /></svg>
+          <div className="w-full md:w-[45%] aspect-square rounded-3xl flex items-center justify-center shadow-sm relative overflow-hidden transition-all duration-500" style={productDetail.imageUrl ? undefined : { background: productDetail.gradient }}>
+            {productDetail.imageUrl ? (
+              <img src={productDetail.imageUrl} alt={productDetail.name} className="w-full h-full object-cover" />
+            ) : (
+              <svg className="h-24 w-24 text-black/10" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" /></svg>
+            )}
           </div>
 
           <div className="w-full md:w-[55%] flex flex-col justify-center">
@@ -284,8 +289,12 @@ export default function ProductDetailPage({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {relatedProducts.map((p) => (
               <div key={p.id} onClick={() => handleRecommendClick(p.raw)} className="group cursor-pointer overflow-hidden flex flex-col gap-3">
-                <div className="relative flex aspect-square w-full items-center justify-center rounded-2xl overflow-hidden" style={{ background: p.gradient }}>
-                  <svg className="h-8 w-8 text-black/10" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" /></svg>
+                <div className="relative flex aspect-square w-full items-center justify-center rounded-2xl overflow-hidden" style={p.raw?.image_url ? undefined : { background: p.gradient }}>
+                  {p.raw?.image_url ? (
+                    <img src={p.raw.image_url} alt={p.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="h-8 w-8 text-black/10" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" /></svg>
+                  )}
                 </div>
                 <div className="px-1">
                   <div className="text-sm font-medium text-[#1A1A18] mb-1 line-clamp-2">{p.name}</div>
