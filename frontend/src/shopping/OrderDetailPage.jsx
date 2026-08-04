@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, FileText, Box, Truck, Heart, Smartphone } from "lucide-react";
 
@@ -16,7 +17,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
     const fetchOrder = async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/consumer/order/view?Order_id=${orderId}`,
+          `${API_BASE_URL}/api/consumer/order/view?Order_id=${orderId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await res.json();
@@ -288,7 +289,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
           <button
             onClick={async () => {
               try {
-                await fetch("http://127.0.0.1:8000/api/consumer/order/update", {
+                await fetch(`${API_BASE_URL}/api/consumer/order/update`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({

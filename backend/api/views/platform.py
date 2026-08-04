@@ -490,8 +490,10 @@ def koc_get_pending_list(request):
             "name": koc.user.name,
             "email": koc.user.email,
             "ig_account": koc.ig_account,
+            "ig_url": koc.ig_url,
             "fb_account": koc.fb_account,
             "threads_account": koc.threads_account,
+            "threads_url": koc.threads_url,
             "user_role": ROLE_CODE_MAP.get(koc.user.role, -1), 
             "applied_at": koc.user.created_at.strftime('%Y-%m-%d %H:%M') if koc.user.created_at else None,
         })

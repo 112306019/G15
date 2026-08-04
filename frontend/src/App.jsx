@@ -1,3 +1,4 @@
+import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 
@@ -151,7 +152,7 @@ function MainSystem() {
     const userId = localStorage.getItem("userId");
     if (!userId) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/consumer/cart/view?User_id=${userId}`);
+      const res = await fetch(`${API_BASE_URL}/api/consumer/cart/view?User_id=${userId}`);
       const data = await res.json();
       if (data.items) {
         const uniqueProducts = new Set(data.items.map(item => item.Product_id));

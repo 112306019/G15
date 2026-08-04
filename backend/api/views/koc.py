@@ -66,6 +66,7 @@ def get_koc_profile(request):
         "phone": user.phone,
         "email": user.email,
         "koc_id": koc.koc_id if koc else None,
+        "approval_status": koc.approval_status if koc else None,
         "address": koc.address if koc else None,
         "bank_account": koc.bank_account if koc else None,
         "bank_number": koc.bank_number if koc else None,
@@ -1297,7 +1298,9 @@ def koc_apply(request):
             # 被拒絕過，允許重新申請
             existing_koc.fb_account = data.get('fb_account') or ''
             existing_koc.ig_account = data.get('ig_account') or ''
+            existing_koc.ig_url = data.get('ig_url') or ''
             existing_koc.threads_account = data.get('threads_account') or ''
+            existing_koc.threads_url = data.get('threads_url') or ''
             existing_koc.approval_status = 'pending'
             existing_koc.reject_reason = None
             existing_koc.save()
@@ -1314,7 +1317,9 @@ def koc_apply(request):
         user=user,
         fb_account=data.get('fb_account') or '',
         ig_account=data.get('ig_account') or '',
+        ig_url=data.get('ig_url') or '',
         threads_account=data.get('threads_account') or '',
+        threads_url=data.get('threads_url') or '',
         bank_number='',
         bank_account='',
         address=None,

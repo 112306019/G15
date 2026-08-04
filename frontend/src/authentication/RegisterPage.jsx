@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useMemo, useState } from "react";
 
 function ImageIcon() {
@@ -82,7 +83,7 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
         role: role,
       };
 
-      const res = await fetch("http://127.0.0.1:8000/api/user/signUp", {
+      const res = await fetch(`${API_BASE_URL}/api/user/signUp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
