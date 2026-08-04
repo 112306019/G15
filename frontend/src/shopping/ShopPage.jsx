@@ -1,6 +1,11 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useRef, useEffect } from "react";
 
+function formatNTD(amount) {
+  const value = Number(amount);
+  return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+}
+
 function SearchIcon() {
   return (
     <svg className="h-4 w-4 text-[#8C8880]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -361,7 +366,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     <ProductCard
                       key={p.product_id}
                       name={p.Product_name}
-                      price={`NTD$ ${p.discounted_price || p.price}`}
+                      price={formatNTD(p.discounted_price || p.price)}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -384,7 +389,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     <ProductCard
                       key={p.product_id}
                       name={p.Product_name}
-                      price={`NTD$ ${p.discounted_price || p.price}`}
+                      price={formatNTD(p.discounted_price || p.price)}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -423,7 +428,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   <ProductCard
                     key={p.product_id}
                     name={p.Product_name}
-                    price={`NTD$ ${p.discounted_price || p.price}`}
+                    price={formatNTD(p.discounted_price || p.price)}
                     gradient={p.gradient}
                       imageUrl={p.image_url}
                     onAdd={() => handleAdd(p.Product_id)}

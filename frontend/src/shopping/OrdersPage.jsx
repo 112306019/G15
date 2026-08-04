@@ -1,6 +1,11 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
 
+function formatNTD(amount) {
+  const value = Number(amount);
+  return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+}
+
 function IconClock(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
@@ -238,7 +243,7 @@ export default function OrdersPage({
     detail: {
       address: o.Address_id || "未填寫",
       payment: o.payment_status,
-      amount: `NTD$ ${o.total_amount}`,
+      amount: formatNTD(o.total_amount),
       shipping: o.shipping_status,
     },
   }));

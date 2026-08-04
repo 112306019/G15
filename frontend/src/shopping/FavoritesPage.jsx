@@ -31,7 +31,7 @@ export default function FavoritesPage({ onNavigate }) {
             wishlistId: item.Wishlist_id,
             productId: item.Product_id,
             name: item.product_name || `商品 ${item.Product_id}`,
-            price: `NTD$ ${item.price || ""}`,
+            price: `NT$${Number(item.price || 0).toLocaleString("zh-TW")}`,
             gradient: GRADIENTS[i % GRADIENTS.length],
             // 商品詳情頁需要的是原始商品欄位格式（Product_id / Product_name / price），
             // 跟這個畫面自己顯示用的格式不一樣，點進商品詳情時要傳這個而不是整個 item

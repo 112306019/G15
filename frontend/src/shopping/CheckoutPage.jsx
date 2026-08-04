@@ -74,18 +74,23 @@ function formatExpiry(raw) {
   return `${v.slice(0, 2)} / ${v.slice(2)}`;
 }
 
+function formatNTD(amount) {
+  const value = Number(amount);
+  return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+}
+
 export default function CheckoutPage({
   onPaid,
   onBack,
   onGoToLogin,
   cartItems = [],
   initialSummary = {
-    items: "$20 x 2",
+    items: "NT$20 × 2",
     itemsAmount: 40,
     shippingAmount: 0,
     couponDiscount: 0,
     pointsDiscount: 0,
-    currency: "USD",
+    currency: "TWD",
     total: 68.94,
   },
 }) {
@@ -115,6 +120,34 @@ export default function CheckoutPage({
   const [couponMsg, setCouponMsg] = useState({ text: "", ok: false, show: false });
   const [couponLoading, setCouponLoading] = useState(false);
 
+  const normalizedCartItems = useMemo(() => {
+    return (cartItems || []).map((item) => ({
+      ...item,
+      productId:
+        item.productId ??
+        item.Product_id ??
+        item.product_id ??
+        item.id,
+      name:
+        item.name ??
+        item.Product_name ??
+        item.product_name ??
+        "未命名商品",
+      price: Number(
+        item.price ??
+        item.unit_price ??
+        item.Unit_price ??
+        0
+      ),
+      qty: Number(
+        item.qty ??
+        item.quantity ??
+        item.Quantity ??
+        1
+      ),
+    }));
+  }, [cartItems]);
+
   // 跟後端 create_order 算法一致：整張商品小計(單價 x 數量)套用該商品自己的折扣規則，
   // 不是先折扣單價再乘數量
   const getItemDiscountedSubtotal = (item) => {
@@ -128,8 +161,8 @@ export default function CheckoutPage({
     return Math.max(0, baseSubtotal - rule.discount_value);
   };
 
-  const rawItemsTotal = cartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const itemsTotal = cartItems.reduce((sum, item) => sum + getItemDiscountedSubtotal(item), 0);
+  const rawItemsTotal = normalizedCartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const itemsTotal = normalizedCartItems.reduce((sum, item) => sum + getItemDiscountedSubtotal(item), 0);
   const couponDiscount = rawItemsTotal - itemsTotal;
   const grandTotal = itemsTotal + initialSummary.shippingAmount;
 
@@ -169,7 +202,7 @@ export default function CheckoutPage({
 
       if (res.ok) {
         // 找出購物車裡符合這個優惠碼的商品
-        const matchedItems = cartItems.filter(item =>
+        const matchedItems = normalizedCartItems.filter(item =>
           data.applicable_product_ids.includes(item.productId)
         );
 
@@ -217,7 +250,7 @@ export default function CheckoutPage({
     const token = localStorage.getItem("token");
 
     // cartItems 來自 CartPage.jsx 的 items 狀態，欄位是 { id, cartItemId, productId, price, qty }
-    const orderItems = cartItems.map((item) => ({
+    const orderItems = normalizedCartItems.map((item) => ({
       Product_id: item.productId ?? item.Product_id ?? item.product_id ?? item.id,
       Quantity: item.qty ?? item.quantity ?? item.Quantity ?? 1,
     }));
@@ -286,11 +319,14 @@ export default function CheckoutPage({
         }),
       });
 
-      for (const item of cartItems) {
+      for (const item of normalizedCartItems) {
+        const cartItemId = item.cartItemId ?? item.id;
+        if (!cartItemId || item.buyNow) continue;
+
         await fetch(`${API_BASE_URL}/api/consumer/cart/item/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ Cart_item_id: item.id }),
+          body: JSON.stringify({ Cart_item_id: cartItemId }),
         }).catch(() => { });
       }
 
@@ -541,7 +577,7 @@ export default function CheckoutPage({
             </div>
 
             <div className="text-[13px] text-[#8C8880]">
-              {(cartItems || []).map((item, idx) => {
+              {normalizedCartItems.map((item, idx) => {
                 const baseSubtotal = item.price * item.qty;
                 const discountedSubtotal = getItemDiscountedSubtotal(item);
                 const hasDiscount = discountedSubtotal < baseSubtotal;
@@ -549,20 +585,24 @@ export default function CheckoutPage({
                   <div key={idx} className="flex items-center justify-between py-2.5">
                     <span>{item.name} × {item.qty}</span>
                     <span className="font-mono text-[#1A1A18]">
-                      {hasDiscount && <span className="line-through text-[#8C8880] mr-2">${baseSubtotal.toFixed(2)}</span>}
-                      ${discountedSubtotal.toFixed(2)}
+                      {hasDiscount && (
+                        <span className="line-through text-[#8C8880] mr-2">
+                          {formatNTD(baseSubtotal)}
+                        </span>
+                      )}
+                      {formatNTD(discountedSubtotal)}
                     </span>
                   </div>
                 );
               })}
               <div className="flex items-center justify-between border-b border-t border-[#E2DDD4] py-2.5">
                 <span>運費</span>
-                <span className="font-mono text-[#1A1A18]">${initialSummary.shippingAmount.toFixed(2)}</span>
+                <span className="font-mono text-[#1A1A18]">{formatNTD(initialSummary.shippingAmount)}</span>
               </div>
               <div className="flex items-center justify-between py-2.5">
                 <span>優惠碼折扣</span>
                 <span className={`font-mono ${couponDiscount > 0 ? "text-[#6BBF6B]" : "text-[#8C8880]"}`}>
-                  {couponDiscount > 0 ? `−$${couponDiscount.toFixed(2)}` : "$0"}
+                  {couponDiscount > 0 ? `−${formatNTD(couponDiscount)}` : "NT$0"}
                 </span>
               </div>
             </div>
@@ -614,10 +654,10 @@ export default function CheckoutPage({
             <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F0E8] px-4 py-3.5">
               <div className="text-[13px] font-bold text-[#1A1A18]">
                 總付款金額{" "}
-                <span className="ml-1 text-[11px] font-normal text-[#8C8880]">({initialSummary.currency})</span>
+                <span className="ml-1 text-[11px] font-normal text-[#8C8880]">(TWD)</span>
               </div>
               <div className="font-mono text-[18px] font-bold text-[#1A1A18]">
-                ${grandTotal.toFixed(2)}
+                {formatNTD(grandTotal)}
               </div>
             </div>
 
