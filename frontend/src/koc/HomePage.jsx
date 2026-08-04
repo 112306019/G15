@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send } from 'lucide-react';
 import api from '../api/index';
 
 const STAGES = [
-  { id: 1, label: '資格審核', icon: Clock, desc: '等待廠商確認' },
+  { id: 1, label: '代言申請', icon: Send, desc: '瀏覽並申請任務' },
   { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交草稿' },
-  { id: 3, label: '文案審核', icon: Search, desc: '廠商審閱中' },
-  { id: 4, label: '待發佈', icon: Upload, desc: '請上傳連結' },
+  { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
+  { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼熱推中' },
   { id: 5, label: '已結案', icon: CheckCircle2, desc: '任務完成' },
 ];
 
-// stage 對照表
+// stage 對照表：撰寫文案分頁要合併 writing(0) + reviewing(1) 兩種後端 stage，
+// 所以這個分頁的值是陣列，其餘分頁維持單一數字
 const STAGE_MAP = {
   1: null,        // 資格審核：從 Application 撈
-  2: 0,           // 撰寫文案：stage=0(writing)
-  3: 1,           // 文案審核：stage=1(reviewing)
-  4: 2,           // 待發佈：stage=2(publishing)
-  5: 3,           // 已結案：stage=3(completed)
+  2: [0, 1],      // 撰寫文案（含已繳交子狀態）：writing(0) + reviewing(1)
+  3: 2,           // 上傳作品：stage=2(publishing)
+  4: 3,           // 推廣中：stage=3(promoting)
+  5: 4,           // 已結案：stage=4(completed)
 };
 
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
@@ -27,11 +28,18 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     writing: 0,
     reviewing: 0,
     publishing: 0,
+    promoting: 0,
     completed: 0,
   });
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
+
+  // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
+  const [applySubTab, setApplySubTab] = useState('unapplied');
+  const [availableCampaigns, setAvailableCampaigns] = useState([]);
+  const [kocId, setKocId] = useState(null);
+  const [appliedCampaign, setAppliedCampaign] = useState(null);
 
   // 從 TaskDetailPage 跳回時，如果有指定要切換的分頁就切過去
   useEffect(() => {
@@ -61,24 +69,53 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
   // 切換分頁時載入對應資料
   useEffect(() => {
+    // jumpToStage 從 TaskDetailPage 返回時會讓 activeStage 在掛載後馬上再變一次，
+    // 前一個分頁的請求還沒回來就被新分頁的請求追過去也可能後到——
+    // 用 cancelled 避免「舊分頁的回應」蓋掉「新分頁的回應」。
+    let cancelled = false;
+
     const fetchTasks = async () => {
       setLoading(true);
       setTasks([]);
+      setAvailableCampaigns([]);
       try {
-        if (activeStage === 1) {
-          // 資格審核：撈 pending + rejected 的 Application
+        if (activeStage === 1 && applySubTab === 'unapplied') {
+          // 未申請：撈可申請的活動清單（原「代言申請區」的待申請內容）
+          const [availableRes, profileRes] = await Promise.all([
+            api.get('/koc/application/getAvailableList', { params: { user_id } }),
+            api.get('/koc/profile/getProfile', { params: { user_id } }),
+          ]);
+
+          if (cancelled) return;
+
+          if (profileRes.data.success) {
+            setKocId(profileRes.data.koc_id);
+          }
+
+          if (availableRes.data.success) {
+            setAvailableCampaigns(availableRes.data.campaigns.map(c => ({
+              id: c.campaign_id,
+              order_id: c.order_id,
+              name: c.campaign_name,
+            })));
+          }
+
+        } else if (activeStage === 1) {
+          // 已申請：撈 pending + rejected 的 Application
           const [pendingRes, rejectedRes] = await Promise.all([
             api.get('/koc/application/getlist', { params: { User_id: user_id, status: 0 } }),
             api.get('/koc/application/getlist', { params: { User_id: user_id, status: 2 } }),
           ]);
+
+          if (cancelled) return;
 
           const pending = pendingRes.data.success
             ? pendingRes.data.application.map(a => ({
                 id: a.application_id,
                 productName: a.campaign_name,
                 campaignImage: a.campaign_image,
-                vendor: a.vendor_name,     
-                deadline: a.deadline,       
+                vendor: a.vendor_name,
+                deadline: a.deadline,
                 stage: 1,
                 isRejected: false,
                 rejectReason: null,
@@ -91,8 +128,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                 id: a.application_id,
                 productName: a.campaign_name,
                 campaignImage: a.campaign_image,
-                vendor: a.vendor_name,     
-                deadline: a.deadline,        
+                vendor: a.vendor_name,
+                deadline: a.deadline,
                 stage: 1,
                 isRejected: true,
                 rejectReason: a.reject_reason,
@@ -101,19 +138,52 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
           setTasks([...pending, ...rejected]);
 
+        } else if (activeStage === 2) {
+          // 撰寫文案：合併 writing(0) + reviewing(1)，reviewing 的卡片標成「已繳交」子狀態
+          const [writingRes, reviewingRes] = await Promise.all([
+            api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 0 } }),
+            api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 1 } }),
+          ]);
+
+          if (cancelled) return;
+
+          const mapMission = (m, isSubmitted) => ({
+            id: m.KOCMission_id,
+            productName: m.campaign_name,
+            campaignImage: m.campaign_image,
+            vendor: m.vendor_name,
+            deadline: m.deadline,
+            stage: 2,
+            isSubmitted,
+            promoCode: null,
+            earningsTotal: m.earnings_total,
+          });
+
+          const writing = writingRes.data.success
+            ? writingRes.data.missions.map(m => mapMission(m, false))
+            : [];
+          const reviewing = reviewingRes.data.success
+            ? reviewingRes.data.missions.map(m => mapMission(m, true))
+            : [];
+
+          setTasks([...writing, ...reviewing]);
+
         } else {
-          // 其他四個分頁：撈 KOCMission
+          // 上傳作品(3) / 推廣中(4) / 已結案(5)：單一 stage
           const stage = STAGE_MAP[activeStage];
           const res = await api.get('/koc/mission/getlist', {
             params: { User_id: user_id, stage }
           });
+
+          if (cancelled) return;
+
           if (res.data.success) {
             setTasks(res.data.missions.map(m => ({
               id: m.KOCMission_id,
               productName: m.campaign_name,
               campaignImage: m.campaign_image,
-              vendor: m.vendor_name,    
-              deadline: m.deadline,   
+              vendor: m.vendor_name,
+              deadline: m.deadline,
               stage: activeStage,
               promoCode: null,
               earningsTotal: m.earnings_total,
@@ -121,14 +191,18 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           }
         }
       } catch (err) {
-        console.error('載入任務失敗', err);
+        if (!cancelled) console.error('載入任務失敗', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchTasks();
-  }, [activeStage]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStage, applySubTab]);
 
   // 移除退件申請
   const dismissTask = async (taskId) => {
@@ -150,6 +224,35 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
   const handleGoToDetail = (task) => {
     onNavigate('task_detail', task);
+  };
+
+  // 申請任務（原「代言申請區」的申請動作）
+  const handleApply = async (campaign) => {
+    if (!kocId) {
+      alert('尚未取得 KOC 身份資料，請稍後再試');
+      return;
+    }
+    try {
+      const res = await api.post('/koc/application/applyMission', {
+        koc_id: kocId,
+        campaign_id: campaign.id,
+        order_id: campaign.order_id,
+      });
+
+      if (res.data.success) {
+        setAvailableCampaigns(prev => prev.filter(c => c.id !== campaign.id));
+        setStageCounts(prev => ({
+          ...prev,
+          qualification: prev.qualification + 1
+        }));
+        setAppliedCampaign(campaign);
+      } else {
+        alert(res.data.err || '申請失敗');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('申請失敗，請稍後再試');
+    }
   };
 
   const renderCardAction = (task) => {
@@ -183,6 +286,15 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           </button>
         );
       case 2:
+        if (task.isSubmitted) {
+          // 已繳交，等廠商審核
+          return (
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+              <Search size={16}/> 已繳交，查看審核進度
+            </button>
+          );
+        }
+        // 撰寫中
         return (
           <div className="flex flex-col gap-3">
             {task.promoCode && (
@@ -197,15 +309,24 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         );
       case 3:
         return (
-          <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
-            <Search size={16}/> 查看審核進度
+          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+            <Upload size={16}/> 上傳作品連結
           </button>
         );
       case 4:
         return (
-          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
-            <Upload size={16}/> 提交貼文連結
-          </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-sm font-bold text-[#8C8880]">目前累積分潤</span>
+              <span className="text-xl font-black text-[#C8522A]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
+            </div>
+            <button
+              onClick={() => handleGoToDetail(task)}
+              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+            >
+              查看詳情
+            </button>
+          </div>
         );
       case 5:
         return (
@@ -227,9 +348,9 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const getStageCount = (stageId) => {
     switch(stageId) {
       case 1: return stageCounts.qualification;
-      case 2: return stageCounts.writing;
-      case 3: return stageCounts.reviewing;
-      case 4: return stageCounts.publishing;
+      case 2: return stageCounts.writing + stageCounts.reviewing;
+      case 3: return stageCounts.publishing;
+      case 4: return stageCounts.promoting;
       case 5: return stageCounts.completed;
       default: return 0;
     }
@@ -244,7 +365,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           <div className="w-6 h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
             <TrendingUp size={14} className="text-[#C8522A] group-hover:text-white transition-colors" />
           </div>
-          進入成效分析看板
+          查看合作收益總覽
         </button>
       </div>
 
@@ -252,7 +373,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
         <div className="relative z-10">
           <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
-            <span className="text-[#C8522A]">💡</span> 賺取分潤超簡單，跟著進度走！
+            <span className="text-[#C8522A]"></span> 賺取分潤超簡單，跟著進度走！
           </h3>
           <div className="flex items-center gap-4 text-sm font-bold text-[#F5F0E8]/80">
             <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請任務</span>
@@ -262,7 +383,10 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-xs shadow-md">3</span> 發布貼文賺獎金</span>
           </div>
         </div>
-        <button onClick={() => onNavigate('apply')} className="relative z-10 bg-white text-[#1A1A18] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#F5F0E8] transition-all shadow-md active:scale-95">
+        <button
+          onClick={() => { setActiveStage(1); setApplySubTab('unapplied'); }}
+          className="relative z-10 bg-white text-[#1A1A18] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#F5F0E8] transition-all shadow-md active:scale-95"
+        >
           前往探索新任務
         </button>
       </div>
@@ -293,15 +417,82 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         })}
       </div>
 
-      <div className="flex justify-between items-end mb-6 px-2">
-        <h3 className="text-xl font-bold text-[#1A1A18] flex items-center gap-2">
-          {STAGES.find(s => s.id === activeStage)?.label}
-          <span className="text-[#8C8880] text-sm">({tasks.length})</span>
-        </h3>
+      <div className="flex items-end mb-6 px-2 gap-4">
+        {activeStage !== 1 && (
+          <h3 className="text-xl font-bold text-[#1A1A18]">
+            {STAGES.find(s => s.id === activeStage)?.label}
+          </h3>
+        )}
+
+        {activeStage === 1 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setApplySubTab('unapplied')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                applySubTab === 'unapplied'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              未申請
+            </button>
+            <button
+              onClick={() => setApplySubTab('applied')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                applySubTab === 'applied'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              已申請
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div>
+      ) : activeStage === 1 && applySubTab === 'unapplied' ? (
+        /* 未申請：可瀏覽並申請的活動清單（原「代言申請區」的待申請內容） */
+        <div className="bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center bg-[#F8F9FA] border-b border-[#E2DDD4] px-10 py-4 text-sm font-bold text-[#8C8880]">
+            <div>任務</div>
+            <div>動作</div>
+          </div>
+          <div className="flex flex-col">
+            {availableCampaigns.length > 0 ? (
+              availableCampaigns.map((campaign, i) => (
+                <div
+                  key={campaign.id}
+                  className={`flex items-center justify-between px-10 py-6 hover:bg-[#F8F9FA] transition-colors ${
+                    i !== availableCampaigns.length - 1 ? 'border-b border-[#E2DDD4]' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-6 flex-1 pr-8">
+                    <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
+                      <ImageIcon className="text-[#8C8880]/50" size={24} />
+                    </div>
+                    <div className="font-bold text-[#1A1A18] leading-snug">
+                      {campaign.name}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 w-[120px] text-right">
+                    <button
+                      onClick={() => handleApply(campaign)}
+                      className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                    >
+                      申請任務
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-10 py-16 text-center text-[#8C8880] font-bold">
+                目前沒有可申請的任務
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-6">
           {tasks.map((task) => (
@@ -318,6 +509,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                     </div>
                   )}
                 </div>
+                {task.stage === 2 && (
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
+                    {task.isSubmitted ? '已繳交・審核中' : '撰寫中'}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-4 mb-6">
@@ -373,6 +569,32 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 rounded-xl font-bold text-sm hover:bg-[#C8522A] transition-all"
             >
               關閉
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 申請成功彈出視窗 */}
+      {appliedCampaign && (
+        <div
+          className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300"
+          onClick={() => setAppliedCampaign(null)}
+        >
+          <div
+            className="bg-white rounded-[2rem] p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-6 flex justify-center">
+              <CheckCircle2 size={64} className="text-[#C8522A]" />
+            </div>
+            <h4 className="text-2xl font-black text-[#1A1A18] mb-8 leading-snug">
+              {appliedCampaign.name}<br />已申請成功
+            </h4>
+            <button
+              onClick={() => setAppliedCampaign(null)}
+              className="bg-[#1A1A18] text-[#F5F0E8] w-full py-4 rounded-2xl font-bold text-lg hover:bg-[#C8522A] transition-all active:scale-95 shadow-lg"
+            >
+              確認
             </button>
           </div>
         </div>

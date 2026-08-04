@@ -3,6 +3,13 @@ import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, C
 import api from '../api/index';
 import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
 
+function formatMessageTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function TaskDetailPage({ task, onBack }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [detail, setDetail] = useState(null);
@@ -12,6 +19,12 @@ export default function TaskDetailPage({ task, onBack }) {
   const [linkText, setLinkText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 推廣中畫面用的成效數據（優惠碼使用次數 + 銷量圖表）
+  const [chartData, setChartData] = useState([]);
+  const [usageCount, setUsageCount] = useState(0);
+  const [chartPeriod, setChartPeriod] = useState('month');
+  const [chartLoading, setChartLoading] = useState(true);
 
   // 聊天室相關狀態
   const [roomId, setRoomId] = useState(null);
@@ -88,6 +101,35 @@ export default function TaskDetailPage({ task, onBack }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 推廣中（stage=3）才需要撈優惠碼使用次數與銷量圖表
+  useEffect(() => {
+    if (!task || detail?.stage !== 3) return;
+
+    let cancelled = false;
+    const fetchAnalytics = async () => {
+      setChartLoading(true);
+      try {
+        const res = await api.get('/koc/analytics/getDetail', {
+          params: { KOCMission_id: task.id, period: chartPeriod }
+        });
+        if (cancelled) return;
+        if (res.data.success) {
+          setChartData(res.data.chart_data);
+          setUsageCount(res.data.usage_count);
+        }
+      } catch (err) {
+        if (!cancelled) console.error('載入銷售數據失敗', err);
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+    fetchAnalytics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [task, detail?.stage, chartPeriod]);
+
   const handleSendMessage = async () => {
     const content = chatInput.trim();
     if (!content || !roomId || sendingMessage) return;
@@ -121,25 +163,30 @@ export default function TaskDetailPage({ task, onBack }) {
   };
 
   if (!task) return null;
-  if (loading) return (
+  if (loading || !detail) return (
     <div className="flex items-center justify-center h-64 text-[#8C8880] font-bold">
       載入中...
     </div>
   );
 
-  // 從 detail 拿資料，沒有就從 task 拿
-  const stage = detail ? detail.stage : task.stage - 1; // API 回傳 0-3，畫面用 1-5
+  // API 回傳 0=writing, 1=reviewing, 2=publishing, 3=promoting, 4=completed
+  const STAGE_NUM_TO_KEY = ['writing', 'reviewing', 'publishing', 'promoting', 'completed'];
+  const stage = STAGE_NUM_TO_KEY[detail.stage];
   const vendorFeedback = detail?.vendor_feedback;
   const draftContent = detail?.draft_content;
   const promoCode = detail?.promotion_code || task.promoCode || null;
   const deadline = task.deadline || detail?.deadline;
+  const earningsTotal = detail?.earnings_total || 0;
 
-  // stage 對照(API 回傳 0=writing, 1=reviewing, 2=publishing, 3=completed)
   // 畫面邏輯
-  const isEditable = stage === 0 || (stage === 1 && vendorFeedback);  // writing 或 reviewing+被退回
-  const isReviewing = stage === 1 && !vendorFeedback;                  // reviewing 且沒有被退回
-  const isWaitPublish = stage === 2;                                    // publishing
-  const isCompleted = stage === 3;                                      // completed
+  const isEditable = stage === 'writing' || (stage === 'reviewing' && vendorFeedback);  // 撰寫中，或已繳交被退回
+  const isReviewing = stage === 'reviewing' && !vendorFeedback;                          // 已繳交，廠商審核中
+  const isWaitUpload = stage === 'publishing';                                           // 上傳作品
+  const isPromoting = stage === 'promoting';                                             // 推廣中
+  const isCompleted = stage === 'completed';                                             // 已結案
+
+  // 推廣中圖表的 Y 軸最大值（動態調整）
+  const chartMaxValue = Math.max(...chartData.map(d => d.y_value), 1);
 
   // 儲存草稿
   const handleSaveDraft = async () => {
@@ -203,9 +250,9 @@ export default function TaskDetailPage({ task, onBack }) {
         content_url: linkText,
       });
       if (res.data.success) {
-        alert('已成功提交連結，任務已完成！');
-        // 跳回任務列表，並通知 HomePage 切換到「已結案」分頁 (activeStage = 5)
-        onBack(5);
+        alert('已成功提交連結，優惠碼已生效，開始推廣囉！');
+        // 跳回任務列表，並通知 HomePage 切換到「推廣中」分頁 (activeStage = 4)
+        onBack(4);
       } else {
         alert(res.data.err || '提交失敗');
       }
@@ -239,9 +286,9 @@ export default function TaskDetailPage({ task, onBack }) {
             <div className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2 ${
               isCompleted
                 ? 'bg-[#F5F0E8] text-[#8C8880] border-[#E2DDD4]'
-                : 'bg-[#FDF0ED] text-[#C8522A] border-[#FDF0ED]'
+                : 'bg-green-50 text-green-600 border-green-100'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-[#8C8880]' : 'bg-[#C8522A] animate-pulse'}`}></span>
+              <span className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-[#8C8880]' : 'bg-green-600 animate-pulse'}`}></span>
               {isCompleted ? '已完成' : '執行中'}
             </div>
           </div>
@@ -261,8 +308,10 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
               <div className="w-px h-8 bg-[#8C8880]/30"></div>
               <div>
-                <p className="text-[#8C8880] text-xs font-bold mb-1">預估分潤收益</p>
-                <p className="font-bold">NT$ {task.reward || '依實際轉換計算'}</p>
+                <p className="text-[#8C8880] text-xs font-bold mb-1">{isPromoting ? '目前累積分潤' : '預估分潤收益'}</p>
+                <p className="font-bold">
+                  {isPromoting ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
+                </p>
               </div>
             </div>
           </div>
@@ -322,8 +371,8 @@ export default function TaskDetailPage({ task, onBack }) {
             </div>
           )}
 
-          {/* 情境 3：待發佈 */}
-          {isWaitPublish && (
+          {/* 情境 3：上傳作品 */}
+          {isWaitUpload && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-4">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 bg-[#FDF0ED] rounded-full flex items-center justify-center text-[#C8522A]">
@@ -331,10 +380,10 @@ export default function TaskDetailPage({ task, onBack }) {
                 </div>
                 <h3 className="text-2xl font-bold text-[#1A1A18]">文案審核已通過！</h3>
               </div>
-              
+
               <div className="bg-[#F8F9FA] rounded-2xl p-8 border border-[#E2DDD4]">
                 <p className="text-[#1A1A18] font-bold mb-6 flex items-center gap-2">
-                  <Info size={16} className="text-[#C8522A]" /> 優惠碼已生效！請將完成的貼文發佈至社群，並提交連結。
+                  <Info size={16} className="text-[#C8522A]" /> 優惠碼已生效！請將完成的貼文發佈至社群，並上傳作品連結。
                 </p>
                 <div className="flex flex-col gap-4">
                   <input
@@ -349,14 +398,80 @@ export default function TaskDetailPage({ task, onBack }) {
                     disabled={isSubmitting}
                     className="w-full bg-[#1A1A18] text-[#F5F0E8] py-4 rounded-xl font-bold transition-all hover:bg-[#C8522A] shadow-md text-sm tracking-widest disabled:opacity-50"
                   >
-                    確認提交連結
+                    確認上傳作品連結
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* 情境 4：已完成 */}
+          {/* 情境 4：推廣中 */}
+          {isPromoting && (
+            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-4">
+              <h3 className="text-2xl font-bold text-[#1A1A18] mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
+              <p className="text-[#8C8880] font-medium leading-relaxed mb-8 text-center">
+                活動截止日後，任務將自動結案並計算最終分潤
+              </p>
+
+              <div className="flex items-center justify-between mb-6">
+                <p className="text-[#1A1A18] font-black text-lg flex items-center gap-3">
+                  <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
+                  優惠碼使用次數：<span className="text-[#C8522A]">{usageCount}</span>
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setChartPeriod('week')}
+                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                      chartPeriod === 'week'
+                        ? 'bg-[#1A1A18] text-white'
+                        : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+                    }`}
+                  >
+                    週
+                  </button>
+                  <button
+                    onClick={() => setChartPeriod('month')}
+                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                      chartPeriod === 'month'
+                        ? 'bg-[#1A1A18] text-white'
+                        : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+                    }`}
+                  >
+                    月
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-[#F8F9FA] rounded-2xl p-8 border border-[#E2DDD4]">
+                {chartLoading ? (
+                  <div className="h-56 flex items-center justify-center text-[#8C8880] font-bold">
+                    載入中...
+                  </div>
+                ) : (
+                  <div className="h-56 w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-10 overflow-x-auto">
+                    <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-1 text-[10px] text-[#8C8880] font-bold">
+                      <span>{chartMaxValue}</span>
+                      <span>{Math.round(chartMaxValue * 0.5)}</span>
+                      <span className="translate-y-2">0</span>
+                    </div>
+                    {chartData.map((item, idx) => (
+                      <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px]">
+                        <div
+                          className="w-2.5 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
+                          style={{ height: `${chartMaxValue > 0 ? (item.y_value / chartMaxValue) * 100 : 0}%` }}
+                        />
+                        <span className="text-[9px] text-[#8C8880] mt-3 font-bold rotate-45 origin-left whitespace-nowrap">
+                          {item.x_label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 情境 5：已完成 */}
           {isCompleted && (
             <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
               <div className="w-24 h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#E2DDD4]">
@@ -407,7 +522,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 {msg.content}
               </div>
               <span className="text-[10px] text-[#8C8880] font-bold mt-1 px-1">
-                {msg.created_at}
+                {formatMessageTime(msg.created_at)}
               </span>
             </div>
           ))}

@@ -362,7 +362,8 @@ def add_wishlist(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    wishlist = Wishlist.objects.create(
+    # 用 get_or_create 避免重複點擊加入收藏時，同一個商品被建立多筆重複紀錄
+    wishlist, _ = Wishlist.objects.get_or_create(
         user=user,
         product=product,
     )
@@ -413,29 +414,37 @@ def view_wishlist(request):
 @permission_classes([AllowAny])
 def delete_wishlist(request):
     wishlist_id = request.data.get('Wishlist_id')
+    user_id = request.data.get('User_id')
+    product_id = request.data.get('Product_id')
 
-    if not wishlist_id:
+    if wishlist_id:
+        matches = Wishlist.objects.filter(wishlist_id=wishlist_id)
+    elif user_id and product_id:
+        # 前端實際上都是用 User_id + Product_id 呼叫這支 API（沒有先查出 Wishlist_id）
+        matches = Wishlist.objects.filter(user_id=user_id, product_id=product_id)
+    else:
         return Response(
-            {'success': False, 'err': 'Wishlist_id 為必填'},
+            {'success': False, 'err': '需提供 Wishlist_id，或 User_id 和 Product_id'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    try:
-        wishlist = Wishlist.objects.get(wishlist_id=wishlist_id)
-    except Wishlist.DoesNotExist:
+    wishlist = matches.select_related('user', 'product').first()
+
+    if not wishlist:
         return Response(
             {'success': False, 'err': '收藏商品不存在'},
             status=status.HTTP_404_NOT_FOUND
         )
 
-    user_id = wishlist.user.user_id
-    product_id = wishlist.product.product_id
+    result_wishlist_id = wishlist.wishlist_id
+    result_user_id = wishlist.user.user_id
+    result_product_id = wishlist.product.product_id
     wishlist.delete()
 
     return Response({
-        'Wishlist_id': wishlist_id,
-        'User_id': user_id,
-        'Product_id': product_id,
+        'Wishlist_id': result_wishlist_id,
+        'User_id': result_user_id,
+        'Product_id': result_product_id,
     }, status=status.HTTP_200_OK)
 
 

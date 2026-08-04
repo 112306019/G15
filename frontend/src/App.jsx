@@ -12,8 +12,8 @@ import EarningsDetailPage from './koc/EarningsDetailPage';
 import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
-import ApplyPage from './koc/ApplyPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
+import ChatPage from './koc/ChatPage';
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -46,16 +46,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 
   const allMenuItems = [
     { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
-    {
-      icon: <Briefcase size={18} />,
-      label: '我的任務',
-      view: 'home',
-      role: 'koc',
-      subItems: [
-        { label: '代言申請區', view: 'apply' },
-        { label: '任務管理', view: 'home' },
-      ]
-    },
+    { icon: <Briefcase size={18} />, label: '我的任務', view: 'home', role: 'koc' },
     { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
@@ -169,8 +160,6 @@ function MainSystem() {
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
 
-  const [favorites, setFavorites] = useState([]);
-
   const navigate = useNavigate();
 
   // 登入狀態下，記住每次切換的 view，刷新時才能還原到原本所在的頁面（而非固定跳回預設頁）
@@ -184,7 +173,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail',
-      'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'apply', 'cart', 'review', 'favorites'
+      'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -209,24 +198,9 @@ function MainSystem() {
     setView(targetView);
   };
 
-  const handleToggleFavorite = (product) => {
-    setFavorites((prev) => {
-      const exists = prev.find(item => item.id === product.id);
-      if (exists) {
-        return prev.filter(item => item.id !== product.id); // 已存在則移除
-      } else {
-        return [...prev, product]; // 不存在則加入
-      }
-    });
-  };
-
-  const handleRemoveFavorite = (productId) => {
-    setFavorites((prev) => prev.filter(item => item.id !== productId));
-  };
-
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
-    'security', 'orders', 'order_detail', 'applyKoc', 'apply',
+    'security', 'orders', 'order_detail', 'applyKoc',
     'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
@@ -265,7 +239,6 @@ function MainSystem() {
       )}
       {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => syncCartCount()} />}
 
-      {/* 🌟 修改：傳遞 favorites 與 onToggleFavorite 給 ProductDetailPage */}
       {view === 'product_detail' && (
         <ProductDetailPage
           onBack={() => handleNavigate('shop')}
@@ -274,8 +247,6 @@ function MainSystem() {
           onNavigate={handleNavigate}
           userRole={userRole}
           onAddToCart={() => syncCartCount()}
-          favorites={favorites}
-          onToggleFavorite={handleToggleFavorite}
           product={selectedProduct}
         />
       )}
@@ -296,6 +267,8 @@ function MainSystem() {
         } : undefined}
       />}
 
+      {view === 'chat' && <ChatPage />}
+
       {shellViews.includes(view) && (
         <div className="flex p-8 max-w-7xl mx-auto">
           <Sidebar userRole={userRole} currentView={getSidebarActiveView()} onNavigate={handleNavigate} />
@@ -307,7 +280,6 @@ function MainSystem() {
                 onJumpHandled={() => setHomeJumpStage(null)}
               />
             )}
-            {view === 'apply' && <ApplyPage />}
 
             {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
             {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
@@ -346,11 +318,8 @@ function MainSystem() {
             {view === 'earnings_detail' && <EarningsDetailPage onBack={() => handleNavigate('earnings')} />}
             {view === 'pending_detail' && <PendingEarningsPage onBack={() => handleNavigate('earnings')} />}
 
-            {/* 🌟 新增：渲染 FavoritesPage */}
             {view === 'favorites' && (
               <FavoritesPage
-                favorites={favorites}
-                onRemoveFavorite={handleRemoveFavorite}
                 onAddToCart={() => setCartCount(c => c + 1)}
                 onNavigate={handleNavigate}
               />

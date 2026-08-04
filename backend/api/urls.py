@@ -81,6 +81,8 @@ urlpatterns = [
     path('koc/chat/getOrCreateRoom', views.get_or_create_chat_room, name='koc-chat-get-or-create-room'),
     path('koc/chat/getHistory', views.get_chat_history, name='koc-chat-get-history'),
     path('koc/chat/sendMessage', views.send_chat_message, name='koc-chat-send-message'),
+    path('koc/chatroom/getlist', views.koc_chatroom_getlist, name='koc-chatroom-getlist'),
+    path('koc/chatroom/markRead', views.koc_chatroom_mark_read, name='koc-chatroom-mark-read'),
 
     # platform/038
     path('platform/koc/approve', koc_approve, name='platform-koc-approve'),
