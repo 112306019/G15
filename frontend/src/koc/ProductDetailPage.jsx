@@ -1,10 +1,9 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Heart, ShoppingBag, Star } from 'lucide-react';
 
 export default function ProductDetailPage({
   onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, product,
-  favorites = [], // 🟢 接收全域的收藏清單
-  onToggleFavorite // 🟢 接收切換收藏的函式
 }) {
   const [toastMsg, setToastMsg] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -12,6 +11,7 @@ export default function ProductDetailPage({
   const [isLoading, setIsLoading] = useState(false);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [campaignData, setCampaignData] = useState(null);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   const [productDetail, setProductDetail] = useState({
     id: 1, // 🟢 確保有給 ID，這樣才能判斷收藏狀態
@@ -24,14 +24,11 @@ export default function ProductDetailPage({
     gradient: "linear-gradient(135deg,#D8D4CC,#C4BDB4)"
   });
 
-  // 🟢 動態計算當前商品是否在收藏清單內
-  const isFavorited = favorites.some(item => item.id === productDetail.id);
-
   useEffect(() => {
     window.scrollTo(0, 0);
 
     // 拉所有商品作為推薦
-    fetch("http://127.0.0.1:8000/api/consumer/products")
+    fetch(`${API_BASE_URL}/api/consumer/products`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -67,8 +64,25 @@ export default function ProductDetailPage({
     }
   }, [product]);
 
+  // 🟢 依實際登入的使用者，向後端查詢這個商品是否已在收藏清單內
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (userRole === 'guest' || !userId || !productDetail.id) return;
+
+    let cancelled = false;
+    fetch(`http://127.0.0.1:8000/api/consumer/wishlist/view?User_id=${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled || !Array.isArray(data)) return;
+        setIsFavorited(data.some(item => item.Product_id === productDetail.id));
+      })
+      .catch(() => { });
+
+    return () => { cancelled = true; };
+  }, [productDetail.id, userRole]);
+
   if (product) {
-    fetch(`http://127.0.0.1:8000/api/consumer/product/campaign?Product_id=${product.Product_id}`)
+    fetch(`${API_BASE_URL}/api/consumer/product/campaign?Product_id=${product.Product_id}`)
       .then(res => res.json())
       .then(data => {
         if (data.campaign_id) setCampaignData(data);
@@ -90,7 +104,7 @@ export default function ProductDetailPage({
     const userId = localStorage.getItem("userId");
 
     try {
-      const cartRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/create", {
+      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ User_id: userId }),
@@ -98,7 +112,7 @@ export default function ProductDetailPage({
       const cartData = await cartRes.json();
       const cartId = cartData.Cart_id;
 
-      const addRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/item/add", {
+      const addRes = await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,14 +159,36 @@ export default function ProductDetailPage({
     }, 400);
   };
 
-  // 🟢 處理愛心點擊事件
-  const handleHeartClick = () => {
+  // 🟢 處理愛心點擊事件：直接呼叫後端收藏清單 API，跟購物車頁的收藏切換邏輯一致
+  const handleHeartClick = async () => {
     if (userRole === 'guest') {
       showToast("需先登入或註冊才能加入收藏清單喔！");
       return;
     }
-    onToggleFavorite?.(productDetail);
-    showToast(isFavorited ? "已從收藏清單移除" : "✓ 已加入收藏清單");
+
+    const userId = localStorage.getItem("userId");
+
+    try {
+      if (!isFavorited) {
+        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
+        });
+        setIsFavorited(true);
+        showToast("✓ 已加入收藏清單");
+      } else {
+        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
+        });
+        setIsFavorited(false);
+        showToast("已從收藏清單移除");
+      }
+    } catch {
+      showToast("操作失敗，請稍後再試");
+    }
   };
 
   return (

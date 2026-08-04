@@ -44,7 +44,9 @@ class KOC(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='koc_profile')
     fb_account = models.CharField(max_length=100, blank=True, default='', db_column='fb_account')
     ig_account = models.CharField(max_length=100, blank=True, default='', db_column='ig_account')
+    ig_url = models.CharField(max_length=300, blank=True, default='', db_column='ig_url')
     threads_account = models.CharField(max_length=100, blank=True, default='', db_column='threads_account')
+    threads_url = models.CharField(max_length=300, blank=True, default='', db_column='threads_url')
     bank_number = models.CharField(max_length=50, blank=True, default='', db_column='bank_number')
     bank_account = models.CharField(max_length=50, blank=True, default='', db_column='bank_account')
     address = models.TextField(blank=True, null=True)
@@ -462,6 +464,9 @@ class Wishlist(models.Model):
 
     class Meta:
         db_table = 'Wishlist'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'product'], name='unique_wishlist_user_product')
+        ]
 
     def __str__(self):
         return f"Wishlist {self.wishlist_id}"

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
 
 function ImgIcon() {
@@ -68,7 +69,7 @@ export default function CartPage({
     const fetchCart = async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/consumer/cart/view?User_id=${userId}`,
+          `${API_BASE_URL}/api/consumer/cart/view?User_id=${userId}`,
         );
         const data = await res.json();
         if (data.Cart_id) {
@@ -123,7 +124,7 @@ export default function CartPage({
     const newQty = Math.max(1, item.qty + delta);
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, qty: newQty } : it)));
     try {
-      await fetch("http://127.0.0.1:8000/api/consumer/cart/item/update", {
+      await fetch(`${API_BASE_URL}/api/consumer/cart/item/update`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -143,7 +144,7 @@ export default function CartPage({
     if (!item.wish) {
       // 加入收藏
       try {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/add", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -160,7 +161,7 @@ export default function CartPage({
     } else {
       // 移除收藏
       try {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
@@ -182,7 +183,7 @@ export default function CartPage({
     if (!item) return;
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, removing: true } : it)));
     try {
-      await fetch("http://127.0.0.1:8000/api/consumer/cart/item/delete", {
+      await fetch(`${API_BASE_URL}/api/consumer/cart/item/delete`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -199,7 +200,7 @@ export default function CartPage({
 
   const applyCoupon = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/consumer/coupon/verify", {
+      const res = await fetch(`${API_BASE_URL}/api/consumer/coupon/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ Promotion_code: coupon.trim() }),

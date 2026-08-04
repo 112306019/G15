@@ -108,7 +108,9 @@ class KOCApplySerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_null=True)
     fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     ig_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    ig_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     threads_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    threads_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, data):
         # 至少要填一個社群帳號
@@ -118,6 +120,14 @@ class KOCApplySerializer(serializers.Serializer):
             data.get('threads_account')
         ]):
             raise serializers.ValidationError("請至少填入一個社群帳號")
+
+        # 填了帳號就必須填連結
+        if data.get('ig_account') and not data.get('ig_url'):
+            raise serializers.ValidationError("填寫 IG 帳號後，請務必附上 IG 連結")
+
+        if data.get('threads_account') and not data.get('threads_url'):
+            raise serializers.ValidationError("填寫 Threads 帳號後，請務必附上 Threads 連結")
+
         return data
     
 # ──────────────────────────────────────────────
@@ -158,6 +168,6 @@ class PlatformKOCDetailSerializer(serializers.Serializer):
 class KOCMissionStageUpdateSerializer(serializers.Serializer):
     KOCMisson_id = serializers.IntegerField(required=True)
     Stage = serializers.ChoiceField(
-        choices=['writing', 'reviewing', 'publishing', 'completed'],
+        choices=['writing', 'reviewing', 'publishing', 'promoting', 'completed'],
         required=True
     )

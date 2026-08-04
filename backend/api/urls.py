@@ -51,6 +51,7 @@ from .views.consumer import (
 )
 
 from .views import koc, vendor
+from .views.vendor import vendor_upload_image
 
 urlpatterns = [
     # koc
@@ -80,6 +81,8 @@ urlpatterns = [
     path('koc/chat/getOrCreateRoom', views.get_or_create_chat_room, name='koc-chat-get-or-create-room'),
     path('koc/chat/getHistory', views.get_chat_history, name='koc-chat-get-history'),
     path('koc/chat/sendMessage', views.send_chat_message, name='koc-chat-send-message'),
+    path('koc/chatroom/getlist', views.koc_chatroom_getlist, name='koc-chatroom-getlist'),
+    path('koc/chatroom/markRead', views.koc_chatroom_mark_read, name='koc-chatroom-mark-read'),
 
     # platform/038
     path('platform/koc/approve', koc_approve, name='platform-koc-approve'),
@@ -145,6 +148,7 @@ urlpatterns = [
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
     path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
+    path('vendor/product/upload-image', vendor_upload_image, name='vendor-upload-image'),
 
     # Vendor 任務 / Campaign API
     path('vendor/campaign/create', vendor.vendor_campaign_create, name='vendor-campaign-create'),

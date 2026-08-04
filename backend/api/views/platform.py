@@ -36,7 +36,7 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email
 
 logger = logging.getLogger(__name__)
@@ -490,8 +490,10 @@ def koc_get_pending_list(request):
             "name": koc.user.name,
             "email": koc.user.email,
             "ig_account": koc.ig_account,
+            "ig_url": koc.ig_url,
             "fb_account": koc.fb_account,
             "threads_account": koc.threads_account,
+            "threads_url": koc.threads_url,
             "user_role": ROLE_CODE_MAP.get(koc.user.role, -1), 
             "applied_at": koc.user.created_at.strftime('%Y-%m-%d %H:%M') if koc.user.created_at else None,
         })
@@ -1208,6 +1210,8 @@ def koc_get_list(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def koc_get_detail(request):
+    sync_expired_promoting_missions()
+
     koc_id = request.query_params.get('koc_id')
     user_id = request.query_params.get('User_id')
     application_id = request.query_params.get('Application_id')
@@ -1318,6 +1322,8 @@ from api.models import Admins, User, Order, Payment, Transactions, AdminAuditLog
 @api_view(['PATCH'])
 @permission_classes([AllowAny])
 def koc_mission_stage_update(request):
+    sync_expired_promoting_missions()
+
     serializer = KOCMissionStageUpdateSerializer(data=request.data)
     if not serializer.is_valid():
         return Response({
@@ -1369,6 +1375,8 @@ def koc_mission_stage_update(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_all_missions(request):
+    sync_expired_promoting_missions()
+
     # 🔥 用 select_related 一次帶出 koc/user/活動/廠商，避免迴圈內逐一查詢
     missions = KOCMissionNew.objects.select_related(
         'koc__user',

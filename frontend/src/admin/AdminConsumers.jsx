@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ChevronRight } from 'lucide-react';
@@ -13,7 +14,7 @@ export default function AdminConsumers() {
   useEffect(() => {
     const fetchConsumers = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/platform/consumers", {
+        const res = await fetch(`${API_BASE_URL}/api/platform/consumers`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();

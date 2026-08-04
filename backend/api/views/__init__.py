@@ -22,6 +22,8 @@ from .koc import (
     get_or_create_chat_room,
     get_chat_history,
     send_chat_message,
+    koc_chatroom_getlist,
+    koc_chatroom_mark_read,
 )
 # 有新寫的 function 就要補進來
 
