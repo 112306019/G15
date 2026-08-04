@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useMemo, useState } from "react";
 
 function CheckIcon({ className = "" }) {
@@ -159,7 +160,7 @@ export default function CheckoutPage({
     setCouponMsg({ text: "", ok: false, show: false });
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/consumer/coupon/verify", {
+      const res = await fetch(`${API_BASE_URL}/api/consumer/coupon/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ Promotion_code: couponCode.trim() }),
@@ -222,7 +223,7 @@ export default function CheckoutPage({
     }));
 
     try {
-      const orderRes = await fetch("http://127.0.0.1:8000/api/consumer/order/create", {
+      const orderRes = await fetch(`${API_BASE_URL}/api/consumer/order/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -242,7 +243,7 @@ export default function CheckoutPage({
       if (!orderRes.ok) throw new Error(orderData.err || "建立訂單失敗");
       const orderId = orderData.Order_id || orderData.orderId;
 
-      const txRes = await fetch("http://127.0.0.1:8000/api/consumer/transaction/create", {
+      const txRes = await fetch(`${API_BASE_URL}/api/consumer/transaction/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,7 +260,7 @@ export default function CheckoutPage({
       const txData = await txRes.json().catch(() => ({}));
       // 不管交易是否成功都繼續（不擋結帳流程）
 
-      await fetch("http://127.0.0.1:8000/api/consumer/payment/update", {
+      await fetch(`${API_BASE_URL}/api/consumer/payment/update`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -273,7 +274,7 @@ export default function CheckoutPage({
         }),
       });
 
-      await fetch("http://127.0.0.1:8000/api/consumer/payments/result", {
+      await fetch(`${API_BASE_URL}/api/consumer/payments/result`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -286,7 +287,7 @@ export default function CheckoutPage({
       });
 
       for (const item of cartItems) {
-        await fetch("http://127.0.0.1:8000/api/consumer/cart/item/delete", {
+        await fetch(`${API_BASE_URL}/api/consumer/cart/item/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ Cart_item_id: item.id }),

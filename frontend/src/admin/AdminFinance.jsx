@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import {
   Search, Filter, CreditCard, DollarSign, Wallet,
@@ -17,7 +18,7 @@ export default function AdminFinance() {
 
   const fetchEarningsData = async () => {
     try {
-      const earnRes = await fetch("http://127.0.0.1:8000/api/platform/earnings", {
+      const earnRes = await fetch(`${API_BASE_URL}/api/platform/earnings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const earnData = await earnRes.json();
@@ -37,7 +38,7 @@ export default function AdminFinance() {
         })));
       }
 
-      const settleRes = await fetch("http://127.0.0.1:8000/api/platform/campaigns/settleable", {
+      const settleRes = await fetch(`${API_BASE_URL}/api/platform/campaigns/settleable`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const settleData = await settleRes.json();
@@ -64,7 +65,7 @@ export default function AdminFinance() {
 
     setSettlingId(campaignId);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/platform/campaign/settle-earnings", {
+      const res = await fetch(`${API_BASE_URL}/api/platform/campaign/settle-earnings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -92,7 +93,7 @@ export default function AdminFinance() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const payRes = await fetch("http://127.0.0.1:8000/api/platform/payments", {
+        const payRes = await fetch(`${API_BASE_URL}/api/platform/payments`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const payData = await payRes.json();
@@ -108,7 +109,7 @@ export default function AdminFinance() {
           })));
         }
 
-        const txRes = await fetch("http://127.0.0.1:8000/api/platform/transactions", {
+        const txRes = await fetch(`${API_BASE_URL}/api/platform/transactions`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const txData = await txRes.json();

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { Heart, ShoppingBag, ArrowRight } from 'lucide-react';
 
@@ -20,7 +21,7 @@ export default function FavoritesPage({ onNavigate }) {
     const fetchWishlist = async () => {
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/api/consumer/wishlist/view?User_id=${userId}`,
+          `${API_BASE_URL}/api/consumer/wishlist/view?User_id=${userId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await res.json();
@@ -49,7 +50,7 @@ export default function FavoritesPage({ onNavigate }) {
     const item = favorites.find((f) => f.id === id);
     if (!item) return;
     try {
-      await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+      await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -69,7 +70,7 @@ export default function FavoritesPage({ onNavigate }) {
   // 加入購物車
   const handleAddToCart = async (product) => {
     try {
-      const cartRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/create", {
+      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,7 +81,7 @@ export default function FavoritesPage({ onNavigate }) {
       const cartData = await cartRes.json();
       const cartId = cartData.Cart_id;
 
-      await fetch("http://127.0.0.1:8000/api/consumer/cart/item/add", {
+      await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

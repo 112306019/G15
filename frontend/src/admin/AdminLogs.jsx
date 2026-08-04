@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, History, ShieldAlert, CheckCircle, Edit, FileText } from 'lucide-react';
 
@@ -12,7 +13,7 @@ export default function AdminLogs() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/platform/audit/logs", {
+        const res = await fetch(`${API_BASE_URL}/api/platform/audit/logs`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();

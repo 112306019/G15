@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from api.models import Admins, User
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.hashers import make_password, check_password
 
 ## 使用者註冊
 @api_view(['POST'])
@@ -40,11 +41,11 @@ def user_signup(request):
 
     # 建立使用者
     user = User.objects.create(
-        name=name,
-        email=email,
-        password=password,
-        phone=phone or '',
-        role=str(role),
+    name=name,
+    email=email,
+    password=make_password(password),
+    phone=phone or '',
+    role=str(role),
     )
 
     return Response({
@@ -77,7 +78,7 @@ def user_login(request):
         )
 
     # 驗證密碼
-    if user.password != password:
+    if not check_password(password, user.password):
         return Response(
             {'success': False, 'err': '帳號或密碼錯誤'},
             status=status.HTTP_401_UNAUTHORIZED

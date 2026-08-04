@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Heart, ShoppingBag, Star } from 'lucide-react';
 
@@ -31,7 +32,7 @@ export default function ProductDetailPage({
     window.scrollTo(0, 0);
 
     // 拉所有商品作為推薦
-    fetch("http://127.0.0.1:8000/api/consumer/products")
+    fetch(`${API_BASE_URL}/api/consumer/products`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -68,7 +69,7 @@ export default function ProductDetailPage({
   }, [product]);
 
   if (product) {
-    fetch(`http://127.0.0.1:8000/api/consumer/product/campaign?Product_id=${product.Product_id}`)
+    fetch(`${API_BASE_URL}/api/consumer/product/campaign?Product_id=${product.Product_id}`)
       .then(res => res.json())
       .then(data => {
         if (data.campaign_id) setCampaignData(data);
@@ -90,7 +91,7 @@ export default function ProductDetailPage({
     const userId = localStorage.getItem("userId");
 
     try {
-      const cartRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/create", {
+      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ User_id: userId }),
@@ -98,7 +99,7 @@ export default function ProductDetailPage({
       const cartData = await cartRes.json();
       const cartId = cartData.Cart_id;
 
-      const addRes = await fetch("http://127.0.0.1:8000/api/consumer/cart/item/add", {
+      const addRes = await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

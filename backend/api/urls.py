@@ -51,6 +51,7 @@ from .views.consumer import (
 )
 
 from .views import koc, vendor
+from .views.vendor import vendor_upload_image
 
 urlpatterns = [
     # koc
@@ -145,6 +146,7 @@ urlpatterns = [
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
     path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
     path('vendor/product/getlist', vendor.vendor_product_getlist, name='vendor-product-getlist'),
+    path('vendor/product/upload-image', vendor_upload_image, name='vendor-upload-image'),
 
     # Vendor 任務 / Campaign API
     path('vendor/campaign/create', vendor.vendor_campaign_create, name='vendor-campaign-create'),
