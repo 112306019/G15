@@ -34,7 +34,7 @@ export default function FavoritesPage({ onNavigate }) {
             wishlistId: item.Wishlist_id,
             productId: item.Product_id,
             name: item.product_name || `商品 ${item.Product_id}`,
-            price: `NTD$ ${item.price || ""}`,
+            price: `NT$${Number(item.price || 0).toLocaleString("zh-TW")}`,
             gradient: GRADIENTS[i % GRADIENTS.length],
             imageUrl: isValidImageUrl(item.image_url) ? item.image_url : "",
             // 商品詳情頁需要的是原始商品欄位格式（Product_id / Product_name / price），

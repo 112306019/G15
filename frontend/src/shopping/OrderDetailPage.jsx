@@ -2,6 +2,11 @@ import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, FileText, Box, Truck, Heart, Smartphone } from "lucide-react";
 
+function formatNTD(amount) {
+  const value = Number(amount);
+  return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+}
+
 export default function OrderDetailPage({ onBack, orderId }) {
   const [step, setStep] = useState(1);
   const [orderData, setOrderData] = useState(null);
@@ -110,7 +115,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
           </div>
         </div>
         <div className="mt-4 md:mt-0 font-mono text-4xl font-black text-[#C8522A]">
-          NTD$ {totalAmount}
+          {formatNTD(totalAmount)}
         </div>
       </div>
 
@@ -235,13 +240,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
                     </div>
                   </td>
                   <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
-                    NTD$ {item.Unit_price}
+                    {formatNTD(item.Unit_price)}
                   </td>
                   <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
                     x{item.quantity}
                   </td>
                   <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
-                    NTD$ {item.subtotal}
+                    {formatNTD(item.subtotal)}
                   </td>
                 </tr>
               ))}

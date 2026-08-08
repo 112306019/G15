@@ -17,6 +17,7 @@ export default function ProductDetailPage({
     id: 1, // 🟢 確保有給 ID，這樣才能判斷收藏狀態
     name: "SanDisk 128GB SDXC Extreme Pro 200MB/s 4K U3 V30 相機記憶卡",
     price: "NTD$ 1470",
+    rawPrice: 1470, // 數字型價格，供「立即訂購」帶去結帳頁使用
     rating: 4.8,
     reviewsCount: 102,
     vendorName: "廠商名稱",
@@ -54,6 +55,7 @@ export default function ProductDetailPage({
         id: product.Product_id,
         name: product.Product_name,
         price: `NTD$ ${product.discounted_price || product.price}`,
+        rawPrice: Number(product.discounted_price || product.price) || 0,
         rating: 4.8,
         description: product.description || "",
         reviewsCount: 0,
@@ -82,14 +84,40 @@ export default function ProductDetailPage({
     return () => { cancelled = true; };
   }, [productDetail.id, userRole]);
 
-  if (product) {
-    fetch(`${API_BASE_URL}/api/consumer/product/campaign?Product_id=${product.Product_id}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.campaign_id) setCampaignData(data);
-      })
-      .catch(() => { });
-  }
+  useEffect(() => {
+    if (!product?.Product_id) {
+      setCampaignData(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCampaign = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/consumer/product/campaign?Product_id=${product.Product_id}`
+        );
+
+        if (!res.ok) {
+          throw new Error("取得商品活動失敗");
+        }
+
+        const data = await res.json();
+        if (!cancelled) {
+          setCampaignData(data?.campaign_id ? data : null);
+        }
+      } catch (err) {
+        console.error("取得商品活動失敗：", err);
+        if (!cancelled) setCampaignData(null);
+      }
+    };
+
+    fetchCampaign();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product?.Product_id]);
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -139,7 +167,29 @@ export default function ProductDetailPage({
       showToast("需先登入或註冊才能直接結帳喔！");
       return;
     }
-    if (onBuyNow) onBuyNow();
+
+    const productId = Number(productDetail.id);
+    const price = Number(productDetail.rawPrice);
+    const qty = Number(quantity) || 1;
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      showToast("找不到商品資料，請重新整理後再試");
+      return;
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      showToast("商品價格異常，暫時無法結帳");
+      return;
+    }
+
+    onBuyNow?.({
+      productId,
+      name: productDetail.name,
+      price,
+      qty,
+      imageUrl: productDetail.imageUrl || "",
+      buyNow: true,
+    });
   };
 
   const handleRecommendClick = (p) => {
@@ -147,15 +197,19 @@ export default function ProductDetailPage({
     setIsLoading(true);
 
     setTimeout(() => {
-      setProductDetail({
-        ...productDetail,
+      const rawPrice = Number(p.discounted_price ?? p.price) || 0;
+
+      setProductDetail((prev) => ({
+        ...prev,
         id: p.Product_id,
         name: p.Product_name,
-        price: `NTD$ ${p.discounted_price || p.price}`,
+        price: `NTD$ ${rawPrice}`,
+        rawPrice,
         description: p.description || "",
-        gradient: productDetail.gradient,
+        vendorName: p.Vendor_id || "",
         imageUrl: p.image_url || "",
-      });
+      }));
+      setCampaignData(null);
       setQuantity(1);
       setIsLoading(false);
     }, 400);
