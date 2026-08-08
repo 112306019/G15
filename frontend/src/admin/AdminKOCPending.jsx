@@ -3,9 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, X, Mail, Instagram, Clock } from 'lucide-react';
 import { getKOCPendingList, approveKOC, rejectKOC } from '../api/platform';
 
-// TODO: 目前尚未接上平台管理員登入機制，暫時寫死 admin_id
-const ADMIN_ID = 1;
-
 const ROLE_LABELS = { 0: '廠商', 1: 'KOC', 2: '消費者' };
 
 export default function AdminKOCPending() {
@@ -42,7 +39,10 @@ export default function AdminKOCPending() {
   const handleApprove = async (koc) => {
     setActioningId(koc.koc_id);
     try {
-      const res = await approveKOC({ koc_id: koc.koc_id });
+      const res = await approveKOC({
+        koc_id: koc.koc_id,
+        admin_id: parseInt(localStorage.getItem('admin_id')) || 1,
+      });
       if (res.data.success) {
         setPendingList((prev) => prev.filter((k) => k.koc_id !== koc.koc_id));
       } else {

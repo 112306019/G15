@@ -1,7 +1,10 @@
 from django.urls import path
 
 from . import views
-from .views.auth import user_signup, user_login
+from .views.auth import (
+    user_signup, user_login, forgot_password, reset_password,
+    verify_email, resend_verification_code,
+)
 from .views.platform import (
     admin_login,
     get_consumers,
@@ -100,6 +103,10 @@ urlpatterns = [
     # auth
     path('user/signUp', user_signup, name='user-signup'),
     path('user/login', user_login, name='user-login'),
+    path('user/password/forgot', forgot_password, name='user-password-forgot'),
+    path('user/password/reset', reset_password, name='user-password-reset'),
+    path('user/verifyEmail', verify_email, name='user-verify-email'),
+    path('user/resendVerification', resend_verification_code, name='user-resend-verification'),
     # platform
     path('platform/login', admin_login, name='platform-login'),
     path('platform/consumers', get_consumers, name='platform-consumers'),

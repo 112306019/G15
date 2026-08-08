@@ -35,6 +35,7 @@ export default function LoginPage({
   const [loginPw, setLoginPw] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [loginNeedsVerification, setLoginNeedsVerification] = useState(false);
 
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -44,8 +45,27 @@ export default function LoginPage({
   const [regSubmitting, setRegSubmitting] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
 
+  // 忘記密碼：email -> 寄送驗證碼 -> reset（輸入驗證碼+新密碼） -> done
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState("email");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPw, setForgotNewPw] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+
+  // 註冊信箱驗證：驗證碼寄出後跳出，輸入驗證碼確認信箱真的存在
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
+  const [verifyDone, setVerifyDone] = useState(false);
+  const [verifyResendMsg, setVerifyResendMsg] = useState("");
+
   const handleLogin = async () => {
     setLoginError("");
+    setLoginNeedsVerification(false);
     if (!loginEmail.trim() || !loginPw) {
       setLoginError("請輸入電子郵件和密碼");
       return;
@@ -68,6 +88,7 @@ export default function LoginPage({
         onLoginSuccess?.({ userId: data.userId, role: data.role, token: data.token });
       } else {
         setLoginError(data.err || "帳號或密碼錯誤");
+        setLoginNeedsVerification(Boolean(data.needsVerification));
       }
     } catch (err) {
       setLoginError("網路錯誤，請確認後端是否正常運作");
@@ -107,8 +128,19 @@ export default function LoginPage({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setRegSuccess(true);
-        onRegisterSuccess?.({ name: regName.trim(), account: regEmail.trim() });
+        if (data.requiresVerification) {
+          // 用真的 Email 註冊：要先輸入驗證碼確認信箱存在，才算註冊完成
+          setVerifyOpen(true);
+          setVerifyEmail(body.email);
+          setVerifyCode("");
+          setVerifyError("");
+          setVerifyDone(false);
+          setVerifyResendMsg("");
+        } else {
+          // 用手機號碼註冊：沒有真正的信箱可以驗證，直接視為完成
+          setRegSuccess(true);
+          onRegisterSuccess?.({ name: regName.trim(), account: regEmail.trim() });
+        }
       } else {
         setRegError(data.err || "註冊失敗，請再試一次");
       }
@@ -116,6 +148,146 @@ export default function LoginPage({
       setRegError("網路錯誤，請確認後端是否正常運作");
     } finally {
       setRegSubmitting(false);
+    }
+  };
+
+  const closeVerifyModal = () => {
+    setVerifyOpen(false);
+  };
+
+  const handleVerifyCode = async () => {
+    setVerifyError("");
+    if (!verifyCode.trim()) {
+      setVerifyError("請輸入驗證碼");
+      return;
+    }
+
+    setVerifySubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/verifyEmail`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verifyEmail, code: verifyCode.trim() }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setVerifyDone(true);
+        setRegSuccess(true);
+        onRegisterSuccess?.({ name: regName.trim(), account: regEmail.trim() });
+      } else {
+        setVerifyError(data.err || "驗證失敗，請再試一次");
+      }
+    } catch (err) {
+      setVerifyError("網路錯誤，請確認後端是否正常運作");
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setVerifyError("");
+    setVerifyResendMsg("");
+    setVerifySubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/resendVerification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verifyEmail }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setVerifyResendMsg("驗證碼已重新寄出，請查收信箱。");
+      } else {
+        setVerifyError(data.err || "驗證碼寄送失敗，請稍後再試");
+      }
+    } catch (err) {
+      setVerifyError("網路錯誤，請確認後端是否正常運作");
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
+  const openVerifyFromLogin = () => {
+    setVerifyOpen(true);
+    setVerifyEmail(loginEmail.trim());
+    setVerifyCode("");
+    setVerifyError("");
+    setVerifyDone(false);
+    setVerifyResendMsg("");
+  };
+
+  const openForgotModal = () => {
+    setForgotOpen(true);
+    setForgotStep("email");
+    setForgotEmail(loginEmail.trim());
+    setForgotCode("");
+    setForgotNewPw("");
+    setForgotError("");
+  };
+
+  const closeForgotModal = () => {
+    setForgotOpen(false);
+  };
+
+  const handleSendResetCode = async () => {
+    setForgotError("");
+    if (!forgotEmail.trim()) {
+      setForgotError("請輸入電子郵件");
+      return;
+    }
+
+    setForgotSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/password/forgot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setForgotStep("reset");
+      } else {
+        setForgotError(data.err || "驗證碼寄送失敗，請稍後再試");
+      }
+    } catch (err) {
+      setForgotError("網路錯誤，請確認後端是否正常運作");
+    } finally {
+      setForgotSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setForgotError("");
+    if (!forgotCode.trim() || forgotNewPw.length < 8) {
+      setForgotError("請輸入驗證碼，新密碼需至少 8 位");
+      return;
+    }
+
+    setForgotSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/password/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          code: forgotCode.trim(),
+          new_password: forgotNewPw,
+        }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setForgotStep("done");
+      } else {
+        setForgotError(data.err || "重設密碼失敗，請稍後再試");
+      }
+    } catch (err) {
+      setForgotError("網路錯誤，請確認後端是否正常運作");
+    } finally {
+      setForgotSubmitting(false);
     }
   };
 
@@ -167,13 +339,22 @@ export default function LoginPage({
                 onChange={(e) => setLoginPw(e.target.value)}
               />
               <div className="-mt-3 mb-8 text-right">
-                <button className="text-xs font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]">忘記密碼？</button>
+                <button type="button" onClick={openForgotModal} className="text-xs font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]">忘記密碼？</button>
               </div>
             </div>
 
             {loginError && (
               <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
                 {loginError}
+                {loginNeedsVerification && (
+                  <button
+                    type="button"
+                    onClick={openVerifyFromLogin}
+                    className="ml-2 font-bold underline underline-offset-2 hover:text-[#A64220]"
+                  >
+                    重新寄送驗證碼
+                  </button>
+                )}
               </div>
             )}
 
@@ -257,6 +438,183 @@ export default function LoginPage({
         </div>
 
       </div>
+
+      {/* 忘記密碼 */}
+      {forgotOpen && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={closeForgotModal}
+        >
+          <div
+            className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {forgotStep === "email" && (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">忘記密碼</h3>
+                <p className="mb-5 text-sm text-[#8C8880]">請輸入您的電子郵件，我們會寄送驗證碼給您。</p>
+                <InputField
+                  label="電子郵件"
+                  placeholder="請輸入電子郵件"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                />
+                {forgotError && (
+                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
+                    {forgotError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeForgotModal}
+                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA]"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSendResetCode}
+                    disabled={forgotSubmitting}
+                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
+                  >
+                    {forgotSubmitting ? "寄送中..." : "寄送驗證碼"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {forgotStep === "reset" && (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">輸入驗證碼</h3>
+                <p className="mb-5 text-sm text-[#8C8880]">
+                  驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{forgotEmail}</span>，10 分鐘內有效。
+                </p>
+                <InputField
+                  label="驗證碼"
+                  placeholder="請輸入 6 位數驗證碼"
+                  value={forgotCode}
+                  onChange={(e) => setForgotCode(e.target.value)}
+                />
+                <InputField
+                  label="新密碼"
+                  hint="密碼需有至少8位"
+                  type="password"
+                  placeholder="請輸入新密碼"
+                  value={forgotNewPw}
+                  onChange={(e) => setForgotNewPw(e.target.value)}
+                />
+                {forgotError && (
+                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
+                    {forgotError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setForgotStep("email")}
+                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA]"
+                  >
+                    上一步
+                  </button>
+                  <button
+                    onClick={handleResetPassword}
+                    disabled={forgotSubmitting}
+                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
+                  >
+                    {forgotSubmitting ? "重設中..." : "重設密碼"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {forgotStep === "done" && (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">密碼已重設！</h3>
+                <p className="mb-6 text-sm text-[#8C8880]">請使用新密碼重新登入。</p>
+                <button
+                  onClick={() => {
+                    setLoginEmail(forgotEmail);
+                    setLoginPw("");
+                    closeForgotModal();
+                  }}
+                  className="w-full rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]"
+                >
+                  返回登入
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 註冊信箱驗證 */}
+      {verifyOpen && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={closeVerifyModal}
+        >
+          <div
+            className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!verifyDone ? (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">驗證您的 Email</h3>
+                <p className="mb-5 text-sm text-[#8C8880]">
+                  驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。
+                </p>
+                <InputField
+                  label="驗證碼"
+                  placeholder="請輸入 6 位數驗證碼"
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value)}
+                />
+                {verifyResendMsg && (
+                  <div className="mb-4 rounded-xl bg-[#F5F0E8] px-4 py-3 text-sm text-[#1A1A18]">
+                    {verifyResendMsg}
+                  </div>
+                )}
+                {verifyError && (
+                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
+                    {verifyError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={verifySubmitting}
+                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
+                  >
+                    重新寄送
+                  </button>
+                  <button
+                    onClick={handleVerifyCode}
+                    disabled={verifySubmitting}
+                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
+                  >
+                    {verifySubmitting ? "驗證中..." : "確認驗證"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">驗證成功！</h3>
+                <p className="mb-6 text-sm text-[#8C8880]">您的帳號已完成信箱驗證，請重新登入。</p>
+                <button
+                  onClick={() => {
+                    setLoginEmail(verifyEmail);
+                    setLoginPw("");
+                    setLoginError("");
+                    setLoginNeedsVerification(false);
+                    closeVerifyModal();
+                  }}
+                  className="w-full rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]"
+                >
+                  返回登入
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
