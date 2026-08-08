@@ -37,7 +37,7 @@ from api.models import (
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, sync_expired_promoting_missions
-from api.emails import send_koc_approval_email
+from api.emails import send_koc_approval_email, send_vendor_approval_email
 
 logger = logging.getLogger(__name__)
 
@@ -724,6 +724,13 @@ def admin_vendor_review(request):
         vendor=vendor,
         action_reason=action_reason
     )
+
+    # 寄送審核通過通知信；寄信失敗不影響審核結果，只記錄下來
+    if review_status == "approved":
+        try:
+            send_vendor_approval_email(vendor)
+        except Exception as email_error:
+            logger.warning(f"寄送廠商審核通過通知信失敗（vendor_id={vendor.vendor_id}）: {email_error}")
 
     return Response({
         "success": True,

@@ -395,7 +395,7 @@ def view_wishlist(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    wishlists = Wishlist.objects.filter(user=user)
+    wishlists = Wishlist.objects.filter(user=user).select_related('product')
     result = []
     for w in wishlists:
         result.append({
@@ -404,6 +404,7 @@ def view_wishlist(request):
             'Product_id': w.product.product_id,
             'product_name': w.product.product_name,
             'price': w.product.discounted_price or w.product.price,
+            'image_url': w.product.image_url,
         })
 
     return Response(result, status=status.HTTP_200_OK)

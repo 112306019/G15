@@ -7,3 +7,4 @@ PyMySQL==1.1.1
 boto3==1.43.58
 gunicorn==26.0.0
 python-dotenv==1.2.2
+boto3

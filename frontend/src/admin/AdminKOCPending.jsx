@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Check, Clock, Instagram, X } from 'lucide-react';
-import {
-  getKOCPendingList,
-  approveKOC,
-  rejectKOC,
-} from '../api/platform';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Check, X, Mail, Instagram, Clock } from 'lucide-react';
+import { getKOCPendingList, approveKOC, rejectKOC } from '../api/platform';
+
+const ROLE_LABELS = { 0: '廠商', 1: 'KOC', 2: '消費者' };
 
 export default function AdminKOCPending() {
   const [pendingList, setPendingList] = useState([]);
@@ -48,8 +47,8 @@ export default function AdminKOCPending() {
     try {
       const res = await approveKOC({
         koc_id: koc.koc_id,
+        admin_id: parseInt(localStorage.getItem('admin_id')) || 1,
       });
-
       if (res.data.success) {
         setPendingList((prev) =>
           prev.filter((item) => item.koc_id !== koc.koc_id)
