@@ -18,18 +18,37 @@ STAGE_CODE_MAP = {
 
 def sync_expired_promoting_missions():
     """
-    Lazy-write：把 stage='promoting' 且所屬 Campaign.end_date 已過期的任務，
-    直接寫回 DB 轉成 stage='completed'。冪等、無參數，可在任何會讀取/顯示
-    mission.stage 的 view 最前面呼叫，重複呼叫是安全的（update 影響 0 筆時是 no-op）。
+    Lazy-write：
+    1. 把 stage='promoting' 且所屬 Campaign.end_date 已過期的任務，
+       轉成 stage='completed'。
+    2. 把所屬 Campaign.end_date 已過期、狀態仍是 'active' 的優惠碼，
+       改成 'expired'。這一步跟任務目前的 stage 無關（不論任務是
+       promoting 還是早已 completed，只要活動過期、優惠碼還 active
+       就會被抓到），避免補不到「任務在這次修正上線前就已經轉成
+       completed，但優惠碼當初沒被連動改掉」的舊資料。
+
+    冪等、無參數，可在任何會讀取/顯示 mission.stage 或 coupon.status
+    的 view 最前面呼叫，重複呼叫是安全的（update 影響 0 筆時是 no-op）。
     """
     from django.utils import timezone
-    from api.models import KOCMissionNew
+    from api.models import KOCMissionNew, CouponNew
 
     today = timezone.localdate()
-    return KOCMissionNew.objects.filter(
+
+    updated_missions = KOCMissionNew.objects.filter(
         stage='promoting',
         application__campaign__end_date__date__lt=today
     ).update(stage='completed')
+
+    updated_coupons = CouponNew.objects.filter(
+        status='active',
+        kocmission__application__campaign__end_date__date__lt=today
+    ).update(status='expired')
+
+    return {
+        'missions_completed': updated_missions,
+        'coupons_expired': updated_coupons
+    }
 
 # Submissions.status: 資料庫字串 <-> API 對外 integer
 SUBMISSION_STATUS_CODE_MAP = {

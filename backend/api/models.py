@@ -320,6 +320,7 @@ class CouponNew(models.Model):
         ('inactive', '未啟用'),
         ('active', '啟用中'),
         ('expired', '已過期'),
+        ('disabled', '已停用'),
     ]
 
     coupon_id = models.AutoField(

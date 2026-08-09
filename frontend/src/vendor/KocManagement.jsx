@@ -26,6 +26,8 @@ import {
 } from '../api/vendor'
 
 import { Avatar } from './components/ui'
+import { useToast } from './components/ui/Toast'
+import { useConfirm } from './components/ui/ConfirmDialog'
 import {
   formatCurrency,
   cn
@@ -166,16 +168,34 @@ function MissionStageBadge({
 function SummaryCard({
   icon: Icon,
   label,
-  value
+  value,
+  compact = false
 }) {
   return (
-    <div className="bg-white border border-[#E2DDD4] rounded-2xl px-5 py-4 shadow-sm">
-      <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] mb-2">
-        <Icon size={15} />
+    <div
+      className={cn(
+        'bg-white border border-[#E2DDD4] shadow-sm',
+        compact
+          ? 'rounded-xl px-4 py-3'
+          : 'rounded-2xl px-5 py-4'
+      )}
+    >
+      <div
+        className={cn(
+          'flex items-center gap-1.5 font-bold text-[#8C8880]',
+          compact ? 'text-[11px] mb-1.5' : 'text-xs gap-2 mb-2'
+        )}
+      >
+        <Icon size={compact ? 13 : 15} />
         {label}
       </div>
 
-      <div className="text-2xl font-black text-[#1A1A18]">
+      <div
+        className={cn(
+          'font-black text-[#1A1A18]',
+          compact ? 'text-lg' : 'text-2xl'
+        )}
+      >
         {value}
       </div>
     </div>
@@ -196,8 +216,9 @@ function CouponDetailModal({
   const canActivate =
     coupon.status !== 'active'
 
+  // 只有「啟用中」才能停用；尚未啟用/已過期/已停用都不該再顯示停用按鈕
   const canDisable =
-    coupon.status !== 'disabled'
+    coupon.status === 'active'
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -207,13 +228,13 @@ function CouponDetailModal({
       />
 
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-[2rem] border border-[#E2DDD4] shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-start justify-between px-8 py-6 bg-[#F8F9FA] border-b border-[#E2DDD4]">
+        <div className="sticky top-0 z-10 flex items-start justify-between px-6 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4]">
           <div>
-            <h2 className="text-2xl font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-xl font-serif font-bold text-[#1A1A18]">
               優惠碼詳細資訊
             </h2>
 
-            <div className="text-sm font-bold text-[#8C8880] mt-1">
+            <div className="text-sm font-bold text-[#8C8880] mt-0.5">
               {coupon.campaignName}
             </div>
           </div>
@@ -228,10 +249,18 @@ function CouponDetailModal({
         </div>
 
 
-        <div className="p-8 space-y-6">
-          <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-6">
-            <div className="text-xs font-bold text-[#C8522A] uppercase tracking-widest mb-3">
-              優惠碼
+        <div className="p-6 space-y-5">
+          {/* 優惠碼 + 狀態徽章同一列，減少獨立區塊 */}
+          <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <span className="text-xs font-bold text-[#C8522A] uppercase tracking-widest">
+                優惠碼
+              </span>
+
+              <div className="flex items-center gap-2">
+                <CouponBadge status={coupon.status} />
+                <MissionStageBadge stage={coupon.stage} />
+              </div>
             </div>
 
             <button
@@ -241,70 +270,69 @@ function CouponDetailModal({
                   coupon.promotionCode
                 )
               }
-              className="flex items-center justify-between gap-4 w-full bg-white border border-[#E2DDD4] hover:border-[#C8522A] rounded-xl px-5 py-4 transition-colors"
+              className="flex items-center justify-between gap-4 w-full bg-white border border-[#E2DDD4] hover:border-[#C8522A] rounded-xl px-4 py-3 transition-colors"
             >
-              <span className="text-xl font-mono font-black text-[#1A1A18]">
+              <span className="text-lg font-mono font-black text-[#1A1A18]">
                 {coupon.promotionCode}
               </span>
 
               {copied ===
               coupon.promotionCode ? (
                 <Check
-                  size={18}
+                  size={17}
                   className="text-[#C8522A]"
                 />
               ) : (
                 <Copy
-                  size={18}
+                  size={17}
                   className="text-[#8C8880]"
                 />
               )}
             </button>
           </div>
 
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-[#E2DDD4] rounded-2xl p-5">
-              <div className="text-xs font-bold text-[#8C8880] mb-2">
-                KOC
+          {/* 基本資訊：改成單一卡片內的緊湊列表，取代 6 個各自獨立的方框 */}
+          <div className="border border-[#E2DDD4] rounded-2xl divide-y divide-[#E2DDD4] overflow-hidden">
+            <div className="grid grid-cols-2 divide-x divide-[#E2DDD4]">
+              <div className="px-4 py-3 flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-[#8C8880]">KOC</span>
+                <span className="text-sm font-bold text-[#1A1A18] truncate">
+                  {coupon.kocId}
+                </span>
               </div>
 
-              <div className="font-bold text-[#1A1A18]">
-                {coupon.kocId}
-              </div>
-            </div>
-
-            <div className="border border-[#E2DDD4] rounded-2xl p-5">
-              <div className="text-xs font-bold text-[#8C8880] mb-2">
-                活動
-              </div>
-
-              <div className="font-bold text-[#1A1A18]">
-                {coupon.campaignName}
+              <div className="px-4 py-3 flex items-center justify-between gap-3">
+                <span className="text-xs font-bold text-[#8C8880]">活動</span>
+                <span className="text-sm font-bold text-[#1A1A18] truncate">
+                  {coupon.campaignName}
+                </span>
               </div>
             </div>
 
-            <div className="border border-[#E2DDD4] rounded-2xl p-5">
-              <div className="text-xs font-bold text-[#8C8880] mb-2">
-                優惠碼狀態
-              </div>
+            <div className="px-4 py-3 flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-[#8C8880]">優惠碼到期日</span>
 
-              <CouponBadge
-                status={coupon.status}
-              />
+              {coupon.campaignEndDate ? (
+                <span
+                  className={cn(
+                    'text-sm font-bold',
+                    new Date(coupon.campaignEndDate) < new Date()
+                      ? 'text-[#D93025]'
+                      : 'text-[#1A1A18]'
+                  )}
+                >
+                  {new Date(
+                    coupon.campaignEndDate
+                  ).toLocaleDateString('zh-TW')}
+                  {new Date(coupon.campaignEndDate) < new Date() && '（已過期）'}
+                </span>
+              ) : (
+                <span className="text-sm font-bold text-[#8C8880]">—</span>
+              )}
             </div>
 
-            <div className="border border-[#E2DDD4] rounded-2xl p-5">
+            <div className="px-4 py-3">
               <div className="text-xs font-bold text-[#8C8880] mb-2">
-                任務階段
-              </div>
-
-              <MissionStageBadge
-                stage={coupon.stage}
-              />
-            </div>
-            <div className="border border-[#E2DDD4] rounded-2xl p-5">
-              <div className="text-xs font-bold text-[#8C8880] mb-3">
                 KOC 發布連結
               </div>
 
@@ -313,18 +341,18 @@ function CouponDetailModal({
                   href={coupon.contentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#C8522A] break-all hover:border-[#C8522A] hover:underline transition-colors"
+                  className="block text-sm font-bold text-[#C8522A] break-all hover:underline"
                 >
                   {coupon.contentUrl}
                 </a>
               ) : (
-                <div className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#8C8880]">
+                <div className="text-sm font-bold text-[#8C8880]">
                   KOC 尚未提交發布連結
                 </div>
               )}
 
               {coupon.linkSubmittedTime && (
-                <div className="mt-2 text-[10px] font-bold text-[#8C8880]">
+                <div className="mt-1.5 text-[10px] font-bold text-[#8C8880]">
                   提交時間：
                   {new Date(
                     coupon.linkSubmittedTime
@@ -335,8 +363,9 @@ function CouponDetailModal({
           </div>
 
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <SummaryCard
+              compact
               icon={Ticket}
               label="優惠類型"
               value={
@@ -349,18 +378,21 @@ function CouponDetailModal({
             />
 
             <SummaryCard
+              compact
               icon={ShoppingBag}
               label="使用次數"
               value={coupon.usageCount}
             />
 
             <SummaryCard
+              compact
               icon={Wallet}
               label="KOC 分潤比例"
               value={`${coupon.kocCommissionRate}%`}
             />
 
             <SummaryCard
+              compact
               icon={Wallet}
               label="累積分潤"
               value={formatCurrency(
@@ -370,13 +402,13 @@ function CouponDetailModal({
           </div>
 
 
-          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-5 text-xs font-bold text-[#8C8880]">
+          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-xs font-bold text-[#8C8880]">
             優惠碼在文案審核通過前應維持「尚未啟用」；文案通過後，系統會自動將優惠碼設為啟用。
           </div>
         </div>
 
 
-        <div className="px-8 py-5 border-t border-[#E2DDD4] bg-[#F8F9FA] flex flex-wrap justify-end gap-3">
+        <div className="px-6 py-4 border-t border-[#E2DDD4] bg-[#F8F9FA] flex flex-wrap justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -434,6 +466,9 @@ function CouponDetailModal({
 
 
 export default function KocManagement() {
+  const { toast } = useToast()
+  const confirm = useConfirm()
+
   const vendorId =
     localStorage.getItem('vendor_id')
 
@@ -565,7 +600,10 @@ export default function KocManagement() {
 
             campaignName:
               coupon.campaign_name ||
-              '未命名活動'
+              '未命名活動',
+
+            campaignEndDate:
+              coupon.campaign_end_date || null
           }))
         )
       } catch (error) {
@@ -733,10 +771,11 @@ export default function KocManagement() {
           ? '停用'
           : '設為尚未啟用'
 
-    const confirmed =
-      window.confirm(
-        `確定要${actionLabel}優惠碼「${coupon.promotionCode}」嗎？`
-      )
+    const confirmed = await confirm({
+      title: `${actionLabel}優惠碼「${coupon.promotionCode}」？`,
+      confirmText: actionLabel,
+      danger: nextStatus === 'disabled',
+    })
 
     if (!confirmed) return
 
@@ -795,14 +834,14 @@ export default function KocManagement() {
           : previous
       )
 
-      alert(
+      toast.success(
         `優惠碼已${actionLabel}`
       )
     } catch (error) {
       const apiError =
         error.response?.data?.err
 
-      alert(
+      toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
