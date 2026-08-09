@@ -41,6 +41,8 @@ export default function LoginPage({
   const [regEmail, setRegEmail] = useState("");
   const [regPw, setRegPw] = useState("");
   const [regTerms, setRegTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [regError, setRegError] = useState("");
   const [regSubmitting, setRegSubmitting] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
@@ -405,7 +407,23 @@ export default function LoginPage({
                 className="mt-1 h-4 w-4 rounded border-[#E2DDD4] text-[#1A1A18] focus:ring-[#1A1A18]"
               />
               <span className="text-xs font-medium leading-relaxed text-[#8C8880]">
-                建立帳戶即表示您同意我們的條款和條件以及隱私權政策。
+                建立帳戶即表示您同意我們的
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="underline text-[#1A1A18] mx-1"
+                >
+                  條款和條件
+                </button>
+                以及
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyModal(true)}
+                  className="underline text-[#1A1A18] mx-1"
+                >
+                  隱私權政策
+                </button>
+                。
               </span>
             </div>
 
@@ -612,6 +630,117 @@ export default function LoginPage({
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 條款和條件彈窗 */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-[#1A1A18] mb-6">服務條款</h3>
+            <div className="space-y-4 text-sm text-[#8C8880] leading-relaxed">
+              <p><strong className="text-[#1A1A18]">第一條、總則</strong><br />
+              歡迎使用本平台（以下稱「本服務」）。本服務條款（以下稱「本條款」）係規範使用者與本平台間之權利義務關係。使用者於完成註冊程序或開始使用本服務時，即視為已閱讀、瞭解並同意接受本條款之全部內容。若使用者不同意本條款之任一部分，應立即停止使用本服務。</p>
+
+              <p><strong className="text-[#1A1A18]">第二條、名詞定義</strong><br />
+              一、「本平台」：指提供消費者、關鍵意見消費者（KOC）與廠商間商品交易、內容合作及行銷推廣服務之網站及應用程式。<br />
+              二、「使用者」：指以任何方式註冊、瀏覽或使用本服務之自然人或法人，包含消費者、KOC 及廠商。<br />
+              三、「內容」：指使用者於本平台發布、上傳或提交之任何文字、圖片、影音或其他形式之資料。</p>
+
+              <p><strong className="text-[#1A1A18]">第三條、服務內容</strong><br />
+              本平台提供商品瀏覽、購買、金流處理、KOC 合作媒合、優惠碼核銷及成效分析等相關服務。本平台得依營運需求，隨時新增、修改或終止部分服務內容，並以系統公告方式通知使用者。</p>
+
+              <p><strong className="text-[#1A1A18]">第四條、帳號註冊與管理</strong><br />
+              一、使用者申請註冊時，應提供真實、正確、最新及完整之個人資料。<br />
+              二、使用者應妥善保管帳號及密碼，不得轉讓、出借予第三人使用。<br />
+              三、使用者對其帳號登入後所為之一切行為，應負完全之法律責任。<br />
+              四、如發現帳號遭他人非法使用，應立即通知本平台採取應變措施。</p>
+
+              <p><strong className="text-[#1A1A18]">第五條、使用者義務與禁止行為</strong><br />
+              使用者不得利用本服務從事下列行為：<br />
+              一、上傳、發布虛偽不實、誇大不實或誤導性之商品資訊或行銷內容。<br />
+              二、侵害他人之智慧財產權、隱私權或其他合法權益。<br />
+              三、以不正當方式干擾本平台系統之正常運作，包含但不限於植入惡意程式、進行未經授權之存取等。<br />
+              四、從事詐欺、洗錢或其他違反法令之行為。</p>
+
+              <p><strong className="text-[#1A1A18]">第六條、交易與付款</strong><br />
+              一、平台上商品之價格、規格及庫存等資訊，以廠商刊登之內容為準，本平台不保證其正確性，惟將盡合理注意義務。<br />
+              二、使用者於本平台完成訂購並付款後，本平台將依廠商出貨流程處理訂單。<br />
+              三、退換貨、爭議處理事宜依平台公告之消費者保護相關規範辦理。</p>
+
+              <p><strong className="text-[#1A1A18]">第七條、KOC 合作機制</strong><br />
+              經核准之 KOC 得於本平台申請參與廠商發起之行銷活動，並使用平台核發之專屬優惠碼。因優惠碼使用所生之分潤，依各活動公告之比例計算並發放。KOC 資格得因違反本條款、提供不實資訊或社群帳號無法公開查證等情事而遭暫停或終止。</p>
+
+              <p><strong className="text-[#1A1A18]">第八條、智慧財產權</strong><br />
+              本平台之網站架構、系統程式及介面設計等相關權利，均屬本平台或其權利人所有。使用者於本平台發布之內容，仍保有其智慧財產權，惟同意授權本平台於服務範圍內合理使用、展示該內容。</p>
+
+              <p><strong className="text-[#1A1A18]">第九條、免責聲明</strong><br />
+              本平台已盡合理之注意義務維護系統穩定運作，惟因不可抗力、系統維護或其他非可歸責於本平台之事由，致服務中斷或資料遺失時，本平台不負損害賠償責任。</p>
+
+              <p><strong className="text-[#1A1A18]">第十條、條款修訂</strong><br />
+              本平台得因法令變更或營運需要修訂本條款，修訂後之條款將於系統公告，使用者於公告後繼續使用本服務，視為同意修訂後之條款內容。</p>
+
+              <p><strong className="text-[#1A1A18]">第十一條、準據法與管轄法院</strong><br />
+              本條款之解釋與適用，以中華民國法律為準據法。因本條款所生之爭議，雙方同意以台灣台北地方法院為第一審管轄法院。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTermsModal(false)}
+              className="mt-8 w-full rounded-full bg-[#1A1A18] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+            >
+              我已閱讀
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 隱私權政策彈窗 */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-[#1A1A18] mb-6">隱私權政策</h3>
+            <div className="space-y-4 text-sm text-[#8C8880] leading-relaxed">
+              <p>本平台（以下稱「本平台」）非常重視使用者之個人資料保護，依據中華民國個人資料保護法及相關法令規定，制定本隱私權政策，說明本平台蒐集、處理及利用使用者個人資料之方式，請使用者詳閱下列內容。</p>
+
+              <p><strong className="text-[#1A1A18]">一、適用範圍</strong><br />
+              本政策適用於使用者於本平台網站及應用程式中所提供之個人資料，不適用於本平台以外之第三方網站或服務。</p>
+
+              <p><strong className="text-[#1A1A18]">二、蒐集之個人資料類別</strong><br />
+              本平台於使用者註冊、購物、申請成為 KOC 或廠商、聯繫客服等過程中，將蒐集下列類別之個人資料：<br />
+              （一）識別類：姓名、帳號、電子郵件信箱、聯絡電話。<br />
+              （二）交易類：收件地址、付款資訊、訂單紀錄。<br />
+              （三）社群類：KOC 申請者提供之社群帳號名稱與連結。<br />
+              （四）系統紀錄類：登入時間、IP 位址、使用裝置資訊。</p>
+
+              <p><strong className="text-[#1A1A18]">三、個人資料蒐集之目的</strong><br />
+              本平台蒐集個人資料之目的包括：會員註冊與身分驗證、訂單處理與物流配送、KOC 資格審核與分潤計算、客服聯繫與爭議處理、行銷活動通知及提升服務品質之統計分析。</p>
+
+              <p><strong className="text-[#1A1A18]">四、個人資料利用之期間、地區、對象及方式</strong><br />
+              （一）期間：自使用者提供資料起，至帳號終止或依法令規定之保存期限屆滿為止。<br />
+              （二）地區：本平台及其委託處理之合作廠商所在地。<br />
+              （三）對象：本平台及依業務需要委託之金流、物流等合作廠商。<br />
+              （四）方式：以自動化及非自動化方式蒐集、處理及利用。</p>
+
+              <p><strong className="text-[#1A1A18]">五、使用者權利</strong><br />
+              使用者得依個人資料保護法規定，向本平台行使下列權利：查詢或請求閱覽、請求製給複製本、請求補充或更正、請求停止蒐集處理利用、請求刪除。使用者得透過客服管道提出請求，本平台將於合理期間內處理，惟涉及交易紀錄等依法應保存之資料不在此限。</p>
+
+              <p><strong className="text-[#1A1A18]">六、Cookie 與追蹤技術之使用</strong><br />
+              本平台為提供更佳之使用體驗，將使用 Cookie 及類似技術記錄使用者之瀏覽行為與偏好設定。使用者得透過瀏覽器設定拒絕 Cookie，惟可能影響部分服務功能之使用。</p>
+
+              <p><strong className="text-[#1A1A18]">七、資料安全維護措施</strong><br />
+              本平台採取合理之技術與管理措施保護個人資料，包括但不限於密碼加密儲存、存取權限控管及定期資安檢視，以避免個人資料遭未經授權之存取、洩漏、竄改或毀損。</p>
+
+              <p><strong className="text-[#1A1A18]">八、政策修訂</strong><br />
+              本政策將因應法令變更或業務需要適時修訂，修訂後之內容將公告於本平台，請使用者隨時留意最新版本。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyModal(false)}
+              className="mt-8 w-full rounded-full bg-[#1A1A18] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+            >
+              我已閱讀
+            </button>
           </div>
         </div>
       )}
