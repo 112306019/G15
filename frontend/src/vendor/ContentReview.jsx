@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Check,
   X,
@@ -21,6 +21,8 @@ import {
 
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
+import { useToast } from './components/ui/Toast'
+import { useConfirm } from './components/ui/ConfirmDialog'
 
 import {
   getVendorApplications,
@@ -237,6 +239,9 @@ export default function ContentReview() {
   const vendorId =
     localStorage.getItem('vendor_id')
 
+  const { toast } = useToast()
+  const confirm = useConfirm()
+
   // 顯示中的分頁
   const [stage, setStage] =
     useState('qualification')
@@ -291,6 +296,18 @@ export default function ContentReview() {
   const [category, setCategory] = useState('food')
   const [aiResult, setAiResult] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+
+  // 展開中的「歷史投稿紀錄」missionId 清單
+  const [expandedHistoryIds, setExpandedHistoryIds] =
+    useState([])
+
+  const toggleHistory = (missionKey) => {
+    setExpandedHistoryIds(previous =>
+      previous.includes(missionKey)
+        ? previous.filter(id => id !== missionKey)
+        : [...previous, missionKey]
+    )
+  }
 
   const handleAiCheck = async (caption) => {
     if (!caption) return
@@ -513,6 +530,60 @@ export default function ContentReview() {
   }, [vendorId])
 
 
+  const sortedApplications =
+    useMemo(
+      () =>
+        [...applications].sort(
+          (a, b) =>
+            new Date(b.appliedAt) -
+            new Date(a.appliedAt)
+        ),
+      [applications]
+    )
+
+  const sortedSubmissions =
+    useMemo(
+      () =>
+        [...submissions].sort(
+          (a, b) =>
+            new Date(b.submittedAt) -
+            new Date(a.submittedAt)
+        ),
+      [submissions]
+    )
+
+  // 同一個 kocMissionId 若被退回重新提交，會產生多筆投稿紀錄；
+  // 這裡只保留最新一筆作為可審核項目，其餘收進 history 供展開查看
+  const groupedSubmissions =
+    useMemo(() => {
+      const byMission = new Map()
+
+      for (const submission of sortedSubmissions) {
+        const key =
+          submission.kocMissionId ||
+          submission.id
+
+        if (!byMission.has(key)) {
+          byMission.set(key, [])
+        }
+
+        byMission.get(key).push(submission)
+      }
+
+      return Array.from(byMission.values()).map(
+        group => {
+          const [latest, ...history] = group
+
+          return {
+            ...latest,
+            historyCount: history.length,
+            history
+          }
+        }
+      )
+    }, [sortedSubmissions])
+
+
   // ─── 統計資料 ─────────────────────────────────────────────
 
   const qualificationCounts = {
@@ -617,7 +688,7 @@ export default function ContentReview() {
       reviewStatus === 'rejected' &&
       !qualificationNote.trim()
     ) {
-      alert('拒絕申請時請填寫原因')
+      toast.error('拒絕申請時請填寫原因')
       return
     }
 
@@ -626,9 +697,16 @@ export default function ContentReview() {
         ? '通過這筆接案申請'
         : '拒絕這筆接案申請'
 
-    const confirmed = window.confirm(
-      `確定要${actionText}嗎？`
-    )
+    const confirmed = await confirm({
+      title: `確定要${actionText}嗎？`,
+      description:
+        reviewStatus === 'approved'
+          ? '通過後系統會建立 KOC 任務並產生尚未啟用的優惠碼。'
+          : 'KOC 會收到拒絕通知，此動作無法復原。',
+      confirmText:
+        reviewStatus === 'approved' ? '通過申請' : '拒絕申請',
+      danger: reviewStatus === 'rejected',
+    })
 
     if (!confirmed) return
 
@@ -688,7 +766,7 @@ export default function ContentReview() {
         )
       )
 
-      alert(
+      toast.success(
         reviewStatus === 'approved'
           ? '接案申請已通過，任務與未啟用優惠碼已建立'
           : '接案申請已拒絕'
@@ -745,7 +823,7 @@ export default function ContentReview() {
       reviewStatus === 'revising' &&
       !submissionNote.trim()
     ) {
-      alert('退回修改時請填寫原因')
+      toast.error('退回修改時請填寫原因')
       return
     }
 
@@ -754,10 +832,16 @@ export default function ContentReview() {
         ? '核准這篇文案並啟用優惠碼'
         : '退回這篇文案'
 
-    const confirmed =
-      window.confirm(
-        `確定要${actionText}嗎？`
-      )
+    const confirmed = await confirm({
+      title: `確定要${actionText}嗎？`,
+      description:
+        reviewStatus === 'approved'
+          ? '核准後優惠碼會正式啟用，KOC 可以開始使用。'
+          : 'KOC 會收到退回通知與您填寫的修改原因。',
+      confirmText:
+        reviewStatus === 'approved' ? '核准文案' : '退回修改',
+      danger: reviewStatus !== 'approved',
+    })
 
     if (!confirmed) return
 
@@ -828,7 +912,7 @@ export default function ContentReview() {
         )
       )
 
-      alert(
+      toast.success(
         reviewStatus === 'approved'
           ? '文案已核准，優惠碼已正式啟用'
           : '文案已退回修改'
@@ -988,7 +1072,7 @@ export default function ContentReview() {
                         {applicationError}
                       </td>
                     </tr>
-                  ) : applications.length === 0 ? (
+                  ) : sortedApplications.length === 0 ? (
                     <tr>
                       <td
                         colSpan={6}
@@ -998,7 +1082,7 @@ export default function ContentReview() {
                       </td>
                     </tr>
                   ) : (
-                    applications.map(application => {
+                    sortedApplications.map(application => {
                       const canReview =
                         application.status === 'pending'
 
@@ -1330,7 +1414,7 @@ export default function ContentReview() {
                         {submissionError}
                       </td>
                     </tr>
-                  ) : submissions.length === 0 ? (
+                  ) : groupedSubmissions.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -1340,7 +1424,7 @@ export default function ContentReview() {
                       </td>
                     </tr>
                   ) : (
-                    submissions.map(submission => {
+                    groupedSubmissions.map(submission => {
                       const canReview =
                         submission.status ===
                         'pending' ||
@@ -1350,8 +1434,8 @@ export default function ContentReview() {
                         'revising'
 
                       return (
+                        <React.Fragment key={submission.id}>
                         <tr
-                          key={submission.id}
                           onClick={() => {
                             if (!canReview) return
 
@@ -1442,15 +1526,85 @@ export default function ContentReview() {
                           </td>
 
                           <td className="p-5">
-                            <Pill
-                              cfg={
-                                submissionBadge[
-                                submission.status
-                                ]
-                              }
-                            />
+                            <div className="flex items-center gap-2">
+                              <Pill
+                                cfg={
+                                  submissionBadge[
+                                  submission.status
+                                  ]
+                                }
+                              />
+
+                              {submission.historyCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    toggleHistory(
+                                      submission.kocMissionId ||
+                                      submission.id
+                                    )
+                                  }}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-1 rounded-md hover:border-[#C8522A] hover:text-[#C8522A] transition-colors"
+                                >
+                                  <RotateCcw size={10} />
+                                  已重新提交 {submission.historyCount} 次
+                                  {expandedHistoryIds.includes(
+                                    submission.kocMissionId ||
+                                    submission.id
+                                  ) ? ' ▲' : ' ▼'}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
+
+                        {submission.historyCount > 0 &&
+                          expandedHistoryIds.includes(
+                            submission.kocMissionId ||
+                            submission.id
+                          ) && (
+                            <tr className="bg-[#F8F9FA]">
+                              <td colSpan={7} className="px-5 pb-4 pt-1">
+                                <div className="ml-[52px] space-y-2 border-l-2 border-[#E2DDD4] pl-4">
+                                  <div className="text-[10px] font-bold text-[#8C8880] uppercase tracking-widest mb-1">
+                                    先前投稿紀錄
+                                  </div>
+
+                                  {submission.history.map(past => (
+                                    <div
+                                      key={past.id}
+                                      className="flex items-start justify-between gap-4 text-xs bg-white border border-[#E2DDD4] rounded-xl px-4 py-3"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-[#8C8880] line-clamp-2">
+                                          {past.caption || '（未填寫文案）'}
+                                        </p>
+
+                                        {past.vendorFeedback && (
+                                          <p className="text-[#D93025] font-bold mt-1">
+                                            退回原因：{past.vendorFeedback}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                        <Pill
+                                          cfg={submissionBadge[past.status]}
+                                        />
+                                        <span className="text-[10px] font-medium text-[#8C8880] whitespace-nowrap">
+                                          {past.submittedAt
+                                            ? new Date(past.submittedAt).toLocaleString('zh-TW')
+                                            : '—'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       )
                     })
                   )}

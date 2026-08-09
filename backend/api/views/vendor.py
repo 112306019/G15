@@ -1890,6 +1890,7 @@ def vendor_coupon_get_usage_list(request):
             "application_id": application.application_id,
             "campaign_id": str(campaign.campaign_id),
             "campaign_name": campaign.name,
+            "campaign_end_date": campaign.end_date,
             "vendor_id": campaign.vendor_id,
 
             "content_url": (
@@ -1947,7 +1948,7 @@ def vendor_coupon_update_status(request):
             "err": "status is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    valid_status = ["active", "inactive", "expired"]
+    valid_status = ["active", "inactive", "expired", "disabled"]
 
     if coupon_status not in valid_status:
         return Response({
@@ -1972,6 +1973,14 @@ def vendor_coupon_update_status(request):
             "success": False,
             "err": "This coupon does not belong to this vendor"
         }, status=status.HTTP_403_FORBIDDEN)
+
+    # 只有「啟用中」的優惠碼才能被停用；尚未啟用/已過期/已停用
+    # 都不該再被改成 disabled，避免狀態轉換不合理
+    if coupon_status == "disabled" and coupon.status != "active":
+        return Response({
+            "success": False,
+            "err": f"Cannot disable a coupon with status '{coupon.status}'"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     coupon.status = coupon_status
     coupon.save()

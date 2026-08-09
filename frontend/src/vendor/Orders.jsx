@@ -22,6 +22,9 @@ import {
   cn
 } from './lib/utils'
 
+import { useToast } from './components/ui/Toast'
+import { useConfirm } from './components/ui/ConfirmDialog'
+
 
 const shippingFilters = [
   'all',
@@ -615,6 +618,9 @@ function OrderDetailModal({
 
 
 export default function Orders() {
+  const { toast } = useToast()
+  const confirm = useConfirm()
+
   const vendorId =
     localStorage.getItem('vendor_id')
 
@@ -785,14 +791,19 @@ export default function Orders() {
 
   const filteredOrders =
     useMemo(() => {
-      if (filter === 'all') {
-        return orders
-      }
+      const base =
+        filter === 'all'
+          ? orders
+          : orders.filter(
+              order =>
+                order.shippingStatus ===
+                filter
+            )
 
-      return orders.filter(
-        order =>
-          order.shippingStatus ===
-          filter
+      return [...base].sort(
+        (a, b) =>
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
       )
     }, [orders, filter])
 
@@ -982,10 +993,10 @@ export default function Orders() {
   ) {
     if (!selectedOrder) return
 
-    const confirmed =
-      window.confirm(
-        `確定要將出貨狀態改為「${shippingLabels[shippingStatus]}」嗎？`
-      )
+    const confirmed = await confirm({
+      title: `將出貨狀態改為「${shippingLabels[shippingStatus]}」？`,
+      confirmText: '確認更新',
+    })
 
     if (!confirmed) return
 
@@ -1042,12 +1053,12 @@ export default function Orders() {
           : previous
       )
 
-      alert('出貨狀態已更新')
+      toast.success('出貨狀態已更新')
     } catch (error) {
       const apiError =
         error.response?.data?.err
 
-      alert(
+      toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
@@ -1082,9 +1093,11 @@ export default function Orders() {
   async function handleBulkUpdateShipping() {
     if (selectedOrderIds.length === 0) return
 
-    const confirmed = window.confirm(
-      `確定要將選取的 ${selectedOrderIds.length} 筆訂單出貨狀態改為「${shippingLabels[bulkStatus]}」嗎？`
-    )
+    const confirmed = await confirm({
+      title: `批次更新 ${selectedOrderIds.length} 筆訂單？`,
+      description: `出貨狀態將改為「${shippingLabels[bulkStatus]}」。`,
+      confirmText: '確認更新',
+    })
 
     if (!confirmed) return
 
@@ -1127,11 +1140,11 @@ export default function Orders() {
 
       setSelectedOrderIds([])
 
-      alert(
-        failedCount === 0
-          ? `已更新 ${succeededIds.length} 筆訂單的出貨狀態`
-          : `已更新 ${succeededIds.length} 筆，${failedCount} 筆更新失敗，請個別確認`
-      )
+      if (failedCount === 0) {
+        toast.success(`已更新 ${succeededIds.length} 筆訂單的出貨狀態`)
+      } else {
+        toast.error(`已更新 ${succeededIds.length} 筆，${failedCount} 筆更新失敗，請個別確認`)
+      }
     } finally {
       setBulkUpdating(false)
     }
@@ -1373,7 +1386,7 @@ export default function Orders() {
 
                         <td className="p-5">
                           {order.promotionCode ? (
-                            <span className="text-xs font-mono font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-1.5 rounded-lg">
+                            <span className="text-xs font-mono font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-1.5 rounded-lg whitespace-nowrap">
                               {
                                 order.promotionCode
                               }
