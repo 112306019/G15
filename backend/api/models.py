@@ -14,6 +14,7 @@ class User(models.Model):
     password = models.CharField(max_length=128)
     phone = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
+    password_updated_at = models.DateTimeField(null=True, blank=True, db_column='password_updated_at')
 
     class Meta:
         db_table = 'User'
@@ -43,6 +44,7 @@ class KOC(models.Model):
     koc_id = models.CharField(max_length=50, unique=True, primary_key=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='koc_profile')
     fb_account = models.CharField(max_length=100, blank=True, default='', db_column='fb_account')
+    fb_url = models.CharField(max_length=300, blank=True, default='', db_column='fb_url')
     ig_account = models.CharField(max_length=100, blank=True, default='', db_column='ig_account')
     ig_url = models.CharField(max_length=300, blank=True, default='', db_column='ig_url')
     threads_account = models.CharField(max_length=100, blank=True, default='', db_column='threads_account')
@@ -724,5 +726,16 @@ class Message(models.Model):
         db_table = 'Message'
         ordering = ['created_at']  # 依時間排序，最舊的在最上面
 
+class LoginHistory(models.Model):
+    log_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='login_history')
+    ip_address = models.CharField(max_length=50, blank=True, null=True)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+    login_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Login_History'
+        ordering = ['-login_at']
+
     def __str__(self):
-        return f"Message {self.message_id} in Room {self.room_id}"
+        return f"{self.user_id} - {self.login_at}"

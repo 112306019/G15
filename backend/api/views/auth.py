@@ -7,6 +7,7 @@ from rest_framework import status
 from api.models import Admins, User
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
+from api.models import Admins, User, LoginHistory
 
 ## 使用者註冊
 @api_view(['POST'])
@@ -97,6 +98,16 @@ def user_login(request):
         defaults={'email': user.email}
     )
     refresh = RefreshToken.for_user(auth_user)
+    
+    # 記錄登入紀錄
+    try:
+        LoginHistory.objects.create(
+            user=user,
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
+        )
+    except Exception:
+        pass
 
     return Response({
         'success': True,
@@ -152,4 +163,81 @@ def admin_login(request):
         'Role': admin.role,
         'Status': admin.status,
         'Last_login_at': admin.last_login_at,
+    }, status=status.HTTP_200_OK)
+    
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_login_history(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response(
+            {'success': False, 'err': 'user_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到對應的使用者'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    logs = LoginHistory.objects.filter(user=user).order_by('-login_at')[:10]
+
+    result = []
+    for log in logs:
+        result.append({
+            'log_id': log.log_id,
+            'ip_address': log.ip_address,
+            'user_agent': log.user_agent,
+            'login_at': log.login_at,
+        })
+
+    return Response({
+        'success': True,
+        'logs': result,
+    }, status=status.HTTP_200_OK)
+    
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def change_password(request):
+    user_id = request.data.get('user_id')
+    current_password = request.data.get('current_password')
+    new_password = request.data.get('new_password')
+
+    if not user_id or not current_password or not new_password:
+        return Response(
+            {'success': False, 'err': 'user_id、current_password、new_password 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if len(new_password) < 8:
+        return Response(
+            {'success': False, 'err': '新密碼需至少 8 位'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到對應的使用者'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not check_password(current_password, user.password):
+        return Response(
+            {'success': False, 'err': '目前密碼不正確'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    user.password = make_password(new_password)
+    user.password_updated_at = timezone.now()
+    user.save()
+
+    return Response({
+        'success': True,
+        'message': '密碼已更新',
     }, status=status.HTTP_200_OK)

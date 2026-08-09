@@ -112,8 +112,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 }
 
 // 刷新後這些頁面需要的資料（selectedTask/selectedProduct）只存在記憶體、不會留下來，
-// 還原時不能停在這些頁面，只能退回各自的清單頁
-const VIEWS_NEEDING_TRANSIENT_DATA = ['task_detail', 'sales_data', 'product_detail'];
+const VIEWS_NEEDING_TRANSIENT_DATA = ['task_detail', 'sales_data'];
 
 // 從 localStorage 恢復登入狀態與刷新前所在頁面；role 一律存字串，比對時需轉型
 function getRestoredAuth() {
@@ -128,7 +127,13 @@ function getRestoredAuth() {
       : defaultView;
     return { view: restoredView, userRole: mappedRole };
   }
-  return { view: 'welcome', userRole: 'guest' };
+
+  // 訪客：也嘗試還原上次瀏覽的頁面
+  const savedView = localStorage.getItem('view');
+  const restoredView = savedView && !VIEWS_NEEDING_TRANSIENT_DATA.includes(savedView)
+    ? savedView
+    : 'shop';
+  return { view: restoredView, userRole: 'guest' };
 }
 
 function MainSystem() {
@@ -162,12 +167,69 @@ function MainSystem() {
 
   const navigate = useNavigate();
 
+  const [roleSyncing, setRoleSyncing] = useState(true);
+
+  // 頁面載入時，重新確認 KOC 審核狀態是否有變化（例如剛被 Admin 核准）
+useEffect(() => {
+    const syncUserRole = async () => {
+      const userId = localStorage.getItem("userId");
+      const token = localStorage.getItem("token");
+      if (!userId || !token) {
+        setRoleSyncing(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/koc/profile/getProfile?user_id=${userId}`);
+        const data = await res.json();
+        if (data.success && data.koc_id && data.approval_status === 'approved') {
+          if (userRole !== 'koc') {
+            localStorage.setItem('role', '1');
+            setUserRole('koc');
+            // 如果剛好停留在申請頁，導向 KOC 首頁
+            if (view === 'applyKoc') {
+              setView('home');
+            }
+          }
+        }
+      } catch (err) {
+        console.error("同步身分失敗", err);
+      } finally {
+        setRoleSyncing(false);
+      }
+    };
+    syncUserRole();
+  }, []);
+
   // 登入狀態下，記住每次切換的 view，刷新時才能還原到原本所在的頁面（而非固定跳回預設頁）
   useEffect(() => {
-    if (localStorage.getItem('token')) {
-      localStorage.setItem('view', view);
-    }
+    localStorage.setItem('view', view);
   }, [view]);
+
+  useEffect(() => {
+    const restoreProductDetail = async () => {
+      if (view === 'product_detail' && !selectedProduct) {
+        const lastProductId = localStorage.getItem('lastProductId');
+        if (!lastProductId) {
+          setView('shop');
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/consumer/products`);
+          const data = await res.json();
+          const found = data.find(p => String(p.Product_id) === String(lastProductId));
+          if (found) {
+            setSelectedProduct(found);
+          } else {
+            setView('shop');
+          }
+        } catch (err) {
+          setView('shop');
+        }
+      }
+    };
+    restoreProductDetail();
+  }, [view, selectedProduct]);
 
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
@@ -190,6 +252,7 @@ function MainSystem() {
       if (targetView === 'task_detail') setSelectedTask(data);
       if (targetView === 'product_detail') {
         setSelectedProduct(data);
+        localStorage.setItem('lastProductId', data.Product_id);
         setTimeout(() => setView(targetView), 0);
         return;
       }
@@ -210,6 +273,14 @@ function MainSystem() {
     if (['orders', 'order_detail'].includes(view)) return 'orders';
     return view;
   };
+
+  if (roleSyncing) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">載入中...</p>
+      </div>
+    );
+  }
 
   const showHeader = !['welcome', 'login'].includes(view);
 

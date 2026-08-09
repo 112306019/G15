@@ -492,6 +492,7 @@ def koc_get_pending_list(request):
             "ig_account": koc.ig_account,
             "ig_url": koc.ig_url,
             "fb_account": koc.fb_account,
+            "fb_url": koc.fb_url,
             "threads_account": koc.threads_account,
             "threads_url": koc.threads_url,
             "user_role": ROLE_CODE_MAP.get(koc.user.role, -1), 
@@ -1195,6 +1196,7 @@ def koc_get_list(request):
             "name": koc.user.name,
             "ig_account": koc.ig_account,
             "fb_account": koc.fb_account,
+            "fb_url": koc.fb_url,
             "threads_account": koc.threads_account,
             "status": 1 if koc.is_suspended else 0,  # 0:已啟用, 1:已停權
         })

@@ -19,7 +19,9 @@ class UpdateKOCProfileSerializer(serializers.Serializer):
     address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     bank_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     bank_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
+    fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
     ig_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)   # 新增
     threads_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)  # 新增
 
@@ -107,28 +109,33 @@ class KOCApplySerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     email = serializers.EmailField(required=False, allow_null=True)
     fb_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    fb_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     ig_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     ig_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     threads_account = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     threads_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    def validate(self, data):
-        # 至少要填一個社群帳號
-        if not any([
-            data.get('fb_account'),
-            data.get('ig_account'),
-            data.get('threads_account')
-        ]):
-            raise serializers.ValidationError("請至少填入一個社群帳號")
+def validate(self, data):
+    # 至少要填一個社群帳號
+    if not any([
+        data.get('fb_account'),
+        data.get('ig_account'),
+        data.get('threads_account')
+    ]):
+        raise serializers.ValidationError("請至少填入一個社群帳號")
 
-        # 填了帳號就必須填連結
-        if data.get('ig_account') and not data.get('ig_url'):
-            raise serializers.ValidationError("填寫 IG 帳號後，請務必附上 IG 連結")
+    # 填了帳號就必須填連結
+    if data.get('fb_account') and not data.get('fb_url'):
+        raise serializers.ValidationError("填寫 FB 帳號後，請務必附上 FB 連結")
 
-        if data.get('threads_account') and not data.get('threads_url'):
-            raise serializers.ValidationError("填寫 Threads 帳號後，請務必附上 Threads 連結")
+    if data.get('ig_account') and not data.get('ig_url'):
+        raise serializers.ValidationError("填寫 IG 帳號後，請務必附上 IG 連結")
 
-        return data
+    if data.get('threads_account') and not data.get('threads_url'):
+        raise serializers.ValidationError("填寫 Threads 帳號後，請務必附上 Threads 連結")
+
+    return data
     
 # ──────────────────────────────────────────────
 # 平台端部分

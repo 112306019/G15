@@ -66,13 +66,16 @@ def get_koc_profile(request):
         "real_name": user.name,
         "phone": user.phone,
         "email": user.email,
+        "password_updated_at": user.password_updated_at,
         "koc_id": koc.koc_id if koc else None,
         "approval_status": koc.approval_status if koc else None,
+        "reject_reason": koc.reject_reason if koc else None,
         "address": koc.address if koc else None,
         "bank_account": koc.bank_account if koc else None,
         "bank_number": koc.bank_number if koc else None,
         "ig_account": koc.ig_account if koc else None,
         "fb_account": koc.fb_account if koc else None,
+        "fb_url": koc.fb_url if koc else None,
         "threads_account": koc.threads_account if koc else None,
     }, status=http_status.HTTP_200_OK)
 
@@ -130,6 +133,8 @@ def update_koc_profile(request):
         koc.address = data['address']
     if data.get('fb_account') is not None:      # 新增
         koc.fb_account = data['fb_account']
+    if data.get('fb_url') is not None:
+        koc.fb_url = data['fb_url']
     if data.get('ig_account') is not None:      # 新增
         koc.ig_account = data['ig_account']
     if data.get('threads_account') is not None:  # 新增
@@ -1310,6 +1315,7 @@ def koc_apply(request):
         elif existing_koc.approval_status == 'rejected':
             # 被拒絕過，允許重新申請
             existing_koc.fb_account = data.get('fb_account') or ''
+            existing_koc.fb_url = data.get('fb_url') or ''
             existing_koc.ig_account = data.get('ig_account') or ''
             existing_koc.ig_url = data.get('ig_url') or ''
             existing_koc.threads_account = data.get('threads_account') or ''
@@ -1329,6 +1335,7 @@ def koc_apply(request):
     koc = KOC.objects.create(
         user=user,
         fb_account=data.get('fb_account') or '',
+        fb_url=data.get('fb_url') or '',
         ig_account=data.get('ig_account') or '',
         ig_url=data.get('ig_url') or '',
         threads_account=data.get('threads_account') or '',

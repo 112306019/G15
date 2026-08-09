@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import views
-from .views.auth import user_signup, user_login
+from .views.auth import user_signup, user_login, get_login_history, change_password
 from .views.platform import (
     admin_login,
     get_consumers,
@@ -193,5 +193,7 @@ urlpatterns = [
     path('platform/overview', admin_overview, name='admin-overview'),
     path('platform/coupons', admin_coupon_usage, name='admin-coupon-usage'),
     path('platform/performance', admin_performance, name='admin-performance'),
-
+    
+    path('user/loginHistory', get_login_history, name='get-login-history'),
+    path('user/changePassword', change_password, name='change-password'),
 ]
