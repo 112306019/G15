@@ -280,11 +280,21 @@ export default function AdminKOCPending() {
                               </span>
                             ))}
 
-                          {koc.fb_account && (
-                            <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit">
-                              FB：{koc.fb_account}
-                            </span>
-                          )}
+                          {koc.fb_account &&
+                            (koc.fb_url ? (
+                              
+                              <a                                href={koc.fb_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-bold text-[#C8522A] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit hover:underline"
+                              >
+                                FB：{koc.fb_account}
+                              </a>
+                            ) : (
+                              <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit">
+                                FB：{koc.fb_account}
+                              </span>
+                            ))}
 
                           {koc.threads_account &&
                             (koc.threads_url ? (

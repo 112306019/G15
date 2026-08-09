@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Lock } from "lucide-react";
+import { API_BASE_URL } from "../config";
 
 // 高質感 Modal 彈窗
 function Modal({ open, title, onClose, children }) {
@@ -32,30 +33,119 @@ export default function SecurityPage({ onLogout }) {
   const [confirmPw, setConfirmPw] = useState("");
   const [toast, setToast] = useState({ show: false, message: "" });
 
-  const [sessions, setSessions] = useState([
-    { id: "session0", name: "Session", current: true, date: "May 14, 2021 at 08:36pm" },
-    { id: "session1", name: "macOs Big Sur. Chrome", current: false, date: "May 14, 2021 at 08:36pm" },
-    { id: "session2", name: "Session", current: false, date: "May 14, 2021 at 08:36pm" },
-  ]);
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [passwordUpdatedAt, setPasswordUpdatedAt] = useState(null);
+
+  useEffect(() => {
+    const fetchLoginHistory = async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) {
+        setLoadingSessions(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/loginHistory?user_id=${userId}`);
+        const data = await res.json();
+        if (data.success) {
+          const formatted = data.logs.map((log, index) => ({
+            id: log.log_id,
+            name: parseUserAgent(log.user_agent),
+            current: index === 0,
+            date: new Date(log.login_at).toLocaleString("zh-TW", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          }));
+          setSessions(formatted);
+        }
+      } catch (err) {
+        console.error("登入紀錄載入失敗", err);
+      } finally {
+        setLoadingSessions(false);
+      }
+    };
+    fetchLoginHistory();
+  }, []);
+
+  useEffect(() => {
+    const fetchPasswordInfo = async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/koc/profile/getProfile?user_id=${userId}`);
+        const data = await res.json();
+        if (data.success) {
+          setPasswordUpdatedAt(data.password_updated_at);
+        }
+      } catch (err) {
+        console.error("密碼資訊載入失敗", err);
+      }
+    };
+    fetchPasswordInfo();
+  }, []);
+
+  const parseUserAgent = (ua) => {
+  if (!ua) return "未知裝置";
+  let browser = "瀏覽器";
+  let os = "";
+
+  if (ua.includes("Chrome") && !ua.includes("Edg")) browser = "Chrome";
+  else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+  else if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Edg")) browser = "Edge";
+
+  if (ua.includes("Mac OS X")) os = "macOS";
+  else if (ua.includes("Windows")) os = "Windows";
+  else if (ua.includes("Android")) os = "Android";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+  return os ? `${os} · ${browser}` : browser;
+};
 
   const showToast = (message) => {
     setToast({ show: true, message });
     window.setTimeout(() => setToast((t) => ({ ...t, show: false })), 2600);
   };
 
-  const handleSavePassword = () => {
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const handleSavePassword = async () => {
+    if (!currentPw) return showToast("請輸入目前密碼");
     if (newPw.length < 8) return showToast("新密碼需至少 8 位");
     if (newPw !== confirmPw) return showToast("兩次輸入的密碼不相符");
-    setPwOpen(false);
-    setCurrentPw("");
-    setNewPw("");
-    setConfirmPw("");
-    showToast("✓ 密碼已成功更新");
-  };
 
-  const handleLogoutDevice = (id) => {
-    setSessions((prev) => prev.filter((s) => s.id !== id));
-    showToast("裝置已登出");
+    const userId = localStorage.getItem("userId");
+    setSavingPassword(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/changePassword`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          current_password: currentPw,
+          new_password: newPw,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPwOpen(false);
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmPw("");
+        setPasswordUpdatedAt(new Date().toISOString());
+        showToast("✓ 密碼已成功更新");
+      } else {
+        showToast(data.err || "密碼更新失敗");
+      }
+    } catch (err) {
+      showToast("網路錯誤，請稍後再試");
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   // 處理主要登出按鈕
@@ -78,11 +168,15 @@ export default function SecurityPage({ onLogout }) {
         <Lock size={20} className="text-slate-500" />
         密碼登入
       </h3>
-      
+     
       <div className="flex items-center justify-between rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-10">
         <div>
           <div className="text-base font-bold text-slate-800">密碼</div>
-          <div className="mt-1 text-sm font-medium text-gray-400">上次更新為一個月前</div>
+          <div className="mt-1 text-sm font-medium text-gray-400">
+            {passwordUpdatedAt
+              ? `上次更新於 ${new Date(passwordUpdatedAt).toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric" })}`
+              : "尚未更新過密碼"}
+          </div>
         </div>
         <button
           onClick={() => setPwOpen(true)}
@@ -100,39 +194,34 @@ export default function SecurityPage({ onLogout }) {
       <h3 className="mb-6 text-lg font-bold text-slate-700">登入記錄</h3>
 
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden mb-10">
-        {sessions.map((s, index) => (
-          <div
-            key={s.id}
-            className={`flex items-center justify-between p-6 transition-colors hover:bg-gray-50 ${
-              index !== sessions.length - 1 ? "border-b border-gray-100" : ""
-            }`}
-          >
-            <div>
-              <div className="mb-1 flex items-center gap-3 text-base font-bold text-slate-800">
-                {s.name}
-                {s.current ? (
-                  <span className="rounded-md bg-green-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-green-600 uppercase">
-                    目前裝置
-                  </span>
-                ) : (
-                  <span className="rounded-md bg-gray-100 px-2.5 py-1 text-[10px] font-bold tracking-wider text-gray-500 uppercase">
-                    裝置
-                  </span>
-                )}
+        {loadingSessions ? (
+          <div className="p-8 text-center text-sm font-bold text-gray-400">載入中...</div>
+        ) : (
+          <>
+            {sessions.map((s, index) => (
+              <div
+                key={s.id}
+                className={`flex items-center justify-between p-6 transition-colors hover:bg-gray-50 ${
+                  index !== sessions.length - 1 ? "border-b border-gray-100" : ""
+                }`}
+              >
+                <div>
+                  <div className="mb-1 flex items-center gap-3 text-base font-bold text-slate-800">
+                    {s.name}
+                    {s.current ? (
+                      <span className="rounded-md bg-green-50 px-2.5 py-1 text-[10px] font-bold tracking-wider text-green-600 uppercase">
+                        最近一次登入
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-sm font-medium text-gray-400">{s.date}</div>
+                </div>
               </div>
-              <div className="text-sm font-medium text-gray-400">{s.date}</div>
-            </div>
-
-            <button
-              onClick={() => handleLogoutDevice(s.id)}
-              className="rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-400 transition-all hover:border-slate-800 hover:text-slate-800"
-            >
-              Log out device
-            </button>
-          </div>
-        ))}
-        {sessions.length === 0 && (
-          <div className="p-8 text-center text-sm font-bold text-gray-400">目前沒有可顯示的登入記錄。</div>
+            ))}
+            {sessions.length === 0 && (
+              <div className="p-8 text-center text-sm font-bold text-gray-400">目前沒有可顯示的登入記錄。</div>
+            )}
+          </>
         )}
       </div>
 
@@ -142,7 +231,7 @@ export default function SecurityPage({ onLogout }) {
           3. 登出帳號區塊
       ========================================== */}
       <h3 className="mb-6 text-lg font-bold text-slate-700">帳號操作</h3>
-      
+     
       <div className="flex items-center justify-between rounded-2xl border border-red-100 bg-red-50 p-6 shadow-sm mb-10">
         <div>
           <div className="text-base font-bold text-red-600">登出此帳號</div>
@@ -201,9 +290,10 @@ export default function SecurityPage({ onLogout }) {
             </button>
             <button
               onClick={handleSavePassword}
-              className="flex-1 rounded-full bg-slate-800 px-4 py-3.5 text-sm font-bold text-white transition-colors hover:bg-black"
+              disabled={savingPassword}
+              className="flex-1 rounded-full bg-slate-800 px-4 py-3.5 text-sm font-bold text-white transition-colors hover:bg-black disabled:opacity-50"
             >
-              確認儲存
+              {savingPassword ? "儲存中..." : "確認儲存"}
             </button>
           </div>
         </div>

@@ -24,6 +24,7 @@ export default function ApplyKOCPage({ onSubmit }) {
     });
 
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
     const [submitState, setSubmitState] = useState("idle");
     const [toast, setToast] = useState({ show: false, msg: "" });
     const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -40,6 +41,7 @@ export default function ApplyKOCPage({ onSubmit }) {
 
     const [applicationStatus, setApplicationStatus] = useState(null); // null | 'pending' | 'approved' | 'rejected'
     const [statusLoading, setStatusLoading] = useState(true);
+    const [rejectReason, setRejectReason] = useState(null);
 
     useEffect(() => {
         const fetchStatus = async () => {
@@ -52,6 +54,7 @@ export default function ApplyKOCPage({ onSubmit }) {
                 const res = await api.get(`/koc/profile/getProfile?user_id=${userId}`);
                 if (res.data.success) {
                     setApplicationStatus(res.data.approval_status);
+                    setRejectReason(res.data.reject_reason);
                 }
             } catch (err) {
                 console.error("查詢申請狀態失敗", err);
@@ -63,6 +66,7 @@ export default function ApplyKOCPage({ onSubmit }) {
     }, []);
 
     const isPending = applicationStatus === 'pending';
+    const isRejected = applicationStatus === 'rejected';
 
     // 🟢 簡約風格輸入框樣式
     const baseInputClass = "w-full rounded-2xl bg-gray-50 border border-transparent px-5 py-3.5 text-sm outline-none transition-all focus:bg-white focus:ring-2 focus:ring-slate-800 shadow-sm placeholder:text-gray-400";
@@ -72,6 +76,7 @@ export default function ApplyKOCPage({ onSubmit }) {
         isError ? `${baseInputClass} ${errorInputClass}` : baseInputClass;
 
     const socialErrors = useMemo(() => !hasAnySocial, [hasAnySocial]);
+
 
 
     const handleSubmit = async () => {
@@ -167,6 +172,14 @@ export default function ApplyKOCPage({ onSubmit }) {
             {isPending && (
                 <div className="mb-8 rounded-2xl bg-amber-50 border border-amber-200 px-6 py-4 text-sm text-amber-700 font-bold">
                     您的申請正在審核中，請耐心等候，審核期間無法重新提交。
+                </div>
+            )}
+
+            {isRejected && (
+                <div className="mb-8 rounded-2xl bg-red-50 border border-red-200 px-6 py-4 text-sm text-red-700">
+                    <p className="font-bold mb-1">您的申請未通過審核</p>
+                    {rejectReason && <p className="text-red-600">原因：{rejectReason}</p>}
+                    <p className="mt-2 text-xs text-red-500">您可以修改資料後重新提交申請。</p>
                 </div>
             )}
 
@@ -268,18 +281,27 @@ export default function ApplyKOCPage({ onSubmit }) {
 
                 {/* 🟢 同意條款與送出按鈕 */}
                 <div className="flex flex-col md:flex-row items-center justify-between mt-10 gap-6">
-                    <button
-                        type="button"
-                        onClick={() => setTermsAccepted(!termsAccepted)}
-                        className="flex items-center gap-3 group"
-                    >
-                        <div className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all ${termsAccepted ? 'border-slate-800 bg-slate-800' : 'border-gray-300 bg-white group-hover:border-slate-400'}`}>
-                            {termsAccepted && <Check size={14} className="text-white" strokeWidth={3} />}
-                        </div>
-                        <span className="text-sm font-medium text-gray-500">
-                            申請成為 KOC 代表您已同意 <span className="font-bold text-slate-800 underline underline-offset-4 hover:text-black">KOC 條款</span>
-                        </span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setTermsAccepted(!termsAccepted)}
+                            className="flex items-center gap-3 group"
+                        >
+                            <div className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all ${termsAccepted ? 'border-slate-800 bg-slate-800' : 'border-gray-300 bg-white group-hover:border-slate-400'}`}>
+                                {termsAccepted && <Check size={14} className="text-white" strokeWidth={3} />}
+                            </div>
+                            <span className="text-sm font-medium text-gray-500">
+                                申請成為 KOC 代表您已同意
+                            </span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowTermsModal(true)}
+                            className="text-sm font-bold text-slate-800 underline underline-offset-4 hover:text-black"
+                        >
+                            KOC 條款
+                        </button>
+                    </div>
 
                     <button
                         type="button"
@@ -300,6 +322,38 @@ export default function ApplyKOCPage({ onSubmit }) {
                     {toast.msg}
                 </div>
             </div>
+
+            {/* 🟢 KOC 條款彈窗 */}
+            {showTermsModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+                    <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
+                        <h3 className="text-xl font-bold text-slate-900 mb-6">KOC 合作條款</h3>
+                        <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+                            <p><strong className="text-slate-800">一、資格與審核</strong><br />
+                            申請人須提供真實且公開之社群帳號資訊，平台將依申請內容進行人工審核，審核結果將於系統中通知。</p>
+
+                            <p><strong className="text-slate-800">二、內容規範</strong><br />
+                            KOC 於合作活動中發布之文案、圖片及連結，須符合平台與相關法規之規定，不得含有虛假、誇大或違法內容。</p>
+
+                            <p><strong className="text-slate-800">三、優惠碼與分潤</strong><br />
+                            KOC 使用平台核發之專屬優惠碼所產生之訂單，將依約定比例計算分潤，分潤明細將於「收益總覽」頁面顯示。</p>
+
+                            <p><strong className="text-slate-800">四、帳號管理</strong><br />
+                            平台保留因違反本條款、提供不實資訊或社群帳號無法公開查證等情況，暫停或終止 KOC 資格之權利。</p>
+
+                            <p><strong className="text-slate-800">五、條款修訂</strong><br />
+                            平台得依營運需要修訂本條款內容，修訂後將於系統中公告。</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowTermsModal(false)}
+                            className="mt-8 w-full rounded-full bg-black py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800"
+                        >
+                            我已閱讀
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* 🟢 申請成功彈窗 */}
             {showSuccessModal && (

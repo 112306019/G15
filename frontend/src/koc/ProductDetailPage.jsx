@@ -13,17 +13,7 @@ export default function ProductDetailPage({
   const [campaignData, setCampaignData] = useState(null);
   const [isFavorited, setIsFavorited] = useState(false);
 
-  const [productDetail, setProductDetail] = useState({
-    id: 1, // 🟢 確保有給 ID，這樣才能判斷收藏狀態
-    name: "SanDisk 128GB SDXC Extreme Pro 200MB/s 4K U3 V30 相機記憶卡",
-    price: "NTD$ 1470",
-    rawPrice: 1470, // 數字型價格，供「立即訂購」帶去結帳頁使用
-    rating: 4.8,
-    reviewsCount: 102,
-    vendorName: "廠商名稱",
-    promoDesc: "使用優惠碼購買享九折優惠",
-    gradient: "linear-gradient(135deg,#D8D4CC,#C4BDB4)"
-  });
+  const [productDetail, setProductDetail] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -35,7 +25,7 @@ export default function ProductDetailPage({
         if (Array.isArray(data)) {
           // 排除當前商品，取前4筆
           const filtered = data
-            .filter(p => p.Product_id !== productDetail.id)
+            .filter(p => p.Product_id !== productDetail?.id)
             .sort(() => Math.random() - 0.5)
             .slice(0, 4)
             .map((p, i) => ({
@@ -70,19 +60,19 @@ export default function ProductDetailPage({
   // 🟢 依實際登入的使用者，向後端查詢這個商品是否已在收藏清單內
   useEffect(() => {
     const userId = localStorage.getItem("userId");
-    if (userRole === 'guest' || !userId || !productDetail.id) return;
+    if (userRole === 'guest' || !userId || !productDetail?.id) return;
 
     let cancelled = false;
     fetch(`http://127.0.0.1:8000/api/consumer/wishlist/view?User_id=${userId}`)
       .then(res => res.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
-        setIsFavorited(data.some(item => item.Product_id === productDetail.id));
+        setIsFavorited(data.some(item => item.Product_id === productDetail?.id));
       })
       .catch(() => { });
 
     return () => { cancelled = true; };
-  }, [productDetail.id, userRole]);
+  }, [productDetail?.id, userRole]);
 
   useEffect(() => {
     if (!product?.Product_id) {
@@ -247,6 +237,13 @@ export default function ProductDetailPage({
     }
   };
 
+  if (!productDetail) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">商品載入中...</p>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-[#F5F0E8] font-sans text-[#1A1A18] pb-24 relative">
       <div className="max-w-5xl mx-auto px-6 py-12">
