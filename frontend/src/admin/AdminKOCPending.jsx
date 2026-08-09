@@ -1,14 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Instagram, X } from 'lucide-react';
-import {
-  getKOCPendingList,
-  approveKOC,
-  rejectKOC,
-} from '../api/platform';
+import { ArrowLeft, Check, X, Mail, Instagram, Clock } from 'lucide-react';
+import { getKOCPendingList, approveKOC, rejectKOC } from '../api/platform';
+
+const ROLE_LABELS = { 0: '廠商', 1: 'KOC', 2: '消費者' };
 
 export default function AdminKOCPending() {
-  const navigate = useNavigate();
   const [pendingList, setPendingList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,9 +47,8 @@ export default function AdminKOCPending() {
     try {
       const res = await approveKOC({
         koc_id: koc.koc_id,
-        admin_id: Number(localStorage.getItem('admin_id')) || 1,
+        admin_id: parseInt(localStorage.getItem('admin_id')) || 1,
       });
-
       if (res.data.success) {
         setPendingList((prev) =>
           prev.filter((item) => item.koc_id !== koc.koc_id)
@@ -137,14 +133,6 @@ export default function AdminKOCPending() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <button
-        onClick={() => navigate('/admin/influencers')}
-        className="flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm group w-fit"
-      >
-        <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
-        返回 KOC 管理
-      </button>
-
       {/* 頁面標題 */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>

@@ -179,7 +179,7 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
                 value={account}
                 onChange={(e) => setAccount(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, account: true }))}
-                placeholder="請輸入電子郵件 或 手機號碼"
+                placeholder="請輸入電子郵件"
                 className={classNames(
                   inputBase,
                   touched.account

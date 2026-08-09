@@ -9,6 +9,9 @@ const GRADIENTS = [
   "linear-gradient(135deg,#D4C8C4,#BBA8A0)",
 ];
 
+// 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
+const isValidImageUrl = (url) => typeof url === 'string' && /^https?:\/\//.test(url);
+
 export default function FavoritesPage({ onNavigate }) {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,12 +36,14 @@ export default function FavoritesPage({ onNavigate }) {
             name: item.product_name || `商品 ${item.Product_id}`,
             price: `NT$${Number(item.price || 0).toLocaleString("zh-TW")}`,
             gradient: GRADIENTS[i % GRADIENTS.length],
+            imageUrl: isValidImageUrl(item.image_url) ? item.image_url : "",
             // 商品詳情頁需要的是原始商品欄位格式（Product_id / Product_name / price），
             // 跟這個畫面自己顯示用的格式不一樣，點進商品詳情時要傳這個而不是整個 item
             raw: {
               Product_id: item.Product_id,
               Product_name: item.product_name,
               price: item.price,
+              image_url: item.image_url,
             },
           })));
         }
@@ -163,11 +168,15 @@ export default function FavoritesPage({ onNavigate }) {
               <div
                 onClick={() => onNavigate?.('product_detail', product.raw)}
                 className="relative flex aspect-square w-full items-center justify-center rounded-2xl overflow-hidden cursor-pointer"
-                style={{ background: product.gradient }}
+                style={product.imageUrl ? undefined : { background: product.gradient }}
               >
-                <svg className="h-10 w-10 text-black/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-                </svg>
+                {product.imageUrl ? (
+                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                ) : (
+                  <svg className="h-10 w-10 text-black/10 group-hover:scale-110 transition-transform duration-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+                  </svg>
+                )}
               </div>
 
               {/* 商品資訊 */}

@@ -28,3 +28,77 @@ def send_koc_approval_email(user):
         recipient_list=[user.email],
         fail_silently=False,
     )
+
+
+def send_vendor_approval_email(vendor):
+    """
+    廠商審核通過後寄送通知信。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    subject = "您的廠商申請已通過審核！"
+    message = (
+        f"{vendor.contact_name or vendor.company_name} 您好，\n\n"
+        f"恭喜！{vendor.company_name} 申請成為廠商的審核已經通過。\n"
+        "請重新登入帳號，即可開始使用廠商專屬功能（建立代言活動、審核 KOC 文案、查看成效分析等）。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[vendor.email],
+        fail_silently=False,
+    )
+
+
+def send_email_verification_email(user, code):
+    """
+    註冊時寄送信箱驗證碼，確認這個 Email 真的存在、使用者收得到信。
+
+    這封信是驗證流程的必要環節，寄信失敗要讓呼叫端知道並回報錯誤，
+    不能悄悄吞掉（不然帳號就卡在「永遠無法驗證」的狀態）。
+    """
+    subject = "【KOC Platform】請驗證您的 Email"
+    message = (
+        f"{user.display_name or user.name} 您好，\n\n"
+        f"您的註冊驗證碼為：{code}\n\n"
+        "此驗證碼將於 10 分鐘後失效，請盡快完成信箱驗證。\n"
+        "如果這不是您本人的操作，請忽略此信。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+def send_password_reset_email(user, code):
+    """
+    忘記密碼流程寄送驗證碼。
+
+    跟審核通知信不一樣：這封信「就是」使用者拿到驗證碼的唯一管道，
+    寄信失敗必須讓呼叫端知道並回報錯誤，不能悄悄吞掉。
+    """
+    subject = "【KOC Platform】密碼重設驗證碼"
+    message = (
+        f"{user.display_name or user.name} 您好，\n\n"
+        f"您的密碼重設驗證碼為：{code}\n\n"
+        "此驗證碼將於 10 分鐘後失效，請盡快完成密碼重設。\n"
+        "如果這不是您本人的操作，請忽略此信，您的密碼不會被變更。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )

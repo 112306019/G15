@@ -15,6 +15,9 @@ class User(models.Model):
     phone = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
     password_updated_at = models.DateTimeField(null=True, blank=True, db_column='password_updated_at')
+    # 預設 True 是為了不影響這個欄位加進來之前就已經存在的帳號；
+    # 新註冊的帳號會在 user_signup 裡明確設成 False，寄出驗證碼後才會被翻成 True
+    is_verified = models.BooleanField(default=True, db_column='is_verified')
 
     class Meta:
         db_table = 'User'
@@ -32,6 +35,38 @@ class User(models.Model):
 
     def __str__(self):
         return f"[{self.role}] {self.name}"
+
+
+class PasswordResetCode(models.Model):
+    """忘記密碼流程用的驗證碼，寄到使用者信箱後憑碼重設密碼"""
+    reset_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='password_reset_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'PasswordResetCode'
+
+    def __str__(self):
+        return f"PasswordResetCode for {self.user_id}"
+
+
+class EmailVerificationCode(models.Model):
+    """註冊時驗證信箱真的存在用的驗證碼"""
+    verification_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='email_verification_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'EmailVerificationCode'
+
+    def __str__(self):
+        return f"EmailVerificationCode for {self.user_id}"
 
 
 class KOC(models.Model):
