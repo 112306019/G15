@@ -1,13 +1,15 @@
-import React from 'react';
-import { Star, ShoppingCart, User, Heart, MessageCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Star, ShoppingCart, User, Heart, MessageCircle, Settings, LogOut } from 'lucide-react';
 
 // 🟢 接收 cartCount
-export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 }) {
+export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, onLogout }) {
 
   const allNavItems = [
     { label: '購物頁面', key: 'shop', isKocOnly: false },
     { label: '任務中心', key: 'home', isKocOnly: true },
   ];
+
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const navItems = allNavItems.filter(item => {
     if (item.isKocOnly && userRole !== 'koc') return false;
@@ -84,10 +86,37 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0 
         )}
 
         <div
-          className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
-          onClick={() => onNavigate?.('profile')}
+          className="relative"
+          onMouseEnter={() => setProfileMenuOpen(true)}
+          onMouseLeave={() => setProfileMenuOpen(false)}
         >
-          <User size={24} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-black' : 'text-gray-400'} />
+          <div
+            className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+            onClick={() => onNavigate?.('profile')}
+          >
+            <User size={24} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-black' : 'text-gray-400'} />
+          </div>
+
+          {profileMenuOpen && (
+            <div className="absolute right-0 top-full pt-2 w-44 z-50">
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden py-2">
+                <button
+                  onClick={() => { setProfileMenuOpen(false); onNavigate?.('profile'); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 hover:text-black transition-colors text-left"
+                >
+                  <Settings size={16} />
+                  設定
+                </button>
+                <button
+                  onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors text-left"
+                >
+                  <LogOut size={16} />
+                  登出
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
