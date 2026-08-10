@@ -413,7 +413,7 @@ function MainSystem() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
-      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} />}
+      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} onLogout={handleLogout} />}
 
       <Routes>
         <Route path="/" element={null} />
