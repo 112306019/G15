@@ -13,7 +13,7 @@ import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
-import ChatPage from './koc/ChatPage';
+import KocIntroPage from './shopping/KocIntroPage';import ChatPage from './koc/ChatPage';
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -61,7 +61,7 @@ const VIEW_TO_PATH = {
   pending_detail: '/earnings/pending',
   favorites: '/favorites',
   applyKoc: '/apply-koc',
-  review: '/review',
+  kocIntro: '/koc-intro',  review: '/review',
 };
 
 // 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
@@ -591,6 +591,13 @@ function MainSystem() {
           </ShellLayout>
         } />
 
+        <Route path="/koc-intro" element={
+          <KocIntroPage
+            onApply={() => handleNavigate('applyKoc')}
+            onBack={() => handleNavigate('shop')}
+          />
+        } />
+
         <Route path="/apply-koc" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <ApplyKOCPage
@@ -599,6 +606,7 @@ function MainSystem() {
                 // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
                 handleNavigate('shop');
               }}
+              onViewIntro={() => handleNavigate('kocIntro')}
             />
           </ShellLayout>
         } />

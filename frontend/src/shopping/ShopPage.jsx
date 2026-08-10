@@ -195,14 +195,10 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
 
   const handleKocClick = (e) => {
     if (e) e.stopPropagation();
-    if (userRole === "guest") {
-      showToast("需先登入或註冊才能前往喔！");
-      return;
-    }
     if (userRole === "koc") {
       onNavigate?.("home");
     } else {
-      onNavigate?.("applyKoc");
+      onNavigate?.("kocIntro");
     }
   };
 
