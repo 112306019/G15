@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, CheckCircle2, Coins, AlertCircle } from 'lucide-react'; 
+import { useToast } from './components/ui/Toast';
 
 // 🟢 初始假資料 (改為放進 useState 以便後續更新狀態)
 const initialFinanceData = [
@@ -37,6 +38,7 @@ const getStatusBadge = (text, type) => {
 const parseAmount = (str) => Number(str.replace(/[^0-9.-]+/g, ""));
 
 export default function Finance() {
+  const { toast } = useToast();
   const [txData, setTxData] = useState(initialFinanceData); // 整個表格的資料狀態
   const [selectedIds, setSelectedIds] = useState([]); // 紀錄被打勾的項目 ID
   const [selectedTx, setSelectedTx] = useState(null); // 查看單筆明細用
@@ -63,7 +65,7 @@ export default function Finance() {
   // 🟢 點擊「申請撥款」按鈕的防呆檢查
   const handleOpenPayout = () => {
     if (selectedIds.length === 0) {
-      alert("⚠️ 請先勾選您想要申請撥款的項目！");
+      toast.error("請先勾選您想要申請撥款的項目");
       return;
     }
 
@@ -72,7 +74,7 @@ export default function Finance() {
     const hasInvalidTx = selectedTxs.some(tx => tx.statusType !== 'pending');
 
     if (hasInvalidTx) {
-      alert("❌ 提醒：您勾選的項目中包含了「已完成撥款」或「處理中」的款項。\n\n請取消勾選這些項目，僅勾選狀態為「待撥款」的項目來進行申請。");
+      toast.error("勾選的項目中包含「已完成撥款」或「處理中」的款項，請僅勾選狀態為「待撥款」的項目");
       return;
     }
 

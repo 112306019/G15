@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock } from 'lucide-react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
+import { useToast } from './components/ui/Toast'
+import { useConfirm } from './components/ui/ConfirmDialog'
 
 
 // 🟢 取得今天的日期字串 (YYYY-MM-DD)，用於防呆與排程判斷
@@ -59,8 +61,32 @@ function Input({ label, ...props }) {
 }
 
 function Thumb({ emoji, size = 'md' }) {
-  const s = { sm: 'w-11 h-11 text-xl rounded-lg', md: 'w-14 h-14 text-3xl rounded-xl', lg: 'w-20 h-20 text-4xl rounded-2xl' }[size]
-  return <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] flex items-center justify-center shrink-0', s)}>{emoji}</div>
+  const sizeMap = {
+    sm: { box: 'w-11 h-11 rounded-lg', text: 'text-xl' },
+    md: { box: 'w-14 h-14 rounded-xl', text: 'text-3xl' },
+    lg: { box: 'w-20 h-20 rounded-2xl', text: 'text-4xl' },
+  }
+  const { box, text } = sizeMap[size] || sizeMap.md
+
+  const isImageUrl =
+    typeof emoji === 'string' && /^https?:\/\//.test(emoji)
+
+  return (
+    <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] flex items-center justify-center shrink-0 overflow-hidden', box)}>
+      {isImageUrl ? (
+        <img
+          src={emoji}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none'
+          }}
+        />
+      ) : (
+        <span className={text}>{emoji}</span>
+      )}
+    </div>
+  )
 }
 
 function ProgressBar({ value }) {
@@ -94,6 +120,7 @@ const STEPS = ['任務與時程', '推廣商品', '分潤與折扣', '確認發�
 
 // ─── 發佈任務精靈 ────────────────────────────────────────────────────────
 function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts }) {
+  const { toast } = useToast()
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
   const [isSaving, setIsSaving] = useState(false)
@@ -257,7 +284,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
       onClose()
     } catch (error) {
-      alert(
+      toast.error(
         error.response?.data?.err
           ? JSON.stringify(error.response.data.err)
           : error.message || '儲存草稿失敗'
@@ -301,7 +328,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
       onClose()
     } catch (error) {
-      alert(
+      toast.error(
         error.response?.data?.err
           ? JSON.stringify(error.response.data.err)
           : error.message || '任務發佈失敗'
@@ -731,7 +758,10 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Campaigns() {
+  const { toast } = useToast()
+  const confirm = useConfirm()
   const [kocList, setKocList] = useState([])
+  const [view, setView] = useState('grid')
   const [kocLoading, setKocLoading] = useState(false)
   const [kocError, setKocError] = useState('')
   const vendorId = localStorage.getItem('vendor_id')
@@ -757,9 +787,12 @@ export default function Campaigns() {
     })
   }
   const handleDeleteDraft = async campaign => {
-    const confirmed = window.confirm(
-      `確定要刪除草稿「${campaign.name || '未命名任務'}」嗎？`
-    )
+    const confirmed = await confirm({
+      title: `刪除草稿「${campaign.name || '未命名任務'}」？`,
+      description: '刪除後草稿內容將無法復原。',
+      confirmText: '刪除草稿',
+      danger: true,
+    })
 
     if (!confirmed) return
 
@@ -772,8 +805,10 @@ export default function Campaigns() {
       setItems(previous =>
         previous.filter(item => item.id !== campaign.id)
       )
+
+      toast.success('草稿已刪除')
     } catch (error) {
-      alert(
+      toast.error(
         error.response?.data?.err ||
         error.message ||
         '刪除草稿失敗'
@@ -792,6 +827,8 @@ export default function Campaigns() {
       setWizardOpen(true)
     } else {
       setSelectedTask(c)
+      setKocList([])
+      loadKocApplications(c)
     }
   }
 
@@ -853,18 +890,22 @@ export default function Campaigns() {
 
     let rejectReason = ''
     if (reviewStatus === 'rejected') {
-      rejectReason = window.prompt(
-        `請填寫拒絕 KOC「${application.name}」申請的原因：`
-      )
-      if (rejectReason === null) return // 使用者按取消
-      if (!rejectReason.trim()) {
-        alert('拒絕申請時請填寫原因')
-        return
-      }
+      const reason = await confirm({
+        title: `拒絕 KOC「${application.name}」的申請？`,
+        confirmText: '拒絕申請',
+        danger: true,
+        requireReason: true,
+        reasonLabel: '拒絕原因',
+        reasonPlaceholder: '請說明拒絕原因，KOC 會收到這則訊息',
+      })
+      if (!reason) return // 使用者取消
+      rejectReason = reason
     } else {
-      const confirmed = window.confirm(
-        `確定要${actionText} KOC「${application.name}」的申請嗎？`
-      )
+      const confirmed = await confirm({
+        title: `確定要${actionText} KOC「${application.name}」的申請嗎？`,
+        description: '通過後系統會建立任務並產生尚未啟用的優惠碼。',
+        confirmText: '通過申請',
+      })
       if (!confirmed) return
     }
 
@@ -902,7 +943,7 @@ export default function Campaigns() {
         )
       )
 
-      alert(
+      toast.success(
         reviewStatus === 'approved'
           ? '申請已通過，已建立任務與未啟用優惠碼'
           : '申請已拒絕'
@@ -1051,17 +1092,42 @@ export default function Campaigns() {
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           任務與商品總覽
         </h2>
-        <Button variant="brand" onClick={handleOpenWizard} className="gap-2 px-6">
-          <Plus size={16} /> 發佈 KOC 任務
-        </Button>
+
+        <div className="flex items-center gap-3">
+          {/* 視圖切換 */}
+          <div className="flex bg-white border border-[#E2DDD4] rounded-full overflow-hidden shadow-sm p-1">
+            <button
+              type="button"
+              onClick={() => setView('grid')}
+              className={cn('p-2 rounded-full transition-colors', view === 'grid' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]')}
+              title="網格檢視"
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={cn('p-2 rounded-full transition-colors', view === 'list' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]')}
+              title="列表檢視"
+            >
+              <List size={16} />
+            </button>
+          </div>
+
+          <Button variant="brand" onClick={handleOpenWizard} className="gap-2 px-6">
+            <Plus size={16} /> 發佈 KOC 任務
+          </Button>
+        </div>
       </div>
 
+      {items.length === 0 && (
+        <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
+          目前尚無任務，點擊右上角「發佈 KOC 任務」開始你的第一個活動
+        </div>
+      )}
+
+      {view === 'grid' && items.length > 0 && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {items.length === 0 && (
-          <div className="col-span-full py-20 text-center text-sm font-bold text-[#8C8880]">
-            目前尚無任務，點擊右上角「發佈 KOC 任務」開始你的第一個活動
-          </div>
-        )}
 
         {items.map(c => {
           const pct = budgetUsedPct(c.spent, c.budget)
@@ -1120,6 +1186,85 @@ export default function Campaigns() {
           )
         })}
       </div>
+      )}
+
+      {view === 'list' && items.length > 0 && (
+        <div className="bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                  {['任務名稱', '綁定商品', '狀態', 'GMV', '訂單', '進度', '操作'].map(h => (
+                    <th key={h} className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2DDD4]">
+                {items.map(c => {
+                  const pct = budgetUsedPct(c.spent, c.budget)
+
+                  let displayStatus = c.status
+                  if (c.status === 'active' && c.startDate > getTodayString()) {
+                    displayStatus = 'scheduled'
+                  }
+
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => handleCardClick(c)}
+                      className="hover:bg-[#F8F9FA] transition-colors cursor-pointer group"
+                    >
+                      <td className="p-5">
+                        <div className={cn('text-sm font-bold', c.status === 'draft' ? 'text-[#8C8880]' : 'text-[#1A1A18]')}>
+                          {c.name || '未命名任務'}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880]">
+                          <Package size={14} /> {c.prodName || '尚未選擇商品'}
+                        </div>
+                      </td>
+
+                      <td className="p-5">
+                        <Badge status={displayStatus} />
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                        {c.status === 'draft' ? '—' : formatCurrency(c.gmv)}
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                        {c.status === 'draft' ? '—' : c.orders}
+                      </td>
+
+                      <td className="p-5 text-sm font-black text-[#C8522A]">
+                        {c.status === 'draft' ? '—' : `${pct}%`}
+                      </td>
+
+                      <td className="p-5">
+                        {c.status === 'draft' && (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation()
+                              handleDeleteDraft(c)
+                            }}
+                            className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors shadow-sm opacity-0 group-hover:opacity-100"
+                            title="刪除草稿"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <CampaignWizard
         open={wizardOpen}
@@ -1201,7 +1346,12 @@ export default function Campaigns() {
               </div>
               <div className="border border-[#E2DDD4] rounded-2xl p-5">
                 <div className="text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2">已參與 KOC</div>
-                <div className="text-2xl font-black text-[#1A1A18] mb-2">{selectedTask.kocCount || 0} <span className="text-sm text-[#8C8880]">人</span></div>
+                <div className="text-2xl font-black text-[#1A1A18] mb-2">
+                  {kocLoading
+                    ? '—'
+                    : kocList.filter(k => k.status === 'approved').length}
+                  {' '}<span className="text-sm text-[#8C8880]">人</span>
+                </div>
                 <button
                   onClick={async () => {
                     await loadKocApplications(selectedTask)
