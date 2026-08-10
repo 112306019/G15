@@ -49,7 +49,7 @@ export default function ProductDetailPage({
         rating: 4.8,
         description: product.description || "",
         reviewsCount: 0,
-        vendorName: product.Vendor_id || "",
+        vendorName: product.Vendor_name || product.Vendor_id || "",
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
         imageUrl: product.image_url || "",
@@ -196,7 +196,7 @@ export default function ProductDetailPage({
         price: `NTD$ ${rawPrice}`,
         rawPrice,
         description: p.description || "",
-        vendorName: p.Vendor_id || "",
+        vendorName: p.Vendor_name || p.Vendor_id || "",
         imageUrl: p.image_url || "",
       }));
       setCampaignData(null);
@@ -303,7 +303,7 @@ export default function ProductDetailPage({
           {activeTab === 'vendor' && (
             <div className="text-sm text-[#8C8880] leading-relaxed space-y-4">
               <div>
-                <h3 className="font-bold text-[#1A1A18] mb-2">廠商 ID</h3>
+                <h3 className="font-bold text-[#1A1A18] mb-2">廠商</h3>
                 <p>{productDetail.vendorName}</p>
               </div>
               {campaignData ? (

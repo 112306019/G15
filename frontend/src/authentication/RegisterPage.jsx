@@ -36,6 +36,8 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
   const [password, setPassword] = useState("");
   const [pwVisible, setPwVisible] = useState(false);
   const [terms, setTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const [touched, setTouched] = useState({ name: false, account: false, password: false });
   const [submitting, setSubmitting] = useState(false);
@@ -235,34 +237,49 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
             </div>
 
             {/* Terms */}
-            <button
-              type="button"
-              onClick={() => setTerms((v) => !v)}
-              className="mb-7 flex w-full items-start gap-3 text-left"
-            >
-              <span
-                className={classNames(
-                  "mt-0.5 grid h-5 w-5 place-items-center rounded-md border transition-all",
-                  terms ? "border-slate-900 bg-slate-900" : "border-[#E2DDD4] bg-white"
-                )}
+            <div className="mb-7 flex w-full items-start gap-3 text-left">
+              <button
+                type="button"
+                onClick={() => setTerms((v) => !v)}
+                className="mt-0.5"
               >
-                {terms ? (
-                  <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : null}
-              </span>
+                <span
+                  className={classNames(
+                    "grid h-5 w-5 place-items-center rounded-md border transition-all",
+                    terms ? "border-slate-900 bg-slate-900" : "border-[#E2DDD4] bg-white"
+                  )}
+                >
+                  {terms ? (
+                    <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : null}
+                </span>
+              </button>
 
               <span className="text-[13px] leading-6 text-slate-500">
                 建立帳戶即表示您同意我們的
-                <span className="mx-1 cursor-pointer underline text-slate-900">條款和條件</span>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="mx-1 cursor-pointer underline text-slate-900"
+                >
+                  條款和條件
+                </button>
                 以及
-                <span className="mx-1 cursor-pointer underline text-slate-900">隱私權政策</span>。
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyModal(true)}
+                  className="mx-1 cursor-pointer underline text-slate-900"
+                >
+                  隱私權政策
+                </button>
+                。
                 {!terms && touched.name && touched.account && touched.password ? (
                   <span className="ml-1 text-[#C8522A]">（需要勾選）</span>
                 ) : null}
               </span>
-            </button>
+            </div>
 
             {/* Error message */}
             {errorMsg && (
@@ -299,6 +316,70 @@ export default function RegisterPage({ onGoLogin, onRegisterSuccess }) {
           </div>
         </div>
       </div>
+
+      {/* 條款和條件彈窗 */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-slate-900 mb-6">條款和條件</h3>
+            <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+              <p><strong className="text-slate-800">一、服務說明</strong><br />
+              本平台提供消費者、KOC 與廠商之間的商品交易、內容合作與行銷推廣服務，使用者註冊即表示同意遵守本條款。</p>
+
+              <p><strong className="text-slate-800">二、帳號使用</strong><br />
+              使用者須提供真實資訊註冊帳號，並妥善保管帳號密碼，對於帳號登入後的所有行為負完全責任。</p>
+
+              <p><strong className="text-slate-800">三、交易規範</strong><br />
+              平台上之商品交易、付款、退換貨等事宜，依平台公告之相關規範辦理，使用者應遵守誠信原則。</p>
+
+              <p><strong className="text-slate-800">四、禁止行為</strong><br />
+              使用者不得利用平台從事任何違法、詐欺、侵權或損害平台與他人權益之行為。</p>
+
+              <p><strong className="text-slate-800">五、條款修訂</strong><br />
+              平台得依營運需要修訂本條款內容，修訂後將於系統中公告。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTermsModal(false)}
+              className="mt-8 w-full rounded-full bg-black py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800"
+            >
+              我已閱讀
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 隱私權政策彈窗 */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-slate-900 mb-6">隱私權政策</h3>
+            <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+              <p><strong className="text-slate-800">一、資料蒐集</strong><br />
+              本平台於使用者註冊、購物、申請成為 KOC 或廠商時，將蒐集姓名、電子郵件、聯絡方式等必要資訊，以提供平台服務。</p>
+
+              <p><strong className="text-slate-800">二、資料使用</strong><br />
+              使用者提供之個人資料僅用於平台服務所需之範圍，包括訂單處理、身分驗證、客服聯繫及活動通知等。</p>
+
+              <p><strong className="text-slate-800">三、資料保護</strong><br />
+              平台採取合理之技術與管理措施保護使用者個人資料，密碼將以加密方式儲存，避免遭未經授權之存取。</p>
+
+              <p><strong className="text-slate-800">四、第三方分享</strong><br />
+              除法律規定或使用者同意外，平台不會將個人資料提供予第三方作商業使用。</p>
+
+              <p><strong className="text-slate-800">五、使用者權利</strong><br />
+              使用者得隨時查詢、更正或要求刪除其個人資料，惟涉及交易紀錄等法律規定應保存之資料不在此限。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyModal(false)}
+              className="mt-8 w-full rounded-full bg-black py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800"
+            >
+              我已閱讀
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
