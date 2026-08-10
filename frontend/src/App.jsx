@@ -231,6 +231,19 @@ useEffect(() => {
     restoreProductDetail();
   }, [view, selectedProduct]);
 
+  // 刷新後 selectedOrderId 只存在記憶體、會不見，這裡從 localStorage 還原，
+  // 不然訂單細節頁會因為拿不到 orderId 而顯示「找不到訂單資料」
+  useEffect(() => {
+    if (view === 'order_detail' && !selectedOrderId) {
+      const lastOrderId = localStorage.getItem('lastOrderId');
+      if (lastOrderId) {
+        setSelectedOrderId(lastOrderId);
+      } else {
+        setView('orders');
+      }
+    }
+  }, [view, selectedOrderId]);
+
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
@@ -406,8 +419,8 @@ useEffect(() => {
               />
             )}
             {view === 'orders' && <OrdersPage
-              onTrackOrder={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
-              onOpenOrderDetail={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
+              onTrackOrder={(id) => { setSelectedOrderId(id); localStorage.setItem('lastOrderId', id); setTimeout(() => handleNavigate('order_detail'), 0); }}
+              onOpenOrderDetail={(id) => { setSelectedOrderId(id); localStorage.setItem('lastOrderId', id); setTimeout(() => handleNavigate('order_detail'), 0); }}
             />}
             {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} orderId={selectedOrderId} />}
             {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
