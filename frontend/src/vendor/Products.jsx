@@ -4,6 +4,8 @@ import { Plus, Search, LayoutGrid, List, Edit3, Trash2, X, Upload, Package, Shop
 import { productCategories } from './mock'
 import { formatCurrency, cn } from './lib/utils'
 import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct} from '../api/vendor'
+import { useToast } from './components/ui/Toast'
+import { useConfirm } from './components/ui/ConfirmDialog'
 
 // 🟢 專屬品牌色狀態設定 (配合新商業邏輯)
 const statusCfg = {
@@ -112,6 +114,7 @@ function Thumb({ emoji, size = 'md' }) {
 
 // ─── 簡化版的新增商品 Modal (存入資料庫) ──────────────────────────────────────────
 function ProductModal({ open, onClose, onComplete, editingProduct}) {
+  const { toast } = useToast()
   const emptyForm = {
     name: '',
     sku: '',
@@ -148,10 +151,10 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
     if (data.success) {
       setForm(prev => ({ ...prev, imageUrl: data.image_url, thumbnail: data.image_url }));
     } else {
-      alert(data.err || "上傳失敗");
+      toast.error(data.err || "上傳失敗");
     }
   } catch (err) {
-    alert("上傳失敗，請確認後端是否正常運作");
+    toast.error("上傳失敗，請確認後端是否正常運作");
   } finally {
     setUploading(false);
   }
@@ -332,6 +335,8 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Products() {
+  const { toast } = useToast()
+  const confirm = useConfirm()
   // 將 mock 資料中的狀態 mapping 到我們新的邏輯
   const [prods, setProds] = useState([])
   const [loading, setLoading] = useState(true)
@@ -391,9 +396,12 @@ export default function Products() {
   }
 
   const handleDelete = async product => {
-    const confirmed = window.confirm(
-      `確定要刪除商品「${product.name}」嗎？`
-    )
+    const confirmed = await confirm({
+      title: `刪除商品「${product.name}」？`,
+      description: '刪除後此商品將從商品列表中移除，此動作無法復原。',
+      confirmText: '刪除商品',
+      danger: true,
+    })
 
     if (!confirmed) return
 
@@ -416,6 +424,8 @@ export default function Products() {
           item => item.id !== product.id
         )
       )
+
+      toast.success('商品已刪除')
     } catch (err) {
       console.error('刪除商品失敗：', err)
 

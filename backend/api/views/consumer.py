@@ -57,9 +57,11 @@ def get_products(request):
 
     result = []
     for p in products:
+        vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
         result.append({
             'Product_id': p.product_id,
             'Vendor_id': p.vendor_id,
+            'Vendor_name': vendor.company_name if vendor else p.vendor_id,
             'Product_name': p.product_name,
             'description': p.description,
             'price': p.price,
@@ -98,9 +100,12 @@ def get_product_detail(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
+
     return Response({
         'Product_id': p.product_id,
         'Vendor_id': p.vendor_id,
+        'Vendor_name': vendor.company_name if vendor else p.vendor_id,
         'Product_name': p.product_name,
         'description': p.description,
         'price': p.price,
