@@ -7,6 +7,9 @@ function formatNTD(amount) {
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
 }
 
+// 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
+const isValidImageUrl = (url) => typeof url === "string" && /^https?:\/\//.test(url);
+
 export default function OrderDetailPage({ onBack, orderId }) {
   const [step, setStep] = useState(1);
   const [orderData, setOrderData] = useState(null);
@@ -229,8 +232,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 <tr key={idx} className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors">
                   <td className="py-6 pr-4">
                     <div className="flex items-center gap-5">
-                      <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4]">
-                        <Smartphone size={24} className="text-[#8C8880]" />
+                      <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+                        {isValidImageUrl(item.image_url) ? (
+                          <img src={item.image_url} alt={item.product_name || ""} className="h-full w-full object-cover" />
+                        ) : (
+                          <Smartphone size={24} className="text-[#8C8880]" />
+                        )}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">

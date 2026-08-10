@@ -366,7 +366,7 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
               <h3 className="text-2xl font-bold text-[#1A1A18] mb-3">文案已送出審核</h3>
               <p className="text-[#8C8880] font-medium leading-relaxed">
-                廠商正在確認您的圖文內容。<br/>審核通過後，任務將會自動移至「待發佈」階段。
+                廠商正在確認您的文案內容。<br/>審核通過後，任務將會自動移至「作品上傳」階段。
               </p>
             </div>
           )}
@@ -390,7 +390,7 @@ export default function TaskDetailPage({ task, onBack }) {
                     type="text"
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
-                    placeholder="請貼上 IG/FB 貼文連結 (例如: https://instagram.com/...)"
+                    placeholder="請上傳貼文連結 (例如: https://instagram.com/...)"
                     className="w-full bg-white border border-[#E2DDD4] rounded-xl px-5 py-4 text-sm text-[#1A1A18] placeholder:text-[#8C8880] font-medium outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
                   />
                   <button
@@ -451,7 +451,13 @@ export default function TaskDetailPage({ task, onBack }) {
                   <div className="h-56 w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-10 overflow-x-auto">
                     <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-1 text-[10px] text-[#8C8880] font-bold">
                       <span>{chartMaxValue}</span>
-                      <span>{Math.round(chartMaxValue * 0.5)}</span>
+                      <span>
+                        {(() => {
+                          const mid = Math.round(chartMaxValue * 0.5);
+                          // 使用次數是整數，最大值太小時中間刻度會跟最大值或 0 重複，這種情況就不顯示
+                          return mid > 0 && mid < chartMaxValue ? mid : '';
+                        })()}
+                      </span>
                       <span className="translate-y-2">0</span>
                     </div>
                     {chartData.map((item, idx) => (

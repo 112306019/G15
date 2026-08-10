@@ -334,6 +334,19 @@ function MainSystem() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roleSyncing, location.pathname]);
 
+  // 刷新後 selectedOrderId 只存在記憶體、會不見，這裡從 localStorage 還原，
+  // 不然訂單細節頁會因為拿不到 orderId 而顯示「找不到訂單資料」
+  useEffect(() => {
+    if (view === 'order_detail' && !selectedOrderId) {
+      const lastOrderId = localStorage.getItem('lastOrderId');
+      if (lastOrderId) {
+        setSelectedOrderId(lastOrderId);
+      } else {
+        setView('orders');
+      }
+    }
+  }, [view, selectedOrderId]);
+
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [

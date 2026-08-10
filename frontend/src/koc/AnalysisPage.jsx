@@ -43,7 +43,7 @@ export default function AnalysisPage({ onBack, onViewData }) {
         返回任務管理
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">成效分析</h2>
+      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">合作收益總覽</h2>
 
       {analytics.length === 0 ? (
         <div className="py-20 text-center text-[#8C8880] font-bold">
