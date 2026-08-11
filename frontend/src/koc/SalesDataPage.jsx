@@ -39,6 +39,18 @@ export default function SalesDataPage({ product, onBack }) {
   // 計算圖表最大值（動態調整 Y 軸）
   const maxValue = Math.max(...chartData.map(d => d.y_value), 1);
 
+  // 中間刻度（0.75 / 0.5 / 0.25）：資料是整數，最大值太小時四捨五入後
+  // 容易跟上一個刻度或 0 重複，這種情況就留空，不重複顯示同一個數字
+  let lastAxisValue = maxValue;
+  const midAxisLabels = [0.75, 0.5, 0.25].map((fraction) => {
+    const value = Math.round(maxValue * fraction);
+    if (value > 0 && value < lastAxisValue) {
+      lastAxisValue = value;
+      return value;
+    }
+    return '';
+  });
+
   return (
     <div className="max-w-5xl animate-in fade-in zoom-in-95 duration-500">
       
@@ -99,9 +111,9 @@ export default function SalesDataPage({ product, onBack }) {
             {/* 左側數值 */}
             <div className="absolute -left-10 top-0 h-full flex flex-col justify-between py-1 text-[11px] text-[#8C8880] font-bold">
               <span>{maxValue}</span>
-              <span>{Math.round(maxValue * 0.75)}</span>
-              <span>{Math.round(maxValue * 0.5)}</span>
-              <span>{Math.round(maxValue * 0.25)}</span>
+              <span>{midAxisLabels[0]}</span>
+              <span>{midAxisLabels[1]}</span>
+              <span>{midAxisLabels[2]}</span>
               <span className="translate-y-2">0</span>
             </div>
 

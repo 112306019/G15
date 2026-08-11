@@ -4,7 +4,7 @@ import api from '../api/index';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function ApplyKOCPage({ onSubmit }) {
+export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
     const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
     const [displayName, setDisplayName] = useState("");
     const [email, setEmail] = useState("");
@@ -167,7 +167,18 @@ export default function ApplyKOCPage({ onSubmit }) {
 
     return (
         <div className="animate-in fade-in duration-500 max-w-3xl">
-            <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">我想成為KOC</h2>
+            <div className="mb-10 flex flex-col gap-2">
+                <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">我想成為KOC</h2>
+                {onViewIntro && (
+                    <button
+                        type="button"
+                        onClick={onViewIntro}
+                        className="w-fit text-xs font-bold text-gray-400 underline underline-offset-4 transition-colors hover:text-slate-800"
+                    >
+                        還不了解 KOC 計畫嗎？先看看簡介
+                    </button>
+                )}
+            </div>
 
             {isPending && (
                 <div className="mb-8 rounded-2xl bg-amber-50 border border-amber-200 px-6 py-4 text-sm text-amber-700 font-bold">

@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -13,7 +13,7 @@ import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
-import ChatPage from './koc/ChatPage';
+import KocIntroPage from './shopping/KocIntroPage';import ChatPage from './koc/ChatPage';
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -40,6 +40,40 @@ import AdminApp from './AdminApp';
 
 // 🌟 新增：引入 Heart icon
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
+
+// 路由對應表：view 名稱（沿用給子元件用的字串） <-> 實際網址
+const VIEW_TO_PATH = {
+  welcome: '/welcome',
+  login: '/login',
+  shop: '/shop',
+  cart: '/cart',
+  checkout: '/checkout',
+  chat: '/chat',
+  home: '/home',
+  analysis: '/analysis',
+  sales_data: '/analysis/product',
+  task_detail: '/task',
+  profile: '/profile',
+  security: '/security',
+  orders: '/orders',
+  earnings: '/earnings',
+  earnings_detail: '/earnings/detail',
+  pending_detail: '/earnings/pending',
+  favorites: '/favorites',
+  applyKoc: '/apply-koc',
+  kocIntro: '/koc-intro',  review: '/review',
+};
+
+// 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
+function getViewKeyFromPath(pathname) {
+  if (pathname.startsWith('/product/')) return 'product_detail';
+  if (pathname.startsWith('/orders/') && pathname !== '/orders') return 'order_detail';
+  for (const [key, path] of Object.entries(VIEW_TO_PATH)) {
+    if (pathname === path) return key;
+  }
+  const trimmed = pathname.replace(/^\//, '');
+  return trimmed || 'welcome';
+}
 
 function Sidebar({ currentView, onNavigate, userRole }) {
   const [expandedMenu, setExpandedMenu] = useState('home');
@@ -111,38 +145,126 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   );
 }
 
-// 刷新後這些頁面需要的資料（selectedTask/selectedProduct）只存在記憶體、不會留下來，
-const VIEWS_NEEDING_TRANSIENT_DATA = ['task_detail', 'sales_data'];
+// 商品詳細頁：從網址拿 productId，優先用路由 state 帶來的完整商品資料（點擊進入時最快），
+// 沒有的話（例如重新整理）就用 id 重新打 API 拿。
+function ProductDetailRoute({ userRole, onAddToCart, onBuyNow, favorites, onToggleFavorite }) {
+  const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState(location.state?.product || null);
 
-// 從 localStorage 恢復登入狀態與刷新前所在頁面；role 一律存字串，比對時需轉型
-function getRestoredAuth() {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
-  if (token && role) {
-    const mappedRole = Number(role) === 1 ? 'koc' : 'shopper';
-    const defaultView = mappedRole === 'koc' ? 'home' : 'shop';
-    const savedView = localStorage.getItem('view');
-    const restoredView = savedView && !VIEWS_NEEDING_TRANSIENT_DATA.includes(savedView)
-      ? savedView
-      : defaultView;
-    return { view: restoredView, userRole: mappedRole };
+  useEffect(() => {
+    if (location.state?.product) {
+      setProduct(location.state.product);
+      return;
+    }
+    let cancelled = false;
+    const fetchProduct = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/products`);
+        const data = await res.json();
+        const found = Array.isArray(data) ? data.find(p => String(p.Product_id) === String(id)) : null;
+        if (!cancelled) {
+          if (found) setProduct(found);
+          else navigate('/shop', { replace: true });
+        }
+      } catch (err) {
+        if (!cancelled) navigate('/shop', { replace: true });
+      }
+    };
+    fetchProduct();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">商品載入中...</p>
+      </div>
+    );
   }
 
-  // 訪客：也嘗試還原上次瀏覽的頁面
-  const savedView = localStorage.getItem('view');
-  const restoredView = savedView && !VIEWS_NEEDING_TRANSIENT_DATA.includes(savedView)
-    ? savedView
-    : 'shop';
-  return { view: restoredView, userRole: 'guest' };
+  return (
+    <ProductDetailPage
+      onBack={() => navigate('/shop')}
+      onGoCart={() => navigate('/cart')}
+      onBuyNow={onBuyNow}
+      onNavigate={(targetView, data) => {
+        // 商品詳細頁裡「您可能也會喜歡」等推薦商品點擊，直接換到另一個商品網址
+        if (targetView === 'product_detail' && data) {
+          localStorage.setItem('lastProductId', data.Product_id);
+          navigate(`/product/${data.Product_id}`, { state: { product: data } });
+          return;
+        }
+        navigate(VIEW_TO_PATH[targetView] || '/shop');
+      }}
+      userRole={userRole}
+      onAddToCart={onAddToCart}
+      product={product}
+    />
+  );
+}
+
+// 訂單詳細頁：id 直接來自網址
+function OrderDetailRoute() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  return <OrderDetailPage onBack={() => navigate('/orders')} orderId={id} />;
+}
+
+// 需要「整包資料」才能顯示、且沒有簡單 fetch-by-id API 的頁面（任務詳情、業績分析），
+// 一律靠路由 state 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
+function TaskDetailRoute({ onJumpHome }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const task = location.state?.task;
+
+  useEffect(() => {
+    if (!task) navigate('/home', { replace: true });
+  }, [task, navigate]);
+
+  if (!task) return null;
+
+  return (
+    <TaskDetailPage
+      task={task}
+      onBack={(targetStage) => {
+        onJumpHome(targetStage);
+        navigate('/home');
+      }}
+    />
+  );
+}
+
+function SalesDataRoute() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const product = location.state?.product;
+
+  useEffect(() => {
+    if (!product) navigate('/analysis', { replace: true });
+  }, [product, navigate]);
+
+  if (!product) return null;
+
+  return <SalesDataPage product={product} onBack={() => navigate('/analysis')} />;
 }
 
 function MainSystem() {
-  const [view, setView] = useState(() => getRestoredAuth().view);
-  const [selectedTask, setSelectedTask] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [homeJumpStage, setHomeJumpStage] = useState(null);
 
-  const [userRole, setUserRole] = useState(() => getRestoredAuth().userRole);
+  const [userRole, setUserRole] = useState(() => {
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+    if (token && role) return Number(role) === 1 ? 'koc' : 'shopper';
+    return 'guest';
+  });
   const [cartCount, setCartCount] = useState(0);
+
   // 從後端同步購物車數量
   const syncCartCount = async () => {
     const userId = localStorage.getItem("userId");
@@ -158,19 +280,15 @@ function MainSystem() {
       console.error("購物車數量同步失敗", err);
     }
   };
+
   const [cartItems, setCartItems] = useState([]);
   const [checkoutSummary, setCheckoutSummary] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
-
-  const navigate = useNavigate();
-
   const [roleSyncing, setRoleSyncing] = useState(true);
 
   // 頁面載入時，重新確認 KOC 審核狀態是否有變化（例如剛被 Admin 核准）
-useEffect(() => {
+  useEffect(() => {
     const syncUserRole = async () => {
       const userId = localStorage.getItem("userId");
       const token = localStorage.getItem("token");
@@ -187,8 +305,8 @@ useEffect(() => {
             localStorage.setItem('role', '1');
             setUserRole('koc');
             // 如果剛好停留在申請頁，導向 KOC 首頁
-            if (view === 'applyKoc') {
-              setView('home');
+            if (location.pathname === '/apply-koc') {
+              navigate('/home', { replace: true });
             }
           }
         }
@@ -199,37 +317,35 @@ useEffect(() => {
       }
     };
     syncUserRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 登入狀態下，記住每次切換的 view，刷新時才能還原到原本所在的頁面（而非固定跳回預設頁）
+  // 剛進站、還沒有指定路徑時（"/"），依登入狀態導去合理的預設頁
   useEffect(() => {
-    localStorage.setItem('view', view);
-  }, [view]);
-
-  useEffect(() => {
-    const restoreProductDetail = async () => {
-      if (view === 'product_detail' && !selectedProduct) {
-        const lastProductId = localStorage.getItem('lastProductId');
-        if (!lastProductId) {
-          setView('shop');
-          return;
-        }
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/consumer/products`);
-          const data = await res.json();
-          const found = data.find(p => String(p.Product_id) === String(lastProductId));
-          if (found) {
-            setSelectedProduct(found);
-          } else {
-            setView('shop');
-          }
-        } catch (err) {
-          setView('shop');
-        }
+    if (roleSyncing) return;
+    if (location.pathname === '/' || location.pathname === '') {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/welcome', { replace: true });
+      } else {
+        navigate(userRole === 'koc' ? '/home' : '/shop', { replace: true });
       }
-    };
-    restoreProductDetail();
-  }, [view, selectedProduct]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roleSyncing, location.pathname]);
+
+  // 刷新後 selectedOrderId 只存在記憶體、會不見，這裡從 localStorage 還原，
+  // 不然訂單細節頁會因為拿不到 orderId 而顯示「找不到訂單資料」
+  useEffect(() => {
+    if (view === 'order_detail' && !selectedOrderId) {
+      const lastOrderId = localStorage.getItem('lastOrderId');
+      if (lastOrderId) {
+        setSelectedOrderId(lastOrderId);
+      } else {
+        setView('orders');
+      }
+    }
+  }, [view, selectedOrderId]);
 
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
@@ -247,19 +363,33 @@ useEffect(() => {
       return;
     }
 
-    if (data) {
-      if (targetView === 'sales_data') setSelectedProduct(data);
-      if (targetView === 'task_detail') setSelectedTask(data);
-      if (targetView === 'product_detail') {
-        setSelectedProduct(data);
-        localStorage.setItem('lastProductId', data.Product_id);
-        setTimeout(() => setView(targetView), 0);
-        return;
-      }
+    // 商品詳細頁：id 進網址，完整資料順便用路由 state 帶過去（避免多打一次 API）
+    if (targetView === 'product_detail' && data) {
+      localStorage.setItem('lastProductId', data.Product_id);
+      navigate(`/product/${data.Product_id}`, { state: { product: data } });
+      return;
     }
 
-    setView(targetView);
+    // 訂單詳細頁：id 直接進網址
+    if (targetView === 'order_detail') {
+      navigate(`/orders/${data}`);
+      return;
+    }
+
+    // 任務詳情 / 業績分析：資料整包用路由 state 帶過去
+    if (targetView === 'task_detail' && data) {
+      navigate('/task', { state: { task: data } });
+      return;
+    }
+    if (targetView === 'sales_data' && data) {
+      navigate('/analysis/product', { state: { product: data } });
+      return;
+    }
+
+    navigate(VIEW_TO_PATH[targetView] || '/shop');
   };
+
+  const view = getViewKeyFromPath(location.pathname);
 
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
@@ -284,160 +414,235 @@ useEffect(() => {
 
   const showHeader = !['welcome', 'login'].includes(view);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('role');
+    localStorage.removeItem('lastProductId');
+    setUserRole('guest');
+    setCartCount(0);
+    navigate('/welcome', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
-      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} />}
+      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} onLogout={handleLogout} />}
 
-      {view === 'welcome' && <WelcomePage onSelectSeller={() => navigate('/vendor-login')} onSelectKoc={() => handleNavigate('login')} onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }} />}
+      <Routes>
+        <Route path="/" element={null} />
 
-      {view === 'login' && (
-        <LoginPage
-          onBack={() => handleNavigate('welcome')}
-          onLoginSuccess={({ userId, role, token }) => {
-            const mappedRole = role === 1 ? 'koc' : 'shopper';
-            setUserRole(mappedRole);
-            syncCartCount();
-            handleNavigate(mappedRole === 'koc' ? 'home' : 'shop', null, mappedRole);
-          }}
-          onRegisterSuccess={() => {
-            handleNavigate('login');
-          }}
-          onSkipToShop={() => {
-            setUserRole('guest');
-            handleNavigate('shop');
-          }}
-        />
-      )}
-      {view === 'shop' && <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => syncCartCount()} />}
+        <Route path="/welcome" element={
+          <WelcomePage
+            onSelectSeller={() => navigate('/vendor-login')}
+            onSelectKoc={() => handleNavigate('login')}
+            onSkipToShop={() => { setUserRole('guest'); handleNavigate('shop'); }}
+          />
+        } />
 
-      {view === 'product_detail' && (
-        <ProductDetailPage
-          onBack={() => handleNavigate('shop')}
-          onGoCart={() => handleNavigate('cart')}
-          onBuyNow={(item) => {
-            const price = Number(item.price) || 0;
-            const qty = Number(item.qty) || 1;
-            const subtotal = price * qty;
+        <Route path="/login" element={
+          <LoginPage
+            onBack={() => handleNavigate('welcome')}
+            onLoginSuccess={({ userId, role, token }) => {
+              const mappedRole = role === 1 ? 'koc' : 'shopper';
+              setUserRole(mappedRole);
+              syncCartCount();
+              handleNavigate(mappedRole === 'koc' ? 'home' : 'shop', null, mappedRole);
+            }}
+            onRegisterSuccess={() => {
+              handleNavigate('login');
+            }}
+            onSkipToShop={() => {
+              setUserRole('guest');
+              handleNavigate('shop');
+            }}
+          />
+        } />
 
-            const checkoutItem = {
-              productId: item.productId,
-              name: item.name,
-              price,
-              qty,
-              imageUrl: item.imageUrl || "",
-              buyNow: true,
-            };
+        <Route path="/shop" element={
+          <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => syncCartCount()} />
+        } />
 
-            const summary = {
-              subtotal,
-              couponDiscount: 0,
+        <Route path="/product/:id" element={
+          <ProductDetailRoute
+            userRole={userRole}
+            onAddToCart={() => syncCartCount()}
+            onBuyNow={(item) => {
+              const price = Number(item.price) || 0;
+              const qty = Number(item.qty) || 1;
+              const subtotal = price * qty;
+
+              const checkoutItem = {
+                productId: item.productId,
+                name: item.name,
+                price,
+                qty,
+                imageUrl: item.imageUrl || "",
+                buyNow: true,
+              };
+
+              const summary = {
+                subtotal,
+                couponDiscount: 0,
+                pointsDiscount: 0,
+                grandTotal: subtotal,
+                items: [checkoutItem],
+              };
+
+              setCartItems([checkoutItem]);
+              setCheckoutSummary(summary);
+              navigate('/checkout');
+            }}
+          />
+        } />
+
+        <Route path="/cart" element={
+          <CartPage
+            onContinueShopping={() => handleNavigate('shop')}
+            onCheckout={(data) => { setCartItems(data?.items || []); setCheckoutSummary(data); handleNavigate('checkout'); }}
+          />
+        } />
+
+        <Route path="/checkout" element={
+          <CheckoutPage
+            cartItems={cartItems}
+            onPaid={() => handleNavigate('orders')}
+            onBack={() => handleNavigate('cart')}
+            initialSummary={checkoutSummary ? {
+              items: `$${checkoutSummary.subtotal} x ${checkoutSummary.items?.length}`,
+              itemsAmount: checkoutSummary.subtotal,
+              shippingAmount: 0,
+              couponDiscount: checkoutSummary.couponDiscount || 0,
               pointsDiscount: 0,
-              grandTotal: subtotal,
-              items: [checkoutItem],
-            };
+              currency: "NTD",
+              total: checkoutSummary.grandTotal,
+            } : undefined}
+          />
+        } />
 
-            setCartItems([checkoutItem]);
-            setCheckoutSummary(summary);
-            setView('checkout');
-          }}
-          onNavigate={handleNavigate}
-          userRole={userRole}
-          onAddToCart={() => syncCartCount()}
-          product={selectedProduct}
-        />
-      )}
+        <Route path="/chat" element={<ChatPage />} />
 
-      {view === 'cart' && <CartPage onContinueShopping={() => handleNavigate('shop')} onCheckout={(data) => { setCartItems(data?.items || []); setCheckoutSummary(data); handleNavigate('checkout'); }} />}
-      {view === 'checkout' && <CheckoutPage
-        cartItems={cartItems}
-        onPaid={() => handleNavigate('orders')}
-        onBack={() => handleNavigate('cart')}
-        initialSummary={checkoutSummary ? {
-          items: `$${checkoutSummary.subtotal} x ${checkoutSummary.items?.length}`,
-          itemsAmount: checkoutSummary.subtotal,
-          shippingAmount: 0,
-          couponDiscount: checkoutSummary.couponDiscount || 0,
-          pointsDiscount: 0,
-          currency: "NTD",
-          total: checkoutSummary.grandTotal,
-        } : undefined}
-      />}
+        {/* 下面這些頁面共用左側 Sidebar 的殼 */}
+        <Route path="/home" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <HomePage
+              onNavigate={handleNavigate}
+              jumpToStage={homeJumpStage}
+              onJumpHandled={() => setHomeJumpStage(null)}
+            />
+          </ShellLayout>
+        } />
 
-      {view === 'chat' && <ChatPage />}
+        <Route path="/analysis" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />
+          </ShellLayout>
+        } />
 
-      {shellViews.includes(view) && (
-        <div className="flex p-8 max-w-7xl mx-auto">
-          <Sidebar userRole={userRole} currentView={getSidebarActiveView()} onNavigate={handleNavigate} />
-          <main className="flex-1 ml-12">
-            {view === 'home' && (
-              <HomePage
-                onNavigate={handleNavigate}
-                jumpToStage={homeJumpStage}
-                onJumpHandled={() => setHomeJumpStage(null)}
-              />
-            )}
+        <Route path="/analysis/product" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <SalesDataRoute />
+          </ShellLayout>
+        } />
 
-            {view === 'analysis' && <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />}
-            {view === 'sales_data' && <SalesDataPage product={selectedProduct} onBack={() => handleNavigate('analysis')} />}
+        <Route path="/task" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <TaskDetailRoute onJumpHome={(stage) => { if (stage) setHomeJumpStage(stage); }} />
+          </ShellLayout>
+        } />
 
-            {view === 'task_detail' && (
-              <TaskDetailPage
-                task={selectedTask}
-                onBack={(targetStage) => {
-                  if (targetStage) setHomeJumpStage(targetStage);
-                  handleNavigate('home');
-                }}
-              />
-            )}
+        <Route path="/profile" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <ProfilePage isKOC={userRole === 'koc'} />
+          </ShellLayout>
+        } />
 
-            {view === 'profile' && <ProfilePage isKOC={userRole === 'koc'} />}
+        <Route path="/security" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <SecurityPage onLogout={handleLogout} />
+          </ShellLayout>
+        } />
 
-            {view === 'security' && (
-              <SecurityPage
-                onLogout={() => {
-                  localStorage.removeItem('token');
-                  localStorage.removeItem('userId');
-                  localStorage.removeItem('role');
-                  localStorage.removeItem('view');
-                  setUserRole('guest');
-                  setCartCount(0);
-                  setView('welcome');
-                }}
-              />
-            )}
-            {view === 'orders' && <OrdersPage
-              onTrackOrder={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
-              onOpenOrderDetail={(id) => { setSelectedOrderId(id); setTimeout(() => handleNavigate('order_detail'), 0); }}
-            />}
-            {view === 'order_detail' && <OrderDetailPage onBack={() => handleNavigate('orders')} orderId={selectedOrderId} />}
-            {view === 'earnings' && <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />}
-            {view === 'earnings_detail' && <EarningsDetailPage onBack={() => handleNavigate('earnings')} />}
-            {view === 'pending_detail' && <PendingEarningsPage onBack={() => handleNavigate('earnings')} />}
+        <Route path="/orders" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <OrdersPage
+              onTrackOrder={(id) => handleNavigate('order_detail', id)}
+              onOpenOrderDetail={(id) => handleNavigate('order_detail', id)}
+            />
+          </ShellLayout>
+        } />
 
-            {view === 'favorites' && (
-              <FavoritesPage
-                onAddToCart={() => setCartCount(c => c + 1)}
-                onNavigate={handleNavigate}
-              />
-            )}
+        <Route path="/orders/:id" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <OrderDetailRoute />
+          </ShellLayout>
+        } />
 
-            {view === 'applyKoc' && (
-              <ApplyKOCPage
-                onSubmit={() => {
-                  // 申請只是送出審核，還不是 KOC；要等平台審核通過、
-                  // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
-                  handleNavigate('shop');
-                }}
-              />
-            )}
-          </main>
-        </div>
-      )}
+        <Route path="/earnings" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/detail" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <EarningsDetailPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/pending" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <PendingEarningsPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/favorites" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <FavoritesPage
+              onAddToCart={() => setCartCount(c => c + 1)}
+              onNavigate={handleNavigate}
+            />
+          </ShellLayout>
+        } />
+
+        <Route path="/koc-intro" element={
+          <KocIntroPage
+            onApply={() => handleNavigate('applyKoc')}
+            onBack={() => handleNavigate('shop')}
+          />
+        } />
+
+        <Route path="/apply-koc" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <ApplyKOCPage
+              onSubmit={() => {
+                // 申請只是送出審核，還不是 KOC；要等平台審核通過、
+                // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
+                handleNavigate('shop');
+              }}
+              onViewIntro={() => handleNavigate('kocIntro')}
+            />
+          </ShellLayout>
+        } />
+
+        <Route path="*" element={null} />
+      </Routes>
 
       <div className={`fixed bottom-10 left-1/2 z-[9999] flex -translate-x-1/2 items-center gap-4 rounded-full bg-[#1A1A18] pl-6 pr-2 py-2 text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 ${appToast ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-10 opacity-0"}`}>
         <span>{appToast}</span>
-        {appToast && <button onClick={() => { setAppToast(""); setView('login'); }} className="rounded-full bg-[#C8522A] px-5 py-2.5 text-xs transition-colors hover:bg-[#A64220]">前往登入</button>}
+        {appToast && <button onClick={() => { setAppToast(""); navigate('/login'); }} className="rounded-full bg-[#C8522A] px-5 py-2.5 text-xs transition-colors hover:bg-[#A64220]">前往登入</button>}
       </div>
+    </div>
+  );
+}
+
+// 左側 Sidebar + 內容區的共用外殼，取代原本用 shellViews.includes(view) 判斷再包一層的寫法
+function ShellLayout({ userRole, activeView, onNavigate, children }) {
+  return (
+    <div className="flex p-8 max-w-7xl mx-auto">
+      <Sidebar userRole={userRole} currentView={activeView} onNavigate={onNavigate} />
+      <main className="flex-1 ml-12">
+        {children}
+      </main>
     </div>
   );
 }

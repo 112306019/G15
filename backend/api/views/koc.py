@@ -189,9 +189,15 @@ def get_available_campaign_list(request):
             })
 
         # 🔥 優化 2：在迴圈外一次性向印度 DB 撈出所有相關活動（對 DB 只發送 1 次 SQL）
+        # 活動要「進行中」才能申請：狀態是 active，而且現在時間要落在 start_date ~ end_date 之間，
+        # 不然任務期限已經過期的活動也會一直出現在可申請清單裡
+        now = timezone.now()
         campaign_products = CampaignProduct.objects.filter(
-            product_id__in=product_ids
-        ).select_related('campaign')
+            product_id__in=product_ids,
+            campaign__status='active',
+            campaign__start_date__lte=now,
+            campaign__end_date__gte=now,
+        ).select_related('campaign', 'product')
 
         campaigns_data = []
         seen_campaign_ids = set()
@@ -216,6 +222,7 @@ def get_available_campaign_list(request):
                 "order_id": product_order_map.get(cp.product_id, ""),
                 "campaign_id": campaign_id_str,
                 "campaign_name": campaign.name,
+                "campaign_image": cp.product.image_url if cp.product else None,
                 "apply_status": 0
             })
 
@@ -745,10 +752,27 @@ def get_mission_list(request):
     )
     earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
 
+    # 🔥 批次查出「文案被退回、還沒重新提交」的任務，讓撰寫文案分頁能顯示「文案退回，請修改」
+    # 而不是跟全新任務一樣顯示「撰寫中」。同一個任務可能被退回過好幾次，只留最新一筆的意見。
+    writing_mission_ids = [
+        mission.kocmission_id for mission in missions
+        if mission.stage == 'writing'
+    ]
+    revising_feedback_map = {}
+    revising_submissions = Submissions.objects.filter(
+        kocmission_id__in=writing_mission_ids,
+        submission_type='text',
+        status='revising'
+    ).order_by('kocmission_id', '-submission_id')
+    for submission in revising_submissions:
+        if submission.kocmission_id not in revising_feedback_map:
+            revising_feedback_map[submission.kocmission_id] = submission.vendor_feedback
+
     result = []
     for mission in missions:
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
+        vendor_feedback = revising_feedback_map.get(mission.kocmission_id)
 
         result.append({
             "KOCMission_id": str(mission.kocmission_id),
@@ -758,6 +782,8 @@ def get_mission_list(request):
             "vendor_name": campaign.vendor.company_name,
             "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
             "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage in ('promoting', 'completed') else 0,
+            "is_revising": vendor_feedback is not None,
+            "vendor_feedback": vendor_feedback,
         })
 
     return Response({
@@ -1131,6 +1157,20 @@ def get_analytics_list(request):
         if cp.campaign_id not in image_map and cp.product:
             image_map[cp.campaign_id] = cp.product.image_url
 
+    # 🔥 批次查出已結案任務裡「還有分潤沒結算」的任務，避免迴圈內逐一查詢
+    # 已結案且分潤已經結算完成（後台按過「結算分潤」，錢已經存進 koc_wallet）的任務，
+    # 就不用再顯示在成效分析裡了
+    completed_mission_ids = [
+        mission.kocmission_id for mission in missions
+        if mission.stage == 'completed'
+    ]
+    unsettled_mission_ids = set(
+        Earnings.objects.filter(
+            kocmission_id__in=completed_mission_ids,
+            status='pending'
+        ).values_list('kocmission_id', flat=True)
+    )
+
     result = []
     for mission in missions:
         # 取得優惠碼(一個任務對應一個優惠碼)
@@ -1138,6 +1178,10 @@ def get_analytics_list(request):
 
         # 沒有優惠碼的任務不顯示在成效分析(還沒到 publishing 階段)
         if not coupon:
+            continue
+
+        # 已結案且分潤已結算完成的任務，不用再顯示在成效分析
+        if mission.stage == 'completed' and mission.kocmission_id not in unsettled_mission_ids:
             continue
 
         # 取商品圖片

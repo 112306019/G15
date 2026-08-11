@@ -4,11 +4,14 @@ import api from '../api/index';
 
 const STAGES = [
   { id: 1, label: '代言申請', icon: Send, desc: '瀏覽並申請任務' },
-  { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交草稿' },
+  { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
-  { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼熱推中' },
+  { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
   { id: 5, label: '已結案', icon: CheckCircle2, desc: '任務完成' },
 ];
+
+// 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
+const isValidImageUrl = (url) => typeof url === 'string' && /^https?:\/\//.test(url);
 
 // stage 對照表：撰寫文案分頁要合併 writing(0) + reviewing(1) 兩種後端 stage，
 // 所以這個分頁的值是陣列，其餘分頁維持單一數字
@@ -97,6 +100,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               id: c.campaign_id,
               order_id: c.order_id,
               name: c.campaign_name,
+              image: c.campaign_image,
             })));
           }
 
@@ -155,6 +159,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             deadline: m.deadline,
             stage: 2,
             isSubmitted,
+            isRevising: m.is_revising || false,
+            vendorFeedback: m.vendor_feedback || null,
             promoCode: null,
             earningsTotal: m.earnings_total,
           });
@@ -294,6 +300,26 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           );
         }
+        if (task.isRevising) {
+          // 文案被廠商退回，需修改後重新提交
+          return (
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setViewingReason({ type: 'revising', productName: task.productName, rejectReason: task.vendorFeedback })}
+                className="bg-[#FDF0ED] text-[#C8522A] p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
+              >
+                <span className="flex items-center gap-2">
+                  <XCircle size={14} className="shrink-0" />
+                  文案退回，請修改
+                </span>
+                <span className="text-[10px] underline underline-offset-2 shrink-0">查看原因</span>
+              </button>
+              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+                <Edit3 size={16}/> 前往修改文案
+              </button>
+            </div>
+          );
+        }
         // 撰寫中
         return (
           <div className="flex flex-col gap-3">
@@ -383,12 +409,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-xs shadow-md">3</span> 發布貼文賺獎金</span>
           </div>
         </div>
-        <button
-          onClick={() => { setActiveStage(1); setApplySubTab('unapplied'); }}
-          className="relative z-10 bg-white text-[#1A1A18] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#F5F0E8] transition-all shadow-md active:scale-95"
-        >
-          前往探索新任務
-        </button>
+        
       </div>
 
       {/* 分頁列 */}
@@ -469,8 +490,12 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   }`}
                 >
                   <div className="flex items-center gap-6 flex-1 pr-8">
-                    <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
-                      <ImageIcon className="text-[#8C8880]/50" size={24} />
+                    <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+                      {isValidImageUrl(campaign.image) ? (
+                        <img src={campaign.image} alt={campaign.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="text-[#8C8880]/50" size={24} />
+                      )}
                     </div>
                     <div className="font-bold text-[#1A1A18] leading-snug">
                       {campaign.name}
@@ -510,15 +535,15 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   )}
                 </div>
                 {task.stage === 2 && (
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
-                    {task.isSubmitted ? '已繳交・審核中' : '撰寫中'}
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
+                    {task.isSubmitted ? '已繳交・審核中' : task.isRevising ? '文案退回，請修改' : '撰寫中'}
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 bg-[#F5F0E8] rounded-2xl flex items-center justify-center shrink-0 border border-[#E2DDD4]">
-                  {task.campaignImage ? (
+                  {isValidImageUrl(task.campaignImage) ? (
                     <img src={task.campaignImage} alt={task.productName} className="w-full h-full object-cover rounded-2xl" />
                   ) : (
                     <ImageIcon size={24} className="text-[#8C8880]/50" />
@@ -559,10 +584,12 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <div className="w-12 h-12 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 text-[#C8522A]">
               <XCircle size={24} />
             </div>
-            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">申請未通過</h3>
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">
+              {viewingReason.type === 'revising' ? '文案退回，請修改' : '申請未通過'}
+            </h3>
             <p className="text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
             <div className="bg-[#F8F9FA] rounded-2xl p-5 text-sm text-[#1A1A18] leading-relaxed mb-6 whitespace-pre-wrap">
-              {viewingReason.rejectReason || '廠商未填寫拒絕原因'}
+              {viewingReason.rejectReason || '廠商未填寫原因'}
             </div>
             <button
               onClick={() => setViewingReason(null)}

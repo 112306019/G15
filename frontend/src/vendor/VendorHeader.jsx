@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Star, User, MessageCircle } from 'lucide-react';
+import { Star, User, MessageCircle, Settings, LogOut } from 'lucide-react';
 
 export default function VendorHeader() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.removeItem('vendor_id');
+    navigate('/vendor-login');
+  };
 
   // 對應 PDF 的功能選單
   const navItems = [
@@ -69,14 +75,41 @@ export default function VendorHeader() {
           <span className="absolute top-2 right-2 w-2 h-2 bg-[#C8522A] rounded-full border border-white shadow-sm" />
         </button>
 
-        {/* 頭像按鈕 (點擊前往設定/廠商資訊) */}
-        <button 
-          onClick={() => navigate('/vendor/settings')}
-          className="cursor-pointer bg-[#F5F0E8] hover:bg-[#E2DDD4] p-2.5 rounded-full transition-colors text-[#1A1A18]"
-          title="廠商資訊"
+        {/* 頭像按鈕 (hover 顯示設定/登出選單) */}
+        <div
+          className="relative"
+          onMouseEnter={() => setProfileMenuOpen(true)}
+          onMouseLeave={() => setProfileMenuOpen(false)}
         >
-          <User size={20} />
-        </button>
+          <button
+            onClick={() => navigate('/vendor/settings')}
+            className="cursor-pointer bg-[#F5F0E8] hover:bg-[#E2DDD4] p-2.5 rounded-full transition-colors text-[#1A1A18]"
+            title="廠商資訊"
+          >
+            <User size={20} />
+          </button>
+
+          {profileMenuOpen && (
+            <div className="absolute right-0 top-full pt-2 w-44 z-50">
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden py-2">
+                <button
+                  onClick={() => { setProfileMenuOpen(false); navigate('/vendor/settings'); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 hover:text-black transition-colors text-left"
+                >
+                  <Settings size={16} />
+                  廠商設定
+                </button>
+                <button
+                  onClick={() => { setProfileMenuOpen(false); handleLogout(); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors text-left"
+                >
+                  <LogOut size={16} />
+                  登出
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
       </div>
     </header>

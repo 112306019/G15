@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import timedelta
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -19,6 +20,12 @@ def _has_active_campaign(product_id):
         campaign__start_date__lte=now,
         campaign__end_date__gte=now
     ).exists()
+
+
+def _is_campaign_promo_expired(campaign):
+    """活動是否已經超過優惠碼效期（活動結束日 + promo_days 寬限期）"""
+    deadline = campaign.end_date + timedelta(days=campaign.promo_days or 0)
+    return timezone.now() > deadline
 
 
 ## 商品查詢
@@ -50,9 +57,11 @@ def get_products(request):
 
     result = []
     for p in products:
+        vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
         result.append({
             'Product_id': p.product_id,
             'Vendor_id': p.vendor_id,
+            'Vendor_name': vendor.company_name if vendor else p.vendor_id,
             'Product_name': p.product_name,
             'description': p.description,
             'price': p.price,
@@ -91,9 +100,12 @@ def get_product_detail(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
+
     return Response({
         'Product_id': p.product_id,
         'Vendor_id': p.vendor_id,
+        'Vendor_name': vendor.company_name if vendor else p.vendor_id,
         'Product_name': p.product_name,
         'description': p.description,
         'price': p.price,
@@ -483,6 +495,15 @@ def verify_coupon(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    if _is_campaign_promo_expired(campaign):
+        # lazy write：讀到才順便把狀態寫回，不用額外排程
+        coupon.status = 'expired'
+        coupon.save(update_fields=['status'])
+        return Response(
+            {'success': False, 'err': '優惠碼已過期'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     campaign_products = CampaignProduct.objects.filter(campaign=campaign).select_related('product')
 
     if not campaign_products:
@@ -630,6 +651,14 @@ def create_order(request):
         except Exception:
             return Response(
                 {'success': False, 'err': '優惠碼未綁定任何活動'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if _is_campaign_promo_expired(campaign):
+            coupon.status = 'expired'
+            coupon.save(update_fields=['status'])
+            return Response(
+                {'success': False, 'err': '優惠碼已過期'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

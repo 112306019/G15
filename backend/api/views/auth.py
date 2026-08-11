@@ -249,6 +249,11 @@ def user_login(request):
             ip_address=request.META.get('REMOTE_ADDR', ''),
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
         )
+        # 只保留每個使用者最近 20 筆登入紀錄，避免資料無限累積
+        old_logs = LoginHistory.objects.filter(user=user).order_by('-login_at')[10:]
+        old_ids = list(old_logs.values_list('log_id', flat=True))
+        if old_ids:
+            LoginHistory.objects.filter(log_id__in=old_ids).delete()
     except Exception:
         pass
 
@@ -419,7 +424,7 @@ def get_login_history(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    logs = LoginHistory.objects.filter(user=user).order_by('-login_at')[:10]
+    logs = LoginHistory.objects.filter(user=user).order_by('-login_at')[:5]
 
     result = []
     for log in logs:
