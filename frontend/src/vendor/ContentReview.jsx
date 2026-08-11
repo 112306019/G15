@@ -33,7 +33,7 @@ import {
 
 // ─── 共用 UI 元件 ─────────────────────────────────────────────
 
-function Card({ children, className = '' }) {
+function Card({ children, className = '', ...props }) {
   return (
     <div
       className={`
@@ -42,6 +42,7 @@ function Card({ children, className = '' }) {
         shadow-sm overflow-hidden
         ${className}
       `}
+      {...props}
     >
       {children}
     </div>
@@ -49,15 +50,31 @@ function Card({ children, className = '' }) {
 }
 
 
-function StatCard({ label, value, icon: Icon }) {
+function StatCard({ label, value, icon: Icon, onClick, active }) {
+  const clickable = typeof onClick === 'function'
+
   return (
-    <Card className="p-5 flex flex-col justify-between hover:border-[#B89B6A] transition-colors">
+    <Card
+      onClick={onClick}
+      className={cn(
+        'p-5 flex flex-col justify-between transition-colors',
+        clickable ? 'cursor-pointer' : '',
+        active
+          ? 'border-[#C8522A] ring-2 ring-[#C8522A]/15'
+          : 'hover:border-[#B89B6A]'
+      )}
+    >
       <div className="flex items-center justify-between mb-4">
-        <span className="text-sm font-bold text-[#8C8880] tracking-wide">
+        <span
+          className={cn(
+            'text-sm font-bold tracking-wide',
+            active ? 'text-[#C8522A]' : 'text-[#8C8880]'
+          )}
+        >
           {label}
         </span>
 
-        <div className="text-[#8C8880]">
+        <div className={active ? 'text-[#C8522A]' : 'text-[#8C8880]'}>
           <Icon size={20} strokeWidth={2.5} />
         </div>
       </div>
@@ -245,6 +262,13 @@ export default function ContentReview() {
   // 顯示中的分頁
   const [stage, setStage] =
     useState('qualification')
+
+  // 依審核狀態分類：接案審核 / 文案審核 各自獨立的篩選條件
+  const [qualificationFilter, setQualificationFilter] =
+    useState('all')
+
+  const [submissionFilter, setSubmissionFilter] =
+    useState('all')
 
 
   const [applications, setApplications] =
@@ -601,27 +625,66 @@ export default function ContentReview() {
   }
 
   const contentCounts = {
-    pendingContent: submissions.filter(
+    pendingContent: groupedSubmissions.filter(
       submission =>
         !submission.caption
     ).length,
 
-    submitted: submissions.filter(
+    submitted: groupedSubmissions.filter(
       submission =>
         submission.status === 'pending' ||
         submission.status === 'submitted'
     ).length,
 
-    approved: submissions.filter(
+    approved: groupedSubmissions.filter(
       submission =>
         submission.status === 'approved'
     ).length,
 
-    revising: submissions.filter(
+    revising: groupedSubmissions.filter(
       submission =>
         submission.status === 'revising'
     ).length
   }
+
+
+  // ─── 依篩選條件過濾清單 ────────────────────────────────────
+
+  const filteredApplications =
+    useMemo(() => {
+      if (qualificationFilter === 'all') {
+        return sortedApplications
+      }
+
+      return sortedApplications.filter(
+        item => item.status === qualificationFilter
+      )
+    }, [sortedApplications, qualificationFilter])
+
+  const filteredSubmissions =
+    useMemo(() => {
+      if (submissionFilter === 'all') {
+        return groupedSubmissions
+      }
+
+      if (submissionFilter === 'pendingContent') {
+        return groupedSubmissions.filter(
+          submission => !submission.caption
+        )
+      }
+
+      if (submissionFilter === 'submitted') {
+        return groupedSubmissions.filter(
+          submission =>
+            submission.status === 'pending' ||
+            submission.status === 'submitted'
+        )
+      }
+
+      return groupedSubmissions.filter(
+        submission => submission.status === submissionFilter
+      )
+    }, [groupedSubmissions, submissionFilter])
 
 
   // ─── 目前選取資料 ──────────────────────────────────────────
@@ -1010,23 +1073,37 @@ export default function ContentReview() {
 
       {stage === 'qualification' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StatCard
+              label="全部"
+              value={applications.length}
+              icon={FileText}
+              active={qualificationFilter === 'all'}
+              onClick={() => setQualificationFilter('all')}
+            />
+
             <StatCard
               label="待審資格"
               value={qualificationCounts.pending}
               icon={Clock}
+              active={qualificationFilter === 'pending'}
+              onClick={() => setQualificationFilter('pending')}
             />
 
             <StatCard
               label="已通過"
               value={qualificationCounts.approved}
               icon={CheckCircle2}
+              active={qualificationFilter === 'approved'}
+              onClick={() => setQualificationFilter('approved')}
             />
 
             <StatCard
               label="已拒絕"
               value={qualificationCounts.rejected}
               icon={X}
+              active={qualificationFilter === 'rejected'}
+              onClick={() => setQualificationFilter('rejected')}
             />
           </div>
 
@@ -1072,17 +1149,19 @@ export default function ContentReview() {
                         {applicationError}
                       </td>
                     </tr>
-                  ) : sortedApplications.length === 0 ? (
+                  ) : filteredApplications.length === 0 ? (
                     <tr>
                       <td
                         colSpan={6}
                         className="py-16 text-center text-sm font-bold text-[#8C8880]"
                       >
-                        目前沒有 KOC 接案申請
+                        {qualificationFilter === 'all'
+                          ? '目前沒有 KOC 接案申請'
+                          : '這個分類目前沒有資料'}
                       </td>
                     </tr>
                   ) : (
-                    sortedApplications.map(application => {
+                    filteredApplications.map(application => {
                       const canReview =
                         application.status === 'pending'
 
@@ -1337,29 +1416,45 @@ export default function ContentReview() {
 
       {stage === 'content' && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            <StatCard
+              label="全部"
+              value={groupedSubmissions.length}
+              icon={FileText}
+              active={submissionFilter === 'all'}
+              onClick={() => setSubmissionFilter('all')}
+            />
+
             <StatCard
               label="待提交文案"
               value={contentCounts.pendingContent}
               icon={Clock}
+              active={submissionFilter === 'pendingContent'}
+              onClick={() => setSubmissionFilter('pendingContent')}
             />
 
             <StatCard
               label="待審文案"
               value={contentCounts.submitted}
               icon={FileText}
+              active={submissionFilter === 'submitted'}
+              onClick={() => setSubmissionFilter('submitted')}
             />
 
             <StatCard
               label="文案核准"
               value={contentCounts.approved}
               icon={CheckCircle2}
+              active={submissionFilter === 'approved'}
+              onClick={() => setSubmissionFilter('approved')}
             />
 
             <StatCard
               label="需修改"
               value={contentCounts.revising}
               icon={RotateCcw}
+              active={submissionFilter === 'revising'}
+              onClick={() => setSubmissionFilter('revising')}
             />
           </div>
 
@@ -1414,17 +1509,19 @@ export default function ContentReview() {
                         {submissionError}
                       </td>
                     </tr>
-                  ) : groupedSubmissions.length === 0 ? (
+                  ) : filteredSubmissions.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
                         className="py-16 text-center text-sm font-bold text-[#8C8880]"
                       >
-                        目前沒有文案投稿
+                        {submissionFilter === 'all'
+                          ? '目前沒有文案投稿'
+                          : '這個分類目前沒有資料'}
                       </td>
                     </tr>
                   ) : (
-                    groupedSubmissions.map(submission => {
+                    filteredSubmissions.map(submission => {
                       const canReview =
                         submission.status ===
                         'pending' ||
