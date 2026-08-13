@@ -1753,6 +1753,7 @@ export default function ContentReview() {
                             <option value="cosmetic">化妝品</option>
                             <option value="medical_device">醫療器材</option>
                             <option value="drug">藥品</option>
+                            <option value="other">其他</option>
                           </select>
                           <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption, selectedSubmission?.id)} disabled={aiLoading} className="px-6">
                             {aiLoading ? "分析中..." : "AI 審核"}
