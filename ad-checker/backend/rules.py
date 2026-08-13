@@ -15,9 +15,10 @@ CATEGORY_NAMES = {
     "cosmetic": "化粧品",
     "medical_device": "醫療器材",
     "drug": "藥品",
+    "other": "其他",
 }
 
-ALL_CATEGORIES = ["food", "cosmetic", "medical_device", "drug"]
+ALL_CATEGORIES = ["food", "cosmetic", "medical_device", "drug", "other"]
 
 # ---------------------------------------------------------------------------
 # 違規詞群組

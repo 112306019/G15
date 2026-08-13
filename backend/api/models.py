@@ -304,6 +304,7 @@ class Submissions(models.Model):
         default='pending',
         db_column='status'
     )
+    ai_result = models.JSONField(blank=True, null=True, db_column='ai_result')
     vendor_feedback = models.TextField(blank=True, null=True, db_column='vendor_feedback')
     submitted_time = models.DateTimeField(blank=True, null=True, db_column='submitted_time')
     reviewed_time = models.DateTimeField(blank=True, null=True, db_column='reviewed_time')
@@ -458,6 +459,19 @@ class Product(models.Model):
     category = models.CharField(max_length=100, blank=True, null=True)
     image_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=50)
+    AD_CATEGORY_CHOICES = [
+        ('food', '食品'),
+        ('cosmetic', '化粧品'),
+        ('medical_device', '醫療器材'),
+        ('drug', '藥品'),
+        ('other', '其他'),
+    ]
+    ad_category = models.CharField(
+        max_length=20,
+        choices=AD_CATEGORY_CHOICES,
+        default='other',
+        db_column='ad_category'
+    )
 
     class Meta:
         db_table = 'Product'

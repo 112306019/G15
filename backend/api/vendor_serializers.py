@@ -63,6 +63,7 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
             "discounted_price",
             "stock",
             "category",
+            "ad_category",
             "image_url",
             "status",
         ]
@@ -81,6 +82,7 @@ class VendorProductUpdateSerializer(serializers.ModelSerializer):
             "discounted_price",
             "stock",
             "category",
+            "ad_category",
             "image_url",
             "status",
         ]

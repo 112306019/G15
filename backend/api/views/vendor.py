@@ -1420,6 +1420,7 @@ def vendor_mission_get_submission_detail(request):
             "vendor_feedback": submission.vendor_feedback,
             "submitted_time": submission.submitted_time,
             "reviewed_time": submission.reviewed_time,
+            "ai_result": submission.ai_result,
 
             "kocmission_id": mission.kocmission_id,
             "stage": mission.stage,

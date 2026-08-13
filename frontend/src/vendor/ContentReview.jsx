@@ -501,7 +501,10 @@ export default function ContentReview() {
               item.submitted_time || null,
 
             reviewedAt:
-              item.reviewed_time || null
+              item.reviewed_time || null,
+
+            aiResult:
+              item.ai_result || null
           }))
         )
       } catch (error) {
@@ -1449,7 +1452,7 @@ export default function ContentReview() {
                               ''
                             )
 
-                            setAiResult(null)
+                            setAiResult(submission.aiResult || null)
                           }}
                           className={cn(
                             'transition-colors',
@@ -1759,10 +1762,10 @@ export default function ContentReview() {
 
                             {aiResult.gray_areas?.length > 0 && (
                               <div>
-                                <div className="font-bold text-[#C8522A] mb-1">灰色地帶（{aiResult.gray_areas.length}）</div>
+                                <div className="font-bold text-[#8A6D1F] mb-1">灰色地帶（{aiResult.gray_areas.length}）</div>
                                 {aiResult.gray_areas.map((g, i) => (
-                                  <div key={i} className="text-xs bg-[#FDF0ED] text-[#8C8880] px-3 py-2 rounded-lg mb-1">
-                                    <span className="font-bold text-[#C8522A]">「{g.phrase}」</span> — {g.reason}
+                                  <div key={i} className="text-xs bg-[#FDF6E3] text-[#6B5A2C] px-3 py-2 rounded-lg mb-1">
+                                    <span className="font-bold text-[#8A6D1F]">「{g.phrase}」</span> — {g.reason}
                                   </div>
                                 ))}
                               </div>
