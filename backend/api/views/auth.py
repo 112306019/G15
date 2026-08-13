@@ -53,11 +53,19 @@ def user_signup(request):
         )
 
     # 檢查 email 是否已存在
-    if User.objects.filter(email=email).exists():
-        return Response(
-            {'success': False, 'err': '此 Email 已被註冊'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    existing_user = User.objects.filter(email=email).first()
+    if existing_user:
+        if existing_user.is_verified:
+            # 已完成驗證的帳號，不可重複註冊
+            return Response(
+                {'success': False, 'err': '此 Email 已被註冊'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            # 之前註冊過但沒完成信箱驗證，視為未完成的舊紀錄，
+            # 刪掉重來，讓使用者可以用同一個 email 重新走一次註冊流程
+            EmailVerificationCode.objects.filter(user=existing_user).delete()
+            existing_user.delete()
 
     is_real_email = not email.endswith(PHONE_PLACEHOLDER_EMAIL_SUFFIX)
 
