@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from typing import Optional
 import json
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import time
-from groq import Groq
+import google.generativeai as genai
 from rules import detect_violations, applicable_groups, CATEGORY_NAMES
 
 app = FastAPI(title="廣告文案品質檢測系統 API", version="1.1.0")
@@ -21,7 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 class AnalyzeRequest(BaseModel):
@@ -130,7 +134,7 @@ def build_highlighted_segments(text, violations, gray_areas):
 
 
 def call_llm(text, violations, category):
-    if not GROQ_API_KEY:
+    if not GEMINI_API_KEY:
         return None, []
 
     cat_name = CATEGORY_NAMES.get(category, "食品")
@@ -152,7 +156,7 @@ def call_llm(text, violations, category):
 
 你的任務分三部分：
 1. semantic_risks：找出語意層級「明確違規」的問題（即使規則引擎沒抓到字面詞）。
-2. gray_areas：判讀「灰色地帶」。這些不是固定禁用詞，而是需要靠語意與舉證可能性判斷的踩線說法，例如「1瓶抵12瓶」這類無法舉證的誇大數字、「業界唯一」這類排他宣稱、「7天有感」這類時效宣稱、暗示性療效、見證式宣稱等。請直接從文案判讀，逐筆列出。
+2. gray_areas：判讀「灰色地帶」。這些不是固定禁用詞，而是需要靠語意與舉證可能性判斷的踩線說法，例如「1瓶抵12瓶」這類無法舉證的誇大數字、「業界唯一」這類排他宣稱、「7天有感」這類時效宣稱、暗示性療效、見證式宣稱、體感變化描述（如代謝變快、體態改善、氣色變好）等。請盡可能寬鬆地判讀，只要片段本身缺乏具體舉證依據、帶有誇大或暗示效果的語氣，就應列為 gray_areas，即使同一句話裡也包含被規則引擎抓到的明確違規詞（兩者可以並存，不互斥，請針對句子中不同片段分別標註）。除非文案完全平鋪直敘、毫無任何主觀效果宣稱，否則 gray_areas 通常不應為空陣列。
 3. suggestions / compliant_alternatives：提供修改方向與合規替代詞句。
 
 請僅以 JSON 回覆（不要任何其他文字、不要 markdown）：
@@ -171,14 +175,13 @@ def call_llm(text, violations, category):
   "compliant_alternatives": ["合規替代詞句1", "合規替代詞句2"]
 }}"""
 
-    client = Groq(api_key=GROQ_API_KEY)
+    model = genai.GenerativeModel("gemini-flash-latest")
 
     for attempt in range(3):
         try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
+            response = model.generate_content(
+                prompt,
+                generation_config={"temperature": 0.2},
             )
             break
         except Exception as e:
@@ -187,7 +190,7 @@ def call_llm(text, violations, category):
                 continue
             raise
 
-    raw = response.choices[0].message.content
+    raw = response.text
     clean = raw.replace("```json", "").replace("```", "").strip()
     parsed = json.loads(clean)
 
@@ -219,7 +222,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "ai_enabled": bool(GROQ_API_KEY)}
+    return {"status": "ok", "ai_enabled": bool(GEMINI_API_KEY)}
 
 
 @app.get("/api/rules/{category}")

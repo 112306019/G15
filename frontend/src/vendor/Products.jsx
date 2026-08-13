@@ -119,6 +119,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
     name: '',
     sku: '',
     category: '',
+    adCategory: 'other',
     price: '',
     discountedPrice: '',
     stock: '',
@@ -298,6 +299,24 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
                 ))}
               </select>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                廣告審核類別
+              </label>
+              <select
+                value={form.adCategory || 'other'}
+                onChange={set('adCategory')}
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm"
+              >
+                <option value="food">食品</option>
+                <option value="cosmetic">化粧品</option>
+                <option value="medical_device">醫療器材</option>
+                <option value="drug">藥品</option>
+                <option value="other">其他</option>
+              </select>
+              <p className="text-[11px] text-[#8C8880]">用於自動判讀 KOC 提交文案的合規審核規則</p>
+            </div>
           </div>
 
           <Input
@@ -458,6 +477,7 @@ export default function Products() {
           : Number(form.discountedPrice),
       stock: Number(form.stock),
       category: form.category || '',
+      ad_category: form.adCategory || 'other',
       image_url: form.imageUrl.trim(),
       status: editingProduct?.apiStatus || 'inactive'
     }

@@ -170,6 +170,7 @@ urlpatterns = [
     # Vendor 投稿 / 任務成果審核 API
     path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
     path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
+    path('vendor/mission/submission/saveAiResult', vendor.vendor_submission_save_ai_result, name='vendor-submission-save-ai-result'),
 
     # Vendor 訂單 API
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),

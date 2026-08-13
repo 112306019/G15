@@ -1420,6 +1420,7 @@ def vendor_mission_get_submission_detail(request):
             "vendor_feedback": submission.vendor_feedback,
             "submitted_time": submission.submitted_time,
             "reviewed_time": submission.reviewed_time,
+            "ai_result": submission.ai_result,
 
             "kocmission_id": mission.kocmission_id,
             "stage": mission.stage,
@@ -1445,6 +1446,40 @@ def vendor_mission_get_submission_detail(request):
         "success": True,
         "err": "",
         "submissions": submission_list
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_submission_save_ai_result(request):
+    """
+    廠商手動重新跑 AI 審核後，把最新結果存回 submission，
+    覆蓋掉之前（不管是自動跑的還是之前手動跑的）舊結果。
+    URL: /vendor/mission/submission/saveAiResult
+    """
+    submission_id = request.data.get("submission_id")
+    ai_result = request.data.get("ai_result")
+
+    if not submission_id or ai_result is None:
+        return Response({
+            "success": False,
+            "err": "submission_id 與 ai_result 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        submission = Submissions.objects.get(submission_id=submission_id)
+    except Submissions.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的投稿紀錄"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    submission.ai_result = ai_result
+    submission.save()
+
+    return Response({
+        "success": True,
+        "err": ""
     }, status=status.HTTP_200_OK)
 
 
