@@ -1451,6 +1451,40 @@ def vendor_mission_get_submission_detail(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+def vendor_submission_save_ai_result(request):
+    """
+    廠商手動重新跑 AI 審核後，把最新結果存回 submission，
+    覆蓋掉之前（不管是自動跑的還是之前手動跑的）舊結果。
+    URL: /vendor/mission/submission/saveAiResult
+    """
+    submission_id = request.data.get("submission_id")
+    ai_result = request.data.get("ai_result")
+
+    if not submission_id or ai_result is None:
+        return Response({
+            "success": False,
+            "err": "submission_id 與 ai_result 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        submission = Submissions.objects.get(submission_id=submission_id)
+    except Submissions.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的投稿紀錄"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    submission.ai_result = ai_result
+    submission.save()
+
+    return Response({
+        "success": True,
+        "err": ""
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
 def vendor_mission_review_submission(request):
     serializer = VendorSubmissionReviewSerializer(data=request.data)
 

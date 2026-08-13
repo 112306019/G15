@@ -228,6 +228,13 @@ function compliance(submission) {
       ok: !/(保證|最強|第一|治療)/.test(
         submission?.caption ?? ''
       )
+    },
+
+    {
+      label: '含業配/合作揭露用詞',
+      ok: /(合作|業配|贊助|廣告|#ad|#sponsored)/i.test(
+        submission?.caption ?? ''
+      )
     }
   ]
 }
@@ -309,7 +316,7 @@ export default function ContentReview() {
     )
   }
 
-  const handleAiCheck = async (caption) => {
+  const handleAiCheck = async (caption, submissionId) => {
     if (!caption) return
     setAiLoading(true)
     setAiResult(null)
@@ -321,6 +328,20 @@ export default function ContentReview() {
       })
       const data = await res.json()
       setAiResult(data)
+
+      // 手動重新分析後，把最新結果覆蓋存回資料庫，
+      // 讓下次任何人打開這筆文案時看到的都是這次最新的結果。
+      if (submissionId) {
+        try {
+          await fetch("http://127.0.0.1:8000/api/vendor/mission/submission/saveAiResult", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ submission_id: submissionId, ai_result: data }),
+          })
+        } catch (saveErr) {
+          console.error("儲存 AI 審核結果失敗", saveErr)
+        }
+      }
     } catch (err) {
       console.error("AI 審核失敗", err)
     } finally {
@@ -1733,7 +1754,7 @@ export default function ContentReview() {
                             <option value="medical_device">醫療器材</option>
                             <option value="drug">藥品</option>
                           </select>
-                          <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption)} disabled={aiLoading} className="px-6">
+                          <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption, selectedSubmission?.id)} disabled={aiLoading} className="px-6">
                             {aiLoading ? "分析中..." : "AI 審核"}
                           </Button>
                         </div>
