@@ -82,6 +82,36 @@ DATABASES = {
     }
 }
 
+
+# ==============================================================================
+# ECPay Logistics - Stage
+# ==============================================================================
+ECPAY_LOGISTICS_MERCHANT_ID = os.getenv(
+    "ECPAY_LOGISTICS_MERCHANT_ID",
+    ""
+)
+
+ECPAY_LOGISTICS_HASH_KEY = os.getenv(
+    "ECPAY_LOGISTICS_HASH_KEY",
+    ""
+)
+
+ECPAY_LOGISTICS_HASH_IV = os.getenv(
+    "ECPAY_LOGISTICS_HASH_IV",
+    ""
+)
+
+ECPAY_LOGISTICS_MAP_URL = os.getenv(
+    "ECPAY_LOGISTICS_MAP_URL",
+    "https://logistics-stage.ecpay.com.tw/Express/map"
+)
+
+ECPAY_LOGISTICS_SUBTYPE = os.getenv(
+    "ECPAY_LOGISTICS_SUBTYPE",
+    "UNIMARTC2C"
+)
+
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": (
