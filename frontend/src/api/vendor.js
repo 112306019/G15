@@ -157,6 +157,13 @@ export const updateVendorShipping = (data) => {
   return api.post('/vendor/order/updateShipping', data)
 }
 
+export const createVendorLogistics = data =>
+  api.post('/vendor/order/createLogistics', data)
+
+export const queryVendorLogistics = data =>
+  api.post('/vendor/order/queryLogistics', data)
+
+
 // 獲取優惠碼使用紀錄
 export const getVendorCouponUsage = (
   vendorId,

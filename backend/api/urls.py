@@ -55,6 +55,7 @@ from .views.consumer import (
 
 from .views import koc, vendor
 from .views.vendor import vendor_upload_image
+from .views import shipping
 
 urlpatterns = [
     # koc
@@ -204,4 +205,12 @@ urlpatterns = [
     
     path('user/loginHistory', get_login_history, name='get-login-history'),
     path('user/changePassword', change_password, name='change-password'),
+
+    # Shipping API
+    path('shipping/ecpay/map/', shipping.ecpay_store_map, name='ecpay_store_map'),
+    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_map_callback'),
+    path("shipping/ecpay/status/callback/", shipping.ecpay_logistics_status_callback,),
+    path("vendor/order/createLogistics", vendor.vendor_order_create_logistics,),
+    path("vendor/order/queryLogistics", vendor.vendor_order_query_logistics,)
+
 ]

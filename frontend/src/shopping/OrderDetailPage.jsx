@@ -1,17 +1,45 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, FileText, Box, Truck, Heart, Smartphone } from "lucide-react";
+import {
+  ArrowLeft,
+  FileText,
+  Box,
+  Truck,
+  Heart,
+  Smartphone,
+  MapPin,
+  Store,
+  Home,
+  UserRound,
+  Phone,
+} from "lucide-react";
 
 function formatNTD(amount) {
   const value = Number(amount);
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
 }
 
-// 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
-const isValidImageUrl = (url) => typeof url === "string" && /^https?:\/\//.test(url);
+const isValidImageUrl = (url) =>
+  typeof url === "string" && /^https?:\/\//.test(url);
+
+function getDeliveryMethodLabel(shipment) {
+  if (!shipment) return "未建立物流資料";
+
+  if (shipment.logistics_type === "CVS") {
+    if (shipment.logistics_sub_type === "UNIMARTC2C") {
+      return "7-ELEVEN 超商取貨";
+    }
+    return "超商取貨";
+  }
+
+  if (shipment.logistics_type === "HOME") {
+    return "宅配";
+  }
+
+  return shipment.logistics_type || "未設定";
+}
 
 export default function OrderDetailPage({ onBack, orderId }) {
-  const [step, setStep] = useState(1);
   const [orderData, setOrderData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -22,21 +50,24 @@ export default function OrderDetailPage({ onBack, orderId }) {
       setLoading(false);
       return;
     }
+
     const fetchOrder = async () => {
       try {
         const res = await fetch(
           `${API_BASE_URL}/api/consumer/order/view?Order_id=${orderId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
+
         const data = await res.json();
+
         if (Array.isArray(data) && data.length > 0) {
-          setOrderData(data[0]);
-          // 根據出貨狀態決定進度
-          const s = data[0].shipping_status;
-          if (s === "unshipped") setStep(0);
-          else if (s === "shipped") setStep(2);
-          else if (s === "delivered") setStep(3);
-          else setStep(1);
+          const currentOrder = data[0];
+          setOrderData(currentOrder);
+
         }
       } catch (err) {
         console.error("訂單詳情載入失敗", err);
@@ -44,24 +75,62 @@ export default function OrderDetailPage({ onBack, orderId }) {
         setLoading(false);
       }
     };
-    fetchOrder();
-  }, [orderId]);
 
-  const fillWidth = ["0%", "33%", "66%", "100%"][step] ?? "33%";
+    fetchOrder();
+  }, [orderId, token]);
+
+  const shippingStatus = orderData?.shipping_status || "unshipped";
+
+  const isCancelled =
+    shippingStatus === "cancelled" ||
+    orderData?.order_status === "cancelled";
+
+  const step =
+    shippingStatus === "unshipped"
+      ? 0
+      : shippingStatus === "preparing"
+      ? 1
+      : shippingStatus === "shipped" ||
+        shippingStatus === "in_transit"
+      ? 2
+      : shippingStatus === "arrived" ||
+        shippingStatus === "delivered" ||
+        shippingStatus === "completed"
+      ? 3
+      : 0;
+
+  const fillWidth =
+    ["0%", "33%", "66%", "100%"][step] ?? "0%";
 
   const steps = [
-    { label: "已確認訂單", icon: FileText },
-    { label: "廠商出貨中", icon: Box },
-    { label: "運送中", icon: Truck },
-    { label: "抵達", icon: Heart },
+    { label: "訂單成立", icon: FileText },
+    { label: "備貨中", icon: Box },
+    { label: "配送中", icon: Truck },
+    { label: "已送達", icon: Heart },
   ];
 
   const totalAmount = orderData?.total_amount ?? 0;
+
   const createdAt = orderData?.created_at
     ? new Date(orderData.created_at)
     : new Date();
-  const createdDate = createdAt.toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric" });
-  const createdTime = createdAt.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+
+  const createdDate = createdAt.toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const createdTime = createdAt.toLocaleTimeString("zh-TW", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const shipment = orderData?.shipment;
+  const recipient = orderData?.recipient;
+
+  const isCVS = shipment?.logistics_type === "CVS";
+  const isHome = shipment?.logistics_type === "HOME";
 
   if (loading) {
     return (
@@ -73,7 +142,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
           <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
           返回訂單列表
         </button>
-        <div className="py-20 text-center text-[#8C8880]">訂單載入中...</div>
+
+        <div className="py-20 text-center text-[#8C8880]">
+          訂單載入中...
+        </div>
       </div>
     );
   }
@@ -88,15 +160,16 @@ export default function OrderDetailPage({ onBack, orderId }) {
           <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
           返回訂單列表
         </button>
-        <div className="py-20 text-center text-[#8C8880]">找不到訂單資料，請返回訂單列表重新查看</div>
+
+        <div className="py-20 text-center text-[#8C8880]">
+          找不到訂單資料，請返回訂單列表重新查看
+        </div>
       </div>
     );
   }
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl">
-
-      {/* 返回按鈕 */}
       <button
         onClick={onBack}
         className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
@@ -105,114 +178,265 @@ export default function OrderDetailPage({ onBack, orderId }) {
         返回訂單列表
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">訂單細節</h2>
+      <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">
+        訂單細節
+      </h2>
 
-      {/* 訂單摘要卡片 */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2.5rem] border border-[#E2DDD4] bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
         <div>
-          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">#{orderData.Order_id}</div>
+          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">
+            #{orderData.Order_id}
+          </div>
+
           <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
             <span>訂購於 {createdDate}</span>
             <span>•</span>
             <span>{createdTime}</span>
           </div>
         </div>
+
         <div className="mt-4 md:mt-0 font-mono text-4xl font-black text-[#C8522A]">
           {formatNTD(totalAmount)}
         </div>
       </div>
 
-      <p className="mb-10 text-sm font-bold text-[#8C8880]">
-        訂單狀態：<strong className="text-[#1A1A18] tracking-wider">
-          {orderData?.order_status === "pending" ? "處理中"
-            : orderData?.order_status === "completed" ? "已完成"
-              : orderData?.order_status === "cancelled" ? "已取消"
-                : "處理中"}
-        </strong>
-      </p>
+      <div className="mb-16 rounded-[2rem] border border-[#E2DDD4] bg-white px-6 py-8 shadow-sm">
+        {isCancelled ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-2">
+            <div className="grid h-12 w-12 place-items-center rounded-full border-4 border-[#C8522A] text-[#C8522A]">
+              <Box size={20} />
+            </div>
+            <div className="text-base font-bold text-[#C8522A]">
+              訂單已取消
+            </div>
+          </div>
+        ) : (
+          <div className="relative px-4">
+            <div className="absolute left-10 right-10 top-[22px] h-1.5 rounded-full bg-[#F5F0E8]" />
+            <div
+              className="absolute left-10 top-[22px] h-1.5 rounded-full bg-[#C8522A] transition-all duration-700 ease-out"
+              style={{ width: `calc(${fillWidth} - 2rem)` }}
+            />
 
-      {/* 物流進度條 */}
-      <div className="relative mb-16 px-4">
-        <div className="absolute left-10 right-10 top-[22px] h-1.5 rounded-full bg-[#F5F0E8]" />
-        <div
-          className="absolute left-10 top-[22px] h-1.5 rounded-full bg-[#C8522A] transition-all duration-700 ease-out"
-          style={{ width: `calc(${fillWidth} - 2rem)` }}
-        />
-        <div className="relative z-10 flex items-start justify-between">
-          {steps.map((s, i) => {
-            const DotIcon = s.icon;
-            const isDone = i < step;
-            const isActive = i === step;
-            return (
-              <div key={s.label} className="flex flex-col items-center gap-4 w-24 group">
-                <div
-                  className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 bg-white ${isDone
-                    ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
-                    : isActive
-                      ? "border-[#C8522A] text-[#C8522A] shadow-sm"
-                      : "border-[#E2DDD4] text-[#8C8880]"
-                    }`}
+            <div className="relative z-10 flex items-start justify-between">
+              {steps.map((s, i) => {
+                const DotIcon = s.icon;
+                const isDone = i < step;
+                const isActive = i === step;
+
+                return (
+                  <div
+                    key={s.label}
+                    className="flex w-24 flex-col items-center gap-4"
+                  >
+                    <div
+                      className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 ${
+                        isDone
+                          ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
+                          : isActive
+                          ? "border-[#C8522A] bg-white text-[#C8522A] shadow-sm"
+                          : "border-[#E2DDD4] bg-white text-[#8C8880]"
+                      }`}
+                    >
+                      <DotIcon
+                        size={20}
+                        className={isDone ? "text-white" : ""}
+                      />
+                    </div>
+
+                    <div
+                      className={`text-center text-sm font-bold transition-colors ${
+                        i <= step
+                          ? "text-[#1A1A18]"
+                          : "text-[#8C8880]"
+                      }`}
+                    >
+                      {s.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isCancelled &&
+          shippingStatus === "delivered" &&
+          orderData.order_status !== "completed" && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-[#1A1A18]">
+                    包裹已送達
+                  </div>
+
+                  <div className="mt-1 text-xs text-[#8C8880]">
+                    確認收到商品後，即可完成此筆訂單
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(
+                        `${API_BASE_URL}/api/consumer/order/update`,
+                        {
+                          method: "PATCH",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            Order_id: orderId,
+                            User_id: orderData.User_id,
+                            order_status: "completed",
+                          }),
+                        }
+                      );
+
+                      const data = await res.json();
+
+                      if (!res.ok) {
+                        throw new Error(
+                          data.err || "確認收貨失敗"
+                        );
+                      }
+
+                      setOrderData((prev) => ({
+                        ...prev,
+                        order_status: "completed",
+                      }));
+                    } catch (err) {
+                      console.error(
+                        "確認收貨失敗",
+                        err
+                      );
+                    }
+                  }}
+                  className="rounded-full bg-[#C8522A] px-8 py-3 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#A64220]"
                 >
-                  <DotIcon size={20} className={isDone ? "text-white" : ""} />
-                </div>
-                <div className={`text-sm text-center font-bold transition-colors ${i <= step ? "text-[#1A1A18]" : "text-[#8C8880]"}`}>
-                  {s.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 訂單動態 */}
-      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
-        <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          訂單詳情
-        </h3>
-        <div className="flex flex-col ml-4">
-          {[
-            {
-              status: orderData?.shipping_status === "shipped" ? "包裹配送中" : "已收到訂單",
-              date: createdDate + " at " + createdTime,
-              active: true,
-            },
-            {
-              status: "已確認訂單",
-              date: createdDate,
-              active: step >= 1,
-            },
-            {
-              status: "已收到訂單，廠商將於確認後安排出貨",
-              date: createdDate,
-              active: false,
-            },
-          ].map((item, idx, arr) => (
-            <div key={idx} className="relative flex gap-6 pb-8 last:pb-0">
-              {idx !== arr.length - 1 && (
-                <div className="absolute left-[11px] top-8 h-full w-[2px] bg-[#E2DDD4]" />
-              )}
-              <div
-                className={`mt-1 h-6 w-6 rounded-full border-4 flex-shrink-0 z-10 bg-white transition-colors ${item.active ? "border-[#C8522A]" : "border-[#E2DDD4]"
-                  }`}
-              />
-              <div>
-                <div className={`mb-1 text-base font-bold ${item.active ? "text-[#1A1A18]" : "text-[#8C8880]"}`}>
-                  {item.status}
-                </div>
-                <div className="text-sm font-medium text-[#8C8880]/70">{item.date}</div>
+                  確認收貨
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+
+        {!isCancelled &&
+          orderData.order_status === "completed" && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+              <div className="text-sm font-bold text-[#1A1A18]">
+                ✓ 訂單已完成
+              </div>
+
+              <div className="mt-1 text-xs text-[#8C8880]">
+                感謝您確認收貨
+              </div>
+            </div>
+          )}
       </div>
 
-      {/* 商品目錄 */}
+      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
+        <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block" />
+          配送資訊
+        </h3>
+
+        {!shipment ? (
+          <div className="rounded-2xl bg-[#F8F9FA] px-5 py-4 text-sm text-[#8C8880]">
+            此訂單目前沒有物流資料。
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 text-sm">
+            <div className="flex items-start gap-3">
+              {isCVS ? (
+                <Store size={18} className="mt-0.5 text-[#C8522A]" />
+              ) : (
+                <Home size={18} className="mt-0.5 text-[#C8522A]" />
+              )}
+
+              <div>
+                <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
+                  配送方式
+                </div>
+                <div className="font-bold text-[#1A1A18]">
+                  {getDeliveryMethodLabel(shipment)}
+                </div>
+              </div>
+            </div>
+
+            {isCVS && (
+              <>
+                <div className="flex items-start gap-3">
+                  <Store size={18} className="mt-0.5 text-[#8C8880]" />
+
+                  <div>
+                    <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
+                      取貨門市
+                    </div>
+                    <div className="font-bold text-[#1A1A18]">
+                      {shipment.store_name || "未提供"}
+                    </div>
+                    {shipment.store_id && (
+                      <div className="mt-1 text-xs text-[#8C8880]">
+                        門市代號：{shipment.store_id}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <MapPin size={18} className="mt-0.5 text-[#8C8880]" />
+
+                  <div>
+                    <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
+                      門市地址
+                    </div>
+                    <div className="font-bold leading-relaxed text-[#1A1A18]">
+                      {shipment.store_address || "未提供"}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {isHome && (
+              <div className="flex items-start gap-3 md:col-span-2">
+                <MapPin size={18} className="mt-0.5 text-[#8C8880]" />
+                <div>
+                  <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
+                    配送地址
+                  </div>
+                  <div className="font-bold leading-relaxed text-[#1A1A18]">
+                    {recipient?.detail_address || "未提供"}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {shipment.ecpay_logistics_id && (
+              <div className="flex items-start gap-3 md:col-span-2">
+                <FileText size={18} className="mt-0.5 text-[#8C8880]" />
+
+                <div>
+                  <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
+                    綠界物流編號
+                  </div>
+                  <div className="font-mono font-bold text-[#1A1A18]">
+                    {shipment.ecpay_logistics_id}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm overflow-hidden">
         <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block"></span>
+          <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block" />
           商品目錄
         </h3>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-[#E2DDD4]">
@@ -223,103 +447,114 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 <th className="pb-4 pl-4 text-right">小計</th>
               </tr>
             </thead>
+
             <tbody>
-              {(orderData?.items || []).length === 0 ? (
+              {(orderData.items || []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-[#8C8880]">無商品資料</td>
+                  <td colSpan={4} className="py-6 text-center text-[#8C8880]">
+                    無商品資料
+                  </td>
                 </tr>
-              ) : (orderData?.items || []).map((item, idx) => (
-                <tr key={idx} className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-                  <td className="py-6 pr-4">
-                    <div className="flex items-center gap-5">
-                      <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
-                        {isValidImageUrl(item.image_url) ? (
-                          <img src={item.image_url} alt={item.product_name || ""} className="h-full w-full object-cover" />
-                        ) : (
-                          <Smartphone size={24} className="text-[#8C8880]" />
-                        )}
-                      </div>
-                      <div>
+              ) : (
+                (orderData.items || []).map((item, idx) => (
+                  <tr
+                    key={idx}
+                    className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors"
+                  >
+                    <td className="py-6 pr-4">
+                      <div className="flex items-center gap-5">
+                        <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+                          {isValidImageUrl(item.image_url) ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.product_name || ""}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Smartphone size={24} className="text-[#8C8880]" />
+                          )}
+                        </div>
+
                         <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
                           {item.product_name || `商品 ${item.Product_id}`}
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
-                    {formatNTD(item.Unit_price)}
-                  </td>
-                  <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
-                    x{item.quantity}
-                  </td>
-                  <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
-                    {formatNTD(item.subtotal)}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+
+                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                      {formatNTD(item.Unit_price)}
+                    </td>
+
+                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                      x{item.quantity}
+                    </td>
+
+                    <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
+                      {formatNTD(item.subtotal)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* 收件資訊 */}
       <div className="rounded-[2rem] border border-[#E2DDD4] bg-[#F8F9FA] p-8 shadow-sm">
         <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block"></span>
+          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block" />
           收件資訊
         </h3>
+
         <div className="space-y-4 text-sm font-medium">
-          <div className="flex">
-            <span className="w-24 text-[#8C8880]">地址編號</span>
-            <span className="text-[#1A1A18] font-bold">{orderData?.Address_id || "未填寫"}</span>
-          </div>
-          <div className="flex">
-            <span className="w-24 text-[#8C8880]">付款狀態</span>
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <UserRound size={15} />
+              收件人
+            </span>
             <span className="text-[#1A1A18] font-bold">
-              {orderData?.payment_status === "paid" ? "已付款" : "未付款"}
+              {recipient?.recipient_name || "未填寫"}
             </span>
           </div>
-          <div className="flex">
-            <span className="w-24 text-[#8C8880]">出貨狀態</span>
+
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <Phone size={15} />
+              聯絡電話
+            </span>
             <span className="text-[#1A1A18] font-bold">
-              {orderData?.shipping_status === "shipped" ? "已出貨"
-                : orderData?.shipping_status === "delivered" ? "已送達"
-                  : "待出貨"}
+              {recipient?.phone || "未填寫"}
             </span>
           </div>
-          {orderData?.promotion_code && (
+
+          {isHome && (
+            <div className="flex items-start">
+              <span className="w-28 flex-shrink-0 text-[#8C8880]">
+                配送地址
+              </span>
+              <span className="text-[#1A1A18] font-bold leading-relaxed">
+                {recipient?.detail_address || "未填寫"}
+              </span>
+            </div>
+          )}
+
+          <div className="flex">
+            <span className="w-28 text-[#8C8880]">付款狀態</span>
+            <span className="text-[#1A1A18] font-bold">
+              {orderData.payment_status === "paid" ? "已付款" : "未付款"}
+            </span>
+          </div>
+
+          {orderData.Promotion_code && (
             <div className="flex">
-              <span className="w-24 text-[#8C8880]">優惠碼</span>
-              <span className="text-[#1A1A18] font-bold">{orderData.promotion_code}</span>
+              <span className="w-28 text-[#8C8880]">優惠碼</span>
+              <span className="text-[#1A1A18] font-bold">
+                {orderData.Promotion_code}
+              </span>
             </div>
           )}
         </div>
       </div>
-
-      {orderData?.shipping_status === 'delivered' && orderData?.order_status !== 'completed' && (
-        <div className="mt-6 flex justify-end">
-          <button
-            onClick={async () => {
-              try {
-                await fetch(`${API_BASE_URL}/api/consumer/order/update`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    Order_id: orderId,
-                    order_status: "completed",
-                  }),
-                });
-                setOrderData((prev) => ({ ...prev, order_status: "completed" }));
-              } catch (err) {
-                console.error("確認收貨失敗", err);
-              }
-            }}
-            className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all hover:-translate-y-0.5"
-          >
-            確認收貨
-          </button>
-        </div>
-      )}
 
     </div>
   );

@@ -596,8 +596,15 @@ class Vendor(models.Model):
     email = models.EmailField(max_length=255)
     password = models.CharField(max_length=255)
     tax_id = models.CharField(max_length=50, db_column='tax_id')
+    sender_name = models.CharField(max_length=50, blank=True, null=True)
+    sender_phone = models.CharField(max_length=20, blank=True, null=True)
+    sender_postal_code = models.CharField(max_length=10, blank=True, null=True)
+    sender_city = models.CharField(max_length=50, blank=True, null=True)
+    sender_district = models.CharField(max_length=50, blank=True, null=True)
+    sender_address = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status',)
     created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         db_table = 'Vendor'
@@ -789,3 +796,96 @@ class LoginHistory(models.Model):
 
     def __str__(self):
         return f"{self.user_id} - {self.login_at}"
+
+class ShipmentInfo(models.Model):
+    shipment_id = models.AutoField(primary_key=True)
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='shipment_info',
+        db_column='order_id'
+    )
+
+    provider = models.CharField(
+        max_length=20,
+        default='ecpay'
+    )
+
+    logistics_type = models.CharField(
+        max_length=20,
+        default='CVS'
+    )
+
+    logistics_sub_type = models.CharField(
+        max_length=30,
+        default='UNIMARTC2C'
+    )
+
+    store_id = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    store_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    store_address = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    merchant_trade_no = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True
+    )
+
+    ecpay_logistics_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    cvs_payment_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    cvs_validation_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    booking_note = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True
+    )
+
+    shipping_status = models.CharField(
+        max_length=30,
+        default='pending'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        db_table = 'Shipment_Info'
+
+    def __str__(self):
+        return f"Shipment {self.shipment_id} - Order {self.order_id}"

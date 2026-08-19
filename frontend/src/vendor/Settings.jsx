@@ -3,6 +3,12 @@ import {getVendorProfile, updateVendorProfile} from '../api/vendor'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Building, Bell, Shield } from 'lucide-react'
 import { cn } from './lib/utils'
+import {
+  TAIWAN_CITIES,
+  getDistrictsByCity,
+  getPostalCode,
+  normalizeCityName,
+} from '../taiwanAddress'
 
 // 🟢 內建品牌高質感 UI (確保 100% 呈現品牌色)
 function Card({ children, className = "" }) {
@@ -39,6 +45,13 @@ export default function Settings() {
     contact_name: '',
     email: '',
     tax_id: '',
+
+    sender_name: '',
+    sender_phone: '',
+    sender_postal_code: '',
+    sender_city: '',
+    sender_district: '',
+    sender_address: '',
   })
 
   const [loading, setLoading] = useState(true)
@@ -62,11 +75,30 @@ export default function Settings() {
         const response = await getVendorProfile(vendorId)
         const vendor = response.data.vendor
 
+        const senderCity =
+          normalizeCityName(vendor.sender_city || '')
+
+        const senderDistrict =
+          vendor.sender_district || ''
+
+        const autoPostalCode =
+          getPostalCode(senderCity, senderDistrict)
+
         setProfile({
           company_name: vendor.company_name || '',
           contact_name: vendor.contact_name || '',
           email: vendor.email || '',
           tax_id: vendor.tax_id || '',
+
+          sender_name: vendor.sender_name || '',
+          sender_phone: vendor.sender_phone || '',
+          sender_postal_code:
+            autoPostalCode ||
+            vendor.sender_postal_code ||
+            '',
+          sender_city: senderCity,
+          sender_district: senderDistrict,
+          sender_address: vendor.sender_address || '',
         })
       } catch (err) {
         setError(
@@ -98,11 +130,52 @@ export default function Settings() {
     }))
   }
 
+  const senderDistrictOptions =
+    getDistrictsByCity(profile.sender_city)
+
+  const handleSenderCityChange = (event) => {
+    const city = event.target.value
+
+    setProfile(previous => ({
+      ...previous,
+      sender_city: city,
+      sender_district: '',
+      sender_postal_code: '',
+    }))
+  }
+
+  const handleSenderDistrictChange = (event) => {
+    const district = event.target.value
+
+    setProfile(previous => ({
+      ...previous,
+      sender_district: district,
+      sender_postal_code:
+        getPostalCode(
+          previous.sender_city,
+          district
+        ),
+    }))
+  }
+
   const handleSaveProfile = async () => {
     try {
       setSaving(true)
       setError('')
       setMessage('')
+
+      const senderPhone = profile.sender_phone.replace(/\D/g, '')
+
+      if (
+        senderPhone &&
+        (
+          senderPhone.length !== 10 ||
+          !senderPhone.startsWith('09')
+        )
+      ) {
+        setError('寄件人手機需為 09 開頭的 10 碼手機號碼')
+        return
+      }
 
       await updateVendorProfile({
         vendor_id: vendorId,
@@ -110,9 +183,16 @@ export default function Settings() {
         contact_name: profile.contact_name.trim(),
         email: profile.email.trim(),
         tax_id: profile.tax_id.trim(),
+
+        sender_name: profile.sender_name.trim(),
+        sender_phone: senderPhone,
+        sender_postal_code: profile.sender_postal_code.trim(),
+        sender_city: profile.sender_city.trim(),
+        sender_district: profile.sender_district.trim(),
+        sender_address: profile.sender_address.trim(),
       })
 
-      setMessage('公司資料更新成功')
+      setMessage('公司與寄件資料更新成功')
     } catch (err) {
       const apiError = err.response?.data?.err
 
@@ -206,6 +286,140 @@ export default function Settings() {
           )}
         </div>
   
+      </Card>
+
+      {/* 🚚 寄件資訊 */}
+      <Card className="space-y-6">
+        <div>
+          <h2 className="text-xl font-serif font-bold text-[#1A1A18] flex items-center gap-3">
+            <span className="w-1.5 h-6 bg-[#B89B6A] rounded-full inline-block"></span>
+            寄件資訊
+          </h2>
+
+          <p className="mt-2 text-xs font-medium text-[#8C8880]">
+            建立黑貓宅配物流單時，系統會使用這裡的寄件人與寄件地址。
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="py-8 text-center text-sm font-bold text-[#8C8880]">
+            寄件資料載入中...
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="寄件人姓名"
+                name="sender_name"
+                value={profile.sender_name}
+                onChange={handleProfileChange}
+                placeholder="例如 王小明"
+              />
+
+              <Input
+                label="寄件人手機"
+                name="sender_phone"
+                value={profile.sender_phone}
+                onChange={(event) =>
+                  setProfile(previous => ({
+                    ...previous,
+                    sender_phone: event.target.value
+                      .replace(/\D/g, '')
+                      .slice(0, 10)
+                  }))
+                }
+                inputMode="tel"
+                maxLength={10}
+                placeholder="09xxxxxxxx"
+              />
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                  寄件縣市
+                </label>
+
+                <select
+                  value={profile.sender_city}
+                  onChange={handleSenderCityChange}
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all"
+                >
+                  <option value="">請選擇縣市</option>
+
+                  {TAIWAN_CITIES.map(city => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                  寄件鄉鎮市區
+                </label>
+
+                <select
+                  value={profile.sender_district}
+                  onChange={handleSenderDistrictChange}
+                  disabled={!profile.sender_city}
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {profile.sender_city
+                      ? '請選擇鄉鎮市區'
+                      : '請先選擇縣市'}
+                  </option>
+
+                  {senderDistrictOptions.map(item => (
+                    <option
+                      key={`${item.district}-${item.postalCode}`}
+                      value={item.district}
+                    >
+                      {item.district}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="寄件郵遞區號"
+                name="sender_postal_code"
+                value={profile.sender_postal_code}
+                readOnly
+                placeholder="選擇鄉鎮市區後自動帶入"
+              />
+
+              <Input
+                label="寄件詳細地址"
+                name="sender_address"
+                value={profile.sender_address}
+                onChange={handleProfileChange}
+                placeholder="例如 光復路二段100號"
+              />
+            </div>
+
+            <div className="rounded-xl bg-[#F5F0E8] px-4 py-3 text-xs font-medium text-[#8C8880]">
+              完整寄件地址：
+              <span className="ml-1 font-bold text-[#1A1A18]">
+                {[
+                  profile.sender_city,
+                  profile.sender_district,
+                  profile.sender_address
+                ].filter(Boolean).join('') || '尚未設定'}
+              </span>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                variant="brand"
+                onClick={handleSaveProfile}
+                disabled={saving}
+              >
+                {saving ? '儲存中...' : '儲存寄件資訊'}
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
 
       {/* 🟢 通知設定 */}
