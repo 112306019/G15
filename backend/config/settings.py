@@ -111,6 +111,30 @@ ECPAY_LOGISTICS_SUBTYPE = os.getenv(
     "UNIMARTC2C"
 )
 
+ECPAY_LOGISTICS_CREATE_URL = os.getenv(
+    "ECPAY_LOGISTICS_CREATE_URL",
+    "https://logistics-stage.ecpay.com.tw/Express/Create"
+)
+
+ECPAY_LOGISTICS_SENDER_NAME = os.getenv(
+    "ECPAY_LOGISTICS_SENDER_NAME",
+    "測試人員"
+)
+
+ECPAY_LOGISTICS_SENDER_PHONE = os.getenv(
+    "ECPAY_LOGISTICS_SENDER_PHONE",
+    "0912345678"
+)
+
+ECPAY_LOGISTICS_REPLY_URL = os.getenv(
+    "ECPAY_LOGISTICS_REPLY_URL",
+    ""
+)
+
+ECPAY_LOGISTICS_QUERY_URL = os.getenv(
+    "ECPAY_LOGISTICS_QUERY_URL",
+    "https://logistics-stage.ecpay.com.tw/Helper/QueryLogisticsTradeInfo/V5"
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],

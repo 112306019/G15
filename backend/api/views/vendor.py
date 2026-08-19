@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -24,6 +24,11 @@ from api.vendor_serializers import (
     VendorCampaignUpdateSerializer,
     VendorApplicationReviewSerializer,
     VendorSubmissionReviewSerializer,
+)
+
+from api.views.shipping import (
+    create_ecpay_logistics_order,
+    query_ecpay_logistics_order
 )
 
 
@@ -1621,14 +1626,29 @@ def vendor_order_getlist(request):
             "err": "vendor_id is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    order_items = OrderItem.objects.filter(
-        product__vendor_id=vendor_id
-    ).select_related("order", "product")
+    order_items = list(
+        OrderItem.objects.filter(
+            product__vendor_id=vendor_id
+        ).select_related("order", "product")
+    )
+
+    order_ids = {
+        item.order_id
+        for item in order_items
+    }
+
+    shipment_by_order = {
+        shipment.order_id: shipment
+        for shipment in ShipmentInfo.objects.filter(
+            order_id__in=order_ids
+        )
+    }
 
     order_map = {}
 
     for item in order_items:
         order = item.order
+        shipment = shipment_by_order.get(order.order_id)
 
         if order.order_id not in order_map:
             order_map[order.order_id] = {
@@ -1640,8 +1660,41 @@ def vendor_order_getlist(request):
                 "order_status": order.order_status,
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
+
+                # 宅配才需要實際地址。
+                # CVS 即使 detail_address 是空字串，也不能被視為「缺少配送資訊」。
                 "has_address": bool(order.address_id),
-                "created_at": order.created_at.isoformat() if order.created_at else None,
+                "has_shipping_info": bool(
+                    (shipment and shipment.logistics_type == "CVS" and shipment.store_id)
+                    or order.address_id
+                ),
+
+                "logistics_type": (
+                    shipment.logistics_type
+                    if shipment
+                    else None
+                ),
+                "logistics_sub_type": (
+                    shipment.logistics_sub_type
+                    if shipment
+                    else None
+                ),
+                "store_name": (
+                    shipment.store_name
+                    if shipment
+                    else None
+                ),
+                "shipment_status": (
+                    shipment.shipping_status
+                    if shipment
+                    else None
+                ),
+
+                "created_at": (
+                    order.created_at.isoformat()
+                    if order.created_at
+                    else None
+                ),
                 "items": []
             }
 
@@ -1660,6 +1713,322 @@ def vendor_order_getlist(request):
         "err": "",
         "orders": list(order_map.values())
     }, status=status.HTTP_200_OK)
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_create_logistics(request):
+    vendor_id = request.data.get(
+        "vendor_id"
+    )
+
+    order_id = request.data.get(
+        "order_id"
+    )
+
+    if not vendor_id or not order_id:
+        return Response(
+            {
+                "success": False,
+                "err":
+                    "vendor_id、order_id 為必填"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    order_items = (
+        OrderItem.objects
+        .filter(
+            order_id=order_id,
+            product__vendor_id=vendor_id
+        )
+        .select_related("order")
+    )
+
+    if not order_items.exists():
+        return Response(
+            {
+                "success": False,
+                "err":
+                    "訂單不存在或不屬於此廠商"
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    order = order_items[0].order
+
+    if order.payment_status not in (
+        "paid",
+        "completed"
+    ):
+        return Response(
+            {
+                "success": False,
+                "err":
+                    "訂單尚未付款，不能建立物流單"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        result = (
+            create_ecpay_logistics_order(
+                order
+            )
+        )
+
+        shipment = result["shipment"]
+
+        return Response(
+            {
+                "success": True,
+
+                "already_created":
+                    result["already_created"],
+
+                "order_id":
+                    str(order.order_id),
+
+                "merchant_trade_no":
+                    shipment.merchant_trade_no,
+
+                "ecpay_logistics_id":
+                    shipment.ecpay_logistics_id,
+
+                "shipment_status":
+                    shipment.shipping_status,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except ValueError as error:
+        return Response(
+            {
+                "success": False,
+                "err": str(error)
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    except Exception as error:
+        return Response(
+            {
+                "success": False,
+                "err":
+                    f"建立物流單失敗：{error}"
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+from api.views.shipping import query_ecpay_logistics_order
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_query_logistics(request):
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+
+    if not vendor_id or not order_id:
+        return Response(
+            {
+                "success": False,
+                "err": "vendor_id、order_id 為必填"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    order_items = (
+        OrderItem.objects
+        .filter(
+            order_id=order_id,
+            product__vendor_id=vendor_id
+        )
+        .select_related("order")
+    )
+
+    if not order_items.exists():
+        return Response(
+            {
+                "success": False,
+                "err": "訂單不存在或不屬於此廠商"
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    order = order_items[0].order
+
+    shipment = (
+        ShipmentInfo.objects
+        .filter(order=order)
+        .first()
+    )
+
+    if not shipment:
+        return Response(
+            {
+                "success": False,
+                "err": "找不到物流資料"
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not shipment.ecpay_logistics_id:
+        return Response(
+            {
+                "success": False,
+                "err": "此訂單尚未建立綠界物流單"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        result = query_ecpay_logistics_order(
+            shipment
+        )
+
+        return Response(
+            {
+                "success": True,
+                "ecpay_logistics_id":
+                    shipment.ecpay_logistics_id,
+
+                "cvs_payment_no":
+                    result["cvs_payment_no"],
+
+                "cvs_validation_no":
+                    result["cvs_validation_no"],
+
+                "delivery_code":
+                    result["delivery_code"],
+
+                "logistics_status":
+                    result["logistics_status"],
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except ValueError as error:
+        return Response(
+            {
+                "success": False,
+                "err": str(error)
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    except Exception as error:
+        return Response(
+            {
+                "success": False,
+                "err": f"查詢物流失敗：{error}"
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_query_logistics(request):
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+
+    if not vendor_id or not order_id:
+        return Response(
+            {
+                "success": False,
+                "err": "vendor_id、order_id 為必填"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    order_items = (
+        OrderItem.objects
+        .filter(
+            order_id=order_id,
+            product__vendor_id=vendor_id
+        )
+        .select_related("order")
+    )
+
+    if not order_items.exists():
+        return Response(
+            {
+                "success": False,
+                "err": "訂單不存在或不屬於此廠商"
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    order = order_items[0].order
+
+    shipment = (
+        ShipmentInfo.objects
+        .filter(order=order)
+        .first()
+    )
+
+    if not shipment:
+        return Response(
+            {
+                "success": False,
+                "err": "找不到物流資料"
+            },
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if not shipment.ecpay_logistics_id:
+        return Response(
+            {
+                "success": False,
+                "err": "此訂單尚未建立綠界物流單"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        result = query_ecpay_logistics_order(
+            shipment
+        )
+
+        return Response(
+            {
+                "success": True,
+                "ecpay_logistics_id":
+                    shipment.ecpay_logistics_id,
+
+                "cvs_payment_no":
+                    result["cvs_payment_no"],
+
+                "cvs_validation_no":
+                    result["cvs_validation_no"],
+
+                "delivery_code":
+                    result["delivery_code"],
+
+                "logistics_status":
+                    result["logistics_status"],
+            },
+            status=status.HTTP_200_OK
+        )
+
+    except ValueError as error:
+        return Response(
+            {
+                "success": False,
+                "err": str(error)
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    except Exception as error:
+        return Response(
+            {
+                "success": False,
+                "err": f"查詢物流失敗：{error}"
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(["GET"])
@@ -1693,18 +2062,29 @@ def vendor_order_get_detail(request):
 
     order = order_items[0].order
 
-    payment = Payment.objects.filter(order_id=order_id).first()
+    payment = Payment.objects.filter(
+        order_id=order_id
+    ).first()
 
-    # 收件資訊：出貨作業必須要有的收件人姓名、電話、地址。
-    # 之前這裡只回傳 address_id（一個數字），前端完全沒地方能看到實際地址。
+    shipment = ShipmentInfo.objects.filter(
+        order_id=order_id
+    ).first()
+
+    # ── 收件資訊 ──
     recipient_name = None
     recipient_phone = None
     address_data = None
 
     if order.user_id:
-        member = User.objects.filter(user_id=order.user_id).first()
+        member = User.objects.filter(
+            user_id=order.user_id
+        ).first()
+
         if member:
-            recipient_name = member.display_name or member.name
+            recipient_name = (
+                member.display_name
+                or member.name
+            )
             recipient_phone = member.phone
 
     if order.address_id:
@@ -1722,10 +2102,9 @@ def vendor_order_get_detail(request):
                 "postal_code": address.postal_code,
             }
 
-            # 地址上留的電話跟收件人姓名優先於會員資料（收件人可能不是本人，
-            # 例如送禮），這是結帳當下實際填的收件資訊。
             if address.phone:
                 recipient_phone = address.phone
+
             if address.recipient_name:
                 recipient_name = address.recipient_name
 
@@ -1735,7 +2114,26 @@ def vendor_order_get_detail(request):
         "address": address_data,
     }
 
+    shipment_data = None
+
+    if shipment:
+        shipment_data = {
+            "shipment_id": shipment.shipment_id,
+            "provider": shipment.provider,
+            "logistics_type": shipment.logistics_type,
+            "logistics_sub_type": shipment.logistics_sub_type,
+            "store_id": shipment.store_id,
+            "store_name": shipment.store_name,
+            "store_address": shipment.store_address,
+            "merchant_trade_no": shipment.merchant_trade_no,
+            "cvs_payment_no": shipment.cvs_payment_no,
+            "cvs_validation_no": shipment.cvs_validation_no,
+            "ecpay_logistics_id": shipment.ecpay_logistics_id,
+            "shipping_status": shipment.shipping_status,
+        }
+
     items = []
+
     for item in order_items:
         items.append({
             "order_item_id": str(item.order_item_id),
@@ -1748,6 +2146,7 @@ def vendor_order_get_detail(request):
         })
 
     payment_data = None
+
     if payment:
         payment_data = {
             "payment_id": payment.payment_id,
@@ -1770,8 +2169,18 @@ def vendor_order_get_detail(request):
             "payment_status": order.payment_status,
             "shipping_status": order.shipping_status,
             "address_id": order.address_id,
+
+            # 原本收件資料保留
             "shipping_info": shipping_info,
-            "created_at": order.created_at.isoformat() if order.created_at else None,
+
+            # 新增：物流詳細資料
+            "shipment": shipment_data,
+
+            "created_at": (
+                order.created_at.isoformat()
+                if order.created_at
+                else None
+            ),
             "items": items,
             "payment": payment_data
         }
@@ -1804,7 +2213,13 @@ def vendor_order_update_shipping(request):
             "err": "shipping_status is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    valid_status = ["unshipped", "preparing", "shipped", "delivered", "cancelled"]
+    valid_status = [
+        "unshipped",
+        "preparing",
+        "shipped",
+        "delivered",
+        "cancelled"
+    ]
 
     if shipping_status not in valid_status:
         return Response({
@@ -1824,14 +2239,47 @@ def vendor_order_update_shipping(request):
         }, status=status.HTTP_404_NOT_FOUND)
 
     order = order_items[0].order
-    order.shipping_status = shipping_status
-    order.save()
+
+    # Order 與 ShipmentInfo 使用不同的初始狀態名稱：
+    # Order: unshipped
+    # ShipmentInfo: pending
+    shipment_status_map = {
+        "unshipped": "pending",
+        "preparing": "preparing",
+        "shipped": "shipped",
+        "delivered": "delivered",
+        "cancelled": "cancelled",
+    }
+
+    with transaction.atomic():
+        order.shipping_status = shipping_status
+        order.save(update_fields=["shipping_status"])
+
+        shipment = ShipmentInfo.objects.filter(
+            order=order
+        ).first()
+
+        if shipment:
+            shipment.shipping_status = shipment_status_map[
+                shipping_status
+            ]
+            shipment.save(
+                update_fields=[
+                    "shipping_status",
+                    "updated_at"
+                ]
+            )
 
     return Response({
         "success": True,
         "err": "",
         "order_id": str(order.order_id),
-        "shipping_status": order.shipping_status
+        "shipping_status": order.shipping_status,
+        "shipment_status": (
+            shipment.shipping_status
+            if shipment
+            else None
+        )
     }, status=status.HTTP_200_OK)
 
 

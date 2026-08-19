@@ -846,6 +846,18 @@ class ShipmentInfo(models.Model):
         null=True
     )
 
+    cvs_payment_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
+    cvs_validation_no = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True
+    )
+
     shipping_status = models.CharField(
         max_length=30,
         default='pending'

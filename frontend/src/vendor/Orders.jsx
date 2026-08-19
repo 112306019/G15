@@ -8,13 +8,17 @@ import {
   Ticket,
   Loader2,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  MapPin,
+  Store
 } from 'lucide-react'
 
 import {
   getVendorOrders,
   getVendorOrderDetail,
-  updateVendorShipping
+  updateVendorShipping,
+  createVendorLogistics,
+  queryVendorLogistics
 } from '../api/vendor'
 
 import {
@@ -235,8 +239,12 @@ function OrderDetailModal({
   open,
   loading,
   updating,
+  logisticsCreating,
+  logisticsQuerying,
   onClose,
-  onUpdateShipping
+  onUpdateShipping,
+  onCreateLogistics,
+  onQueryLogistics
 }) {
   const [
     nextShippingStatus,
@@ -481,55 +489,260 @@ function OrderDetailModal({
 
 
             <Card className="p-6">
-              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-5">
                 <Truck size={17} />
-                收件資訊
+                配送與收件資訊
               </div>
 
-              {order.shippingInfo?.address ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
-                      收件人
-                    </div>
-
-                    <div className="font-bold text-[#1A1A18]">
-                      {order.shippingInfo.recipientName || '—'}
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+                <div>
+                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    收件人
                   </div>
 
-                  <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
-                      聯絡電話
-                    </div>
+                  <div className="font-bold text-[#1A1A18]">
+                    {order.shippingInfo?.recipientName || '—'}
+                  </div>
+                </div>
 
-                    <div className="font-bold text-[#1A1A18]">
-                      {order.shippingInfo.recipientPhone || '—'}
-                    </div>
+                <div>
+                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    聯絡電話
                   </div>
 
+                  <div className="font-bold text-[#1A1A18]">
+                    {order.shippingInfo?.recipientPhone || '—'}
+                  </div>
+                </div>
+
+                {order.shipment?.logisticsType === 'CVS' ? (
+                  <>
+                    <div>
+                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                        配送方式
+                      </div>
+
+                      <div className="font-bold text-[#1A1A18] flex items-center gap-2">
+                        <Store size={15} className="text-[#C8522A]" />
+                        {order.shipment.logisticsSubType === 'UNIMARTC2C'
+                          ? '7-ELEVEN 超商取貨'
+                          : '超商取貨'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                        取貨門市
+                      </div>
+
+                      <div className="font-bold text-[#1A1A18]">
+                        {order.shipment.storeName || '—'}
+                        {order.shipment.storeId && (
+                          <span className="ml-2 text-xs font-mono text-[#8C8880]">
+                            ({order.shipment.storeId})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                        門市地址
+                      </div>
+
+                      <div className="font-bold text-[#1A1A18] flex items-start gap-2">
+                        <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
+                        {order.shipment.storeAddress || '—'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
                   <div className="md:col-span-2">
                     <div className="text-xs font-bold text-[#8C8880] mb-1">
-                      收件地址
+                      宅配地址
+                    </div>
+
+                    {order.shippingInfo?.address ? (
+                      <div className="font-bold text-[#1A1A18] flex items-start gap-2">
+                        <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
+                        <span>
+                          {order.shippingInfo.address.postalCode && (
+                            <span className="font-mono text-[#8C8880] mr-1">
+                              {order.shippingInfo.address.postalCode}
+                            </span>
+                          )}
+                          {order.shippingInfo.address.city}
+                          {order.shippingInfo.address.district}
+                          {order.shippingInfo.address.detailAddress}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 font-bold">
+                        此宅配訂單尚未留有配送地址
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {order.shipment?.merchantTradeNo && (
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      平台物流交易編號
+                    </div>
+
+                    <div className="font-mono font-bold text-[#1A1A18] break-all">
+                      {order.shipment.merchantTradeNo}
+                    </div>
+                  </div>
+                )}
+
+                {order.shipment?.ecpayLogisticsId && (
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      綠界物流編號
+                    </div>
+
+                    <div className="font-mono font-bold text-[#1A1A18]">
+                      {order.shipment.ecpayLogisticsId}
+                    </div>
+                  </div>
+                )}
+
+                {order.shipment?.cvsPaymentNo && (
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      7-ELEVEN 寄貨編號
+                    </div>
+
+                    <div className="font-mono font-bold text-[#1A1A18]">
+                      {order.shipment.cvsPaymentNo}
+                    </div>
+                  </div>
+                )}
+
+                {order.shipment?.cvsValidationNo && (
+                  <div>
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      7-ELEVEN 驗證碼
+                    </div>
+
+                    <div className="font-mono font-bold text-[#1A1A18]">
+                      {order.shipment.cvsValidationNo}
+                    </div>
+                  </div>
+                )}
+
+                {order.shipment?.cvsPaymentNo &&
+                  order.shipment?.cvsValidationNo && (
+                    <div className="md:col-span-2">
+                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                        7-ELEVEN 交貨便代碼
+                      </div>
+
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider">
+                        {order.shipment.cvsPaymentNo}
+                        {order.shipment.cvsValidationNo}
+                      </div>
+                    </div>
+                  )}
+
+                {order.shipment && (
+                  <div className="md:col-span-2">
+                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      物流單狀態
                     </div>
 
                     <div className="font-bold text-[#1A1A18]">
-                      {order.shippingInfo.address.postalCode && (
-                        <span className="font-mono text-[#8C8880] mr-1">
-                          {order.shippingInfo.address.postalCode}
-                        </span>
-                      )}
-                      {order.shippingInfo.address.city}
-                      {order.shippingInfo.address.district}
-                      {order.shippingInfo.address.detailAddress}
+                      {order.shipment.shippingStatus === 'pending'
+                        ? '待建立物流單'
+                        : order.shipment.shippingStatus === 'created'
+                          ? '物流單已建立'
+                          : order.shipment.shippingStatus === 'preparing'
+                            ? '準備出貨'
+                            : order.shipment.shippingStatus === 'shipped'
+                              ? '已出貨'
+                              : order.shipment.shippingStatus === 'in_transit'
+                                ? '運送中'
+                                : order.shipment.shippingStatus === 'arrived'
+                                  ? '已到店'
+                                  : order.shipment.shippingStatus === 'picked_up'
+                                    ? '已取貨'
+                                    : order.shipment.shippingStatus === 'delivered'
+                                      ? '已送達'
+                                      : order.shipment.shippingStatus === 'cancelled'
+                                        ? '已取消'
+                                        : order.shipment.shippingStatus || '—'}
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 text-sm font-bold">
-                  此訂單尚未留有收件地址，請先聯繫顧客確認後再安排出貨
-                </div>
-              )}
+                )}
+
+                {order.shipment?.logisticsType === 'CVS' &&
+                  !order.shipment?.ecpayLogisticsId && (
+                    <div className="md:col-span-2 pt-2">
+                      <Button
+                        variant="brand"
+                        disabled={
+                          logisticsCreating ||
+                          order.paymentStatus !== 'paid'
+                        }
+                        onClick={onCreateLogistics}
+                        className="gap-2"
+                      >
+                        {logisticsCreating ? (
+                          <>
+                            <Loader2
+                              size={15}
+                              className="animate-spin"
+                            />
+                            建立物流單中...
+                          </>
+                        ) : (
+                          <>
+                            <Truck size={15} />
+                            建立綠界物流單
+                          </>
+                        )}
+                      </Button>
+
+                      {order.paymentStatus !== 'paid' && (
+                        <div className="text-xs font-bold text-[#C8522A] mt-2">
+                          訂單需完成付款後才能建立物流單
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                {order.shipment?.logisticsType === 'CVS' &&
+                  order.shipment?.ecpayLogisticsId &&
+                  !(
+                    order.shipment?.cvsPaymentNo &&
+                    order.shipment?.cvsValidationNo
+                  ) && (
+                    <div className="md:col-span-2 pt-2">
+                      <Button
+                        variant="outline"
+                        disabled={logisticsQuerying}
+                        onClick={onQueryLogistics}
+                        className="gap-2"
+                      >
+                        {logisticsQuerying ? (
+                          <>
+                            <Loader2
+                              size={15}
+                              className="animate-spin"
+                            />
+                            查詢寄貨編號中...
+                          </>
+                        ) : (
+                          <>
+                            <Store size={15} />
+                            取得 7-ELEVEN 寄貨編號
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+              </div>
             </Card>
 
 
@@ -651,6 +864,16 @@ export default function Orders() {
     setShippingUpdating
   ] = useState(false)
 
+  const [
+    logisticsCreating,
+    setLogisticsCreating
+  ] = useState(false)
+
+  const [
+    logisticsQuerying,
+    setLogisticsQuerying
+  ] = useState(false)
+
   const [selectedOrderIds, setSelectedOrderIds] =
     useState([])
 
@@ -721,6 +944,21 @@ export default function Orders() {
 
             hasAddress:
               Boolean(order.has_address),
+
+            hasShippingInfo:
+              Boolean(order.has_shipping_info),
+
+            logisticsType:
+              order.logistics_type || '',
+
+            logisticsSubType:
+              order.logistics_sub_type || '',
+
+            storeName:
+              order.store_name || '',
+
+            shipmentStatus:
+              order.shipment_status || '',
 
             createdAt:
               order.created_at,
@@ -908,6 +1146,47 @@ export default function Orders() {
               }
             : null,
 
+        shipment:
+          detail.shipment
+            ? {
+                shipmentId:
+                  detail.shipment.shipment_id,
+
+                provider:
+                  detail.shipment.provider || '',
+
+                logisticsType:
+                  detail.shipment.logistics_type || '',
+
+                logisticsSubType:
+                  detail.shipment.logistics_sub_type || '',
+
+                storeId:
+                  detail.shipment.store_id || '',
+
+                storeName:
+                  detail.shipment.store_name || '',
+
+                storeAddress:
+                  detail.shipment.store_address || '',
+
+                merchantTradeNo:
+                  detail.shipment.merchant_trade_no || '',
+
+                ecpayLogisticsId:
+                  detail.shipment.ecpay_logistics_id || '',
+
+                cvsPaymentNo:
+                  detail.shipment.cvs_payment_no || '',
+
+                cvsValidationNo:
+                  detail.shipment.cvs_validation_no || '',
+
+                shippingStatus:
+                  detail.shipment.shipping_status || ''
+              }
+            : null,
+
         createdAt:
           detail.created_at,
 
@@ -1048,7 +1327,17 @@ export default function Orders() {
           ? {
               ...previous,
               shippingStatus:
-                updatedStatus
+                updatedStatus,
+
+              shipment:
+                previous.shipment
+                  ? {
+                      ...previous.shipment,
+                      shippingStatus:
+                        response.data?.shipment_status ||
+                        previous.shipment.shippingStatus
+                    }
+                  : previous.shipment
             }
           : previous
       )
@@ -1068,6 +1357,174 @@ export default function Orders() {
       )
     } finally {
       setShippingUpdating(false)
+    }
+  }
+
+
+
+  async function handleCreateLogistics() {
+    if (!selectedOrder) return
+
+    const confirmed = await confirm({
+      title: '建立綠界物流單？',
+      description:
+        '系統將使用此訂單的超商門市與收件資料向綠界建立 7-ELEVEN C2C 物流單。',
+      confirmText: '建立物流單'
+    })
+
+    if (!confirmed) return
+
+    try {
+      setLogisticsCreating(true)
+
+      const response =
+        await createVendorLogistics({
+          vendor_id: vendorId,
+          order_id: selectedOrder.orderId
+        })
+
+      if (
+        response.data?.success === false
+      ) {
+        throw new Error(
+          response.data.err ||
+          '建立綠界物流單失敗'
+        )
+      }
+
+      const logisticsId =
+        response.data?.ecpay_logistics_id || ''
+
+      const merchantTradeNo =
+        response.data?.merchant_trade_no || ''
+
+      const shipmentStatus =
+        response.data?.shipment_status || 'created'
+
+      setSelectedOrder(previous =>
+        previous
+          ? {
+              ...previous,
+              shipment: previous.shipment
+                ? {
+                    ...previous.shipment,
+                    ecpayLogisticsId:
+                      logisticsId,
+                    merchantTradeNo:
+                      merchantTradeNo,
+                    shippingStatus:
+                      shipmentStatus
+                  }
+                : previous.shipment
+            }
+          : previous
+      )
+
+      setOrders(previous =>
+        previous.map(order =>
+          order.orderId === selectedOrder.orderId
+            ? {
+                ...order,
+                shipmentStatus:
+                  shipmentStatus
+              }
+            : order
+        )
+      )
+
+      if (response.data?.already_created) {
+        toast.info('此訂單已建立過綠界物流單')
+      } else {
+        toast.success(
+          logisticsId
+            ? `物流單建立成功，物流編號：${logisticsId}`
+            : '綠界物流單建立成功'
+        )
+      }
+    } catch (error) {
+      const apiError =
+        error.response?.data?.err
+
+      toast.error(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message ||
+              '建立綠界物流單失敗'
+      )
+    } finally {
+      setLogisticsCreating(false)
+    }
+  }
+
+
+
+  async function handleQueryLogistics() {
+    if (!selectedOrder) return
+
+    try {
+      setLogisticsQuerying(true)
+
+      const response =
+        await queryVendorLogistics({
+          vendor_id: vendorId,
+          order_id: selectedOrder.orderId
+        })
+
+      if (
+        response.data?.success === false
+      ) {
+        throw new Error(
+          response.data.err ||
+          '查詢 7-ELEVEN 寄貨編號失敗'
+        )
+      }
+
+      const cvsPaymentNo =
+        response.data?.cvs_payment_no || ''
+
+      const cvsValidationNo =
+        response.data?.cvs_validation_no || ''
+
+      setSelectedOrder(previous =>
+        previous
+          ? {
+              ...previous,
+              shipment: previous.shipment
+                ? {
+                    ...previous.shipment,
+                    cvsPaymentNo,
+                    cvsValidationNo
+                  }
+                : previous.shipment
+            }
+          : previous
+      )
+
+      if (cvsPaymentNo && cvsValidationNo) {
+        toast.success(
+          `已取得交貨便代碼：${cvsPaymentNo}${cvsValidationNo}`
+        )
+      } else {
+        toast.info(
+          '物流單已查詢成功，但目前尚未取得完整的 7-ELEVEN 寄貨編號'
+        )
+      }
+    } catch (error) {
+      const apiError =
+        error.response?.data?.err
+
+      toast.error(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message ||
+              '查詢 7-ELEVEN 寄貨編號失敗'
+      )
+    } finally {
+      setLogisticsQuerying(false)
     }
   }
 
@@ -1439,9 +1896,9 @@ export default function Orders() {
                               }
                             />
 
-                            {!order.hasAddress &&
+                            {!order.hasShippingInfo &&
                               order.shippingStatus !== 'cancelled' && (
-                                <span title="尚無收件地址">
+                                <span title="尚無配送資訊">
                                   <AlertTriangle
                                     size={14}
                                     className="text-[#C8522A]"
@@ -1492,11 +1949,19 @@ export default function Orders() {
         order={selectedOrder}
         loading={detailLoading}
         updating={shippingUpdating}
+        logisticsCreating={logisticsCreating}
+        logisticsQuerying={logisticsQuerying}
         onClose={() =>
           setSelectedOrder(null)
         }
         onUpdateShipping={
           handleUpdateShipping
+        }
+        onCreateLogistics={
+          handleCreateLogistics
+        }
+        onQueryLogistics={
+          handleQueryLogistics
         }
       />
     </div>
