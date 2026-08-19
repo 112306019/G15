@@ -1,5 +1,10 @@
 import { API_BASE_URL } from '../config';
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  TAIWAN_CITIES,
+  getDistrictsByCity,
+  getPostalCode,
+} from "../taiwanAddress";
 
 function CheckIcon({ className = "" }) {
   return (
@@ -161,7 +166,34 @@ export default function CheckoutPage({
   // ============================
   const [recipient, setRecipient] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
+
+  // 宅配完整地址
+  const [recipientPostalCode, setRecipientPostalCode] = useState("");
+  const [recipientCity, setRecipientCity] = useState("");
+  const [recipientDistrict, setRecipientDistrict] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
+
+  const recipientDistrictOptions = useMemo(
+    () => getDistrictsByCity(recipientCity),
+    [recipientCity]
+  );
+
+  const handleRecipientCityChange = (event) => {
+    const city = event.target.value;
+
+    setRecipientCity(city);
+    setRecipientDistrict("");
+    setRecipientPostalCode("");
+  };
+
+  const handleRecipientDistrictChange = (event) => {
+    const district = event.target.value;
+
+    setRecipientDistrict(district);
+    setRecipientPostalCode(
+      getPostalCode(recipientCity, district)
+    );
+  };
 
   // ============================
   // 配送方式
@@ -388,12 +420,24 @@ export default function CheckoutPage({
   // ============================
   // 配送資料驗證
   // ============================
+  const phoneDigits = digitsOnly(recipientPhone);
+
+  const recipientPhoneValid =
+    phoneDigits.length === 10 &&
+    phoneDigits.startsWith("09");
+
+  const homeAddressValid =
+    recipientPostalCode.trim().length >= 3 &&
+    recipientCity.trim().length > 0 &&
+    recipientDistrict.trim().length > 0 &&
+    recipientAddress.trim().length > 0;
+
   const shippingValid =
     recipient.trim().length > 0 &&
-    recipientPhone.trim().length > 0 &&
+    recipientPhoneValid &&
     (
       shippingMethod === "home"
-        ? recipientAddress.trim().length > 0
+        ? homeAddressValid
         : Boolean(selectedStore?.store_id)
     );
 
@@ -676,6 +720,21 @@ export default function CheckoutPage({
             recipient_address:
               shippingMethod === "home"
                 ? recipientAddress
+                : "",
+
+            recipient_postal_code:
+              shippingMethod === "home"
+                ? recipientPostalCode.trim()
+                : "",
+
+            recipient_city:
+              shippingMethod === "home"
+                ? recipientCity.trim()
+                : "",
+
+            recipient_district:
+              shippingMethod === "home"
+                ? recipientDistrict.trim()
                 : "",
 
             // =========================
@@ -1036,11 +1095,15 @@ export default function CheckoutPage({
                 onChange={(e) =>
                   setRecipientPhone(
                     e.target.value
+                      .replace(/\D/g, "")
+                      .slice(0, 10)
                   )
                 }
-                placeholder="請輸入收件人電話"
+                inputMode="tel"
+                maxLength={10}
+                placeholder="請輸入 09 開頭的 10 碼手機號碼"
                 className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                  recipientPhone.trim()
+                  recipientPhoneValid
                     ? "border-[#6BBF6B] bg-white"
                     : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
                 }`}
@@ -1051,28 +1114,109 @@ export default function CheckoutPage({
             {/* ================= 宅配 ================= */}
             {shippingMethod === "home" ? (
 
-              <div className="mb-4">
+              <div className="mb-4 space-y-4">
 
-                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                  配送地址
-                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                <input
-                  value={
-                    recipientAddress
-                  }
-                  onChange={(e) =>
-                    setRecipientAddress(
-                      e.target.value
-                    )
-                  }
-                  placeholder="請輸入配送地址"
-                  className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                    recipientAddress.trim()
-                      ? "border-[#6BBF6B] bg-white"
-                      : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                  }`}
-                />
+                  <div>
+                    <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      縣市
+                    </label>
+
+                    <select
+                      value={recipientCity}
+                      onChange={handleRecipientCityChange}
+                      className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
+                        recipientCity
+                          ? "border-[#6BBF6B] bg-white"
+                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                      }`}
+                    >
+                      <option value="">請選擇縣市</option>
+
+                      {TAIWAN_CITIES.map(city => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      鄉鎮市區
+                    </label>
+
+                    <select
+                      value={recipientDistrict}
+                      onChange={handleRecipientDistrictChange}
+                      disabled={!recipientCity}
+                      className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        recipientDistrict
+                          ? "border-[#6BBF6B] bg-white"
+                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                      }`}
+                    >
+                      <option value="">
+                        {recipientCity
+                          ? "請選擇鄉鎮市區"
+                          : "請先選擇縣市"}
+                      </option>
+
+                      {recipientDistrictOptions.map(item => (
+                        <option
+                          key={`${item.district}-${item.postalCode}`}
+                          value={item.district}
+                        >
+                          {item.district}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                    郵遞區號
+                  </label>
+
+                  <input
+                    value={recipientPostalCode}
+                    readOnly
+                    placeholder="選擇鄉鎮市區後自動帶入"
+                    className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none ${
+                      recipientPostalCode
+                        ? "border-[#6BBF6B] bg-[#F8F9FA]"
+                        : "border-[#E2DDD4] bg-slate-100"
+                    }`}
+                  />
+
+                  <p className="mt-2 text-[11px] text-[#8C8880]">
+                    郵遞區號會依縣市與鄉鎮市區自動填入。
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                    詳細地址
+                  </label>
+
+                  <input
+                    value={recipientAddress}
+                    onChange={(e) =>
+                      setRecipientAddress(
+                        e.target.value
+                      )
+                    }
+                    placeholder="例如 光復路二段100號"
+                    className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
+                      recipientAddress.trim()
+                        ? "border-[#6BBF6B] bg-white"
+                        : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                    }`}
+                  />
+                </div>
 
               </div>
 
@@ -1513,8 +1657,8 @@ export default function CheckoutPage({
             <p className="mt-3 text-[12px] text-[#8C8880]">
 
               {shippingMethod === "home"
-                ? "請填寫完整的收件人姓名、電話與配送地址。"
-                : "請填寫收件人姓名、電話，並選擇取貨門市。"}
+                ? "請填寫收件人姓名、09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
+                : "請填寫收件人姓名、09 開頭手機號碼，並選擇取貨門市。"}
 
             </p>
 

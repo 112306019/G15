@@ -596,8 +596,15 @@ class Vendor(models.Model):
     email = models.EmailField(max_length=255)
     password = models.CharField(max_length=255)
     tax_id = models.CharField(max_length=50, db_column='tax_id')
+    sender_name = models.CharField(max_length=50, blank=True, null=True)
+    sender_phone = models.CharField(max_length=20, blank=True, null=True)
+    sender_postal_code = models.CharField(max_length=10, blank=True, null=True)
+    sender_city = models.CharField(max_length=50, blank=True, null=True)
+    sender_district = models.CharField(max_length=50, blank=True, null=True)
+    sender_address = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status',)
     created_at = models.DateTimeField(auto_now_add=True)
+
 
     class Meta:
         db_table = 'Vendor'
@@ -854,6 +861,12 @@ class ShipmentInfo(models.Model):
 
     cvs_validation_no = models.CharField(
         max_length=20,
+        blank=True,
+        null=True
+    )
+
+    booking_note = models.CharField(
+        max_length=50,
         blank=True,
         null=True
     )

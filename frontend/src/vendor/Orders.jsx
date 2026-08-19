@@ -646,6 +646,19 @@ function OrderDetailModal({
                     </div>
                   )}
 
+                {order.shipment?.logisticsType === 'HOME' &&
+                  order.shipment?.bookingNote && (
+                    <div className="md:col-span-2">
+                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                        黑貓宅配託運單號
+                      </div>
+
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider">
+                        {order.shipment.bookingNote}
+                      </div>
+                    </div>
+                  )}
+
                 {order.shipment && (
                   <div className="md:col-span-2">
                     <div className="text-xs font-bold text-[#8C8880] mb-1">
@@ -676,8 +689,12 @@ function OrderDetailModal({
                   </div>
                 )}
 
-                {order.shipment?.logisticsType === 'CVS' &&
-                  !order.shipment?.ecpayLogisticsId && (
+                {order.shipment &&
+                  !order.shipment?.ecpayLogisticsId &&
+                  (
+                    order.shipment?.logisticsType === 'CVS' ||
+                    order.shipment?.logisticsType === 'HOME'
+                  ) && (
                     <div className="md:col-span-2 pt-2">
                       <Button
                         variant="brand"
@@ -699,7 +716,9 @@ function OrderDetailModal({
                         ) : (
                           <>
                             <Truck size={15} />
-                            建立綠界物流單
+                            {order.shipment?.logisticsType === 'HOME'
+                              ? '建立黑貓宅配物流單'
+                              : '建立 7-ELEVEN 物流單'}
                           </>
                         )}
                       </Button>
@@ -1182,6 +1201,9 @@ export default function Orders() {
                 cvsValidationNo:
                   detail.shipment.cvs_validation_no || '',
 
+                bookingNote:
+                  detail.shipment.booking_note || '',
+
                 shippingStatus:
                   detail.shipment.shipping_status || ''
               }
@@ -1365,10 +1387,18 @@ export default function Orders() {
   async function handleCreateLogistics() {
     if (!selectedOrder) return
 
+    const isHome =
+      selectedOrder.shipment?.logisticsType === 'HOME'
+
     const confirmed = await confirm({
-      title: '建立綠界物流單？',
-      description:
-        '系統將使用此訂單的超商門市與收件資料向綠界建立 7-ELEVEN C2C 物流單。',
+      title: isHome
+        ? '建立黑貓宅配物流單？'
+        : '建立 7-ELEVEN 物流單？',
+
+      description: isHome
+        ? '系統將使用廠商寄件資料與此訂單的收件地址，向綠界建立黑貓宅配物流單。'
+        : '系統將使用此訂單的超商門市與收件資料，向綠界建立 7-ELEVEN C2C 物流單。',
+
       confirmText: '建立物流單'
     })
 
@@ -1401,6 +1431,9 @@ export default function Orders() {
       const shipmentStatus =
         response.data?.shipment_status || 'created'
 
+      const bookingNote =
+        response.data?.booking_note || ''
+
       setSelectedOrder(previous =>
         previous
           ? {
@@ -1412,6 +1445,8 @@ export default function Orders() {
                       logisticsId,
                     merchantTradeNo:
                       merchantTradeNo,
+                    bookingNote:
+                      bookingNote,
                     shippingStatus:
                       shipmentStatus
                   }
@@ -1434,11 +1469,19 @@ export default function Orders() {
 
       if (response.data?.already_created) {
         toast.info('此訂單已建立過綠界物流單')
+      } else if (isHome) {
+        toast.success(
+          bookingNote
+            ? `黑貓物流單建立成功，託運單號：${bookingNote}`
+            : logisticsId
+              ? `黑貓物流單建立成功，綠界物流編號：${logisticsId}`
+              : '黑貓宅配物流單建立成功'
+        )
       } else {
         toast.success(
           logisticsId
-            ? `物流單建立成功，物流編號：${logisticsId}`
-            : '綠界物流單建立成功'
+            ? `7-ELEVEN 物流單建立成功，物流編號：${logisticsId}`
+            : '7-ELEVEN 物流單建立成功'
         )
       }
     } catch (error) {

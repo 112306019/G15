@@ -147,6 +147,12 @@ def vendor_profile_get(request):
             "contact_name": vendor.contact_name,
             "email": vendor.email,
             "tax_id": vendor.tax_id,
+            "sender_name": vendor.sender_name,
+            "sender_phone": vendor.sender_phone,
+            "sender_postal_code": vendor.sender_postal_code,
+            "sender_city": vendor.sender_city,
+            "sender_district": vendor.sender_district,
+            "sender_address": vendor.sender_address,
             "created_at": vendor.created_at,
         }
     }, status=status.HTTP_200_OK)
@@ -1794,6 +1800,9 @@ def vendor_order_create_logistics(request):
                 "ecpay_logistics_id":
                     shipment.ecpay_logistics_id,
 
+                "booking_note":
+                    shipment.booking_note,
+
                 "shipment_status":
                     shipment.shipping_status,
             },
@@ -1820,8 +1829,6 @@ def vendor_order_create_logistics(request):
         )
 
 
-from api.views.shipping import query_ecpay_logistics_order
-
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -1902,109 +1909,8 @@ def vendor_order_query_logistics(request):
                 "delivery_code":
                     result["delivery_code"],
 
-                "logistics_status":
-                    result["logistics_status"],
-            },
-            status=status.HTTP_200_OK
-        )
-
-    except ValueError as error:
-        return Response(
-            {
-                "success": False,
-                "err": str(error)
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    except Exception as error:
-        return Response(
-            {
-                "success": False,
-                "err": f"查詢物流失敗：{error}"
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def vendor_order_query_logistics(request):
-    vendor_id = request.data.get("vendor_id")
-    order_id = request.data.get("order_id")
-
-    if not vendor_id or not order_id:
-        return Response(
-            {
-                "success": False,
-                "err": "vendor_id、order_id 為必填"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    order_items = (
-        OrderItem.objects
-        .filter(
-            order_id=order_id,
-            product__vendor_id=vendor_id
-        )
-        .select_related("order")
-    )
-
-    if not order_items.exists():
-        return Response(
-            {
-                "success": False,
-                "err": "訂單不存在或不屬於此廠商"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-    order = order_items[0].order
-
-    shipment = (
-        ShipmentInfo.objects
-        .filter(order=order)
-        .first()
-    )
-
-    if not shipment:
-        return Response(
-            {
-                "success": False,
-                "err": "找不到物流資料"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-    if not shipment.ecpay_logistics_id:
-        return Response(
-            {
-                "success": False,
-                "err": "此訂單尚未建立綠界物流單"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    try:
-        result = query_ecpay_logistics_order(
-            shipment
-        )
-
-        return Response(
-            {
-                "success": True,
-                "ecpay_logistics_id":
-                    shipment.ecpay_logistics_id,
-
-                "cvs_payment_no":
-                    result["cvs_payment_no"],
-
-                "cvs_validation_no":
-                    result["cvs_validation_no"],
-
-                "delivery_code":
-                    result["delivery_code"],
+                "booking_note":
+                    result["booking_note"],
 
                 "logistics_status":
                     result["logistics_status"],
@@ -2029,6 +1935,7 @@ def vendor_order_query_logistics(request):
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 
 @api_view(["GET"])
@@ -2129,6 +2036,7 @@ def vendor_order_get_detail(request):
             "cvs_payment_no": shipment.cvs_payment_no,
             "cvs_validation_no": shipment.cvs_validation_no,
             "ecpay_logistics_id": shipment.ecpay_logistics_id,
+            "booking_note": shipment.booking_note,
             "shipping_status": shipment.shipping_status,
         }
 

@@ -22,54 +22,6 @@ function formatNTD(amount) {
 const isValidImageUrl = (url) =>
   typeof url === "string" && /^https?:\/\//.test(url);
 
-function getOrderShippingLabel(status) {
-  switch (status) {
-    case "unshipped":
-      return "待出貨";
-    case "preparing":
-      return "準備出貨";
-    case "shipped":
-      return "已出貨";
-    case "in_transit":
-      return "運送中";
-    case "arrived":
-      return "已到店";
-    case "delivered":
-      return "已送達";
-    case "completed":
-      return "已完成";
-    case "cancelled":
-      return "已取消";
-    default:
-      return status || "待出貨";
-  }
-}
-
-function getShipmentStatusLabel(status) {
-  switch (status) {
-    case "pending":
-      return "待建立物流單";
-    case "created":
-      return "物流單已建立";
-    case "preparing":
-      return "準備出貨";
-    case "shipped":
-      return "已出貨";
-    case "in_transit":
-      return "運送中";
-    case "arrived":
-      return "已到店";
-    case "picked_up":
-      return "已取貨";
-    case "delivered":
-      return "已送達";
-    case "cancelled":
-      return "已取消";
-    default:
-      return status || "待處理";
-  }
-}
-
 function getDeliveryMethodLabel(shipment) {
   if (!shipment) return "未建立物流資料";
 
@@ -88,7 +40,6 @@ function getDeliveryMethodLabel(shipment) {
 }
 
 export default function OrderDetailPage({ onBack, orderId }) {
-  const [step, setStep] = useState(1);
   const [orderData, setOrderData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -117,21 +68,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
           const currentOrder = data[0];
           setOrderData(currentOrder);
 
-          const s = currentOrder.shipping_status;
-
-          if (s === "unshipped") {
-            setStep(0);
-          } else if (s === "shipped" || s === "in_transit") {
-            setStep(2);
-          } else if (
-            s === "arrived" ||
-            s === "delivered" ||
-            s === "completed"
-          ) {
-            setStep(3);
-          } else {
-            setStep(1);
-          }
         }
       } catch (err) {
         console.error("訂單詳情載入失敗", err);
@@ -143,13 +79,34 @@ export default function OrderDetailPage({ onBack, orderId }) {
     fetchOrder();
   }, [orderId, token]);
 
-  const fillWidth = ["0%", "33%", "66%", "100%"][step] ?? "33%";
+  const shippingStatus = orderData?.shipping_status || "unshipped";
+
+  const isCancelled =
+    shippingStatus === "cancelled" ||
+    orderData?.order_status === "cancelled";
+
+  const step =
+    shippingStatus === "unshipped"
+      ? 0
+      : shippingStatus === "preparing"
+      ? 1
+      : shippingStatus === "shipped" ||
+        shippingStatus === "in_transit"
+      ? 2
+      : shippingStatus === "arrived" ||
+        shippingStatus === "delivered" ||
+        shippingStatus === "completed"
+      ? 3
+      : 0;
+
+  const fillWidth =
+    ["0%", "33%", "66%", "100%"][step] ?? "0%";
 
   const steps = [
-    { label: "已確認訂單", icon: FileText },
-    { label: "廠商出貨中", icon: Box },
-    { label: "運送中", icon: Truck },
-    { label: "抵達", icon: Heart },
+    { label: "訂單成立", icon: FileText },
+    { label: "備貨中", icon: Box },
+    { label: "配送中", icon: Truck },
+    { label: "已送達", icon: Heart },
   ];
 
   const totalAmount = orderData?.total_amount ?? 0;
@@ -243,57 +200,139 @@ export default function OrderDetailPage({ onBack, orderId }) {
         </div>
       </div>
 
-      <p className="mb-10 text-sm font-bold text-[#8C8880]">
-        訂單狀態：
-        <strong className="ml-1 text-[#1A1A18] tracking-wider">
-          {orderData.order_status === "pending"
-            ? "處理中"
-            : orderData.order_status === "completed"
-            ? "已完成"
-            : orderData.order_status === "cancelled"
-            ? "已取消"
-            : orderData.order_status}
-        </strong>
-      </p>
+      <div className="mb-16 rounded-[2rem] border border-[#E2DDD4] bg-white px-6 py-8 shadow-sm">
+        {isCancelled ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-2">
+            <div className="grid h-12 w-12 place-items-center rounded-full border-4 border-[#C8522A] text-[#C8522A]">
+              <Box size={20} />
+            </div>
+            <div className="text-base font-bold text-[#C8522A]">
+              訂單已取消
+            </div>
+          </div>
+        ) : (
+          <div className="relative px-4">
+            <div className="absolute left-10 right-10 top-[22px] h-1.5 rounded-full bg-[#F5F0E8]" />
+            <div
+              className="absolute left-10 top-[22px] h-1.5 rounded-full bg-[#C8522A] transition-all duration-700 ease-out"
+              style={{ width: `calc(${fillWidth} - 2rem)` }}
+            />
 
-      <div className="relative mb-16 px-4">
-        <div className="absolute left-10 right-10 top-[22px] h-1.5 rounded-full bg-[#F5F0E8]" />
-        <div
-          className="absolute left-10 top-[22px] h-1.5 rounded-full bg-[#C8522A] transition-all duration-700 ease-out"
-          style={{ width: `calc(${fillWidth} - 2rem)` }}
-        />
+            <div className="relative z-10 flex items-start justify-between">
+              {steps.map((s, i) => {
+                const DotIcon = s.icon;
+                const isDone = i < step;
+                const isActive = i === step;
 
-        <div className="relative z-10 flex items-start justify-between">
-          {steps.map((s, i) => {
-            const DotIcon = s.icon;
-            const isDone = i < step;
-            const isActive = i === step;
+                return (
+                  <div
+                    key={s.label}
+                    className="flex w-24 flex-col items-center gap-4"
+                  >
+                    <div
+                      className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 ${
+                        isDone
+                          ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
+                          : isActive
+                          ? "border-[#C8522A] bg-white text-[#C8522A] shadow-sm"
+                          : "border-[#E2DDD4] bg-white text-[#8C8880]"
+                      }`}
+                    >
+                      <DotIcon
+                        size={20}
+                        className={isDone ? "text-white" : ""}
+                      />
+                    </div>
 
-            return (
-              <div key={s.label} className="flex flex-col items-center gap-4 w-24 group">
-                <div
-                  className={`grid h-12 w-12 place-items-center rounded-full border-4 transition-all duration-500 bg-white ${
-                    isDone
-                      ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_15px_rgba(200,82,42,0.3)]"
-                      : isActive
-                      ? "border-[#C8522A] text-[#C8522A] shadow-sm"
-                      : "border-[#E2DDD4] text-[#8C8880]"
-                  }`}
-                >
-                  <DotIcon size={20} className={isDone ? "text-white" : ""} />
+                    <div
+                      className={`text-center text-sm font-bold transition-colors ${
+                        i <= step
+                          ? "text-[#1A1A18]"
+                          : "text-[#8C8880]"
+                      }`}
+                    >
+                      {s.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isCancelled &&
+          shippingStatus === "delivered" &&
+          orderData.order_status !== "completed" && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-[#1A1A18]">
+                    包裹已送達
+                  </div>
+
+                  <div className="mt-1 text-xs text-[#8C8880]">
+                    確認收到商品後，即可完成此筆訂單
+                  </div>
                 </div>
 
-                <div
-                  className={`text-sm text-center font-bold transition-colors ${
-                    i <= step ? "text-[#1A1A18]" : "text-[#8C8880]"
-                  }`}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(
+                        `${API_BASE_URL}/api/consumer/order/update`,
+                        {
+                          method: "PATCH",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            Order_id: orderId,
+                            User_id: orderData.User_id,
+                            order_status: "completed",
+                          }),
+                        }
+                      );
+
+                      const data = await res.json();
+
+                      if (!res.ok) {
+                        throw new Error(
+                          data.err || "確認收貨失敗"
+                        );
+                      }
+
+                      setOrderData((prev) => ({
+                        ...prev,
+                        order_status: "completed",
+                      }));
+                    } catch (err) {
+                      console.error(
+                        "確認收貨失敗",
+                        err
+                      );
+                    }
+                  }}
+                  className="rounded-full bg-[#C8522A] px-8 py-3 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#A64220]"
                 >
-                  {s.label}
-                </div>
+                  確認收貨
+                </button>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
+
+        {!isCancelled &&
+          orderData.order_status === "completed" && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+              <div className="text-sm font-bold text-[#1A1A18]">
+                ✓ 訂單已完成
+              </div>
+
+              <div className="mt-1 text-xs text-[#8C8880]">
+                感謝您確認收貨
+              </div>
+            </div>
+          )}
       </div>
 
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
@@ -321,19 +360,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 </div>
                 <div className="font-bold text-[#1A1A18]">
                   {getDeliveryMethodLabel(shipment)}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Truck size={18} className="mt-0.5 text-[#C8522A]" />
-
-              <div>
-                <div className="mb-1 text-xs font-bold tracking-wider text-[#8C8880]">
-                  物流狀態
-                </div>
-                <div className="font-bold text-[#1A1A18]">
-                  {getShipmentStatusLabel(shipment.shipping_status)}
                 </div>
               </div>
             </div>
@@ -403,58 +429,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
             )}
           </div>
         )}
-      </div>
-
-      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
-        <h3 className="mb-8 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block" />
-          訂單詳情
-        </h3>
-
-        <div className="flex flex-col ml-4">
-          {[
-            {
-              status: orderData.shipping_status === "shipped" ? "包裹配送中" : "已收到訂單",
-              date: `${createdDate} at ${createdTime}`,
-              active: true,
-            },
-            {
-              status: "已確認訂單",
-              date: createdDate,
-              active: step >= 1,
-            },
-            {
-              status: "已收到訂單，廠商將於確認後安排出貨",
-              date: createdDate,
-              active: false,
-            },
-          ].map((item, idx, arr) => (
-            <div key={idx} className="relative flex gap-6 pb-8 last:pb-0">
-              {idx !== arr.length - 1 && (
-                <div className="absolute left-[11px] top-8 h-full w-[2px] bg-[#E2DDD4]" />
-              )}
-
-              <div
-                className={`mt-1 h-6 w-6 rounded-full border-4 flex-shrink-0 z-10 bg-white transition-colors ${
-                  item.active ? "border-[#C8522A]" : "border-[#E2DDD4]"
-                }`}
-              />
-
-              <div>
-                <div
-                  className={`mb-1 text-base font-bold ${
-                    item.active ? "text-[#1A1A18]" : "text-[#8C8880]"
-                  }`}
-                >
-                  {item.status}
-                </div>
-                <div className="text-sm font-medium text-[#8C8880]/70">
-                  {item.date}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm overflow-hidden">
@@ -571,13 +545,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
             </span>
           </div>
 
-          <div className="flex">
-            <span className="w-28 text-[#8C8880]">訂單物流狀態</span>
-            <span className="text-[#1A1A18] font-bold">
-              {getOrderShippingLabel(orderData.shipping_status)}
-            </span>
-          </div>
-
           {orderData.Promotion_code && (
             <div className="flex">
               <span className="w-28 text-[#8C8880]">優惠碼</span>
@@ -589,47 +556,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
         </div>
       </div>
 
-      {orderData.shipping_status === "delivered" &&
-        orderData.order_status !== "completed" && (
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={async () => {
-                try {
-                  const res = await fetch(
-                    `${API_BASE_URL}/api/consumer/order/update`,
-                    {
-                      method: "PATCH",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        Order_id: orderId,
-                        User_id: orderData.User_id,
-                        order_status: "completed",
-                      }),
-                    }
-                  );
-
-                  const data = await res.json();
-
-                  if (!res.ok) {
-                    throw new Error(data.err || "確認收貨失敗");
-                  }
-
-                  setOrderData((prev) => ({
-                    ...prev,
-                    order_status: "completed",
-                  }));
-                } catch (err) {
-                  console.error("確認收貨失敗", err);
-                }
-              }}
-              className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all hover:-translate-y-0.5"
-            >
-              確認收貨
-            </button>
-          </div>
-        )}
     </div>
   );
 }

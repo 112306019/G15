@@ -576,6 +576,22 @@ def create_order(request):
     recipient_phone = request.data.get('recipient_phone')
     recipient_address = request.data.get('recipient_address')
 
+    recipient_postal_code = (
+        request.data.get('recipient_postal_code')
+        or request.data.get('postal_code')
+        or ''
+    )
+    recipient_city = (
+        request.data.get('recipient_city')
+        or request.data.get('city')
+        or ''
+    )
+    recipient_district = (
+        request.data.get('recipient_district')
+        or request.data.get('district')
+        or ''
+    )
+
     # ============================
     # 配送資訊
     # ============================
@@ -896,8 +912,23 @@ def create_order(request):
 
                 # 宅配才寫真正配送地址
                 # 超商取貨這裡不需要塞門市地址
+                city=(
+                    recipient_city
+                    if shipping_method == 'home'
+                    else ''
+                ),
+                district=(
+                    recipient_district
+                    if shipping_method == 'home'
+                    else ''
+                ),
                 detail_address=(
                     recipient_address
+                    if shipping_method == 'home'
+                    else ''
+                ),
+                postal_code=(
+                    recipient_postal_code
                     if shipping_method == 'home'
                     else ''
                 ),
@@ -1125,6 +1156,9 @@ def view_order(request):
                 recipient_data = {
                     'recipient_name': address.recipient_name,
                     'phone': address.phone,
+                    'postal_code': address.postal_code,
+                    'city': address.city,
+                    'district': address.district,
                     'detail_address': address.detail_address,
                 }
 
@@ -1142,6 +1176,7 @@ def view_order(request):
                 'store_address': shipment.store_address,
                 'merchant_trade_no': shipment.merchant_trade_no,
                 'ecpay_logistics_id': shipment.ecpay_logistics_id,
+                'booking_note': shipment.booking_note,
                 'shipping_status': shipment.shipping_status,
             }
 

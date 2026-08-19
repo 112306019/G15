@@ -1,12 +1,12 @@
 import json
 import hashlib
 import time
+import re
 from datetime import datetime
 from urllib.parse import urlencode, parse_qs, quote_plus
 from urllib.request import Request, urlopen
-from urllib.parse import urlencode
 
-from api.models import ShipmentInfo, OrderItem
+from api.models import ShipmentInfo, OrderItem, Vendor
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -14,6 +14,43 @@ from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
+
+
+
+# 綠界 GoodsName 不允許的特殊符號。
+# Serializer 會阻止新資料進 DB；這裡是為了相容資料庫中已存在的舊商品。
+ECPAY_GOODS_NAME_FORBIDDEN_PATTERN = re.compile(
+    r"""[\^'`!@#%&*+\\\"<>|_\[\]]"""
+)
+
+
+def sanitize_ecpay_goods_name(name):
+    cleaned = ECPAY_GOODS_NAME_FORBIDDEN_PATTERN.sub(
+        "",
+        str(name or "")
+    ).strip()
+
+    return cleaned
+
+
+def truncate_ecpay_goods_name(value, max_length=50):
+    """
+    綠界欄位長度：中文/全形字元以 2 計，其餘以 1 計。
+    避免直接用 [:50] 導致中文實際長度超標。
+    """
+    result = []
+    length = 0
+
+    for char in str(value or ""):
+        char_length = 2 if ord(char) > 127 else 1
+
+        if length + char_length > max_length:
+            break
+
+        result.append(char)
+        length += char_length
+
+    return "".join(result)
 
 
 @api_view(["GET"])
@@ -222,20 +259,10 @@ def generate_ecpay_check_mac_value(params):
 
 def create_ecpay_logistics_order(order):
     try:
-        shipment = ShipmentInfo.objects.get(
-            order=order
-        )
+        shipment = ShipmentInfo.objects.get(order=order)
     except ShipmentInfo.DoesNotExist:
         raise ValueError("此訂單沒有 ShipmentInfo")
 
-    # 目前先只做 7-ELEVEN C2C
-    if shipment.logistics_type != "CVS":
-        raise ValueError("目前只支援超商物流")
-
-    if shipment.logistics_sub_type != "UNIMARTC2C":
-        raise ValueError("目前只支援 7-ELEVEN C2C")
-
-    # 避免重複建單
     if shipment.ecpay_logistics_id:
         return {
             "success": True,
@@ -243,11 +270,59 @@ def create_ecpay_logistics_order(order):
             "shipment": shipment,
         }
 
-    if not shipment.store_id:
-        raise ValueError("此訂單沒有取貨門市")
-
     if not order.address:
         raise ValueError("此訂單沒有收件人資料")
+
+    order_items = list(
+        OrderItem.objects
+        .filter(order=order)
+        .select_related("product")
+    )
+
+    if not order_items:
+        raise ValueError("此訂單沒有商品")
+
+    vendor_ids = {
+        str(item.product.vendor_id)
+        for item in order_items
+        if item.product and item.product.vendor_id
+    }
+
+    if len(vendor_ids) != 1:
+        raise ValueError(
+            "目前物流建單僅支援單一廠商訂單；"
+            "此訂單包含多個廠商商品，需拆單後才能建立物流單"
+        )
+
+    vendor_id = next(iter(vendor_ids))
+
+    vendor = Vendor.objects.filter(
+        vendor_id=vendor_id
+    ).first()
+
+    if not vendor:
+        raise ValueError("找不到訂單所屬廠商")
+
+    sender_name = (vendor.sender_name or "").strip()
+    sender_phone = (vendor.sender_phone or "").strip()
+    sender_postal_code = (vendor.sender_postal_code or "").strip()
+    sender_address = (
+        f"{vendor.sender_city or ''}"
+        f"{vendor.sender_district or ''}"
+        f"{vendor.sender_address or ''}"
+    ).strip()
+
+    if not sender_name:
+        raise ValueError("廠商尚未設定寄件人姓名")
+
+    if (
+        len(sender_phone) != 10
+        or not sender_phone.startswith("09")
+        or not sender_phone.isdigit()
+    ):
+        raise ValueError(
+            "廠商寄件人手機必須為 09 開頭的 10 碼手機號碼"
+        )
 
     receiver_name = (
         order.address.recipient_name or ""
@@ -274,129 +349,137 @@ def create_ecpay_logistics_order(order):
             "尚未設定 ECPAY_LOGISTICS_REPLY_URL"
         )
 
-    order_items = (
-        OrderItem.objects
-        .filter(order=order)
-        .select_related("product")
-    )
-
     goods_names = [
-        item.product.product_name
+        sanitize_ecpay_goods_name(
+            item.product.product_name
+        )
         for item in order_items
     ]
 
-    goods_name = ",".join(goods_names)
+    goods_names = [
+        name
+        for name in goods_names
+        if name
+    ]
 
-    # 綠界 GoodsName 最大 50
-    goods_name = goods_name[:50]
+    if not goods_names:
+        raise ValueError(
+            "商品名稱清理後為空，請先修改商品名稱"
+        )
 
-    # 自己產生唯一 MerchantTradeNo
-    #
-    # 最多 20 字元
+    goods_name = truncate_ecpay_goods_name(
+        ",".join(goods_names),
+        50
+    )
+
     merchant_trade_no = (
         "G15"
-        + datetime.now().strftime(
-            "%y%m%d%H%M%S"
-        )
+        + datetime.now().strftime("%y%m%d%H%M%S")
         + str(shipment.shipment_id)
     )[:20]
 
     params = {
-        "MerchantID":
-            settings.ECPAY_LOGISTICS_MERCHANT_ID,
-
-        "MerchantTradeNo":
-            merchant_trade_no,
-
-        "MerchantTradeDate":
-            datetime.now().strftime(
-                "%Y/%m/%d %H:%M:%S"
-            ),
-
-        "LogisticsType":
-            "CVS",
-
-        "LogisticsSubType":
-            shipment.logistics_sub_type,
-
-        "GoodsAmount":
-            int(order.total_amount),
-
-        "CollectionAmount":
-            0,
-
-        "IsCollection":
-            "N",
-
-        "GoodsName":
-            goods_name,
-
-        "SenderName":
-            settings.ECPAY_LOGISTICS_SENDER_NAME,
-
-        "SenderCellPhone":
-            settings.ECPAY_LOGISTICS_SENDER_PHONE,
-
-        "ReceiverName":
-            receiver_name,
-
-        "ReceiverCellPhone":
-            receiver_phone,
-
-        "ServerReplyURL":
-            settings.ECPAY_LOGISTICS_REPLY_URL,
-
-        "ReceiverStoreID":
-            shipment.store_id,
+        "MerchantID": settings.ECPAY_LOGISTICS_MERCHANT_ID,
+        "MerchantTradeNo": merchant_trade_no,
+        "MerchantTradeDate": datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+        "GoodsAmount": int(order.total_amount),
+        "IsCollection": "N",
+        "GoodsName": goods_name,
+        "SenderName": sender_name,
+        "SenderCellPhone": sender_phone,
+        "ReceiverName": receiver_name,
+        "ReceiverCellPhone": receiver_phone,
+        "ServerReplyURL": settings.ECPAY_LOGISTICS_REPLY_URL,
     }
 
+    # 7-ELEVEN C2C
+    if (
+        shipment.logistics_type == "CVS"
+        and shipment.logistics_sub_type == "UNIMARTC2C"
+    ):
+        if not shipment.store_id:
+            raise ValueError("此超商訂單沒有取貨門市")
+
+        params.update({
+            "LogisticsType": "CVS",
+            "LogisticsSubType": "UNIMARTC2C",
+            "CollectionAmount": 0,
+            "ReceiverStoreID": shipment.store_id,
+        })
+
+    # 黑貓宅配
+    elif (
+        shipment.logistics_type == "HOME"
+        and shipment.logistics_sub_type == "TCAT"
+    ):
+        receiver_postal_code = (
+            order.address.postal_code or ""
+        ).strip()
+
+        receiver_address = (
+            f"{order.address.city or ''}"
+            f"{order.address.district or ''}"
+            f"{order.address.detail_address or ''}"
+        ).strip()
+
+        if not sender_postal_code:
+            raise ValueError("廠商尚未設定寄件郵遞區號")
+
+        if len(sender_address) <= 6:
+            raise ValueError("廠商寄件地址不完整")
+
+        if not receiver_postal_code:
+            raise ValueError("宅配訂單缺少收件人郵遞區號")
+
+        if len(receiver_address) <= 6:
+            raise ValueError("宅配收件地址不完整")
+
+        params.update({
+            "LogisticsType": "HOME",
+            "LogisticsSubType": "TCAT",
+            "SenderZipCode": sender_postal_code,
+            "SenderAddress": sender_address,
+            "ReceiverZipCode": receiver_postal_code,
+            "ReceiverAddress": receiver_address,
+            "Temperature": "0001",
+            "Specification": "0001",
+            "ScheduledPickupTime": "4",
+            "ScheduledDeliveryTime": "4",
+            "Distance": "00",
+        })
+
+    else:
+        raise ValueError("目前不支援此物流方式")
+
     params["CheckMacValue"] = (
-        generate_ecpay_check_mac_value(
-            params
-        )
+        generate_ecpay_check_mac_value(params)
     )
 
-    encoded_data = urlencode(
-        params
-    ).encode("utf-8")
+    encoded_data = urlencode(params).encode("utf-8")
 
     request = Request(
         settings.ECPAY_LOGISTICS_CREATE_URL,
         data=encoded_data,
         headers={
-            "Content-Type":
-                "application/x-www-form-urlencoded",
+            "Content-Type": "application/x-www-form-urlencoded",
         },
         method="POST",
     )
 
     try:
-        with urlopen(
-            request,
-            timeout=30
-        ) as response:
-            raw_response = (
-                response
-                .read()
-                .decode("utf-8")
-            )
-
+        with urlopen(request, timeout=30) as response:
+            raw_response = response.read().decode("utf-8")
     except Exception as error:
         raise ValueError(
             f"呼叫綠界物流 API 失敗：{error}"
         )
 
-    # 綠界成功：
-    # 1|MerchantID=...&AllPayLogisticsID=...
     if not raw_response.startswith("1|"):
         raise ValueError(
             f"綠界建立物流單失敗：{raw_response}"
         )
 
-    response_query = raw_response.split(
-        "|",
-        1
-    )[1]
+    response_query = raw_response.split("|", 1)[1]
 
     response_data = {
         key: values[0]
@@ -406,16 +489,10 @@ def create_ecpay_logistics_order(order):
         ).items()
     }
 
-    logistics_id = (
-        response_data.get(
-            "AllPayLogisticsID"
-        )
-    )
+    logistics_id = response_data.get("AllPayLogisticsID")
 
     returned_trade_no = (
-        response_data.get(
-            "MerchantTradeNo"
-        )
+        response_data.get("MerchantTradeNo")
         or merchant_trade_no
     )
 
@@ -424,22 +501,18 @@ def create_ecpay_logistics_order(order):
             "綠界回傳成功，但沒有 AllPayLogisticsID"
         )
 
-    shipment.merchant_trade_no = (
-        returned_trade_no
+    shipment.merchant_trade_no = returned_trade_no
+    shipment.ecpay_logistics_id = logistics_id
+    shipment.booking_note = (
+        response_data.get("BookingNote") or None
     )
-
-    shipment.ecpay_logistics_id = (
-        logistics_id
-    )
-
-    shipment.shipping_status = (
-        "created"
-    )
+    shipment.shipping_status = "created"
 
     shipment.save(
         update_fields=[
             "merchant_trade_no",
             "ecpay_logistics_id",
+            "booking_note",
             "shipping_status",
             "updated_at",
         ]
@@ -700,10 +773,23 @@ def query_ecpay_logistics_order(shipment):
         cvs_validation_no or None
     )
 
+    booking_note = (
+        response_data.get("BookingNote")
+        or response_data.get("ShipmentNo")
+        or ""
+    )
+
+    if (
+        shipment.logistics_type == "HOME"
+        and booking_note
+    ):
+        shipment.booking_note = booking_note
+
     shipment.save(
         update_fields=[
             "cvs_payment_no",
             "cvs_validation_no",
+            "booking_note",
             "updated_at",
         ]
     )
@@ -721,6 +807,8 @@ def query_ecpay_logistics_order(shipment):
             ),
         "logistics_status":
             logistics_status,
+        "booking_note":
+            shipment.booking_note or "",
         "ecpay_response":
             response_data,
     }
