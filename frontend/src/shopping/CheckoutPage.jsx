@@ -129,6 +129,22 @@ function formatNTD(amount) {
   }`;
 }
 
+function isValidCVSReceiverName(name) {
+  const value = String(name || "").trim();
+
+  // 中文姓名：2～5 個中文字
+  if (/^[\u4e00-\u9fff]{2,5}$/.test(value)) {
+    return true;
+  }
+
+  // 英文姓名：4～10 個半形英文字母，可包含空白
+  if (/^[A-Za-z ]{4,10}$/.test(value)) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function CheckoutPage({
   onPaid,
   onBack,
@@ -432,9 +448,14 @@ export default function CheckoutPage({
     recipientDistrict.trim().length > 0 &&
     recipientAddress.trim().length > 0;
 
+  const cvsReceiverNameValid =
+    shippingMethod !== "cvs" ||
+    isValidCVSReceiverName(recipient);
+
   const shippingValid =
     recipient.trim().length > 0 &&
     recipientPhoneValid &&
+    cvsReceiverNameValid &&
     (
       shippingMethod === "home"
         ? homeAddressValid
@@ -1073,11 +1094,33 @@ export default function CheckoutPage({
                 }
                 placeholder="請輸入收件人姓名"
                 className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                  recipient.trim()
+                  recipient.trim() &&
+                  (
+                    shippingMethod !== "cvs" ||
+                    isValidCVSReceiverName(recipient)
+                  )
                     ? "border-[#6BBF6B] bg-white"
+                    : recipient.trim() &&
+                      shippingMethod === "cvs" &&
+                      !isValidCVSReceiverName(recipient)
+                    ? "border-[#C8522A] bg-white"
                     : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
                 }`}
               />
+
+              {shippingMethod === "cvs" && (
+                <p
+                  className={`mt-2 text-[11px] ${
+                    recipient.trim() &&
+                    !isValidCVSReceiverName(recipient)
+                      ? "font-bold text-[#C8522A]"
+                      : "text-[#8C8880]"
+                  }`}
+                >
+                  7-ELEVEN 取貨姓名需為中文 2～5 個字，
+                  或英文 4～10 個半形英文字母。
+                </p>
+              )}
 
             </div>
 
@@ -1658,6 +1701,8 @@ export default function CheckoutPage({
 
               {shippingMethod === "home"
                 ? "請填寫收件人姓名、09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
+                : !cvsReceiverNameValid
+                ? "7-ELEVEN 取貨姓名需為中文 2～5 個字，或英文 4～10 個半形英文字母。"
                 : "請填寫收件人姓名、09 開頭手機號碼，並選擇取貨門市。"}
 
             </p>

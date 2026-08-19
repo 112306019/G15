@@ -24,6 +24,29 @@ ECPAY_GOODS_NAME_FORBIDDEN_PATTERN = re.compile(
 )
 
 
+
+# 綠界超商取貨收件人姓名驗證
+# 中文：2~5 個中文字
+# 英文：4~10 個半形英文字母，可包含空白
+ECPAY_CVS_CHINESE_NAME_PATTERN = re.compile(r"^[\u4e00-\u9fff]{2,5}$")
+ECPAY_CVS_ENGLISH_NAME_PATTERN = re.compile(r"^[A-Za-z ]{4,10}$")
+
+
+def is_valid_ecpay_cvs_receiver_name(name):
+    value = (name or "").strip()
+
+    if not value:
+        return False
+
+    if ECPAY_CVS_CHINESE_NAME_PATTERN.fullmatch(value):
+        return True
+
+    if ECPAY_CVS_ENGLISH_NAME_PATTERN.fullmatch(value):
+        return True
+
+    return False
+
+
 def sanitize_ecpay_goods_name(name):
     cleaned = ECPAY_GOODS_NAME_FORBIDDEN_PATTERN.sub(
         "",
@@ -399,6 +422,13 @@ def create_ecpay_logistics_order(order):
     ):
         if not shipment.store_id:
             raise ValueError("此超商訂單沒有取貨門市")
+
+        if not is_valid_ecpay_cvs_receiver_name(receiver_name):
+            raise ValueError(
+                "7-ELEVEN 收件人姓名格式不符合規定："
+                "中文需 2～5 個字，"
+                "英文需 4～10 個半形英文字母"
+            )
 
         params.update({
             "LogisticsType": "CVS",
