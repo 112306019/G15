@@ -12,7 +12,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, Payment, CouponNew, Earnings, ChatRoom, Message, Address, User
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User
+from payments.services import get_order_payment_status
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -1658,7 +1659,7 @@ def vendor_order_get_detail(request):
 
     order = order_items[0].order
 
-    payment = Payment.objects.filter(order_id=order_id).first()
+    payment_tx = get_order_payment_status(order)
 
     # 收件資訊：出貨作業必須要有的收件人姓名、電話、地址。
     # 之前這裡只回傳 address_id（一個數字），前端完全沒地方能看到實際地址。
@@ -1712,14 +1713,27 @@ def vendor_order_get_detail(request):
             "apply_status": item.apply_status
         })
 
-    payment_data = None
-    if payment:
+    # 舊版 Payment model 只有走過綠界前的模擬結帳流程才會有紀錄，改成一律從
+    # Order + PaymentTransaction 組資料：有 PaymentTransaction（綠界訂單）就用那筆的資訊，
+    # 沒有的話（轉帳/貨到付款走的是舊流程，只會寫 Order.payment_status，不會建立 PaymentTransaction）
+    # 退回顯示 Order.payment_status，付款方式留空由前端顯示「—」。
+    # 注意：轉帳/貨到付款曾經記錄在 Payment.payment_method 的方式名稱（"轉帳"/"貨到付款"）
+    # 目前沒有其他地方存了，這裡拿不到、也顯示不出來。
+    if payment_tx:
         payment_data = {
-            "payment_id": payment.payment_id,
-            "payment_method": payment.payment_method,
-            "payment_status": payment.payment_status,
-            "transaction_id": payment.transaction_id,
-            "promotion_code": payment.promotion_code
+            "payment_id": payment_tx.payment_transaction_id,
+            "payment_method": "信用卡",
+            "payment_status": payment_tx.status,
+            "transaction_id": payment_tx.ecpay_trade_no,
+            "promotion_code": order.promotion_code,
+        }
+    else:
+        payment_data = {
+            "payment_id": None,
+            "payment_method": None,
+            "payment_status": order.payment_status,
+            "transaction_id": None,
+            "promotion_code": order.promotion_code,
         }
 
     return Response({

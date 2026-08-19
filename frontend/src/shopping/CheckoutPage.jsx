@@ -59,24 +59,30 @@ const METHODS = [
   { key: "cod", label: "貨到付款", Icon: CodIcon },
 ];
 
-function digitsOnly(s) {
-  return (s || "").replace(/\D/g, "");
-}
-
-function formatCardNumber(raw) {
-  const v = digitsOnly(raw).slice(0, 16);
-  return v.replace(/(.{4})/g, "$1 ").trim();
-}
-
-function formatExpiry(raw) {
-  const v = digitsOnly(raw).slice(0, 4);
-  if (v.length <= 2) return v;
-  return `${v.slice(0, 2)} / ${v.slice(2)}`;
-}
-
 function formatNTD(amount) {
   const value = Number(amount);
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
+}
+
+// 綠界 AIO 金流：後端 /api/payments/create/ 回傳 {action, method, fields}，
+// 這裡動態建立一個看不見的 <form>、把 fields 逐一塞成 hidden input，再自動 submit，
+// 瀏覽器會離開 SPA、整頁導向綠界的刷卡頁（這不是 fetch/AJAX 能做到的，ECPay 要求真正的表單 POST）。
+function submitEcpayForm({ action, method, fields }) {
+  const form = document.createElement("form");
+  form.method = method || "POST";
+  form.action = action;
+  form.style.display = "none";
+
+  Object.entries(fields || {}).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
 }
 
 export default function CheckoutPage({
@@ -98,12 +104,6 @@ export default function CheckoutPage({
   const isLoggedIn = Boolean(userId);
 
   const [method, setMethod] = useState("card");
-
-  const [cardNum, setCardNum] = useState("999999999999");
-  const [cardName, setCardName] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvc, setCvc] = useState("");
-  const [saveInfo, setSaveInfo] = useState(true);
 
   const [submitState, setSubmitState] = useState("idle");
   const [payError, setPayError] = useState("");
@@ -166,22 +166,10 @@ export default function CheckoutPage({
   const couponDiscount = rawItemsTotal - itemsTotal;
   const grandTotal = itemsTotal + initialSummary.shippingAmount;
 
-  const cardNumDigits = useMemo(() => digitsOnly(cardNum), [cardNum]);
-  const expiryDigits = useMemo(() => digitsOnly(expiry), [expiry]);
-
-  const cardNumValid = method === "card" ? cardNumDigits.length >= 16 : true;
-  const cardNameValid = method === "card" ? cardName.trim().length >= 3 : true;
-  const expiryValid = method === "card" ? expiryDigits.length >= 4 : true;
-  const cvcValid = method === "card" ? cvc.trim().length >= 3 : true;
-
+  // 信用卡（method === "card"）走綠界 AIO：實際刷卡資訊是在綠界的頁面上輸入，
+  // 這裡不再要求任何本地卡號/到期日/CVC 欄位，那些欄位從未被送到任何 API。
   const shippingValid = recipient.trim().length > 0 && recipientPhone.trim().length > 0 && recipientAddress.trim().length > 0;
-  const canPay = isLoggedIn && shippingValid && (method !== "card" ? true : cardNumValid && cardNameValid && expiryValid && cvcValid);
-
-  const inputBase =
-    "w-full rounded-[10px] border-[1.5px] px-4 py-[13px] pr-11 outline-none transition-colors tracking-[0.05em] font-mono text-[14px]";
-  const inputNormal = "bg-white border-[#E2DDD4] focus:border-[#1A1A18]";
-  const inputValid = "bg-white border-[#6BBF6B]";
-  const inputClass = (valid) => `${inputBase} ${valid ? inputValid : inputNormal}`;
+  const canPay = isLoggedIn && shippingValid;
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -275,6 +263,29 @@ export default function CheckoutPage({
       const orderData = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderData.err || "建立訂單失敗");
       const orderId = orderData.Order_id || orderData.orderId;
+
+      // 信用卡走真正的綠界 AIO 金流：後端 /api/payments/create/ 針對這筆 Order
+      // 建立 PaymentTransaction、算好 CheckMacValue，回傳可直接 auto-submit 的表單資料。
+      // 金額、商品名稱都是後端從 Order/OrderItem 組出來的，前端不會也不能自己帶金額。
+      // 送出表單後瀏覽器會離開這個頁面，訂單狀態改成「已付款」是綠界打 ReturnURL 回後端才會發生，
+      // 不是這裡能立即決定的，所以信用卡這條路徑先不跑下面清購物車/顯示成功動畫那段舊的模擬邏輯。
+      if (method === "card") {
+        const paymentRes = await fetch(`${API_BASE_URL}/api/payments/create/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ Order_id: orderId }),
+        });
+        const paymentData = await paymentRes.json();
+        if (!paymentRes.ok || !paymentData.success) {
+          throw new Error(paymentData.err || "建立綠界付款失敗");
+        }
+
+        submitEcpayForm(paymentData);
+        return; // 頁面即將被導向綠界，不需要再更新任何 local state
+      }
 
       const txRes = await fetch(`${API_BASE_URL}/api/consumer/transaction/create`, {
         method: "POST",
@@ -448,92 +459,16 @@ export default function CheckoutPage({
 
           <div className="h-px bg-[#E2DDD4] mb-7" />
 
-          <p className="font-['DM_Serif_Display'] text-[16px] font-bold mb-6">Credit Card</p>
-
-          <div className={`${method === "card" ? "" : "opacity-50 pointer-events-none select-none"}`}>
-            <div className="mb-5">
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">信用卡號</label>
-              <div className="relative">
-                <input
-                  value={formatCardNumber(cardNum)}
-                  onChange={(e) => setCardNum(formatCardNumber(e.target.value))}
-                  maxLength={19}
-                  className={inputClass(cardNumValid)}
-                />
-                {cardNumValid && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6BBF6B]">
-                    <CheckIcon className="h-[18px] w-[18px]" />
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">持卡人姓名</label>
-              <div className="relative">
-                <input
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  placeholder="CARDHOLDER NAME"
-                  className={`${inputClass(cardNameValid)} font-serif tracking-[0.02em]`}
-                />
-                {cardNameValid && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6BBF6B]">
-                    <CheckIcon className="h-[18px] w-[18px]" />
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-              <div>
-                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">到期日</label>
-                <div className="relative">
-                  <input
-                    value={expiry}
-                    onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                    placeholder="MM / YY"
-                    maxLength={7}
-                    className={inputClass(expiryValid)}
-                  />
-                  {expiryValid && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6BBF6B]">
-                      <CheckIcon className="h-[18px] w-[18px]" />
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">CVC</label>
-                <div className="relative">
-                  <input
-                    value={cvc}
-                    onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder="•••"
-                    maxLength={4}
-                    type="password"
-                    className={inputClass(cvcValid)}
-                  />
-                  {cvcValid && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6BBF6B]">
-                      <CheckIcon className="h-[18px] w-[18px]" />
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setSaveInfo((v) => !v)}
-              className="mb-7 inline-flex items-center gap-3"
-            >
-              <span className={`h-5 w-5 rounded-[5px] border-[1.5px] flex items-center justify-center transition-colors ${saveInfo ? "bg-[#1A1A18] border-[#1A1A18]" : "bg-white border-[#E2DDD4]"}`}>
-                {saveInfo && <CheckIcon className="h-3 w-3 text-white" />}
+          {method === "card" && (
+            <div className="mb-7 flex items-start gap-3 rounded-[14px] border-[1.5px] border-[#E2DDD4] bg-[#F5F0E8] px-5 py-4">
+              <span className="mt-0.5 shrink-0 text-[#6BBF6B]">
+                <ShieldIcon />
               </span>
-              <span className="text-[14px]">儲存資訊</span>
-            </button>
-          </div>
+              <p className="text-[13px] text-[#8C8880]">
+                按下「確認並支付」後會導向綠界金流的安全刷卡頁面填寫卡片資訊，本頁不會收集您的卡號。
+              </p>
+            </div>
+          )}
 
           {/* Submit */}
           <button
@@ -561,9 +496,9 @@ export default function CheckoutPage({
             <p className="mt-3 text-[12px] text-[#C8522A] font-bold">
               請先登入會員才能結帳。
             </p>
-          ) : !canPay && method === "card" && (
+          ) : !canPay && (
             <p className="mt-3 text-[12px] text-[#8C8880]">
-              請完成信用卡資訊後再付款（卡號 16 碼、姓名、到期日、CVC）。
+              請完成收件人姓名、電話、地址後再付款。
             </p>
           )}
         </div>

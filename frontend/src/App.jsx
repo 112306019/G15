@@ -21,6 +21,7 @@ import WelcomePage from './shopping/WelcomePage';
 import ShopPage from './shopping/ShopPage';
 import CartPage from './shopping/CartPage';
 import CheckoutPage from './shopping/CheckoutPage';
+import PaymentResultPage from './shopping/PaymentResultPage';
 import OrdersPage from './shopping/OrdersPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
@@ -504,6 +505,13 @@ function MainSystem() {
               total: checkoutSummary.grandTotal,
             } : undefined}
           />
+        } />
+
+        {/* 綠界付款結果頁：OrderResultURL 由後端驗證完再把瀏覽器導回這裡（帶 order_id），
+            這是一個「從外部整頁導回來」的進入點，不透過 handleNavigate，所以沒有登入保護閘門，
+            頁面本身只靠 order_id 呼叫後端查真正的付款狀態，不採信網址上其他任何參數 */}
+        <Route path="/checkout/result" element={
+          <PaymentResultPage onCartCleared={() => syncCartCount()} />
         } />
 
         <Route path="/chat" element={<ChatPage />} />
