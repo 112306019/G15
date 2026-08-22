@@ -1,3 +1,4 @@
+import requests
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Sum
@@ -454,6 +455,28 @@ def mission_submit(request):
         status='pending',
         submitted_time=timezone.now(),
     )
+
+    # 文字類型的提交，自動打 AdGuard 做一次 AI 合規分析，
+    # 存進 ai_result，讓廠商打開審核頁面時可以直接看到結果，不用手動再按一次。
+    if submission_type_db == 'text' and data.get('text_content'):
+        try:
+            ad_category = 'other'
+            campaign_product = CampaignProduct.objects.filter(
+                campaign=mission.application.campaign
+            ).select_related('product').first()
+            if campaign_product and campaign_product.product:
+                ad_category = campaign_product.product.ad_category or 'other'
+
+            ai_resp = requests.post(
+                'http://127.0.0.1:8001/api/analyze',
+                json={'text': data.get('text_content'), 'category': ad_category},
+                timeout=30,
+            )
+            if ai_resp.ok:
+                submission.ai_result = ai_resp.json()
+                submission.save()
+        except Exception as e:
+            print(f"自動 AI 審核失敗（submission_id={submission.submission_id}）: {e}")
 
     # 依提交類型，推進任務 stage
     if submission_type_db == 'text':

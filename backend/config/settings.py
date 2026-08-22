@@ -83,6 +83,60 @@ DATABASES = {
     }
 }
 
+
+# ==============================================================================
+# ECPay Logistics - Stage
+# ==============================================================================
+ECPAY_LOGISTICS_MERCHANT_ID = os.getenv(
+    "ECPAY_LOGISTICS_MERCHANT_ID",
+    ""
+)
+
+ECPAY_LOGISTICS_HASH_KEY = os.getenv(
+    "ECPAY_LOGISTICS_HASH_KEY",
+    ""
+)
+
+ECPAY_LOGISTICS_HASH_IV = os.getenv(
+    "ECPAY_LOGISTICS_HASH_IV",
+    ""
+)
+
+ECPAY_LOGISTICS_MAP_URL = os.getenv(
+    "ECPAY_LOGISTICS_MAP_URL",
+    "https://logistics-stage.ecpay.com.tw/Express/map"
+)
+
+ECPAY_LOGISTICS_SUBTYPE = os.getenv(
+    "ECPAY_LOGISTICS_SUBTYPE",
+    "UNIMARTC2C"
+)
+
+ECPAY_LOGISTICS_CREATE_URL = os.getenv(
+    "ECPAY_LOGISTICS_CREATE_URL",
+    "https://logistics-stage.ecpay.com.tw/Express/Create"
+)
+
+ECPAY_LOGISTICS_SENDER_NAME = os.getenv(
+    "ECPAY_LOGISTICS_SENDER_NAME",
+    "測試人員"
+)
+
+ECPAY_LOGISTICS_SENDER_PHONE = os.getenv(
+    "ECPAY_LOGISTICS_SENDER_PHONE",
+    "0912345678"
+)
+
+ECPAY_LOGISTICS_REPLY_URL = os.getenv(
+    "ECPAY_LOGISTICS_REPLY_URL",
+    ""
+)
+
+ECPAY_LOGISTICS_QUERY_URL = os.getenv(
+    "ECPAY_LOGISTICS_QUERY_URL",
+    "https://logistics-stage.ecpay.com.tw/Helper/QueryLogisticsTradeInfo/V5"
+)
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": (

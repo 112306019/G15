@@ -311,10 +311,18 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   商品介紹
                 </button>
               </div>
-              <div className="w-full md:w-[450px] aspect-[4/3] bg-gradient-to-br from-[#D8D4CC] to-[#C4BDB4] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow" onClick={() => products[0] && onNavigate?.("product_detail", products[0])}>
-                <svg className="h-20 w-20 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-                </svg>
+              <div
+                className="w-full md:w-[450px] aspect-[4/3] rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow overflow-hidden"
+                style={products[0]?.image_url ? undefined : { background: "linear-gradient(135deg,#D8D4CC,#C4BDB4)" }}
+                onClick={() => products[0] && onNavigate?.("product_detail", products[0])}
+              >
+                {products[0]?.image_url ? (
+                  <img src={products[0].image_url} alt={products[0].Product_name} className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="h-20 w-20 text-[#1A1A18]/10" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+                  </svg>
+                )}
               </div>
             </div>
 

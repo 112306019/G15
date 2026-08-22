@@ -1,3 +1,4 @@
+import re
 from rest_framework import serializers
 from .models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions
 
@@ -34,6 +35,13 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
             "contact_name",
             "email",
             "tax_id",
+
+            "sender_name",
+            "sender_phone",
+            "sender_postal_code",
+            "sender_city",
+            "sender_district",
+            "sender_address",
         ]
 
     def update(self, instance, validated_data):
@@ -47,11 +55,37 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
     
 
 
+
+# 綠界物流 GoodsName 不允許的特殊符號
+ECPAY_GOODS_NAME_FORBIDDEN_PATTERN = re.compile(
+    r"""[\^'`!@#%&*+\\\"<>|_\[\]]"""
+)
+
+
+def validate_ecpay_goods_name(value):
+    value = (value or "").strip()
+
+    if not value:
+        raise serializers.ValidationError(
+            "商品名稱不能為空"
+        )
+
+    if ECPAY_GOODS_NAME_FORBIDDEN_PATTERN.search(value):
+        raise serializers.ValidationError(
+            '商品名稱不可包含 ^ \' ` ! @ # % & * + \\\\ " < > | _ [ ] 等特殊符號'
+        )
+
+    return value
+
+
 # ──────────────────────────────────────────────
 # Vendor 商品管理
 # ──────────────────────────────────────────────
 
 class VendorProductCreateSerializer(serializers.ModelSerializer):
+    def validate_product_name(self, value):
+        return validate_ecpay_goods_name(value)
+
     class Meta:
         model = Product
         fields = [
@@ -63,6 +97,7 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
             "discounted_price",
             "stock",
             "category",
+            "ad_category",
             "image_url",
             "status",
         ]
@@ -70,6 +105,9 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 
 
 class VendorProductUpdateSerializer(serializers.ModelSerializer):
+    def validate_product_name(self, value):
+        return validate_ecpay_goods_name(value)
+
     class Meta:
         model = Product
         fields = [
@@ -81,6 +119,7 @@ class VendorProductUpdateSerializer(serializers.ModelSerializer):
             "discounted_price",
             "stock",
             "category",
+            "ad_category",
             "image_url",
             "status",
         ]
@@ -99,6 +138,9 @@ class VendorProductStatusSerializer(serializers.Serializer):
 
 class VendorCampaignProductSerializer(serializers.Serializer):
     product_name = serializers.CharField(max_length=200)
+
+    def validate_product_name(self, value):
+        return validate_ecpay_goods_name(value)
 
     description = serializers.CharField(
         required=False,

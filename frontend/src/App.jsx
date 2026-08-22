@@ -22,6 +22,7 @@ import ShopPage from './shopping/ShopPage';
 import CartPage from './shopping/CartPage';
 import CheckoutPage from './shopping/CheckoutPage';
 import PaymentResultPage from './shopping/PaymentResultPage';
+import ECPayStoreResult from './shopping/ECPayStoreResult';
 import OrdersPage from './shopping/OrdersPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
@@ -513,6 +514,11 @@ function MainSystem() {
         <Route path="/checkout/result" element={
           <PaymentResultPage onCartCleared={() => syncCartCount()} />
         } />
+
+        <Route
+          path="/ecpay-store-result"
+          element={<ECPayStoreResult />}
+        />
 
         <Route path="/chat" element={<ChatPage />} />
 

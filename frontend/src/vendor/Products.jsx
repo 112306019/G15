@@ -15,12 +15,34 @@ const statusCfg = {
   delisted: { label: '已下架', cls: 'bg-[#F5F0E8] text-[#8C8880]', dot: 'bg-[#8C8880]' },
 }
 
+
+const ECPAY_GOODS_NAME_FORBIDDEN_PATTERN =
+  /[\^'`!@#%&*+\\"<>|_\[\]]/
+
+const ECPAY_FORBIDDEN_CHARS_TEXT =
+  '^ \' ` ! @ # % & * + \\ " < > | _ [ ]'
+
+function validateProductNameForEcpay(name) {
+  const value = (name || '').trim()
+
+  if (!value) {
+    return '請輸入商品名稱'
+  }
+
+  if (ECPAY_GOODS_NAME_FORBIDDEN_PATTERN.test(value)) {
+    return `商品名稱不可包含：${ECPAY_FORBIDDEN_CHARS_TEXT}`
+  }
+
+  return ''
+}
+
 function mapProductFromApi(product) {
   return {
     id: product.product_id,
     name: product.product_name,
     sku: `PRODUCT-${String(product.product_id).padStart(5, '0')}`,
     category: product.category || '未分類',
+    adCategory: product.ad_category || 'other',
     price: Number(product.price || 0),
     discountedPrice:
       product.discounted_price === null
@@ -119,6 +141,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
     name: '',
     sku: '',
     category: '',
+    adCategory: 'other',
     price: '',
     discountedPrice: '',
     stock: '',
@@ -132,7 +155,15 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
   const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const productNameError =
+    validateProductNameForEcpay(form.name)
+
+  const set = k => e =>
+    setForm(f => ({
+      ...f,
+      [k]: e.target.value
+    }))
 
   const handleImageUpload = async (e) => {
   const file = e.target.files[0];
@@ -166,6 +197,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
         name: editingProduct.name || '',
         sku: editingProduct.sku || '',
         category: editingProduct.category || '',
+        adCategory: editingProduct.adCategory || 'other',
         price: editingProduct.price || '',
         discountedPrice: editingProduct.discountedPrice || '',
         stock: editingProduct.stock ?? '',
@@ -183,8 +215,17 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
   
   async function finish() {
     try {
-      setSaving(true)
       setError('')
+
+      const nameError =
+        validateProductNameForEcpay(form.name)
+
+      if (nameError) {
+        setError(nameError)
+        return
+      }
+
+      setSaving(true)
 
       await onComplete(form)
 
@@ -241,12 +282,26 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
               <Upload size={14} />{uploading ? "上傳中..." : "上傳圖片"}
             </button>
           </div>
-          <Input
-            label="商品名稱 *"
-            value={form.name}
-            onChange={set('name')}
-            placeholder="例：深層保濕精華液"
-          />
+          <div>
+            <Input
+              label="商品名稱 *"
+              value={form.name}
+              onChange={set('name')}
+              placeholder="例：深層保濕精華液"
+            />
+
+            <p
+              className={`mt-2 text-[11px] font-bold ${
+                form.name && productNameError
+                  ? 'text-red-600'
+                  : 'text-[#8C8880]'
+              }`}
+            >
+              {form.name && productNameError
+                ? productNameError
+                : `為符合物流規範，請勿使用：${ECPAY_FORBIDDEN_CHARS_TEXT}`}
+            </p>
+          </div>
 
           <Input
             label="商品描述"
@@ -298,6 +353,24 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
                 ))}
               </select>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                廣告審核類別
+              </label>
+              <select
+                value={form.adCategory || 'other'}
+                onChange={set('adCategory')}
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm"
+              >
+                <option value="food">食品</option>
+                <option value="cosmetic">化粧品</option>
+                <option value="medical_device">醫療器材</option>
+                <option value="drug">藥品</option>
+                <option value="other">其他</option>
+              </select>
+              <p className="text-[11px] text-[#8C8880]">用於自動判讀 KOC 提交文案的合規審核規則</p>
+            </div>
           </div>
 
           <Input
@@ -319,7 +392,12 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
           <Button
             variant="brand"
             onClick={finish}
-            disabled={saving || !form.name || !form.price || form.stock === ''}
+            disabled={
+              saving ||
+              Boolean(productNameError) ||
+              !form.price ||
+              form.stock === ''
+            }
           >
             {saving
               ? '儲存中...'
@@ -458,6 +536,7 @@ export default function Products() {
           : Number(form.discountedPrice),
       stock: Number(form.stock),
       category: form.category || '',
+      ad_category: form.adCategory || 'other',
       image_url: form.imageUrl.trim(),
       status: editingProduct?.apiStatus || 'inactive'
     }
@@ -475,6 +554,7 @@ export default function Products() {
                 ...product,
                 name: form.name,
                 category: form.category || '未分類',
+                adCategory: form.adCategory || 'other',
                 price: Number(form.price),
                 discountedPrice:
                   form.discountedPrice === ''
@@ -508,6 +588,7 @@ export default function Products() {
       sku: form.sku ||
         `PRODUCT-${String(response.data.product_id).padStart(5, '0')}`,
       category: form.category || '未分類',
+      adCategory: form.adCategory || 'other',
       price: Number(form.price),
       discountedPrice:
         form.discountedPrice === ''
@@ -553,6 +634,7 @@ export default function Products() {
           product.category === '未分類'
             ? ''
             : product.category,
+        ad_category: product.adCategory || 'other',
         image_url: product.imageUrl || '',
         status: nextStatus
       })

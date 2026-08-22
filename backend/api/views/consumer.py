@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo
 from .platform import calculate_order_commission
 from payments.models import PaymentTransaction
 from payments.services import pick_relevant_payment
@@ -571,57 +571,192 @@ def create_order(request):
     promotion_code = request.data.get('Promotion_code', None)
     items_data = request.data.get('items') or []
 
+    # ============================
+    # 收件資訊
+    # ============================
     recipient_name = request.data.get('recipient')
     recipient_phone = request.data.get('recipient_phone')
     recipient_address = request.data.get('recipient_address')
 
+    recipient_postal_code = (
+        request.data.get('recipient_postal_code')
+        or request.data.get('postal_code')
+        or ''
+    )
+    recipient_city = (
+        request.data.get('recipient_city')
+        or request.data.get('city')
+        or ''
+    )
+    recipient_district = (
+        request.data.get('recipient_district')
+        or request.data.get('district')
+        or ''
+    )
+
+    # ============================
+    # 配送資訊
+    # ============================
+    shipping_method = request.data.get('shipping_method', 'home')
+    logistics_type = request.data.get('logistics_type')
+    logistics_sub_type = request.data.get('logistics_sub_type')
+
+    store_id = request.data.get('store_id')
+    store_name = request.data.get('store_name')
+    store_address = request.data.get('store_address')
+
+    # ============================
+    # 基本驗證
+    # ============================
     if not user_id:
         return Response(
-            {'success': False, 'err': 'User_id 為必填，需登入會員才能下單'},
+            {
+                'success': False,
+                'err': 'User_id 為必填，需登入會員才能下單'
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
 
     if not items_data:
         return Response(
-            {'success': False, 'err': 'items 為必填，訂單至少需要一項商品'},
+            {
+                'success': False,
+                'err': 'items 為必填，訂單至少需要一項商品'
+            },
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 先把商品都查出來，任何一項商品不存在或庫存不足就整單擋下，
-    # 不要建立一張「買了不存在商品」的訂單。
-    product_ids = [item.get('Product_id') for item in items_data]
+    # ============================
+    # 配送方式驗證
+    # ============================
+    if shipping_method not in ('home', 'cvs'):
+        return Response(
+            {
+                'success': False,
+                'err': 'shipping_method 必須為 home 或 cvs'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 宅配需要地址
+    if shipping_method == 'home':
+        if not recipient_address:
+            return Response(
+                {
+                    'success': False,
+                    'err': '宅配必須提供配送地址'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 後端統一配送類型
+        logistics_type = 'HOME'
+
+        if not logistics_sub_type:
+            logistics_sub_type = 'TCAT'
+
+    # 超商取貨需要門市資訊
+    elif shipping_method == 'cvs':
+        if not store_id:
+            return Response(
+                {
+                    'success': False,
+                    'err': '超商取貨必須選擇取貨門市'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logistics_type = 'CVS'
+
+        if not logistics_sub_type:
+            logistics_sub_type = 'UNIMARTC2C'
+
+    # ============================
+    # 商品資料
+    # ============================
+    product_ids = [
+        item.get('Product_id')
+        for item in items_data
+    ]
+
     products_by_id = {
         p.product_id: p
-        for p in Product.objects.filter(product_id__in=product_ids)
+        for p in Product.objects.filter(
+            product_id__in=product_ids
+        )
     }
 
     for item in items_data:
         product_id = item.get('Product_id')
-        quantity = int(item.get('Quantity') or 1)
-        product = products_by_id.get(product_id)
+
+        try:
+            quantity = int(
+                item.get('Quantity') or 1
+            )
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    'success': False,
+                    'err': f'商品 {product_id} 的數量格式錯誤'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if quantity <= 0:
+            return Response(
+                {
+                    'success': False,
+                    'err': f'商品 {product_id} 的數量必須大於 0'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        product = products_by_id.get(
+            product_id
+        )
 
         if not product:
             return Response(
-                {'success': False, 'err': f'商品 {product_id} 不存在'},
+                {
+                    'success': False,
+                    'err': f'商品 {product_id} 不存在'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if product.stock < quantity:
             return Response(
-                {'success': False, 'err': f'{product.product_name} 庫存不足'},
+                {
+                    'success': False,
+                    'err': f'{product.product_name} 庫存不足'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    # 金額一律由後端重新計算，不採信前端傳來的 total_amount，避免被竄改請求內容占便宜。
-    # base_subtotal 是套用優惠碼前，商品本身售價(discounted_price 或 price) x 數量的小計。
+    # ============================
+    # 後端重新計算金額
+    # ============================
     line_items = []
+
     for item in items_data:
         product_id = item.get('Product_id')
-        quantity = int(item.get('Quantity') or 1)
-        product = products_by_id[product_id]
+        quantity = int(
+            item.get('Quantity') or 1
+        )
 
-        unit_price = Decimal(product.discounted_price if product.discounted_price else product.price)
-        base_subtotal = unit_price * quantity
+        product = products_by_id[
+            product_id
+        ]
+
+        unit_price = Decimal(
+            product.discounted_price
+            if product.discounted_price
+            else product.price
+        )
+
+        base_subtotal = (
+            unit_price * quantity
+        )
 
         line_items.append({
             'product': product,
@@ -632,79 +767,183 @@ def create_order(request):
             'final_subtotal': base_subtotal,
         })
 
-    # 套用優惠碼：promotion_code 只是「啟用該活動折扣」的開關，
-    # 實際折扣規則要看 CampaignProduct 裡每個商品各自的 discount_type/discount_value，
-    # 不是 CouponNew 自己的 discount_type/discount_value。
+    # ============================
+    # 優惠碼
+    # ============================
     if promotion_code:
-        coupon = CouponNew.objects.filter(promotion_code=promotion_code).first()
+        coupon = CouponNew.objects.filter(
+            promotion_code=promotion_code
+        ).first()
+
         if not coupon:
             return Response(
-                {'success': False, 'err': '優惠碼不存在'},
+                {
+                    'success': False,
+                    'err': '優惠碼不存在'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
         if coupon.status != 'active':
             return Response(
-                {'success': False, 'err': '優惠碼未啟用或已失效'},
+                {
+                    'success': False,
+                    'err': '優惠碼未啟用或已失效'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            campaign = coupon.kocmission.application.campaign
+            campaign = (
+                coupon
+                .kocmission
+                .application
+                .campaign
+            )
         except Exception:
             return Response(
-                {'success': False, 'err': '優惠碼未綁定任何活動'},
+                {
+                    'success': False,
+                    'err': '優惠碼未綁定任何活動'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if _is_campaign_promo_expired(campaign):
+        if _is_campaign_promo_expired(
+            campaign
+        ):
             coupon.status = 'expired'
-            coupon.save(update_fields=['status'])
+
+            coupon.save(
+                update_fields=['status']
+            )
+
             return Response(
-                {'success': False, 'err': '優惠碼已過期'},
+                {
+                    'success': False,
+                    'err': '優惠碼已過期'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         campaign_products_by_product_id = {
             cp.product_id: cp
-            for cp in CampaignProduct.objects.filter(campaign=campaign)
+            for cp in CampaignProduct.objects.filter(
+                campaign=campaign
+            )
         }
 
         for line in line_items:
-            campaign_product = campaign_products_by_product_id.get(line['product'].product_id)
+            campaign_product = (
+                campaign_products_by_product_id.get(
+                    line['product'].product_id
+                )
+            )
+
+            # 商品不屬於活動
             if not campaign_product:
-                continue  # 不屬於這個活動的商品，維持原價
+                continue
 
             line['eligible'] = True
-            discount_value = campaign_product.discount_value
 
-            if campaign_product.discount_type == 'percentage':
-                discounted = line['base_subtotal'] * (Decimal('1') - discount_value / Decimal('100'))
+            discount_value = (
+                campaign_product.discount_value
+            )
+
+            if (
+                campaign_product.discount_type
+                == 'percentage'
+            ):
+                discounted = (
+                    line['base_subtotal']
+                    * (
+                        Decimal('1')
+                        - discount_value
+                        / Decimal('100')
+                    )
+                )
+
             else:
-                discounted = line['base_subtotal'] - discount_value
+                discounted = (
+                    line['base_subtotal']
+                    - discount_value
+                )
 
-            line['final_subtotal'] = max(discounted, Decimal('0')).quantize(
-                Decimal('0.01'), rounding=ROUND_HALF_UP
+            line['final_subtotal'] = max(
+                discounted,
+                Decimal('0')
+            ).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP
             )
 
     total_amount = sum(
-        (line['final_subtotal'] for line in line_items), Decimal('0')
-    ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        (
+            line['final_subtotal']
+            for line in line_items
+        ),
+        Decimal('0')
+    ).quantize(
+        Decimal('0.01'),
+        rounding=ROUND_HALF_UP
+    )
 
+    # ============================
+    # 建立訂單
+    # ============================
     with transaction.atomic():
-        # 結帳頁有收集收件人姓名、電話跟地址，把它們存成一筆 Address，
-        # 綁在下單的會員身上（不支援訪客結帳，所以一定有 user_id）。
+
+        # --------------------------
+        # Address
+        # --------------------------
         address = None
-        if recipient_name or recipient_phone or recipient_address:
+
+        if (
+            recipient_name
+            or recipient_phone
+            or recipient_address
+        ):
             address = Address.objects.create(
                 user_id=user_id,
-                recipient_name=recipient_name or '',
-                phone=recipient_phone or '',
-                detail_address=recipient_address or '',
+                recipient_name=(
+                    recipient_name or ''
+                ),
+                phone=(
+                    recipient_phone or ''
+                ),
+
+                # 宅配才寫真正配送地址
+                # 超商取貨這裡不需要塞門市地址
+                city=(
+                    recipient_city
+                    if shipping_method == 'home'
+                    else ''
+                ),
+                district=(
+                    recipient_district
+                    if shipping_method == 'home'
+                    else ''
+                ),
+                detail_address=(
+                    recipient_address
+                    if shipping_method == 'home'
+                    else ''
+                ),
+                postal_code=(
+                    recipient_postal_code
+                    if shipping_method == 'home'
+                    else ''
+                ),
             )
 
+        # --------------------------
+        # Order
+        # --------------------------
         order = Order.objects.create(
             user_id=user_id,
-            promotion_code=promotion_code or '',
+            promotion_code=(
+                promotion_code or ''
+            ),
             total_amount=total_amount,
             order_status='pending',
             payment_status='unpaid',
@@ -712,31 +951,143 @@ def create_order(request):
             address=address,
         )
 
+        # --------------------------
+        # ShipmentInfo
+        # --------------------------
+        shipment = ShipmentInfo.objects.create(
+            order=order,
+
+            provider='ecpay',
+
+            logistics_type=(
+                logistics_type
+            ),
+
+            logistics_sub_type=(
+                logistics_sub_type
+            ),
+
+            store_id=(
+                store_id
+                if shipping_method == 'cvs'
+                else None
+            ),
+
+            store_name=(
+                store_name
+                if shipping_method == 'cvs'
+                else None
+            ),
+
+            store_address=(
+                store_address
+                if shipping_method == 'cvs'
+                else None
+            ),
+
+            # 還沒有真正呼叫綠界建立物流單，
+            # 所以現在先不會有物流編號
+            merchant_trade_no=None,
+            ecpay_logistics_id=None,
+
+            shipping_status='pending',
+        )
+
+        # --------------------------
+        # OrderItem
+        # --------------------------
         created_items = []
+
         for line in line_items:
             product = line['product']
 
-            order_item = OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=line['quantity'],
-                unit_price=line['unit_price'],
-                subtotal=line['final_subtotal'],
+            order_item = (
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=line[
+                        'quantity'
+                    ],
+                    unit_price=line[
+                        'unit_price'
+                    ],
+                    subtotal=line[
+                        'final_subtotal'
+                    ],
+                )
             )
-            created_items.append(order_item)
 
-            product.stock = max(0, product.stock - line['quantity'])
-            product.save(update_fields=['stock'])
+            created_items.append(
+                order_item
+            )
 
-    return Response({
-        'success': True,
-        'orderId': str(order.order_id),
-        'orderStatus': order.order_status,
-        'paymentStatus': order.payment_status,
-        'shippingStatus': order.shipping_status,
-        'totalAmount': float(order.total_amount),
-        'itemCount': len(created_items),
-    }, status=status.HTTP_201_CREATED)
+            # 扣庫存
+            product.stock = max(
+                0,
+                product.stock
+                - line['quantity']
+            )
+
+            product.save(
+                update_fields=['stock']
+            )
+
+    # ============================
+    # Response
+    # ============================
+    return Response(
+        {
+            'success': True,
+
+            'orderId': str(
+                order.order_id
+            ),
+
+            'orderStatus':
+                order.order_status,
+
+            'paymentStatus':
+                order.payment_status,
+
+            'shippingStatus':
+                order.shipping_status,
+
+            'totalAmount':
+                float(
+                    order.total_amount
+                ),
+
+            'itemCount':
+                len(created_items),
+
+            'shipment': {
+                'shipmentId':
+                    shipment.shipment_id,
+
+                'provider':
+                    shipment.provider,
+
+                'logisticsType':
+                    shipment.logistics_type,
+
+                'logisticsSubType':
+                    shipment.logistics_sub_type,
+
+                'storeId':
+                    shipment.store_id,
+
+                'storeName':
+                    shipment.store_name,
+
+                'storeAddress':
+                    shipment.store_address,
+
+                'shippingStatus':
+                    shipment.shipping_status,
+            },
+        },
+        status=status.HTTP_201_CREATED
+    )
 
 
 # ── 查看訂單 ──
@@ -770,9 +1121,15 @@ def view_order(request):
 
     items_by_order = {}
     vendor_ids = set()
+
     for order in order_list:
-        items = list(OrderItem.objects.filter(order=order).select_related('product'))
+        items = list(
+            OrderItem.objects
+            .filter(order=order)
+            .select_related('product')
+        )
         items_by_order[order.order_id] = items
+
         for item in items:
             if item.product and item.product.vendor_id:
                 vendor_ids.add(item.product.vendor_id)
@@ -782,10 +1139,59 @@ def view_order(request):
         for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
     }
 
+    order_ids = [order.order_id for order in order_list]
+
+    shipment_by_order = {
+        shipment.order_id: shipment
+        for shipment in ShipmentInfo.objects.filter(order_id__in=order_ids)
+    }
+
     result = []
+
     for order in order_list:
-        items = items_by_order[order.order_id]
-        first_vendor_id = items[0].product.vendor_id if items and items[0].product else None
+        items = items_by_order.get(order.order_id, [])
+
+        first_vendor_id = (
+            items[0].product.vendor_id
+            if items and items[0].product
+            else None
+        )
+
+        recipient_data = None
+
+        if order.address_id:
+            address = Address.objects.filter(
+                pk=order.address_id
+            ).first()
+
+            if address:
+                recipient_data = {
+                    'recipient_name': address.recipient_name,
+                    'phone': address.phone,
+                    'postal_code': address.postal_code,
+                    'city': address.city,
+                    'district': address.district,
+                    'detail_address': address.detail_address,
+                }
+
+        shipment = shipment_by_order.get(order.order_id)
+        shipment_data = None
+
+        if shipment:
+            shipment_data = {
+                'shipment_id': shipment.shipment_id,
+                'provider': shipment.provider,
+                'logistics_type': shipment.logistics_type,
+                'logistics_sub_type': shipment.logistics_sub_type,
+                'store_id': shipment.store_id,
+                'store_name': shipment.store_name,
+                'store_address': shipment.store_address,
+                'merchant_trade_no': shipment.merchant_trade_no,
+                'ecpay_logistics_id': shipment.ecpay_logistics_id,
+                'booking_note': shipment.booking_note,
+                'shipping_status': shipment.shipping_status,
+            }
+
         order_data = {
             'Order_id': str(order.order_id),
             'User_id': order.user_id,
@@ -798,6 +1204,8 @@ def view_order(request):
             'Address_id': order.address_id,
             'created_at': order.created_at,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
+            'recipient': recipient_data,
+            'shipment': shipment_data,
             'items': [
                 {
                     'Order_item_id': str(item.order_item_id),
@@ -808,12 +1216,14 @@ def view_order(request):
                     'Unit_price': float(item.unit_price),
                     'subtotal': float(item.subtotal),
                 }
-            for item in items
-        ],
+                for item in items
+            ],
         }
+
         result.append(order_data)
 
     return Response(result, status=status.HTTP_200_OK)
+
 
 
 # ── 建立交易紀錄 ──

@@ -55,6 +55,7 @@ from .views.consumer import (
 
 from .views import koc, vendor
 from .views.vendor import vendor_upload_image
+from .views import shipping
 
 urlpatterns = [
     # koc
@@ -170,6 +171,7 @@ urlpatterns = [
     # Vendor 投稿 / 任務成果審核 API
     path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
     path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
+    path('vendor/mission/submission/saveAiResult', vendor.vendor_submission_save_ai_result, name='vendor-submission-save-ai-result'),
 
     # Vendor 訂單 API
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
@@ -203,4 +205,12 @@ urlpatterns = [
     
     path('user/loginHistory', get_login_history, name='get-login-history'),
     path('user/changePassword', change_password, name='change-password'),
+
+    # Shipping API
+    path('shipping/ecpay/map/', shipping.ecpay_store_map, name='ecpay_store_map'),
+    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_map_callback'),
+    path("shipping/ecpay/status/callback/", shipping.ecpay_logistics_status_callback,),
+    path("vendor/order/createLogistics", vendor.vendor_order_create_logistics,),
+    path("vendor/order/queryLogistics", vendor.vendor_order_query_logistics,)
+
 ]

@@ -245,6 +245,13 @@ function compliance(submission) {
       ok: !/(保證|最強|第一|治療)/.test(
         submission?.caption ?? ''
       )
+    },
+
+    {
+      label: '含業配/合作揭露用詞',
+      ok: /(合作|業配|贊助|廣告|#ad|#sponsored)/i.test(
+        submission?.caption ?? ''
+      )
     }
   ]
 }
@@ -333,7 +340,7 @@ export default function ContentReview() {
     )
   }
 
-  const handleAiCheck = async (caption) => {
+  const handleAiCheck = async (caption, submissionId) => {
     if (!caption) return
     setAiLoading(true)
     setAiResult(null)
@@ -345,6 +352,20 @@ export default function ContentReview() {
       })
       const data = await res.json()
       setAiResult(data)
+
+      // 手動重新分析後，把最新結果覆蓋存回資料庫，
+      // 讓下次任何人打開這筆文案時看到的都是這次最新的結果。
+      if (submissionId) {
+        try {
+          await fetch("http://127.0.0.1:8000/api/vendor/mission/submission/saveAiResult", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ submission_id: submissionId, ai_result: data }),
+          })
+        } catch (saveErr) {
+          console.error("儲存 AI 審核結果失敗", saveErr)
+        }
+      }
     } catch (err) {
       console.error("AI 審核失敗", err)
     } finally {
@@ -525,7 +546,10 @@ export default function ContentReview() {
               item.submitted_time || null,
 
             reviewedAt:
-              item.reviewed_time || null
+              item.reviewed_time || null,
+
+            aiResult:
+              item.ai_result || null
           }))
         )
       } catch (error) {
@@ -1546,7 +1570,7 @@ export default function ContentReview() {
                               ''
                             )
 
-                            setAiResult(null)
+                            setAiResult(submission.aiResult || null)
                           }}
                           className={cn(
                             'transition-colors',
@@ -1826,8 +1850,9 @@ export default function ContentReview() {
                             <option value="cosmetic">化妝品</option>
                             <option value="medical_device">醫療器材</option>
                             <option value="drug">藥品</option>
+                            <option value="other">其他</option>
                           </select>
-                          <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption)} disabled={aiLoading} className="px-6">
+                          <Button variant="brand" onClick={() => handleAiCheck(selectedSubmission?.caption, selectedSubmission?.id)} disabled={aiLoading} className="px-6">
                             {aiLoading ? "分析中..." : "AI 審核"}
                           </Button>
                         </div>
@@ -1856,10 +1881,10 @@ export default function ContentReview() {
 
                             {aiResult.gray_areas?.length > 0 && (
                               <div>
-                                <div className="font-bold text-[#C8522A] mb-1">灰色地帶（{aiResult.gray_areas.length}）</div>
+                                <div className="font-bold text-[#8A6D1F] mb-1">灰色地帶（{aiResult.gray_areas.length}）</div>
                                 {aiResult.gray_areas.map((g, i) => (
-                                  <div key={i} className="text-xs bg-[#FDF0ED] text-[#8C8880] px-3 py-2 rounded-lg mb-1">
-                                    <span className="font-bold text-[#C8522A]">「{g.phrase}」</span> — {g.reason}
+                                  <div key={i} className="text-xs bg-[#FDF6E3] text-[#6B5A2C] px-3 py-2 rounded-lg mb-1">
+                                    <span className="font-bold text-[#8A6D1F]">「{g.phrase}」</span> — {g.reason}
                                   </div>
                                 ))}
                               </div>
