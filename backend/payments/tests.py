@@ -1,12 +1,16 @@
+import io
 import uuid
+import urllib.parse
+from unittest.mock import patch
 
 from django.conf import settings
+from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 
 from api.models import Order, OrderItem, Product, User
 
 from .models import PaymentTransaction
-from .services import create_order_payment, generate_check_mac_value
+from .services import create_order_payment, generate_check_mac_value, query_trade_info, reconcile_payment_from_query
 
 # 綠界公開測試帳號（AIO 金流），來源：SKILL.md §測試帳號，非正式環境機密
 ECPAY_TEST_SETTINGS = dict(
@@ -65,6 +69,39 @@ class PaymentsTestCase(TestCase):
             params, settings.ECPAY_HASH_KEY, settings.ECPAY_HASH_IV
         )
         return params
+
+    def make_query_trade_response_text(self, merchant_trade_no, trade_status, *, valid_cmv=True, **overrides):
+        """組一份跟綠界 QueryTradeInfo 格式一致（URL-encoded key=value 字串）的回應內容"""
+        params = {
+            "MerchantID": settings.ECPAY_MERCHANT_ID,
+            "MerchantTradeNo": merchant_trade_no,
+            "TradeNo": "2026082200000099",
+            "TradeAmt": "680",
+            "PaymentDate": "2026/08/22 12:00:00",
+            "PaymentType": "Credit_CreditCard",
+            "TradeDate": "2026/08/22 11:55:00",
+            "TradeStatus": trade_status,
+            "ItemName": "測試商品",
+        }
+        params.update(overrides)
+        if valid_cmv:
+            params["CheckMacValue"] = generate_check_mac_value(
+                params, settings.ECPAY_HASH_KEY, settings.ECPAY_HASH_IV
+            )
+        else:
+            params["CheckMacValue"] = "TAMPEREDVALUE0000000000000000000000000000000000"
+        return urllib.parse.urlencode(params)
+
+
+class _MockResponse:
+    """模擬 requests.Response，只提供 query_trade_info 用得到的兩個介面"""
+
+    def __init__(self, text, status_code=200):
+        self.text = text
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        pass
 
 
 class CreatePaymentEndpointTests(PaymentsTestCase):
@@ -271,3 +308,165 @@ class PaymentStatusEndpointTests(PaymentsTestCase):
         body = resp.json()
         self.assertEqual(body["status"], PaymentTransaction.STATUS_PAID)
         self.assertEqual(body["merchant_trade_no"], "SECONDATTEMPTOK1")
+
+
+class QueryTradeInfoTests(PaymentsTestCase):
+    """query_trade_info / reconcile_payment_from_query —— 主動對帳工具，全程 mock requests.post，不打真正的綠界"""
+
+    def make_pending_payment(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        return create_order_payment(order)
+
+    @patch("payments.services.requests.post")
+    def test_query_trade_info_parses_valid_response(self, mock_post):
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(payment.merchant_trade_no, "1")
+        )
+
+        result = query_trade_info(payment)
+
+        self.assertEqual(result["TradeStatus"], "1")
+        self.assertEqual(result["MerchantTradeNo"], payment.merchant_trade_no)
+        # 送出的請求要打對測試站網址、帶正確的 MerchantTradeNo
+        called_url = mock_post.call_args.args[0]
+        self.assertEqual(called_url, "https://payment-stage.ecpay.com.tw/Cashier/QueryTradeInfo/V5")
+        sent_data = mock_post.call_args.kwargs["data"]
+        self.assertEqual(sent_data["MerchantTradeNo"], payment.merchant_trade_no)
+
+    @patch("payments.services.requests.post")
+    def test_query_trade_info_handles_blank_value_fields(self, mock_post):
+        # 真實情境：查詢一筆綠界那邊查無此單/尚未付款的交易時，PaymentDate/PaymentType/TradeNo
+        # 等欄位會是空字串（例如 "TradeNo="），CheckMacValue 的計算規則要求空值參數仍要納入計算，
+        # 這裡刻意模擬這種回應，確保 CMV 驗證不會因為 parse_qsl 把空值欄位丟掉而誤判失敗。
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(
+                payment.merchant_trade_no, "10200047",
+                PaymentDate="", PaymentType="", TradeNo="", TradeDate="", ItemName="",
+            )
+        )
+
+        result = query_trade_info(payment)
+
+        self.assertEqual(result["TradeStatus"], "10200047")
+        self.assertEqual(result["TradeNo"], "")
+
+    @patch("payments.services.requests.post")
+    def test_query_trade_info_rejects_tampered_checkmacvalue(self, mock_post):
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(payment.merchant_trade_no, "1", valid_cmv=False)
+        )
+
+        with self.assertRaises(ValueError):
+            query_trade_info(payment)
+
+    @patch("payments.services.requests.post")
+    def test_reconcile_marks_paid_when_trade_status_is_1(self, mock_post):
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(payment.merchant_trade_no, "1")
+        )
+
+        payment = reconcile_payment_from_query(payment)
+
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_PAID)
+        self.assertEqual(payment.ecpay_trade_no, "2026082200000099")
+        payment.order.refresh_from_db()
+        self.assertEqual(payment.order.payment_status, "paid")
+
+    @patch("payments.services.requests.post")
+    def test_reconcile_marks_failed_when_trade_not_established(self, mock_post):
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(payment.merchant_trade_no, "10200095")
+        )
+
+        payment = reconcile_payment_from_query(payment)
+
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_FAILED)
+        payment.order.refresh_from_db()
+        self.assertEqual(payment.order.payment_status, "unpaid")
+
+    @patch("payments.services.requests.post")
+    def test_reconcile_leaves_pending_when_trade_status_is_0(self, mock_post):
+        payment = self.make_pending_payment()
+        mock_post.return_value = _MockResponse(
+            self.make_query_trade_response_text(payment.merchant_trade_no, "0")
+        )
+
+        payment = reconcile_payment_from_query(payment)
+
+        # 銀行還沒回覆，不能誤判成失敗，維持 pending
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_PENDING)
+        payment.order.refresh_from_db()
+        self.assertEqual(payment.order.payment_status, "unpaid")
+
+
+@override_settings(**ECPAY_TEST_SETTINGS)
+class ReconcilePendingPaymentsCommandTests(TestCase):
+    """python manage.py reconcile_pending_payments —— 對帳批次工具"""
+
+    def setUp(self):
+        self.user = User.objects.create(
+            role="consumer", name="測試用戶", email="reconcile-cmd-test@example.com",
+            password="x", phone="0900000000",
+        )
+        self.product = Product.objects.create(
+            vendor_id="V00001", product_name="測試商品", price=680, status="active"
+        )
+        order = Order.objects.create(user=self.user, total_amount=680)
+        OrderItem.objects.create(
+            order=order, product=self.product, quantity=1, unit_price=680, subtotal=680,
+        )
+        self.payment = create_order_payment(order)
+
+    def _response_text(self, trade_status):
+        params = {
+            "MerchantID": settings.ECPAY_MERCHANT_ID,
+            "MerchantTradeNo": self.payment.merchant_trade_no,
+            "TradeNo": "2026082200000123",
+            "TradeStatus": trade_status,
+        }
+        params["CheckMacValue"] = generate_check_mac_value(
+            params, settings.ECPAY_HASH_KEY, settings.ECPAY_HASH_IV
+        )
+        return urllib.parse.urlencode(params)
+
+    @patch("payments.services.requests.post")
+    def test_dry_run_does_not_write_changes(self, mock_post):
+        mock_post.return_value = _MockResponse(self._response_text("1"))
+
+        out = io.StringIO()
+        call_command(
+            "reconcile_pending_payments",
+            f"--merchant-trade-no={self.payment.merchant_trade_no}",
+            stdout=out,
+        )
+
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentTransaction.STATUS_PENDING)  # 沒加 --apply，不該被寫入
+        self.assertIn("TradeStatus=1", out.getvalue())
+        self.assertIn("尚未寫入任何變更", out.getvalue())
+
+    @patch("payments.services.requests.post")
+    def test_apply_writes_changes(self, mock_post):
+        mock_post.return_value = _MockResponse(self._response_text("1"))
+
+        out = io.StringIO()
+        call_command(
+            "reconcile_pending_payments",
+            f"--merchant-trade-no={self.payment.merchant_trade_no}",
+            "--apply",
+            stdout=out,
+        )
+
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentTransaction.STATUS_PAID)
+        self.assertIn("已更新", out.getvalue())
+
+    def test_unknown_merchant_trade_no_raises_command_error(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("reconcile_pending_payments", "--merchant-trade-no=NOTEXIST00000001")

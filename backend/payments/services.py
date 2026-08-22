@@ -18,6 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
@@ -33,6 +34,12 @@ TW_TZ = ZoneInfo("Asia/Taipei")
 ECPAY_AIO_CHECKOUT_URL = {
     "stage": "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
     "production": "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5",
+}
+
+# Source: web_fetch https://developers.ecpay.com.tw/2890.md 2026-08-22（查詢訂單 QueryTradeInfo）
+ECPAY_QUERY_TRADE_URL = {
+    "stage": "https://payment-stage.ecpay.com.tw/Cashier/QueryTradeInfo/V5",
+    "production": "https://payment.ecpay.com.tw/Cashier/QueryTradeInfo/V5",
 }
 
 
@@ -200,13 +207,30 @@ def verify_check_mac_value(params: dict) -> bool:
     return hmac.compare_digest(received.upper(), calculated)
 
 
+def _apply_payment_result(payment: PaymentTransaction, *, ecpay_trade_no, raw_response, is_paid: bool) -> PaymentTransaction:
+    """
+    共用邏輯：把一筆「已經確認過的」付款結果寫回 PaymentTransaction，並同步 Order.payment_status。
+    來源可以是 ReturnURL callback（process_ecpay_callback），也可以是主動查詢的對帳結果
+    （reconcile_payment_from_query）——兩者最終都是同一組欄位、同一套同步規則，只有結果的
+    取得方式不同，所以共用同一個寫入函式，避免兩處邏輯之後改一邊漏改另一邊。
+    呼叫端負責上鎖（select_for_update）跟包 transaction，這裡只單純寫入。
+    """
+    payment.ecpay_trade_no = ecpay_trade_no or payment.ecpay_trade_no
+    payment.raw_response = raw_response
+    payment.status = PaymentTransaction.STATUS_PAID if is_paid else PaymentTransaction.STATUS_FAILED
+    payment.save(update_fields=["ecpay_trade_no", "raw_response", "status", "updated_at"])
+
+    if payment.status == PaymentTransaction.STATUS_PAID:
+        Order.objects.filter(order_id=payment.order_id).update(payment_status="paid")
+
+    return payment
+
+
 @transaction.atomic
 def process_ecpay_callback(params: dict) -> PaymentTransaction | None:
     """
     處理已驗證過 CheckMacValue 的 ECPay ReturnURL 通知：
-    依 MerchantTradeNo 找回交易紀錄、寫入 ecpay_trade_no/raw_response、更新 status，
-    付款成功時同步把舊版 api.Order.payment_status 標成 'paid'
-    （vendor.py / platform.py 既有的訂單查詢邏輯是看這個欄位判斷有沒有收到錢，不是看 PaymentTransaction）。
+    依 MerchantTradeNo 找回交易紀錄，寫入結果（見 _apply_payment_result）。
 
     - select_for_update 鎖住該筆，避免綠界重送（最多 4 次）造成併發重複處理。
     - 用 update 而非 insert（冪等）：同一個 MerchantTradeNo 收到幾次都是覆蓋同一筆。
@@ -220,18 +244,98 @@ def process_ecpay_callback(params: dict) -> PaymentTransaction | None:
         logger.error("ECPay callback 找不到對應的 PaymentTransaction: MerchantTradeNo=%s", merchant_trade_no)
         return None
 
-    payment.ecpay_trade_no = params.get("TradeNo", payment.ecpay_trade_no)
-    payment.raw_response = params
-    payment.status = (
-        PaymentTransaction.STATUS_PAID if params.get("RtnCode") == "1" else PaymentTransaction.STATUS_FAILED
+    payment = _apply_payment_result(
+        payment,
+        ecpay_trade_no=params.get("TradeNo"),
+        raw_response=params,
+        is_paid=params.get("RtnCode") == "1",
     )
-    payment.save(update_fields=["ecpay_trade_no", "raw_response", "status", "updated_at"])
-
-    if payment.status == PaymentTransaction.STATUS_PAID:
-        Order.objects.filter(order_id=payment.order_id).update(payment_status="paid")
 
     logger.info(
         "ECPay callback 處理完成: MerchantTradeNo=%s status=%s",
         merchant_trade_no, payment.status,
+    )
+    return payment
+
+
+def _parse_query_trade_response(body: str) -> dict:
+    """
+    QueryTradeInfo 回應是 text/html、URL-encoded 的 key=value 字串（不是 JSON），手動解析成 dict。
+    keep_blank_values=True 是必要的：查無交易/尚未付款時，PaymentDate/PaymentType/TradeNo 等欄位
+    會是空字串（例如 "TradeNo="），parse_qsl 預設會把這種空值參數整個丟掉，
+    但 CheckMacValue 的計算規則明文要求空字串參數仍要納入——用預設值解析會讓驗證永遠失敗。
+    """
+    return dict(urllib.parse.parse_qsl(body, keep_blank_values=True))
+
+
+def query_trade_info(payment: PaymentTransaction) -> dict:
+    """
+    主動向綠界查詢一筆交易的真實付款狀態（QueryTradeInfo API），純查詢、不寫入任何資料。
+
+    用途：ReturnURL 收不到通知時的對帳工具。銀行端的授權/請款是消費者刷卡當下就跟綠界完成的，
+    跟 ReturnURL 有沒有送達是兩件事——PaymentTransaction 卡在 pending 不代表真的沒付款，
+    只代表「我們沒收到通知」，正確做法是主動查證，不是憑猜測改狀態。
+
+    回傳綠界解析後的欄位 dict，其中 TradeStatus（字串）：
+      "0"         交易訂單成立未付款
+      "1"         交易訂單成立已付款
+      "10200095"  交易訂單未成立，消費者未完成付款作業
+    信用卡建議付款後至少等 10 分鐘再查，太快查可能銀行還沒回覆、TradeStatus 仍是 "0"。
+
+    Source: web_fetch https://developers.ecpay.com.tw/2890.md 2026-08-22
+    """
+    merchant_id, hash_key, hash_iv, _return_url, _order_result_url, env = _get_ecpay_credentials()
+
+    params = {
+        "MerchantID": merchant_id,
+        "MerchantTradeNo": payment.merchant_trade_no,
+        "TimeStamp": str(int(time.time())),  # 3 分鐘內有效，每次呼叫都要重新產生
+    }
+    params["CheckMacValue"] = generate_check_mac_value(params, hash_key, hash_iv)
+
+    resp = requests.post(ECPAY_QUERY_TRADE_URL[env], data=params, timeout=30)
+    resp.raise_for_status()
+    result = _parse_query_trade_response(resp.text)
+
+    if not verify_check_mac_value(result):
+        raise ValueError(
+            f"QueryTradeInfo 回應的 CheckMacValue 驗證失敗，不可信任: MerchantTradeNo={payment.merchant_trade_no}"
+        )
+
+    logger.info(
+        "QueryTradeInfo 查詢完成: MerchantTradeNo=%s TradeStatus=%s",
+        payment.merchant_trade_no, result.get("TradeStatus"),
+    )
+    return result
+
+
+@transaction.atomic
+def reconcile_payment_from_query(payment: PaymentTransaction) -> PaymentTransaction:
+    """
+    對一筆卡住的 PaymentTransaction 主動呼叫 QueryTradeInfo 對帳、並依查詢結果更新狀態。
+    TradeStatus="0"（銀行還沒回覆/消費者還沒付）時不動它，維持 pending，避免誤判成失敗；
+    "1" 或 "10200095" 才分別寫成 paid / failed。
+    """
+    result = query_trade_info(payment)
+    trade_status = result.get("TradeStatus")
+
+    if trade_status == "0":
+        logger.info(
+            "QueryTradeInfo 對帳：仍是待付款，維持 pending 不變更: MerchantTradeNo=%s",
+            payment.merchant_trade_no,
+        )
+        return payment
+
+    payment = PaymentTransaction.objects.select_for_update().get(pk=payment.pk)
+    payment = _apply_payment_result(
+        payment,
+        ecpay_trade_no=result.get("TradeNo"),
+        raw_response=result,
+        is_paid=(trade_status == "1"),
+    )
+
+    logger.info(
+        "QueryTradeInfo 對帳完成: MerchantTradeNo=%s TradeStatus=%s status=%s",
+        payment.merchant_trade_no, trade_status, payment.status,
     )
     return payment

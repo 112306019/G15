@@ -9,6 +9,8 @@ from django.db import transaction
 from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address
 from .platform import calculate_order_commission
+from payments.models import PaymentTransaction
+from payments.services import pick_relevant_payment
 
 
 def _has_active_campaign(product_id):
@@ -745,7 +747,7 @@ def view_order(request):
     guest_id = request.query_params.get('Guest_id', None)
     order_id = request.query_params.get('Order_id', None)
 
-    orders = Order.objects.all()
+    orders = Order.objects.all().prefetch_related('payment_transactions')
 
     if user_id:
         orders = orders.filter(user_id=user_id)
@@ -754,7 +756,18 @@ def view_order(request):
     if order_id:
         orders = orders.filter(order_id=order_id)
 
-    order_list = list(orders)
+    # 付款失敗的訂單不該出現在消費者的訂單列表/詳情裡：
+    # 走綠界付款失敗後，使用者只會回到購物車重新結帳（會建立一筆新訂單），
+    # 這筆失敗的舊訂單就變成沒有人會再去付款的孤兒訂單，顯示出來只會讓人誤會。
+    # 只有「最相關的付款紀錄剛好是 failed」才排除——還沒付過款(沒有 PaymentTransaction)、
+    # 或曾經失敗後來重試成功的訂單都正常顯示（pick_relevant_payment 本身就會優先挑成功的那筆）。
+    order_list = []
+    for order in orders:
+        payment_tx = pick_relevant_payment(order.payment_transactions.all())
+        if payment_tx and payment_tx.status == PaymentTransaction.STATUS_FAILED:
+            continue
+        order_list.append(order)
+
     items_by_order = {}
     vendor_ids = set()
     for order in order_list:

@@ -126,3 +126,77 @@ class VendorPlatformPaymentReadTests(TestCase):
         unpaid_row = next(row for row in resp_all.json() if row["Order_id"] == str(unpaid_order.order_id))
         self.assertIsNone(unpaid_row["payment_method"])
         self.assertEqual(unpaid_row["payment_status"], "unpaid")
+
+
+class ConsumerOrderViewFailedPaymentTests(TestCase):
+    """
+    GET /api/consumer/order/view —— 付款失敗的訂單不該出現在消費者的「我的訂單」列表/詳情裡，
+    但還沒付款、或曾經失敗後來重試成功的訂單要正常顯示，不能被一起誤殺。
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(
+            role="consumer", name="測試用戶", email="order-view-test@example.com",
+            password="x", phone="0900000000",
+        )
+        self.product = Product.objects.create(
+            vendor_id="V00001", product_name="測試商品", price=500, status="active"
+        )
+
+    def make_order(self, total_amount=500):
+        order = Order.objects.create(user=self.user, total_amount=total_amount)
+        OrderItem.objects.create(
+            order=order, product=self.product, quantity=1,
+            unit_price=total_amount, subtotal=total_amount,
+        )
+        return order
+
+    def test_failed_only_order_is_hidden_from_list(self):
+        failed_order = self.make_order()
+        PaymentTransaction.objects.create(
+            order=failed_order, merchant_trade_no="ORDERVIEWFAILED01", amount=failed_order.total_amount,
+            status=PaymentTransaction.STATUS_FAILED,
+        )
+
+        resp = self.client.get(f"/api/consumer/order/view?User_id={self.user.user_id}")
+
+        self.assertEqual(resp.status_code, 200)
+        order_ids = {row["Order_id"] for row in resp.json()}
+        self.assertNotIn(str(failed_order.order_id), order_ids)
+
+    def test_failed_only_order_is_hidden_from_direct_detail_lookup(self):
+        failed_order = self.make_order()
+        PaymentTransaction.objects.create(
+            order=failed_order, merchant_trade_no="ORDERVIEWFAILED02", amount=failed_order.total_amount,
+            status=PaymentTransaction.STATUS_FAILED,
+        )
+
+        resp = self.client.get(f"/api/consumer/order/view?Order_id={failed_order.order_id}")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
+
+    def test_unpaid_order_without_any_payment_attempt_still_shows(self):
+        order = self.make_order()  # 還沒按過付款，完全沒有 PaymentTransaction
+
+        resp = self.client.get(f"/api/consumer/order/view?User_id={self.user.user_id}")
+
+        order_ids = {row["Order_id"] for row in resp.json()}
+        self.assertIn(str(order.order_id), order_ids)
+
+    def test_order_that_failed_then_succeeded_on_retry_still_shows(self):
+        order = self.make_order()
+        PaymentTransaction.objects.create(
+            order=order, merchant_trade_no="ORDERVIEWRETRY001", amount=order.total_amount,
+            status=PaymentTransaction.STATUS_FAILED,
+        )
+        PaymentTransaction.objects.create(
+            order=order, merchant_trade_no="ORDERVIEWRETRY002", amount=order.total_amount,
+            status=PaymentTransaction.STATUS_PAID,
+        )
+
+        resp = self.client.get(f"/api/consumer/order/view?User_id={self.user.user_id}")
+
+        order_ids = {row["Order_id"] for row in resp.json()}
+        self.assertIn(str(order.order_id), order_ids)
