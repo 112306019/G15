@@ -26,51 +26,61 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
   const currentActiveKey = getActiveKey(activeTab);
 
   return (
-    <header className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center sticky top-0 z-50">
+    <header className="bg-white border-b border-[#E2DDD4]/60 px-8 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
       <div className="flex items-center gap-8">
 
         <div
-          className="bg-gray-100 px-6 py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-gray-200 transition-colors"
+          className="bg-[#F5F0E8] px-6 py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
           onClick={() => onNavigate?.('shop')}
         >
-          <Star size={18} className="text-gray-500 fill-gray-500" />
-          <span className="font-bold tracking-widest text-gray-700 uppercase">Logo</span>
+          <Star size={18} className="text-[#1A1A18] fill-[#1A1A18]" />
+          <span className="font-black tracking-widest text-[#1A1A18] uppercase">Logo</span>
         </div>
 
-        <div className="h-6 w-[1px] bg-gray-200"></div>
+        <div className="h-6 w-px bg-[#E2DDD4]"></div>
 
         <nav className="flex items-center gap-6">
-          {navItems.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => onNavigate?.(item.key)}
-              className={`text-sm transition-colors ${currentActiveKey === item.key
-                  ? 'text-slate-800 font-bold'
-                  : 'text-gray-400 font-medium hover:text-gray-600'
+          {navItems.map((item) => {
+            const isActive = currentActiveKey === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => onNavigate?.(item.key)}
+                className={`relative text-sm transition-colors py-1 ${
+                  isActive
+                    ? 'text-[#1A1A18] font-black'
+                    : 'text-[#8C8880] font-bold hover:text-[#1A1A18]'
                 }`}
-            >
-              {item.label}
-            </button>
-          ))}
+              >
+                {item.label}
+                
+                {/* 🌟 橘色底線：只有在 active 時才會出現 */}
+                {isActive && (
+                  <span className="absolute -bottom-1.5 left-1/2 h-[3px] w-3/4 -translate-x-1/2 rounded-full bg-[#C8522A]" />
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-5">
         <div
-          className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+          className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
           onClick={() => onNavigate?.('favorites')}
         >
-          <Heart size={24} className={activeTab === 'favorites' ? 'text-black' : 'text-gray-400'} />
+          <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
         </div>
+        
         <div
-          className="relative cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+          className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
           onClick={() => onNavigate?.('cart')}
         >
-          <ShoppingCart size={24} className={activeTab === 'cart' ? 'text-black' : 'text-gray-400'} />
+          <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
           {/* 🟢 只有當 cartCount 大於 0 時，才顯示紅底白字的小圓點 */}
           {cartCount > 0 && (
-            <span className="absolute top-0 right-0 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-white font-bold">
+            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
               {cartCount}
             </span>
           )}
@@ -78,10 +88,10 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
 
         {userRole === 'koc' && (
           <div
-            className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
             onClick={() => onNavigate?.('chat')}
           >
-            <MessageCircle size={24} className={activeTab === 'chat' ? 'text-black' : 'text-gray-400'} />
+            <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
           </div>
         )}
 
@@ -91,28 +101,29 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
           onMouseLeave={() => setProfileMenuOpen(false)}
         >
           <div
-            className="cursor-pointer hover:bg-gray-50 p-2 rounded-full transition-colors"
+            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
             onClick={() => onNavigate?.('profile')}
           >
-            <User size={24} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-black' : 'text-gray-400'} />
+            <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
           </div>
 
+          {/* 右上角個人選單 */}
           {profileMenuOpen && (
-            <div className="absolute right-0 top-full pt-2 w-44 z-50">
-              <div className="bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden py-2">
+            <div className="absolute right-0 top-full pt-2 w-44 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
                 <button
                   onClick={() => { setProfileMenuOpen(false); onNavigate?.('profile'); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50 hover:text-black transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
                 >
-                  <Settings size={16} />
-                  設定
+                  <Settings size={16} strokeWidth={2.5} />
+                  個人設定
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#C8522A] hover:bg-[#FEF5F3] transition-colors text-left"
                 >
-                  <LogOut size={16} />
-                  登出
+                  <LogOut size={16} strokeWidth={2.5} />
+                  登出系統
                 </button>
               </div>
             </div>

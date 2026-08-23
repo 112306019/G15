@@ -1,26 +1,25 @@
 import { API_BASE_URL } from '../config';
 import React, { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, ShieldCheck } from "lucide-react";
 
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] text-[#1A1A18]" fill="currentColor">
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-    </svg>
-  );
-}
-
-function InputField({ label, hint, ...props }) {
+function InputField({ label, hint, icon: Icon, ...props }) {
   return (
     <div className="mb-5">
       <div className="flex justify-between items-end mb-2">
-        <label className="block text-sm font-bold text-[#1A1A18]">{label}</label>
-        {hint && <span className="text-xs font-medium text-[#8C8880]">{hint}</span>}
+        <label className="block text-[11px] font-black text-[#1A1A18] tracking-widest uppercase">{label}</label>
+        {hint && <span className="text-[10px] font-bold text-[#8C8880]">{hint}</span>}
       </div>
-      <input
-        {...props}
-        className="w-full rounded-xl border border-[#E2DDD4] bg-white px-5 py-3.5 text-sm text-[#1A1A18] shadow-sm outline-none transition-all placeholder:text-[#8C8880] focus:border-[#1A1A18] focus:ring-1 focus:ring-[#1A1A18]"
-      />
+      <div className="relative group">
+        {Icon && (
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8C8880] transition-colors duration-300 group-focus-within:text-[#C8522A]">
+            <Icon size={18} strokeWidth={2.5} />
+          </div>
+        )}
+        <input
+          {...props}
+          className={`w-full rounded-2xl border border-[#E2DDD4] bg-white/60 backdrop-blur-sm py-4 ${Icon ? 'pl-12' : 'px-5'} pr-5 text-sm font-medium text-[#1A1A18] outline-none transition-all duration-300 placeholder:text-[#8C8880]/50 focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30`}
+        />
+      </div>
     </div>
   );
 }
@@ -31,9 +30,7 @@ export default function LoginPage({
   onRegisterSuccess,
   onSkipToShop,
 }) {
-  // 用來切換整頁顯示登入或註冊表單，而不是左右並排同時顯示
   const [isLogin, setIsLogin] = useState(true);
-  // 註冊完成、切回登入畫面時，在登入表單上方顯示的提示文字
   const [justRegisteredMsg, setJustRegisteredMsg] = useState("");
 
   const [loginEmail, setLoginEmail] = useState("");
@@ -53,7 +50,6 @@ export default function LoginPage({
   const [regSubmitting, setRegSubmitting] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
 
-  // 忘記密碼：email -> 寄送驗證碼 -> reset（輸入驗證碼+新密碼） -> done
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState("email");
   const [forgotEmail, setForgotEmail] = useState("");
@@ -62,7 +58,6 @@ export default function LoginPage({
   const [forgotError, setForgotError] = useState("");
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
 
-  // 註冊信箱驗證：驗證碼寄出後跳出，輸入驗證碼確認信箱真的存在
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
@@ -71,7 +66,6 @@ export default function LoginPage({
   const [verifyDone, setVerifyDone] = useState(false);
   const [verifyResendMsg, setVerifyResendMsg] = useState("");
 
-  // 切到登入畫面時，把註冊表單清乾淨、順便帶入剛註冊的帳號方便直接登入
   const switchToLoginAfterRegister = (account) => {
     setIsLogin(true);
     setJustRegisteredMsg("✓ 註冊成功！請使用剛剛設定的帳號密碼登入");
@@ -93,7 +87,6 @@ export default function LoginPage({
       setLoginError("請輸入電子郵件和密碼");
       return;
     }
-
     setLoginSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/login`, {
@@ -101,9 +94,7 @@ export default function LoginPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail.trim(), password: loginPw }),
       });
-
       const data = await res.json();
-
       if (res.ok && data.success) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("userId", data.userId);
@@ -134,7 +125,6 @@ export default function LoginPage({
       setRegError("請同意條款和條件");
       return;
     }
-
     setRegSubmitting(true);
     try {
       const isEmail = regEmail.trim().includes("@");
@@ -143,20 +133,16 @@ export default function LoginPage({
         email: isEmail ? regEmail.trim() : `${regEmail.trim()}@phone.local`,
         password: regPw,
         phone: isEmail ? "" : regEmail.trim(),
-        role: 2, // 消費者
+        role: 2, 
       };
-
       const res = await fetch(`${API_BASE_URL}/api/user/signUp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
       const data = await res.json();
-
       if (res.ok && data.success) {
         if (data.requiresVerification) {
-          // 用真的 Email 註冊：要先輸入驗證碼確認信箱存在，才算註冊完成
           setVerifyOpen(true);
           setVerifyEmail(body.email);
           setVerifyCode("");
@@ -164,7 +150,6 @@ export default function LoginPage({
           setVerifyDone(false);
           setVerifyResendMsg("");
         } else {
-          // 用手機號碼註冊：沒有真正的信箱可以驗證，直接視為完成，導回登入畫面
           setRegSuccess(true);
           onRegisterSuccess?.({ name: regName.trim(), account: regEmail.trim() });
           switchToLoginAfterRegister(regEmail.trim());
@@ -179,9 +164,7 @@ export default function LoginPage({
     }
   };
 
-  const closeVerifyModal = () => {
-    setVerifyOpen(false);
-  };
+  const closeVerifyModal = () => setVerifyOpen(false);
 
   const handleVerifyCode = async () => {
     setVerifyError("");
@@ -189,7 +172,6 @@ export default function LoginPage({
       setVerifyError("請輸入驗證碼");
       return;
     }
-
     setVerifySubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/verifyEmail`, {
@@ -198,7 +180,6 @@ export default function LoginPage({
         body: JSON.stringify({ email: verifyEmail, code: verifyCode.trim() }),
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         setVerifyDone(true);
         setRegSuccess(true);
@@ -224,7 +205,6 @@ export default function LoginPage({
         body: JSON.stringify({ email: verifyEmail }),
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         setVerifyResendMsg("驗證碼已重新寄出，請查收信箱。");
       } else {
@@ -255,9 +235,7 @@ export default function LoginPage({
     setForgotError("");
   };
 
-  const closeForgotModal = () => {
-    setForgotOpen(false);
-  };
+  const closeForgotModal = () => setForgotOpen(false);
 
   const handleSendResetCode = async () => {
     setForgotError("");
@@ -265,7 +243,6 @@ export default function LoginPage({
       setForgotError("請輸入電子郵件");
       return;
     }
-
     setForgotSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/password/forgot`, {
@@ -274,7 +251,6 @@ export default function LoginPage({
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         setForgotStep("reset");
       } else {
@@ -293,7 +269,6 @@ export default function LoginPage({
       setForgotError("請輸入驗證碼，新密碼需至少 8 位");
       return;
     }
-
     setForgotSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/password/reset`, {
@@ -306,7 +281,6 @@ export default function LoginPage({
         }),
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         setForgotStep("done");
       } else {
@@ -320,242 +294,185 @@ export default function LoginPage({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F5F0E8] font-sans text-[#1A1A18] duration-500 animate-in fade-in">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F5F0E8] font-sans text-[#1A1A18] duration-500 animate-in fade-in p-6 relative overflow-hidden">
 
-      {/* 頂部橫幅 */}
-      <div className="relative flex w-full items-center justify-center py-10">
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
-          >
-            <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
-            返回
-          </button>
-        )}
-        <h1 className="relative text-center font-serif text-3xl tracking-widest text-[#1A1A18] md:text-4xl">
-          {isLogin ? "歡迎回來" : "建立帳號"}
-          <span className="absolute left-1/2 top-full mt-3 h-0.5 w-12 -translate-x-1/2 rounded bg-[#C8522A]" />
-        </h1>
-      </div>
+      {/* 背景環境光暈 (Ambient Glow) - 移除 animate-pulse，改為靜態 */}
+      <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] bg-[#C8522A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.15] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] bg-[#B89B6A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.2] pointer-events-none"></div>
 
-      {/* 主要內容：單一卡片，依 isLogin 切換顯示登入或註冊表單 */}
-      <div className="mx-auto w-full max-w-lg flex-1 px-6 py-6 md:py-8">
-        <div className="flex flex-col rounded-2xl border border-[#E2DDD4] bg-[#FDFAF6] p-8 shadow-[0_16px_40px_rgba(26,26,24,0.05)] md:p-12">
+      {/* 左上角返回按鈕 */}
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute left-6 top-8 md:left-10 md:top-10 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group z-10 bg-white/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/60 shadow-sm"
+        >
+          <ArrowLeft size={16} strokeWidth={2.5} className="transition-transform group-hover:-translate-x-1" />
+          <span>返回身份選擇</span>
+        </button>
+      )}
 
-          {isLogin ? (
-            <>
-              <h2 className="relative mb-10 inline-block font-serif text-2xl text-[#1A1A18]">
-                登入帳號
-                <span className="absolute left-0 top-full mt-2 h-0.5 w-8 rounded bg-[#B89B6A]" />
-              </h2>
-
-              {justRegisteredMsg && (
-                <div className="mb-5 rounded-xl bg-[#EAF6EC] px-4 py-3 text-sm font-bold text-[#2F8F4E]">
-                  {justRegisteredMsg}
-                </div>
-              )}
-
-              <InputField
-                label="電子郵件或手機號碼"
-                placeholder="請輸入電子郵件或手機號碼"
-                value={loginEmail}
-                onChange={(e) => { setLoginEmail(e.target.value); setJustRegisteredMsg(""); }}
-              />
-
-              <div className="mb-2">
-                <InputField
-                  label="密碼"
-                  type="password"
-                  placeholder="請輸入密碼"
-                  value={loginPw}
-                  onChange={(e) => { setLoginPw(e.target.value); setJustRegisteredMsg(""); }}
-                />
-                <div className="-mt-3 mb-8 text-right">
-                  <button type="button" onClick={openForgotModal} className="text-xs font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]">忘記密碼？</button>
-                </div>
-              </div>
-
-              {loginError && (
-                <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
-                  {loginError}
-                  {loginNeedsVerification && (
-                    <button
-                      type="button"
-                      onClick={openVerifyFromLogin}
-                      className="ml-2 font-bold underline underline-offset-2 hover:text-[#A64220]"
-                    >
-                      重新寄送驗證碼
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={handleLogin}
-                disabled={loginSubmitting}
-                className="w-full rounded-full bg-[#1A1A18] py-4 text-sm tracking-[0.05em] text-[#F5F0E8] shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loginSubmitting ? "登入中..." : "登入"}
-              </button>
-
-              <p className="mt-8 text-center text-sm font-bold text-[#8C8880]">
-                還沒有帳號嗎？{" "}
-                <button
-                  type="button"
-                  onClick={() => { setIsLogin(false); setLoginError(""); setJustRegisteredMsg(""); }}
-                  className="text-[#1A1A18] underline underline-offset-4 hover:text-[#C8522A]"
-                >
-                  立即註冊
-                </button>
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="relative mb-10 inline-block font-serif text-2xl text-[#1A1A18]">
-                註冊帳號
-                <span className="absolute left-0 top-full mt-2 h-0.5 w-8 rounded bg-[#B89B6A]" />
-              </h2>
-
-              <InputField
-                label="全名"
-                placeholder="請輸入姓名"
-                value={regName}
-                onChange={(e) => setRegName(e.target.value)}
-              />
-
-              <InputField
-                label="電子郵件或手機號碼"
-                placeholder="請輸入電子郵件或手機號碼"
-                value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
-              />
-
-              <InputField
-                label="密碼"
-                hint="密碼需有至少8位"
-                type="password"
-                placeholder="請輸入密碼"
-                value={regPw}
-                onChange={(e) => setRegPw(e.target.value)}
-              />
-
-              <InputField
-                label="確認密碼"
-                type="password"
-                placeholder="請再次輸入密碼"
-                value={regConfirmPw}
-                onChange={(e) => setRegConfirmPw(e.target.value)}
-              />
-
-              <div className="mb-6 flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={regTerms}
-                  onChange={(e) => setRegTerms(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-[#E2DDD4] text-[#1A1A18] focus:ring-[#1A1A18]"
-                />
-                <span className="text-xs font-medium leading-relaxed text-[#8C8880]">
-                  建立帳戶即表示您同意我們的
-                  <button
-                    type="button"
-                    onClick={() => setShowTermsModal(true)}
-                    className="underline text-[#1A1A18] mx-1"
-                  >
-                    條款和條件
-                  </button>
-                  以及
-                  <button
-                    type="button"
-                    onClick={() => setShowPrivacyModal(true)}
-                    className="underline text-[#1A1A18] mx-1"
-                  >
-                    隱私權政策
-                  </button>
-                  。
-                </span>
-              </div>
-
-              {regError && (
-                <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
-                  {regError}
-                </div>
-              )}
-
-              <button
-                onClick={handleRegister}
-                disabled={regSubmitting || regSuccess}
-                className="w-full rounded-full bg-[#1A1A18] py-4 text-sm tracking-[0.05em] text-[#F5F0E8] shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {regSuccess ? "✓ 註冊成功！" : regSubmitting ? "註冊中..." : "註冊"}
-              </button>
-
-              <p className="mt-8 text-center text-sm font-bold text-[#8C8880]">
-                已經有帳號了嗎？{" "}
-                <button
-                  type="button"
-                  onClick={() => { setIsLogin(true); setRegError(""); }}
-                  className="text-[#1A1A18] underline underline-offset-4 hover:text-[#C8522A]"
-                >
-                  前往登入
-                </button>
-              </p>
-            </>
-          )}
-
+      {/* 懸浮玻璃卡片 (Glassmorphism) */}
+      <div className="w-full max-w-[440px] relative z-10">
+        
+        {/* 頂部 Logo */}
+        <div className="mb-8 flex flex-col items-center justify-center">
+          <div className="w-12 h-12 bg-gradient-to-tr from-[#C8522A] to-[#B89B6A] rounded-[1rem] shadow-lg flex items-center justify-center mb-4 text-white transform rotate-3">
+             <ShieldCheck size={24} strokeWidth={2.5} className="-rotate-3" />
+          </div>
+          <h1 className="text-2xl font-serif font-black tracking-[0.15em] uppercase text-[#1A1A18]">
+            KOC Platform
+          </h1>
         </div>
 
-        {/* 跳過直接購物 */}
-        <div className="mt-10 text-center">
-          <span className="text-sm font-bold text-[#8C8880]">想要先購物就好？ </span>
+        <div className="rounded-[2.5rem] bg-white/80 backdrop-blur-xl p-8 md:p-10 shadow-[0_20px_60px_rgba(26,26,24,0.08)] border border-white">
+          
+          <div className="flex w-full rounded-full bg-[#E2DDD4]/40 p-1.5 mb-8 shadow-inner">
+            <button
+              onClick={() => { setIsLogin(true); setRegError(""); }}
+              className={`flex-1 rounded-full py-2.5 text-sm font-bold transition-all duration-300 ${isLogin ? 'bg-white text-[#1A1A18] shadow-md transform scale-[1.02]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}
+            >
+              登入
+            </button>
+            <button
+              onClick={() => { setIsLogin(false); setLoginError(""); setJustRegisteredMsg(""); }}
+              className={`flex-1 rounded-full py-2.5 text-sm font-bold transition-all duration-300 ${!isLogin ? 'bg-white text-[#1A1A18] shadow-md transform scale-[1.02]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}
+            >
+              註冊
+            </button>
+          </div>
+
+          <div className="min-h-[340px]">
+            {isLogin ? (
+              <div className="animate-in slide-in-from-left-4 fade-in duration-300">
+                
+                {justRegisteredMsg && (
+                  <div className="mb-6 rounded-2xl bg-[#EAF6EC]/80 backdrop-blur-sm px-5 py-4 text-sm font-bold text-[#2F8F4E] border border-[#2F8F4E]/20">
+                    {justRegisteredMsg}
+                  </div>
+                )}
+
+                <InputField
+                  label="帳號"
+                  icon={User}
+                  placeholder="電子郵件或手機號碼"
+                  value={loginEmail}
+                  onChange={(e) => { setLoginEmail(e.target.value); setJustRegisteredMsg(""); }}
+                />
+
+                <div className="mb-2 relative">
+                  <InputField
+                    label="密碼"
+                    icon={Lock}
+                    type="password"
+                    placeholder="請輸入密碼"
+                    value={loginPw}
+                    onChange={(e) => { setLoginPw(e.target.value); setJustRegisteredMsg(""); }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={openForgotModal} 
+                    className="absolute right-0 top-0 mt-0 text-[11px] font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors uppercase tracking-wider"
+                  >
+                    忘記密碼？
+                  </button>
+                </div>
+
+                {loginError && (
+                  <div className="mb-6 rounded-2xl bg-[#FEF5F3]/80 backdrop-blur-sm px-5 py-4 text-sm font-bold text-[#C8522A] border border-[#C8522A]/20">
+                    {loginError}
+                    {loginNeedsVerification && (
+                      <button type="button" onClick={openVerifyFromLogin} className="ml-2 underline underline-offset-2 hover:text-[#A64220]">
+                        重新寄送
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleLogin}
+                  disabled={loginSubmitting}
+                  className="mt-6 w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold tracking-[0.1em] text-[#F5F0E8] shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(200,82,42,0.25)] hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loginSubmitting ? "驗證中..." : "登入系統"}
+                </button>
+              </div>
+            ) : (
+              <div className="animate-in slide-in-from-right-4 fade-in duration-300">
+                <div className="grid grid-cols-2 gap-x-4">
+                  <div className="col-span-2">
+                    <InputField label="全名" icon={User} placeholder="請輸入姓名" value={regName} onChange={(e) => setRegName(e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <InputField label="聯絡方式" icon={Mail} placeholder="電子郵件或手機號碼" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <InputField label="設定密碼" icon={Lock} hint="至少8位" type="password" placeholder="輸入密碼" value={regPw} onChange={(e) => setRegPw(e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <InputField label="確認密碼" icon={ShieldCheck} type="password" placeholder="再次確認" value={regConfirmPw} onChange={(e) => setRegConfirmPw(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="mb-4 mt-1 flex items-start gap-3 bg-white/50 p-3.5 rounded-2xl border border-white">
+                  <input
+                    type="checkbox"
+                    checked={regTerms}
+                    onChange={(e) => setRegTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer"
+                  />
+                  <span className="text-xs font-bold leading-relaxed text-[#8C8880]">
+                    我同意平台的
+                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline decoration-[#E2DDD4] underline-offset-4 text-[#1A1A18] mx-1 hover:text-[#C8522A] hover:decoration-[#C8522A]">服務條款</button>
+                    與
+                    <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline decoration-[#E2DDD4] underline-offset-4 text-[#1A1A18] mx-1 hover:text-[#C8522A] hover:decoration-[#C8522A]">隱私權政策</button>
+                  </span>
+                </div>
+
+                {regError && (
+                  <div className="mb-6 rounded-2xl bg-[#FEF5F3]/80 backdrop-blur-sm px-5 py-4 text-sm font-bold text-[#C8522A] border border-[#C8522A]/20">
+                    {regError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleRegister}
+                  disabled={regSubmitting || regSuccess}
+                  className="w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold tracking-[0.1em] text-[#F5F0E8] shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(200,82,42,0.25)] hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {regSuccess ? "✓ 註冊成功！" : regSubmitting ? "處理中..." : "建立帳號"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 底部跳過按鈕 */}
+        <div className="mt-8 text-center relative z-10">
           <button
             onClick={onSkipToShop}
-            className="text-sm font-bold text-[#1A1A18] underline underline-offset-4 transition-colors hover:text-[#C8522A]"
+            className="group flex items-center justify-center gap-2 mx-auto text-sm font-bold text-[#8C8880] transition-colors hover:text-[#1A1A18]"
           >
-            直接進入購物
+            <span>不想註冊？</span>
+            <span className="underline decoration-[#E2DDD4] group-hover:decoration-[#1A1A18] underline-offset-4 text-[#1A1A18]">直接逛逛商城</span>
+            <ArrowLeft size={16} className="rotate-180 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
-
       </div>
 
       {/* 忘記密碼 */}
       {forgotOpen && (
-        <div
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-          onClick={closeForgotModal}
-        >
-          <div
-            className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#1A1A18]/40 p-4 backdrop-blur-md" onClick={closeForgotModal}>
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white/95 backdrop-blur-xl p-8 md:p-10 shadow-2xl border border-white animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
             {forgotStep === "email" && (
               <>
-                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">忘記密碼</h3>
-                <p className="mb-5 text-sm text-[#8C8880]">請輸入您的電子郵件，我們會寄送驗證碼給您。</p>
-                <InputField
-                  label="電子郵件"
-                  placeholder="請輸入電子郵件"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                />
-                {forgotError && (
-                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
-                    {forgotError}
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={closeForgotModal}
-                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA]"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSendResetCode}
-                    disabled={forgotSubmitting}
-                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
-                  >
+                <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">忘記密碼</h3>
+                <p className="mb-8 text-sm text-[#8C8880] font-medium">請輸入您的電子郵件，我們會寄送驗證碼給您。</p>
+                <InputField label="電子郵件" icon={Mail} placeholder="請輸入信箱" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} />
+                {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A] font-bold">{forgotError}</div>}
+                <div className="flex gap-3 mt-4">
+                  <button onClick={closeForgotModal} className="flex-1 rounded-2xl border border-[#E2DDD4] py-4 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8]">取消</button>
+                  <button onClick={handleSendResetCode} disabled={forgotSubmitting} className="flex-1 rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">
                     {forgotSubmitting ? "寄送中..." : "寄送驗證碼"}
                   </button>
                 </div>
@@ -564,62 +481,26 @@ export default function LoginPage({
 
             {forgotStep === "reset" && (
               <>
-                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">輸入驗證碼</h3>
-                <p className="mb-5 text-sm text-[#8C8880]">
-                  驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{forgotEmail}</span>，10 分鐘內有效。
-                </p>
-                <InputField
-                  label="驗證碼"
-                  placeholder="請輸入 6 位數驗證碼"
-                  value={forgotCode}
-                  onChange={(e) => setForgotCode(e.target.value)}
-                />
-                <InputField
-                  label="新密碼"
-                  hint="密碼需有至少8位"
-                  type="password"
-                  placeholder="請輸入新密碼"
-                  value={forgotNewPw}
-                  onChange={(e) => setForgotNewPw(e.target.value)}
-                />
-                {forgotError && (
-                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
-                    {forgotError}
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setForgotStep("email")}
-                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA]"
-                  >
-                    上一步
-                  </button>
-                  <button
-                    onClick={handleResetPassword}
-                    disabled={forgotSubmitting}
-                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
-                  >
-                    {forgotSubmitting ? "重設中..." : "重設密碼"}
-                  </button>
+                <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">輸入驗證碼</h3>
+                <p className="mb-8 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{forgotEmail}</span>，10 分鐘內有效。</p>
+                <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={forgotCode} onChange={(e) => setForgotCode(e.target.value)} />
+                <InputField label="新密碼" icon={Lock} hint="至少8位" type="password" placeholder="請輸入新密碼" value={forgotNewPw} onChange={(e) => setForgotNewPw(e.target.value)} />
+                {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A] font-bold">{forgotError}</div>}
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => setForgotStep("email")} className="flex-1 rounded-2xl border border-[#E2DDD4] py-4 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8]">上一步</button>
+                  <button onClick={handleResetPassword} disabled={forgotSubmitting} className="flex-1 rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">重設密碼</button>
                 </div>
               </>
             )}
 
             {forgotStep === "done" && (
               <>
-                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">密碼已重設！</h3>
-                <p className="mb-6 text-sm text-[#8C8880]">請使用新密碼重新登入。</p>
-                <button
-                  onClick={() => {
-                    setIsLogin(true);
-                    setLoginEmail(forgotEmail);
-                    setLoginPw("");
-                    closeForgotModal();
-                  }}
-                  className="w-full rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]"
-                >
-                  返回登入
-                </button>
+                <div className="w-16 h-16 bg-[#EAF6EC] text-[#2F8F4E] rounded-full flex items-center justify-center mb-6">
+                  <ShieldCheck size={32} />
+                </div>
+                <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">密碼已重設！</h3>
+                <p className="mb-8 text-sm text-[#8C8880] font-medium">請使用新密碼重新登入。</p>
+                <button onClick={() => { setIsLogin(true); setLoginEmail(forgotEmail); setLoginPw(""); closeForgotModal(); }} className="w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]">返回登入</button>
               </>
             )}
           </div>
@@ -628,80 +509,40 @@ export default function LoginPage({
 
       {/* 註冊信箱驗證 */}
       {verifyOpen && (
-        <div
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-          onClick={closeVerifyModal}
-        >
-          <div
-            className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl animate-in zoom-in-95 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#1A1A18]/40 p-4 backdrop-blur-md" onClick={closeVerifyModal}>
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white/95 backdrop-blur-xl p-8 md:p-10 shadow-2xl border border-white animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
             {!verifyDone ? (
               <>
-                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">驗證您的 Email</h3>
-                <p className="mb-5 text-sm text-[#8C8880]">
-                  驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。
-                </p>
-                <InputField
-                  label="驗證碼"
-                  placeholder="請輸入 6 位數驗證碼"
-                  value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value)}
-                />
-                {verifyResendMsg && (
-                  <div className="mb-4 rounded-xl bg-[#F5F0E8] px-4 py-3 text-sm text-[#1A1A18]">
-                    {verifyResendMsg}
-                  </div>
-                )}
-                {verifyError && (
-                  <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A]">
-                    {verifyError}
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleResendVerification}
-                    disabled={verifySubmitting}
-                    className="flex-1 rounded-full border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
-                  >
-                    重新寄送
-                  </button>
-                  <button
-                    onClick={handleVerifyCode}
-                    disabled={verifySubmitting}
-                    className="flex-1 rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50"
-                  >
-                    {verifySubmitting ? "驗證中..." : "確認驗證"}
-                  </button>
+                <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">驗證您的 Email</h3>
+                <p className="mb-8 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。</p>
+                <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value)} />
+                {verifyResendMsg && <div className="mb-4 rounded-xl bg-[#F5F0E8] px-4 py-3 text-sm font-bold text-[#1A1A18]">{verifyResendMsg}</div>}
+                {verifyError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm font-bold text-[#C8522A]">{verifyError}</div>}
+                <div className="flex gap-3 mt-4">
+                  <button onClick={handleResendVerification} disabled={verifySubmitting} className="flex-1 rounded-2xl border border-[#E2DDD4] py-4 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8] disabled:opacity-50">重新寄送</button>
+                  <button onClick={handleVerifyCode} disabled={verifySubmitting} className="flex-1 rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">確認驗證</button>
                 </div>
               </>
             ) : (
               <>
-                <h3 className="mb-2 text-lg font-bold text-[#1A1A18]">驗證成功！</h3>
-                <p className="mb-6 text-sm text-[#8C8880]">您的帳號已完成信箱驗證，請重新登入。</p>
-                <button
-                  onClick={() => {
-                    setLoginError("");
-                    setLoginNeedsVerification(false);
-                    closeVerifyModal();
-                    switchToLoginAfterRegister(verifyEmail);
-                  }}
-                  className="w-full rounded-full bg-[#1A1A18] py-3 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]"
-                >
-                  返回登入
-                </button>
+                <div className="w-16 h-16 bg-[#EAF6EC] text-[#2F8F4E] rounded-full flex items-center justify-center mb-6">
+                  <ShieldCheck size={32} />
+                </div>
+                <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">驗證成功！</h3>
+                <p className="mb-8 text-sm text-[#8C8880] font-medium">您的帳號已完成信箱驗證，請重新登入。</p>
+                <button onClick={() => { setLoginError(""); setLoginNeedsVerification(false); closeVerifyModal(); switchToLoginAfterRegister(verifyEmail); }} className="w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]">返回登入</button>
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* 條款和條件彈窗 */}
+      {/* 條款和條件彈窗 (完整文字) */}
       {showTermsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
-          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-[#1A1A18] mb-6">服務條款</h3>
-            <div className="space-y-4 text-sm text-[#8C8880] leading-relaxed">
+        <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-lg w-full shadow-2xl max-h-[85vh] overflow-y-auto">
+            <h3 className="text-2xl font-serif font-bold text-[#1A1A18] mb-6">服務條款</h3>
+            <div className="space-y-5 text-sm text-[#8C8880] leading-relaxed font-medium">
               <p><strong className="text-[#1A1A18]">第一條、總則</strong><br />
               歡迎使用本平台（以下稱「本服務」）。本服務條款（以下稱「本條款」）係規範使用者與本平台間之權利義務關係。使用者於完成註冊程序或開始使用本服務時，即視為已閱讀、瞭解並同意接受本條款之全部內容。若使用者不同意本條款之任一部分，應立即停止使用本服務。</p>
 
@@ -749,7 +590,7 @@ export default function LoginPage({
             <button
               type="button"
               onClick={() => setShowTermsModal(false)}
-              className="mt-8 w-full rounded-full bg-[#1A1A18] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+              className="mt-8 w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
             >
               我已閱讀
             </button>
@@ -757,12 +598,12 @@ export default function LoginPage({
         </div>
       )}
 
-      {/* 隱私權政策彈窗 */}
+      {/* 隱私權政策彈窗 (完整文字) */}
       {showPrivacyModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
-          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-[#1A1A18] mb-6">隱私權政策</h3>
-            <div className="space-y-4 text-sm text-[#8C8880] leading-relaxed">
+        <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-lg w-full shadow-2xl max-h-[85vh] overflow-y-auto">
+            <h3 className="text-2xl font-serif font-bold text-[#1A1A18] mb-6">隱私權政策</h3>
+            <div className="space-y-5 text-sm text-[#8C8880] leading-relaxed font-medium">
               <p>本平台（以下稱「本平台」）非常重視使用者之個人資料保護，依據中華民國個人資料保護法及相關法令規定，制定本隱私權政策，說明本平台蒐集、處理及利用使用者個人資料之方式，請使用者詳閱下列內容。</p>
 
               <p><strong className="text-[#1A1A18]">一、適用範圍</strong><br />
@@ -799,7 +640,7 @@ export default function LoginPage({
             <button
               type="button"
               onClick={() => setShowPrivacyModal(false)}
-              className="mt-8 w-full rounded-full bg-[#1A1A18] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+              className="mt-8 w-full rounded-2xl bg-[#1A1A18] py-4 text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
             >
               我已閱讀
             </button>
