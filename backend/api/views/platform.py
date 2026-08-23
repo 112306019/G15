@@ -18,7 +18,6 @@ from api.models import (
     VendorWallet,
     Campaigns,
     Order,
-    Payment,
     Transactions,
     ServiceTickets,
     KOCMissionNew,
@@ -38,6 +37,7 @@ from api.models import (
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email, send_vendor_approval_email
+from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +404,9 @@ def admin_overview(request):
     vendor_count = Vendor.objects.count()
     order_count = Order.objects.count()
     campaign_count = Campaigns.objects.count()
-    payment_count = Payment.objects.count()
+    # 舊版 Payment model 只有走過模擬結帳流程才會有紀錄，改成直接數 Order.payment_status='paid'
+    # 的筆數 —— 這是綠界（PaymentTransaction）跟舊版轉帳/貨到付款流程都會寫入的共同欄位
+    payment_count = Order.objects.filter(payment_status='paid').count()
     ticket_count = ServiceTickets.objects.count()
     kocmission_count = KOCMissionNew.objects.count()
 
@@ -1325,7 +1327,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Admins, User, Order, Payment, Transactions, AdminAuditLogs
+from api.models import Admins, User, Order, Transactions, AdminAuditLogs
 
 # 手動更新koc任務階段
 @api_view(['PATCH'])
@@ -1572,23 +1574,33 @@ def get_consumer_orders(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_payments(request):
+    """
+    改成直接從 Order + PaymentTransaction 組資料，不再讀舊版 Payment model。
+    基準從「有 Payment 紀錄的訂單」變成「全部訂單」——包含還沒付款的，
+    這樣後台才看得到卡在待付款狀態的訂單，用 payment_status=unpaid 篩選即可排除。
+    走綠界的訂單用 PaymentTransaction 補上付款方式/交易編號；
+    走舊版轉帳/貨到付款流程的訂單沒有 PaymentTransaction，退回顯示 Order.payment_status，
+    付款方式留空——那條舊流程唯一記錄「轉帳」/「貨到付款」字樣的地方(Payment.payment_method)
+    現在沒讀了，這個資訊目前無法從 Order/PaymentTransaction 還原。
+    """
     order_id = request.query_params.get('Order_id', None)
-    payment_id = request.query_params.get('Payment_id', None)
+    payment_transaction_id = request.query_params.get('Payment_id', None)
     payment_status = request.query_params.get('payment_status', None)
 
-    # 🔥 直接查 Payment 並 select_related('order')，避免對每筆訂單各查一次 Payment
-    payments = Payment.objects.select_related('order').all()
+    # prefetch_related 一次撈完全部訂單的 PaymentTransaction，避免對每筆訂單各查一次（N+1）
+    orders = Order.objects.all().prefetch_related('payment_transactions')
 
     if order_id:
-        payments = payments.filter(order_id=order_id)
+        orders = orders.filter(order_id=order_id)
     if payment_status:
-        payments = payments.filter(order__payment_status=payment_status)
-    if payment_id:
-        payments = payments.filter(payment_id=payment_id)
+        orders = orders.filter(payment_status=payment_status)
+    if payment_transaction_id:
+        orders = orders.filter(payment_transactions__payment_transaction_id=payment_transaction_id)
 
     result = []
-    for p in payments:
-        o = p.order
+    for o in orders:
+        payment_tx = pick_relevant_payment(o.payment_transactions.all())
+
         result.append({
             'Order_id': str(o.order_id),
             'User_id': o.user_id,
@@ -1596,13 +1608,13 @@ def get_payments(request):
             'Promotion_code': o.promotion_code,
             'total_amount': float(o.total_amount),
             'order_status': o.order_status,
-            'payment_status': o.payment_status,
+            'payment_status': payment_tx.status if payment_tx else o.payment_status,
             'shipping_status': o.shipping_status,
             'Address_id': o.address_id,
             'created_at': o.created_at,
-            'Payment_id': p.payment_id,
-            'payment_method': p.payment_method,
-            'transaction_id': p.transaction_id,
+            'Payment_id': payment_tx.payment_transaction_id if payment_tx else None,
+            'payment_method': '信用卡' if payment_tx else None,
+            'transaction_id': payment_tx.ecpay_trade_no if payment_tx else None,
         })
 
     return Response(result, status=status.HTTP_200_OK)

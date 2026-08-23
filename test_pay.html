@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ECPay 綠界測試付款跳轉</title>
+</head>
+<body>
+  <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+    <h2>正在準備前往綠界測試刷卡頁...</h2>
+    <p>交易單號：<strong>KOC1786553587B540</strong> | 金額：<strong>NT$ 100</strong></p>
+    
+    <form id="ecpay-form" action="https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5" method="POST">
+      <input type="hidden" name="MerchantID" value="3002607" />
+      <input type="hidden" name="MerchantTradeNo" value="KOC1786553587B540" />
+      <input type="hidden" name="MerchantTradeDate" value="2026/08/13 00:53:07" />
+      <input type="hidden" name="PaymentType" value="aio" />
+      <input type="hidden" name="TotalAmount" value="100" />
+      <input type="hidden" name="TradeDesc" value="訂單付款" />
+      <input type="hidden" name="ItemName" value="水壺" />
+      <input type="hidden" name="ReturnURL" value="https://wool-referee-ended.ngrok-free.dev/api/payments/ecpay/notify/" />
+      <input type="hidden" name="ChoosePayment" value="Credit" />
+      <input type="hidden" name="EncryptType" value="1" />
+      <input type="hidden" name="CheckMacValue" value="903EF20789C6FE85171472A1155DE5C17E2BEEE0081997F540B46C4139C66D6C" />
+
+      <button type="submit" style="font-size: 18px; padding: 12px 24px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px;">
+        點我前往綠界刷卡
+      </button>
+    </form>
+  </div>
+</body>
+</html>
