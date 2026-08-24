@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import { API_BASE_URL } from '../config';
+import React, { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
@@ -158,7 +159,35 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     gmv: 0
   }
   const [form, setForm] = useState(defaultForm)
-  
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/vendor/product/upload-image`, {
+        method: "POST",
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.success) {
+        setForm(prev => ({ ...prev, prodImageUrl: data.image_url, thumbnail: data.image_url }))
+      } else {
+        toast.error(data.err || "上傳失敗")
+      }
+    } catch (err) {
+      toast.error("上傳失敗，請確認後端是否正常運作")
+    } finally {
+      setUploading(false)
+    }
+  }
+
   useEffect(() => {
     if (open) {
       if (initialData) {
@@ -504,7 +533,20 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
             <>
               <div className="flex items-center gap-5 p-5 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-2xl">
                 <Thumb emoji={form.thumbnail} size="lg" />
-                <button disabled={locked} className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"><Upload size={14}/>上傳新圖片</button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  disabled={locked || uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Upload size={14}/>{uploading ? "上傳中..." : "上傳新圖片"}
+                </button>
               </div>
               <Input label="新商品名稱 *" disabled={locked} value={form.prodName} onChange={set('prodName')} placeholder="例：極致防曬乳 SPF50+" />
               <div className="grid grid-cols-2 gap-4">
