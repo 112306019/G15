@@ -83,6 +83,30 @@ def ecpay_store_map(request):
     產生綠界 Stage 超商選店表單。
     """
 
+    print("===== ECPAY MAP CONFIG =====")
+    print(
+        "MerchantID:",
+        repr(settings.ECPAY_LOGISTICS_MERCHANT_ID)
+    )
+    print(
+        "MapURL:",
+        repr(settings.ECPAY_LOGISTICS_MAP_URL)
+    )
+    print(
+        "LogisticsSubType:",
+        repr(settings.ECPAY_LOGISTICS_SUBTYPE)
+    )
+    print("============================")
+
+    callback_url = request.build_absolute_uri(
+        "/api/shipping/ecpay/map/callback/"
+    )
+
+    print(
+        "CallbackURL:",
+        callback_url
+    )
+
     callback_url = request.build_absolute_uri(
         "/api/shipping/ecpay/map/callback/"
     )
