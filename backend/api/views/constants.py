@@ -85,6 +85,9 @@ EARNINGS_STATUS_CODE_MAP = {
     'transferred': 1,    # 已撥款(已轉帳)
 }
 
+# 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
+VENDOR_SETTLEMENT_HOLD_DAYS = 7
+
 # User.role: 資料庫字串 <-> API 對外 integer
 ROLE_CODE_MAP = {
     'vendor': 0,

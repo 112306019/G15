@@ -230,6 +230,29 @@ export const getVendorAnalyticsOverview = (vendorId) => {
   })
 }
 
+// 金流總覽（可提領/凍結中金額、是否已綁定銀行帳戶）
+export const getVendorFinanceOverview = (vendorId) => {
+  return api.get('/vendor/finance/getOverview', {
+    params: {
+      vendor_id: vendorId,
+    },
+  })
+}
+
+// 金流明細列表
+export const getVendorFinanceTransactions = (vendorId) => {
+  return api.get('/vendor/finance/getTransactions', {
+    params: {
+      vendor_id: vendorId,
+    },
+  })
+}
+
+// 申請撥款
+export const requestVendorPayout = (data) => {
+  return api.post('/vendor/finance/requestPayout', data)
+}
+
 // 商品成效
 export const getVendorProductPerformance = (
   vendorId,

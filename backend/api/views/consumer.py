@@ -8,7 +8,7 @@ from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo
-from .platform import calculate_order_commission
+from .platform import calculate_order_commission, calculate_vendor_earning
 from payments.models import PaymentTransaction
 from payments.services import pick_relevant_payment
 
@@ -1369,6 +1369,7 @@ def update_order_status(request):
         )
 
     commission_result = None
+    vendor_result = None
 
     # 「完成訂單」是分潤唯一的觸發點，需要額外驗證，
     # 避免商品送達前、或已取消/退款的訂單被算進分潤。
@@ -1417,6 +1418,18 @@ def update_order_status(request):
                     'commission_amount': 0,
                     'message': str(commission_error)
                 }
+
+            # 廠商入帳跟 KOC 分潤是同一個觸發點：訂單第一次被標記 completed 的當下。
+            # 這裡故意放在 commission 計算「之後」，因為 calculate_vendor_earning 需要
+            # 讀取剛才 calculate_order_commission 建立的 Earnings 紀錄，藉此判斷這筆
+            # 訂單裡有多少金額已經被算給 KOC 分潤，才能從廠商淨額裡正確扣除。
+            try:
+                vendor_result = calculate_vendor_earning(order)
+            except Exception as vendor_error:
+                vendor_result = [{
+                    'created': False,
+                    'message': str(vendor_error)
+                }]
     else:
         order.order_status = order_status
         order.save()
@@ -1429,6 +1442,9 @@ def update_order_status(request):
 
     if commission_result:
         response_data['commission'] = commission_result
+
+    if vendor_result:
+        response_data['vendor_earning'] = vendor_result
 
     return Response(response_data, status=status.HTTP_200_OK)
 

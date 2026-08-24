@@ -42,6 +42,10 @@ class VendorProfileUpdateSerializer(serializers.ModelSerializer):
             "sender_city",
             "sender_district",
             "sender_address",
+
+            "bank_code",
+            "bank_account",
+            "bank_account_name",
         ]
 
     def update(self, instance, validated_data):
