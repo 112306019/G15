@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "api",
+    "payments",
 ]
 
 MIDDLEWARE = [
@@ -179,3 +180,24 @@ EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "KOC Platform <no-reply@kocplatform.com>")
+
+# ==============================================================================
+# ECPay 綠界科技
+# MerchantID / HashKey / HashIV 皆從環境變數讀取，不寫死在程式碼裡；
+# 未設定時故意留空字串，缺漏會在 payments/services.py 實際呼叫時明確報錯，
+# 而不是讓別的、沒用到 ECPay 的指令（如 manage.py test）因為缺環境變數而啟動失敗。
+# ==============================================================================
+ECPAY_MERCHANT_ID = os.getenv("ECPAY_MERCHANT_ID", "")
+ECPAY_HASH_KEY = os.getenv("ECPAY_HASH_KEY", "")
+ECPAY_HASH_IV = os.getenv("ECPAY_HASH_IV", "")
+# stage：測試環境（payment-stage.ecpay.com.tw） / production：正式環境（payment.ecpay.com.tw）
+ECPAY_ENV = os.getenv("ECPAY_ENV", "stage")
+# 綠界 Server-to-Server 付款結果通知網址（ReturnURL），必須是可公開訪問的網址（本機開發需用 ngrok 等工具轉發）
+ECPAY_RETURN_URL = os.getenv("ECPAY_RETURN_URL", "")
+# 消費者付款完成後，綠界把「瀏覽器」導回的網址（OrderResultURL）。
+# 這條路徑打的也是後端（跟 ReturnURL 一樣要公開可訪問），後端收到後再把瀏覽器導去 FRONTEND_BASE_URL 底下的結果頁，
+# 不能直接填前端網址：OrderResultURL 帶回的是 Form POST + CheckMacValue，前端 SPA 沒有能力接收、驗證這個請求。
+ECPAY_ORDER_RESULT_URL = os.getenv("ECPAY_ORDER_RESULT_URL", "")
+
+# 前端網站的網域，後端驗證完 OrderResultURL 通知後，會把瀏覽器導去 {FRONTEND_BASE_URL}/checkout/result?order_id=...
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
