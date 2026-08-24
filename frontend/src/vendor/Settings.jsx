@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { getVendorProfile, updateVendorProfile } from '../api/vendor'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Building, Bell, Shield, MapPin } from 'lucide-react'
+import { LogOut, Building, Bell, Shield, MapPin, Landmark } from 'lucide-react'
 import { cn } from './lib/utils'
 import {
   TAIWAN_CITIES,
@@ -52,6 +52,10 @@ export default function Settings() {
     sender_city: '',
     sender_district: '',
     sender_address: '',
+
+    bank_code: '',
+    bank_account: '',
+    bank_account_name: '',
   })
 
   const [loading, setLoading] = useState(true)
@@ -99,6 +103,10 @@ export default function Settings() {
           sender_city: senderCity,
           sender_district: senderDistrict,
           sender_address: vendor.sender_address || '',
+
+          bank_code: vendor.bank_code || '',
+          bank_account: vendor.bank_account || '',
+          bank_account_name: vendor.bank_account_name || '',
         })
       } catch (err) {
         setError(
@@ -190,6 +198,10 @@ export default function Settings() {
         sender_city: profile.sender_city.trim(),
         sender_district: profile.sender_district.trim(),
         sender_address: profile.sender_address.trim(),
+
+        bank_code: profile.bank_code.trim(),
+        bank_account: profile.bank_account.trim(),
+        bank_account_name: profile.bank_account_name.trim(),
       })
 
       setMessage('公司與寄件資料更新成功')
@@ -408,6 +420,75 @@ export default function Settings() {
                   disabled={saving}
                 >
                   {saving ? '儲存中...' : '儲存寄件資訊'}
+                </Button>
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* 💰 撥款銀行帳戶 */}
+        <Card className="space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
+            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <Landmark size={20} className="text-[#2F8F4E]" />
+              撥款銀行帳戶
+            </h2>
+            <p className="text-xs font-bold text-[#8C8880] ml-7">申請撥款前必須先綁定，款項將直接匯入此帳戶</p>
+          </div>
+
+          {loading ? (
+            <div className="py-8 flex justify-center text-[#8C8880] animate-pulse">
+              <div className="w-6 h-6 border-2 border-[#2F8F4E] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input
+                  label="銀行代碼"
+                  name="bank_code"
+                  value={profile.bank_code}
+                  onChange={(event) =>
+                    setProfile(previous => ({
+                      ...previous,
+                      bank_code: event.target.value.replace(/\D/g, '').slice(0, 10),
+                    }))
+                  }
+                  inputMode="numeric"
+                  placeholder="例如 822"
+                />
+
+                <Input
+                  label="銀行帳號"
+                  name="bank_account"
+                  value={profile.bank_account}
+                  onChange={(event) =>
+                    setProfile(previous => ({
+                      ...previous,
+                      bank_account: event.target.value.replace(/\D/g, '').slice(0, 50),
+                    }))
+                  }
+                  inputMode="numeric"
+                  placeholder="請輸入完整銀行帳號"
+                />
+
+                <div className="md:col-span-2">
+                  <Input
+                    label="銀行戶名"
+                    name="bank_account_name"
+                    value={profile.bank_account_name}
+                    onChange={handleProfileChange}
+                    placeholder="需與存摺戶名完全一致"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <Button
+                  variant="brand"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                >
+                  {saving ? '儲存中...' : '儲存銀行帳戶'}
                 </Button>
               </div>
             </>
