@@ -84,7 +84,7 @@ def ecpay_store_map(request):
     """
 
     callback_url = (
-        "https://koc-backend.onrender.com"
+        "https://g15-backend.onrender.com"
         "/api/shipping/ecpay/map/callback/"
     )
 
