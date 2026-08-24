@@ -449,6 +449,11 @@ export default function CheckoutPage({
     const url =
       `${API_BASE_URL}/api/shipping/ecpay/map/`;
 
+    console.log(
+      "ECPay map URL:",
+      url
+    );
+
     const width = 700;
     const height = 700;
 
