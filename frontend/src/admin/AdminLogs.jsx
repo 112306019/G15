@@ -46,10 +46,12 @@ export default function AdminLogs() {
   const getActionBadge = (type) => {
     switch (type) {
       case 'approve_koc':
+      case 'confirm_vendor_payout_completed':
       case '核准入駐':
       case '手動撥款':
         return { icon: <CheckCircle size={14} />, color: 'text-[#B89B6A] bg-[#F5F0E8] border-[#B89B6A]/30' };
       case 'reject_koc':
+      case 'confirm_vendor_payout_failed':
       case '停權處分':
         return { icon: <ShieldAlert size={14} />, color: 'text-[#C8522A] bg-[#FDF0ED] border-[#C8522A]/20' };
       case 'review_vendor':
@@ -96,6 +98,8 @@ export default function AdminLogs() {
             <option>approve_koc</option>
             <option>reject_koc</option>
             <option>review_vendor</option>
+            <option>confirm_vendor_payout_completed</option>
+            <option>confirm_vendor_payout_failed</option>
           </select>
 
           <div className="relative flex-1 md:w-64">

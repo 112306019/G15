@@ -21,7 +21,7 @@ export default function AdminLogin() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("admin@koc.com");
   const [password, setPassword] = useState("password");
-  const [role, setRole] = useState("Super Admin"); // 🌟 新增權限狀態
+  const [role, setRole] = useState("super_admin"); // 🌟 新增權限狀態（跟後端 Admins.role 的 snake_case 慣例對齊）
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   const handleLogin = (e) => {
@@ -139,9 +139,9 @@ export default function AdminLogin() {
                   onChange={(e) => setRole(e.target.value)}
                   className="w-full appearance-none rounded-2xl border border-[#E2DDD4] bg-white px-5 py-4 text-sm font-bold text-[#1A1A18] shadow-sm outline-none transition-all focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30 cursor-pointer"
                 >
-                  <option value="Super Admin">👑 Super Admin (最高權限)</option>
-                  <option value="Reviewer">📝 Reviewer (審核員，無財務權限)</option>
-                  <option value="Finance">💰 Finance (財務員，僅看帳與審核)</option>
+                  <option value="super_admin">👑 Super Admin (最高權限)</option>
+                  <option value="reviewer">📝 Reviewer (審核員，無財務權限)</option>
+                  <option value="finance">💰 Finance (財務員，僅看帳與審核)</option>
                 </select>
                 <ChevronDown size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-[#8C8880] pointer-events-none" />
               </div>
