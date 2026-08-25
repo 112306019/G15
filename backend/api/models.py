@@ -1,4 +1,5 @@
 from django.db import models, transaction
+from decimal import Decimal
 import uuid
 
 # ==============================================================================
@@ -208,6 +209,8 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=50, default='unpaid')
     shipping_status = models.CharField(max_length=50, default='unshipped')
     created_at = models.DateTimeField(auto_now_add=True)
+    # 出貨狀態變成 'delivered' 的當下寫入，作為鑑賞期倒數的起算點
+    delivered_at = models.DateTimeField(null=True, blank=True, db_column='delivered_at')
 
     class Meta:
         db_table = 'Order'
@@ -407,11 +410,17 @@ class Transactions(models.Model):
         related_name='transactions', db_column='vendor_wallet_id'
     )
 
-    # 金流種類，例如：'deposit'(儲值), 'withdraw'(提領), 'reward'(分潤), 'pay'(付活動費)
+    # 金流種類，例如：'deposit'(儲值), 'withdraw'(提領), 'reward'(分潤), 'order_income'(廠商訂單入帳),
+    # 'settle'(凍結轉可提領), 'pay'(付活動費)
     type = models.CharField(max_length=50) 
-    # 交易金額
+    # 交易金額（withdraw/order_income/settle 都是「入帳或出帳的實際金額」）
     amount = models.IntegerField()
-    
+
+    # 只有 type='order_income' 才會填：入帳前的原始小計與扣掉的手續費/分潤，
+    # 純粹是為了明細頁能顯示分解，不參與餘額計算（餘額只認 amount）
+    gross_amount = models.IntegerField(null=True, blank=True)
+    fee_amount = models.IntegerField(null=True, blank=True)
+
     # 關聯業務軌跡（例如：reference_type='order', reference_id='訂單UUID'）
     reference_type = models.CharField(max_length=50, blank=True, null=True)
     reference_id = models.CharField(max_length=100, blank=True, null=True)
@@ -610,6 +619,17 @@ class Vendor(models.Model):
     # is_verified 只代表「這個信箱真的存在、廠商收得到信」，審核通過與否是另一條流程。
     is_verified = models.BooleanField(default=True, db_column='is_verified')
 
+    # 金流：撥款銀行帳戶
+    bank_code = models.CharField(max_length=10, blank=True, default='', db_column='bank_code')
+    bank_account = models.CharField(max_length=50, blank=True, default='', db_column='bank_account')
+    bank_account_name = models.CharField(max_length=100, blank=True, default='', db_column='bank_account_name')
+
+    # 金流：平台抽成比例（每個廠商可談不同費率，單位：百分比，例如 5.00 代表 5%）
+    platform_fee_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('0.00'),
+        db_column='platform_fee_rate'
+    )
+
     class Meta:
         db_table = 'Vendor'
 
@@ -680,6 +700,21 @@ class Payouts(models.Model):
 
     def __str__(self):
         return f"Payout {self.payout_id}"
+
+
+class VendorPayouts(models.Model):
+    """廠商撥款申請紀錄（比照 Payouts，但主體是 Vendor 而不是 User）"""
+    payout_id = models.AutoField(primary_key=True)
+    vendor = models.ForeignKey('Vendor', on_delete=models.CASCADE, db_column='vendor_id')
+    amount = models.IntegerField()
+    payout_date = models.DateField()
+    status = models.CharField(max_length=50, default='pending')
+
+    class Meta:
+        db_table = 'Vendor_Payouts'
+
+    def __str__(self):
+        return f"VendorPayout {self.payout_id}"
 
 
 class Earnings(models.Model):

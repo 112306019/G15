@@ -35,7 +35,7 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, sync_expired_promoting_missions
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email, send_vendor_approval_email
 from payments.services import pick_relevant_payment
 
@@ -210,6 +210,238 @@ def calculate_order_commission(order):
         ),
         "message": "分潤建立成功"
     }
+
+
+# ==============================================================================
+# 廠商入帳：訂單付款完成後，依廠商分組計算「廠商應得淨額」並存入凍結餘額
+# 淨額 = 該廠商商品小計 - 這筆訂單已計算給 KOC 的分潤(若該分潤屬於同一廠商的活動) - 平台手續費
+#
+# 呼叫時機：跟 calculate_order_commission 同一個觸發點（訂單 payment_status 轉為
+# paid/completed 的地方，目前應該在 consumer.py 裡）。建議兩個函式一起呼叫：
+#   commission_result = calculate_order_commission(order)
+#   vendor_results = calculate_vendor_earning(order)
+# ==============================================================================
+
+def calculate_vendor_earning(order):
+    """
+    訂單付款完成後，把錢分帳給訂單裡涉及的每一個廠商（同一張訂單可能有多個廠商的商品）。
+    這筆錢先進 VendorWallet.balance_frozen（鑑賞期內不可提領），
+    等 admin_settle_vendor_earnings 結算後才會轉進 balance_available。
+    """
+
+    order_items = (
+        OrderItem.objects
+        .filter(order=order)
+        .select_related("product")
+    )
+
+    if not order_items:
+        return []
+
+    # 依商品所屬廠商分組
+    items_by_vendor = {}
+    for item in order_items:
+        vendor_id = item.product.vendor_id
+        items_by_vendor.setdefault(vendor_id, []).append(item)
+
+    # 這筆訂單如果有算過 KOC 分潤，抓出來看是哪個活動（用來判斷分潤該從哪個廠商的淨額扣除）
+    order_earning = (
+        Earnings.objects
+        .select_related("kocmission__application__campaign__vendor")
+        .filter(order=order)
+        .first()
+    )
+    commission_vendor_id = None
+    commission_amount = 0
+    if order_earning and order_earning.kocmission:
+        campaign = order_earning.kocmission.application.campaign
+        if campaign and campaign.vendor_id:
+            commission_vendor_id = campaign.vendor_id
+            commission_amount = order_earning.amount
+
+    results = []
+
+    for vendor_id, items in items_by_vendor.items():
+        # 同一筆訂單、同一廠商，避免重複入帳（可能被呼叫兩次，例如重試付款 webhook）
+        already_credited = Transactions.objects.filter(
+            vendor_wallet__vendor_id=vendor_id,
+            type="order_income",
+            reference_type="order",
+            reference_id=str(order.order_id)
+        ).exists()
+
+        if already_credited:
+            results.append({
+                "vendor_id": vendor_id,
+                "created": False,
+                "message": "此訂單已對該廠商入帳過"
+            })
+            continue
+
+        try:
+            vendor = Vendor.objects.get(vendor_id=vendor_id)
+        except Vendor.DoesNotExist:
+            results.append({
+                "vendor_id": vendor_id,
+                "created": False,
+                "message": "找不到廠商"
+            })
+            continue
+
+        items_subtotal = sum(Decimal(str(i.subtotal)) for i in items)
+
+        fee_rate = Decimal(str(vendor.platform_fee_rate or 0))
+        platform_fee = (items_subtotal * fee_rate / Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+
+        koc_deduction = Decimal("0")
+        if vendor_id == commission_vendor_id:
+            koc_deduction = Decimal(str(commission_amount))
+
+        net_amount = int(
+            (items_subtotal - platform_fee - koc_deduction).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+
+        if net_amount <= 0:
+            results.append({
+                "vendor_id": vendor_id,
+                "created": False,
+                "message": "計算後廠商淨額為 0 或負數"
+            })
+            continue
+
+        with transaction.atomic():
+            wallet, _ = VendorWallet.objects.select_for_update().get_or_create(
+                vendor=vendor
+            )
+            wallet.balance_frozen = wallet.balance_frozen + net_amount
+            wallet.save(update_fields=["balance_frozen", "updated_at"])
+
+            Transactions.objects.create(
+                vendor_wallet=wallet,
+                type="order_income",
+                amount=net_amount,
+                gross_amount=int(items_subtotal),
+                fee_amount=int(platform_fee + koc_deduction),
+                reference_type="order",
+                reference_id=str(order.order_id)
+            )
+
+        results.append({
+            "vendor_id": vendor_id,
+            "created": True,
+            "items_subtotal": int(items_subtotal),
+            "platform_fee": int(platform_fee),
+            "koc_commission_deducted": int(koc_deduction),
+            "net_amount": net_amount
+        })
+
+    return results
+
+
+# ==============================================================================
+# 廠商結算：出貨完成滿 N 天鑑賞期後，把廠商凍結餘額轉成可提領餘額
+# POST /platform_admin/vendor/settle-earnings
+#
+# 用途：after 出貨後鑑賞期過了，才能把「已入帳但還在凍結」的款項轉為可提領。
+# 這支可以由排程（cron / celery beat）定期呼叫，也可以在後台放一顆手動按鈕呼叫。
+# ==============================================================================
+
+# 鑑賞期天數已搬進 constants.py（VENDOR_SETTLEMENT_HOLD_DAYS），這裡改成從那邊 import
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_settle_vendor_earnings(request):
+    vendor_id = request.data.get('vendor_id')  # 選填：只結算單一廠商；不帶則全廠商一起跑
+
+    cutoff = timezone.now() - timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)
+
+    # 找出所有「已入帳但尚未結算」的 order_income 交易
+    income_txns = (
+        Transactions.objects
+        .filter(type="order_income", reference_type="order")
+        .select_related("vendor_wallet__vendor")
+    )
+
+    if vendor_id:
+        income_txns = income_txns.filter(vendor_wallet__vendor_id=vendor_id)
+
+    # 已經結算過的交易：用 (vendor_wallet, reference_id) 這組合去比對，
+    # 不能只看 reference_id ── 同一張訂單如果有多個廠商的商品，
+    # 每個廠商的 order_income 交易 reference_id 會是同一個 order_id，
+    # 只用 reference_id 判斷會導致其中一個廠商結算後，另一個廠商的份被誤判成「已結算」而跳過。
+    settled_keys = set(
+        Transactions.objects
+        .filter(type="settle", reference_type="order")
+        .values_list("vendor_wallet_id", "reference_id")
+    )
+
+    # 把還沒結算的交易，依訂單 delivered_at 篩出已經過了鑑賞期的
+    pending_income_txns = [
+        t for t in income_txns
+        if (t.vendor_wallet_id, t.reference_id) not in settled_keys
+    ]
+
+    order_ids = [t.reference_id for t in pending_income_txns]
+    orders_by_id = {
+        str(o.order_id): o
+        for o in Order.objects.filter(order_id__in=order_ids)
+    }
+
+    settled = []
+    skipped = []
+
+    for txn in pending_income_txns:
+        order = orders_by_id.get(txn.reference_id)
+
+        if not order or not order.delivered_at:
+            skipped.append({
+                'transaction_id': txn.transaction_id,
+                'reason': '訂單尚未出貨完成（無 delivered_at）'
+            })
+            continue
+
+        if order.delivered_at > cutoff:
+            skipped.append({
+                'transaction_id': txn.transaction_id,
+                'reason': f'鑑賞期尚未結束，需等到 {(order.delivered_at + timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)).isoformat()}'
+            })
+            continue
+
+        with transaction.atomic():
+            wallet = VendorWallet.objects.select_for_update().get(
+                pk=txn.vendor_wallet_id
+            )
+            wallet.balance_frozen = max(0, wallet.balance_frozen - txn.amount)
+            wallet.balance_available = wallet.balance_available + txn.amount
+            wallet.save(update_fields=["balance_frozen", "balance_available", "updated_at"])
+
+            Transactions.objects.create(
+                vendor_wallet=wallet,
+                type="settle",
+                amount=txn.amount,
+                reference_type="order",
+                reference_id=txn.reference_id
+            )
+
+        settled.append({
+            'vendor_id': wallet.vendor_id,
+            'order_id': txn.reference_id,
+            'amount': txn.amount
+        })
+
+    return Response({
+        'success': True,
+        'err': '',
+        'settled_count': len(settled),
+        'total_amount': sum(s['amount'] for s in settled),
+        'settled': settled,
+        'skipped': skipped
+    }, status=status.HTTP_200_OK)
 
 
 # ==============================================================================

@@ -13,7 +13,7 @@ function ImgIcon() {
 
 function HeartIcon({ filled = false }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5">
       <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
     </svg>
   );
@@ -21,7 +21,7 @@ function HeartIcon({ filled = false }) {
 
 function XIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
@@ -30,7 +30,7 @@ function XIcon() {
 
 function BackIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
       <path d="M19 12H5" />
       <path d="M12 5l-7 7 7 7" />
     </svg>
@@ -223,38 +223,47 @@ export default function CartPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">載入購物車中...</p>
+      <div className="min-h-screen bg-[#F5F0E8] flex flex-col items-center justify-center font-sans text-[#8C8880] animate-pulse">
+        <div className="w-8 h-8 border-2 border-[#C8522A] border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-bold tracking-widest text-sm uppercase">Loading</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-serif">
-      <div className="mx-auto max-w-[860px] px-6 pb-20 pt-12">
+    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans">
+      <div className="mx-auto max-w-[860px] px-6 pb-20 pt-12 animate-in fade-in duration-500">
 
-        {/* Heading */}
-        <div className="mb-7 flex items-baseline gap-4">
-          <h1 className="font-['DM_Serif_Display'] text-[32px]">購物車</h1>
-          <span className="font-mono text-[16px] text-[#8C8880]">{count}</span>
+        {/* 🌟 統一風格的大標題 (移除橘色底線) */}
+        <div className="mb-10">
+          <div className="flex items-baseline gap-4">
+            <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#1A1A18]">購物車</h1>
+            <span className="text-sm font-bold text-[#8C8880] tracking-wide">
+              {count > 0 ? `共 ${count} 件商品` : ''}
+            </span>
+          </div>
         </div>
 
         {items.length === 0 ? (
-          <div className="py-20 text-center text-[#8C8880]">
-            <p className="text-lg font-bold mb-2">購物車是空的</p>
-            <button onClick={onContinueShopping} className="mt-4 text-sm font-bold text-[#1A1A18] underline hover:text-[#C8522A]">
+          <div className="py-24 text-center text-[#8C8880]">
+            <p className="text-lg font-bold mb-4 text-[#1A1A18]">購物車是空的</p>
+            <p className="text-sm font-medium mb-8">看起來您還沒有挑選任何商品。</p>
+            <button 
+              onClick={onContinueShopping} 
+              className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 shadow-md"
+            >
               前往購物
             </button>
           </div>
         ) : (
           <>
             {/* Table */}
-            <div className="mb-8 overflow-hidden rounded-[16px] border border-[#E2DDD4] bg-white">
-              <div className="grid grid-cols-[1fr_100px_160px_100px_56px] gap-0 border-b border-[#E2DDD4] bg-[#F5F0E8] px-6 py-3.5">
-                <div className="text-[12px] tracking-[0.1em] uppercase text-[#8C8880]">項目</div>
-                <div className="text-center text-[12px] tracking-[0.1em] uppercase text-[#8C8880]">價格</div>
-                <div className="text-center text-[12px] tracking-[0.1em] uppercase text-[#8C8880]">數量</div>
-                <div className="text-right text-[12px] tracking-[0.1em] uppercase text-[#8C8880]">總計</div>
+            <div className="mb-8 overflow-hidden rounded-[2rem] border border-[#E2DDD4] bg-white shadow-sm">
+              <div className="grid grid-cols-[1fr_100px_140px_100px_56px] gap-0 border-b border-[#E2DDD4] bg-[#FDFAF6] px-8 py-4">
+                <div className="text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">項目</div>
+                <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">價格</div>
+                <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">數量</div>
+                <div className="text-right text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">總計</div>
                 <div />
               </div>
 
@@ -264,41 +273,41 @@ export default function CartPage({
                   <div
                     key={it.id}
                     className={[
-                      "grid grid-cols-[1fr_100px_160px_100px_56px] items-center px-6 py-5 border-b border-[#E2DDD4] transition-colors",
+                      "grid grid-cols-[1fr_100px_140px_100px_56px] items-center px-8 py-6 border-b border-[#E2DDD4] transition-colors",
                       "hover:bg-[#FDFAF6]",
                       it.removing ? "opacity-0 translate-x-5 transition-all duration-300 ease-out" : "",
                     ].join(" ")}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-5">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(it.id)}
                         onChange={() => toggleSelect(it.id)}
-                        className="h-4 w-4"
+                        className="h-4 w-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer"
                       />
-                      <div className={`h-14 w-14 shrink-0 rounded-[10px] bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60`}>
+                      <div className={`h-16 w-16 shrink-0 rounded-2xl bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60 shadow-inner`}>
                         <ImgIcon />
                       </div>
-                      <span className="text-[14px]">{it.name}</span>
+                      <span className="text-sm font-bold leading-relaxed">{it.name}</span>
                     </div>
 
-                    <div className="text-center font-mono text-[14px]">{fmt(it.price)}</div>
+                    <div className="text-center text-sm font-bold text-[#8C8880] tracking-wide">{fmt(it.price)}</div>
 
                     <div className="flex justify-center">
-                      <div className="flex items-center overflow-hidden rounded-full border-[1.5px] border-[#E2DDD4] bg-[#F5F0E8]">
-                        <button type="button" className="h-8 w-8 font-mono text-[16px] text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]" onClick={() => changeQty(it.id, -1)}>−</button>
-                        <span className="min-w-7 px-1 text-center font-mono text-[13px]">{it.qty}</span>
-                        <button type="button" className="h-8 w-8 font-mono text-[16px] text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]" onClick={() => changeQty(it.id, 1)}>+</button>
+                      <div className="flex items-center overflow-hidden rounded-full border border-[#E2DDD4] bg-[#F5F0E8]">
+                        <button type="button" className="h-8 w-8 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, -1)}>−</button>
+                        <span className="min-w-8 px-1 text-center text-sm font-bold">{it.qty}</span>
+                        <button type="button" className="h-8 w-8 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, 1)}>+</button>
                       </div>
                     </div>
 
-                    <div className="text-right font-mono text-[14px] font-bold">{fmt(rowTotal)}</div>
+                    <div className="text-right text-sm font-black tracking-wide text-[#1A1A18]">{fmt(rowTotal)}</div>
 
-                    <div className="flex items-center justify-end gap-2.5">
+                    <div className="flex items-center justify-end gap-3">
                       <button
                         type="button"
                         onClick={() => toggleWish(it.id)}
-                        className={["h-7 w-7 rounded-full transition-all flex items-center justify-center", it.wish ? "text-[#C8522A]" : "text-[#E2DDD4]", "hover:bg-[#F5F0E8] hover:text-[#8C8880]"].join(" ")}
+                        className={["h-8 w-8 rounded-full transition-all flex items-center justify-center", it.wish ? "text-[#C8522A]" : "text-[#E2DDD4]", "hover:bg-[#F5F0E8] hover:text-[#1A1A18]"].join(" ")}
                         aria-label="wishlist"
                       >
                         <HeartIcon filled={it.wish} />
@@ -306,7 +315,7 @@ export default function CartPage({
                       <button
                         type="button"
                         onClick={() => removeItem(it.id)}
-                        className="h-7 w-7 rounded-full text-[#E2DDD4] transition-all hover:bg-[#F5F0E8] hover:text-[#8C8880] flex items-center justify-center"
+                        className="h-8 w-8 rounded-full text-[#E2DDD4] transition-all hover:bg-[#FEF5F3] hover:text-[#C8522A] flex items-center justify-center"
                         aria-label="remove"
                       >
                         <XIcon />
@@ -317,22 +326,28 @@ export default function CartPage({
               })}
             </div>
 
-
             {/* Footer */}
-            <div className="flex items-center gap-6">
-              <button type="button" onClick={onContinueShopping} className="inline-flex items-center gap-2 text-[13px] tracking-[0.03em] text-[#8C8880] transition-colors hover:text-[#1A1A18]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-4">
+              <button 
+                type="button" 
+                onClick={onContinueShopping} 
+                className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+              >
                 <BackIcon />
                 繼續購物
               </button>
-              <div className="ml-auto flex items-center gap-6">
-                <span className="text-[13px] text-[#8C8880]">總付款金額：</span>
-                <span className="font-mono text-[22px] font-bold">{fmt(grandTotal)}</span>
+              
+              <div className="flex items-center gap-6 bg-white border border-[#E2DDD4] pl-6 pr-2 py-2 rounded-full shadow-sm">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-bold text-[#8C8880] tracking-widest uppercase">Total</span>
+                  <span className="text-2xl font-black text-[#1A1A18] tracking-tight">{fmt(grandTotal)}</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => onCheckout?.({ subtotal, couponDiscount, pointsDiscount, grandTotal, items: items.filter(it => selectedIds.has(it.id)) })}
-                  className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-[15px] tracking-[0.05em] text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-[1px] whitespace-nowrap"
+                  className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md whitespace-nowrap"
                 >
-                  結帳
+                  去結帳
                 </button>
               </div>
             </div>

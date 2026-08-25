@@ -1,28 +1,25 @@
-import React, { useState, useMemo } from 'react';
-import { X, CheckCircle2, Coins, AlertCircle } from 'lucide-react'; 
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { X, CheckCircle2, Coins, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from './components/ui/Toast';
-
-// 🟢 初始假資料 (改為放進 useState 以便後續更新狀態)
-const initialFinanceData = [
-  { id: '00000006', orderId: '20260302001', amount: 'NTD$ 1399', fee: 'NTD$ 39', netAmount: 'NTD$ 1360', date: '2026-03-02', statusText: '已完成撥款', statusType: 'success', account: '中國信託 (822) ****1234' },
-  { id: '00000005', orderId: '20260510001', amount: 'NTD$ 1470', fee: 'NTD$ 40', netAmount: 'NTD$ 1430', date: '2026-05-10', statusText: '撥款確認中', statusType: 'processing', account: '國泰世華 (013) ****5678' },
-  { id: '00000004', orderId: '20260712001', amount: 'NTD$ 2700', fee: 'NTD$ 70', netAmount: 'NTD$ 2630', date: '2026-07-12', statusText: '待撥款', statusType: 'pending', account: '台北富邦 (012) ****9012' },
-  { id: '00000003', orderId: '20260112003', amount: 'NTD$ 100', fee: 'NTD$ 15', netAmount: 'NTD$ 85', date: '2026-01-12', statusText: '待撥款', statusType: 'pending', account: '中國信託 (822) ****1234' },
-  { id: '00000002', orderId: '20260112002', amount: 'NTD$ 100', fee: 'NTD$ 15', netAmount: 'NTD$ 85', date: '2026-01-12', statusText: '待撥款', statusType: 'pending', account: '中國信託 (822) ****1234' },
-  { id: '00000001', orderId: '20260112001', amount: 'NTD$ 100', fee: 'NTD$ 15', netAmount: 'NTD$ 85', date: '2026-01-12', statusText: '款項異常,審核中', statusType: 'error', account: '未設定' },
-];
+import {
+  getVendorFinanceOverview,
+  getVendorFinanceTransactions,
+  requestVendorPayout,
+} from '../api/vendor';
 
 const getStatusBadge = (text, type) => {
   const styles = {
     success: 'bg-[#F5F0E8] text-[#1A1A18]', 
     processing: 'bg-[#FDF0ED] text-[#C8522A]', 
     pending: 'bg-white border border-[#E2DDD4] text-[#8C8880]', 
+    frozen: 'bg-white border border-[#E2DDD4] text-[#B8B4AC]',
     error: 'bg-[#FFF0F0] text-[#D93025]', 
   };
   const dots = {
     success: 'bg-[#1A1A18]',
     processing: 'bg-[#C8522A]',
     pending: 'bg-[#E2DDD4]',
+    frozen: 'bg-[#E2DDD4]',
     error: 'bg-[#D93025]',
   };
 
@@ -34,17 +31,65 @@ const getStatusBadge = (text, type) => {
   );
 };
 
-// 輔助函式：將 'NTD$ 1399' 轉換為純數字 1399
-const parseAmount = (str) => Number(str.replace(/[^0-9.-]+/g, ""));
+const fmt = (n) => `NTD$ ${Number(n || 0).toLocaleString()}`;
+
+// 把後端回傳的單筆交易轉成表格要用的顯示格式
+const mapTxn = (t) => ({
+  id: t.id,
+  orderId: t.order_id || '—',
+  amount: fmt(t.gross_amount != null ? t.gross_amount : t.amount),
+  fee: fmt(t.fee_amount != null ? t.fee_amount : 0),
+  netAmount: fmt(t.amount),
+  netAmountRaw: Number(t.amount || 0),
+  date: t.date,
+  statusText: t.statusText,
+  statusType: t.statusType,
+  account: t.account,
+});
 
 export default function Finance() {
   const { toast } = useToast();
-  const [txData, setTxData] = useState(initialFinanceData); // 整個表格的資料狀態
+  const vendorId = localStorage.getItem('vendor_id');
+
+  const [txData, setTxData] = useState([]); // 整個表格的資料狀態
   const [selectedIds, setSelectedIds] = useState([]); // 紀錄被打勾的項目 ID
   const [selectedTx, setSelectedTx] = useState(null); // 查看單筆明細用
-  
+
+  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState({ withdrawable_amount: 0, pending_amount: 0, hasBankAccount: false });
+
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutSuccess, setPayoutSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadData = useCallback(async () => {
+    if (!vendorId) return;
+    setLoading(true);
+    try {
+      const [overviewRes, txRes] = await Promise.all([
+        getVendorFinanceOverview(vendorId),
+        getVendorFinanceTransactions(vendorId),
+      ]);
+
+      if (overviewRes.data?.success) {
+        setOverview(overviewRes.data);
+      }
+
+      if (txRes.data?.success) {
+        setTxData(txRes.data.transactions.map(mapTxn));
+      } else {
+        toast.error(txRes.data?.err || '讀取金流明細失敗');
+      }
+    } catch (err) {
+      toast.error('讀取金流資料失敗，請稍後再試');
+    } finally {
+      setLoading(false);
+    }
+  }, [vendorId, toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // 🟢 處理單一 Checkbox 勾選/取消
   const handleSelectRow = (id) => {
@@ -64,62 +109,86 @@ export default function Finance() {
 
   // 🟢 點擊「申請撥款」按鈕的防呆檢查
   const handleOpenPayout = () => {
+    if (!overview.hasBankAccount) {
+      toast.error("請先至「設定」頁面綁定撥款銀行帳戶");
+      return;
+    }
+
     if (selectedIds.length === 0) {
       toast.error("請先勾選您想要申請撥款的項目");
       return;
     }
 
-    // 檢查選中的項目中，是否有不是「待撥款」狀態的
+    // 檢查選中的項目中，是否有不是「待撥款」狀態的（鑑賞期中/處理中/已完成 都不能再選）
     const selectedTxs = txData.filter(tx => selectedIds.includes(tx.id));
     const hasInvalidTx = selectedTxs.some(tx => tx.statusType !== 'pending');
 
     if (hasInvalidTx) {
-      toast.error("勾選的項目中包含「已完成撥款」或「處理中」的款項，請僅勾選狀態為「待撥款」的項目");
+      toast.error("勾選的項目中包含「鑑賞期中」或非「待撥款」的款項，請僅勾選狀態為「待撥款」的項目");
       return;
     }
 
     setIsPayoutModalOpen(true);
   };
 
-  // 🟢 確認申請撥款並變更狀態
-  const handleConfirmPayout = () => {
-    setPayoutSuccess(true);
-    
-    // 模擬 API 呼叫延遲 1.5 秒
-    setTimeout(() => {
-      // 1. 把所有剛才選中的項目，狀態改成「撥款確認中」
-      setTxData(prev => prev.map(tx => {
-        if (selectedIds.includes(tx.id)) {
-          return { ...tx, statusText: '撥款確認中', statusType: 'processing' };
-        }
-        return tx;
-      }));
+  // 🟢 確認申請撥款（實際呼叫後端 API）
+  const handleConfirmPayout = async () => {
+    setSubmitting(true);
+    try {
+      const res = await requestVendorPayout({
+        vendor_id: vendorId,
+        amount: stats.totalNetAmount,
+      });
 
-      // 2. 清空勾選狀態、關閉彈窗
-      setSelectedIds([]);
-      setIsPayoutModalOpen(false);
-      setPayoutSuccess(false);
-    }, 1500); 
+      if (!res.data?.success) {
+        toast.error(res.data?.err || '申請撥款失敗');
+        setSubmitting(false);
+        return;
+      }
+
+      setPayoutSuccess(true);
+
+      // 重新拉一次最新的金流資料（狀態、餘額都會變）
+      await loadData();
+
+      setTimeout(() => {
+        setSelectedIds([]);
+        setIsPayoutModalOpen(false);
+        setPayoutSuccess(false);
+        setSubmitting(false);
+      }, 1200);
+    } catch (err) {
+      toast.error('申請撥款失敗，請稍後再試');
+      setSubmitting(false);
+    }
   };
 
-  // 計算選中項目的總金額 (用於顯示在彈出視窗)
+  // 計算選中項目的總金額 (用於顯示在彈出視窗，以及實際送出撥款申請)
   const stats = useMemo(() => {
     const selectedPendingTxs = txData.filter(tx => selectedIds.includes(tx.id));
-    const totalAmount = selectedPendingTxs.reduce((sum, tx) => sum + parseAmount(tx.amount), 0);
-    const totalNetAmount = selectedPendingTxs.reduce((sum, tx) => sum + parseAmount(tx.netAmount), 0);
-    
+    const totalNetAmountRaw = selectedPendingTxs.reduce((sum, tx) => sum + tx.netAmountRaw, 0);
+
     return {
       count: selectedPendingTxs.length,
-      totalAmount: `NTD$ ${totalAmount.toLocaleString()}`,
-      totalNetAmount: `NTD$ ${totalNetAmount.toLocaleString()}`
+      totalNetAmount: totalNetAmountRaw, // 純數字，申請撥款 API 用
+      totalNetAmountDisplay: fmt(totalNetAmountRaw), // 格式化字串，畫面顯示用
     };
   }, [selectedIds, txData]);
+
+  if (!vendorId) {
+    return (
+      <div className="flex items-center gap-2 text-sm font-bold text-[#D93025] bg-[#FFF0F0] rounded-2xl p-5 border border-[#FFD7D2]">
+        <AlertCircle size={18} />
+        找不到廠商登入資訊，請重新登入後再試一次。
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 relative">
       
       {/* 頂部操作區塊 */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-serif font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           金流明細
@@ -133,6 +202,32 @@ export default function Finance() {
         </button>
       </div>
 
+      {/* 餘額總覽 */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-[#E2DDD4] p-5">
+          <p className="text-xs font-bold text-[#8C8880] mb-1">可提領餘額</p>
+          <p className="text-2xl font-black text-[#C8522A]">{fmt(overview.withdrawable_amount)}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-[#E2DDD4] p-5">
+          <p className="text-xs font-bold text-[#8C8880] mb-1">鑑賞期凍結中</p>
+          <p className="text-2xl font-black text-[#8C8880]">{fmt(overview.pending_amount)}</p>
+        </div>
+      </div>
+
+      {!overview.hasBankAccount && (
+        <div className="flex items-center gap-2 text-sm font-bold text-[#C8522A] bg-[#FDF0ED] rounded-2xl p-4 border border-[#F5D5C8] mb-6">
+          <AlertCircle size={18} />
+          尚未綁定撥款銀行帳戶，請至「設定」頁面完成綁定後才能申請撥款。
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 text-sm font-bold text-[#8C8880] py-20">
+          <Loader2 size={18} className="animate-spin" />
+          載入金流資料中...
+        </div>
+      ) : (
+      <>
       {/* 明細列表卡片 */}
       <div className="bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -188,10 +283,19 @@ export default function Finance() {
                   </td>
                 </tr>
               ))}
+              {txData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-sm font-bold text-[#8C8880]">
+                    目前沒有任何金流紀錄
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* 🟢 單筆明細彈出視窗 (Modal) */}
       {selectedTx && (
@@ -258,27 +362,26 @@ export default function Finance() {
                     <span>待撥款單數</span>
                     <span className="text-[#1A1A18] font-black">{stats.count} 筆</span>
                   </div>
-                  <div className="flex justify-between text-xs font-bold text-[#8C8880]">
-                    <span>累積總金額</span>
-                    <span className="text-[#1A1A18] font-black">{stats.totalAmount}</span>
-                  </div>
                   <div className="flex justify-between items-end pt-3 border-t border-[#E2DDD4] border-dashed">
-                    <span className="text-xs font-bold text-[#1A1A18]">預計實收總額</span>
-                    <span className="text-xl font-black text-[#C8522A]">{stats.totalNetAmount}</span>
+                    <span className="text-xs font-bold text-[#1A1A18]">預計撥款總額</span>
+                    <span className="text-xl font-black text-[#C8522A]">{stats.totalNetAmountDisplay}</span>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
                   <button 
                     onClick={() => setIsPayoutModalOpen(false)}
-                    className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] font-bold text-sm py-3 rounded-full hover:text-[#1A1A18] hover:border-[#1A1A18] transition-all"
+                    disabled={submitting}
+                    className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] font-bold text-sm py-3 rounded-full hover:text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
                   >
                     取消
                   </button>
                   <button 
                     onClick={handleConfirmPayout}
-                    className="flex-1 bg-[#1A1A18] text-[#F5F0E8] font-bold text-sm py-3 rounded-full hover:bg-[#C8522A] transition-all shadow-sm active:scale-95"
+                    disabled={submitting}
+                    className="flex-1 bg-[#1A1A18] text-[#F5F0E8] font-bold text-sm py-3 rounded-full hover:bg-[#C8522A] transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
+                    {submitting && <Loader2 size={14} className="animate-spin" />}
                     確認送出
                   </button>
                 </div>

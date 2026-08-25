@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions
 from api.emails import send_vendor_email_verification_email
 from payments.services import get_order_payment_status
 from api.vendor_serializers import (
@@ -302,6 +302,10 @@ def vendor_profile_get(request):
             "sender_city": vendor.sender_city,
             "sender_district": vendor.sender_district,
             "sender_address": vendor.sender_address,
+            "bank_code": vendor.bank_code,
+            "bank_account": vendor.bank_account,
+            "bank_account_name": vendor.bank_account_name,
+            "platform_fee_rate": str(vendor.platform_fee_rate),
             "created_at": vendor.created_at,
         }
     }, status=status.HTTP_200_OK)
@@ -2320,7 +2324,16 @@ def vendor_order_update_shipping(request):
 
     with transaction.atomic():
         order.shipping_status = shipping_status
-        order.save(update_fields=["shipping_status"])
+
+        update_fields = ["shipping_status"]
+
+        # 第一次轉成 delivered 才寫入 delivered_at，這是廠商鑑賞期結算的起算點，
+        # 不能因為之後又被重複呼叫同一個狀態而被覆蓋掉。
+        if shipping_status == "delivered" and not order.delivered_at:
+            order.delivered_at = timezone.now()
+            update_fields.append("delivered_at")
+
+        order.save(update_fields=update_fields)
 
         shipment = ShipmentInfo.objects.filter(
             order=order
@@ -3130,3 +3143,237 @@ def vendor_upload_image(request):
             "success": False,
             "err": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ==============================================================================
+# 廠商金流：總覽 / 明細 / 申請撥款
+# 比照 koc.py 的 get_revenue_total / get_revenue_history / request_payout 設計
+# ==============================================================================
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def get_vendor_finance_overview(request):
+    """
+    廠商金流總覽：可提領餘額、凍結中(鑑賞期內)金額、是否已綁定銀行帳戶
+    URL: GET /vendor/finance/getOverview
+    """
+    vendor_id = request.query_params.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        wallet = vendor.wallet  # VendorWallet 的 related_name='wallet'
+        balance_available = wallet.balance_available
+        balance_frozen = wallet.balance_frozen
+    except VendorWallet.DoesNotExist:
+        balance_available = 0
+        balance_frozen = 0
+
+    has_bank_account = bool(vendor.bank_account)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "withdrawable_amount": balance_available,
+        "pending_amount": balance_frozen,
+        "hasBankAccount": has_bank_account,
+        "platform_fee_rate": str(vendor.platform_fee_rate),
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def get_vendor_finance_transactions(request):
+    """
+    廠商金流明細列表（Finance.jsx 表格資料源）
+    URL: GET /vendor/finance/getTransactions
+    """
+    vendor_id = request.query_params.get("vendor_id")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        wallet = vendor.wallet
+    except VendorWallet.DoesNotExist:
+        return Response({
+            "success": True,
+            "err": "",
+            "transactions": []
+        }, status=status.HTTP_200_OK)
+
+    txns = (
+        Transactions.objects
+        .filter(vendor_wallet=wallet)
+        .order_by("-created_at")
+    )
+
+    # order_income 的交易才有對應訂單可以查訂單金額；withdraw 是撥款本身，不用查訂單
+    order_ids = [
+        t.reference_id for t in txns
+        if t.reference_type == "order"
+    ]
+    orders_by_id = {
+        str(o.order_id): o
+        for o in Order.objects.filter(order_id__in=order_ids)
+    }
+
+    account_display = (
+        f"{vendor.bank_code} ****{vendor.bank_account[-4:]}"
+        if vendor.bank_account else "未設定"
+    )
+
+    STATUS_TEXT_MAP = {
+        "order_income": ("鑑賞期中", "frozen"),  # 還在凍結餘額，不可勾選申請撥款
+        "settle": ("待撥款", "pending"),          # 已轉入可提領餘額，可勾選申請撥款
+    }
+    PAYOUT_STATUS_TEXT_MAP = {
+        "pending": ("撥款確認中", "processing"),
+        "completed": ("已完成撥款", "success"),
+        "failed": ("款項異常,審核中", "error"),
+    }
+
+    # withdraw 類型的交易，實際狀態要看對應的 VendorPayouts.status
+    payout_ids = [
+        t.reference_id for t in txns
+        if t.type == "withdraw" and t.reference_type == "payout"
+    ]
+    payouts_by_id = {
+        str(p.payout_id): p
+        for p in VendorPayouts.objects.filter(payout_id__in=payout_ids)
+    }
+
+    results = []
+    for t in txns:
+        order = orders_by_id.get(t.reference_id) if t.reference_type == "order" else None
+
+        if t.type == "withdraw":
+            payout = payouts_by_id.get(t.reference_id)
+            status_text, status_type = PAYOUT_STATUS_TEXT_MAP.get(
+                payout.status if payout else "pending", ("撥款確認中", "processing")
+            )
+        else:
+            status_text, status_type = STATUS_TEXT_MAP.get(t.type, (t.type, "pending"))
+
+        results.append({
+            "id": f"{t.transaction_id:08d}",
+            "order_id": str(order.order_id) if order else "",
+            "type": t.type,
+            "amount": t.amount,
+            "gross_amount": t.gross_amount,
+            "fee_amount": t.fee_amount,
+            "date": t.created_at.date().isoformat(),
+            "statusText": status_text,
+            "statusType": status_type,
+            "account": account_display,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "transactions": results
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_request_payout(request):
+    """
+    廠商申請撥款：把可提領餘額(balance_available)送出撥款申請
+    URL: POST /vendor/finance/requestPayout
+    """
+    vendor_id = request.data.get("vendor_id")
+    amount = request.data.get("amount")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if not vendor.bank_account:
+        return Response({
+            "success": False,
+            "err": "尚未綁定銀行帳戶，無法申請撥款"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        wallet = vendor.wallet
+    except VendorWallet.DoesNotExist:
+        wallet = None
+
+    available = wallet.balance_available if wallet else 0
+
+    if available <= 0:
+        return Response({
+            "success": False,
+            "err": "目前沒有可提領的餘額"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    payout_amount = int(amount) if amount else available
+
+    if payout_amount <= 0 or payout_amount > available:
+        return Response({
+            "success": False,
+            "err": "申請金額不可小於等於 0 或超過可提領餘額"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        wallet = VendorWallet.objects.select_for_update().get(vendor=vendor)
+        wallet.balance_available = wallet.balance_available - payout_amount
+        wallet.save(update_fields=["balance_available", "updated_at"])
+
+        payout = VendorPayouts.objects.create(
+            vendor=vendor,
+            amount=payout_amount,
+            payout_date=timezone.localdate(),
+            status="pending"
+        )
+
+        Transactions.objects.create(
+            vendor_wallet=wallet,
+            type="withdraw",
+            amount=payout_amount,
+            reference_type="payout",
+            reference_id=str(payout.payout_id)
+        )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "payout_id": payout.payout_id,
+        "amount": payout.amount,
+        "payout_date": payout.payout_date,
+        "status": payout.status,
+        "remaining_balance": wallet.balance_available,
+    }, status=status.HTTP_200_OK)

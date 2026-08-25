@@ -229,6 +229,39 @@ export default function CheckoutPage({
   // 寫入 localStorage 的結果
   // ============================
   useEffect(() => {
+    const applyStore = (storeData) => {
+      if (!storeData?.store_id) {
+        return;
+      }
+
+      console.log(
+        "取得綠界門市：",
+        storeData
+      );
+
+      setSelectedStore(storeData);
+
+      if (
+        storeWindowRef.current &&
+        !storeWindowRef.current.closed
+      ) {
+        try {
+          storeWindowRef.current.close();
+        } catch (error) {
+          console.warn(
+            "關閉綠界 popup 失敗：",
+            error
+          );
+        }
+      }
+
+      storeWindowRef.current = null;
+    };
+
+
+    // =========================
+    // localStorage 備援
+    // =========================
     const readSelectedStore = () => {
       const raw = localStorage.getItem(
         "ecpaySelectedStore"
@@ -239,35 +272,10 @@ export default function CheckoutPage({
       }
 
       try {
-        const storeData = JSON.parse(raw);
+        const storeData =
+          JSON.parse(raw);
 
-        if (!storeData?.store_id) {
-          return;
-        }
-
-        console.log(
-          "取得綠界門市：",
-          storeData
-        );
-
-        setSelectedStore(storeData);
-
-        // 如果 popup 還存在，嘗試關掉
-        if (
-          storeWindowRef.current &&
-          !storeWindowRef.current.closed
-        ) {
-          try {
-            storeWindowRef.current.close();
-          } catch (error) {
-            console.warn(
-              "關閉綠界 popup 失敗：",
-              error
-            );
-          }
-        }
-
-        storeWindowRef.current = null;
+        applyStore(storeData);
 
       } catch (error) {
         console.error(
@@ -277,6 +285,10 @@ export default function CheckoutPage({
       }
     };
 
+
+    // =========================
+    // storage event
+    // =========================
     const handleStorage = (event) => {
       if (
         event.key ===
@@ -286,16 +298,91 @@ export default function CheckoutPage({
       }
     };
 
+
+    // =========================
+    // popup postMessage
+    // =========================
+    const handleMessage = (event) => {
+      if (
+        event.origin !==
+        window.location.origin
+      ) {
+        return;
+      }
+
+      if (
+        event.data?.type !==
+        "ECPAY_STORE_SELECTED"
+      ) {
+        return;
+      }
+
+      applyStore(
+        event.data.store
+      );
+    };
+
+
+    // =========================
+    // popup 關閉後重新 focus
+    // 再讀一次 localStorage
+    // =========================
+    const handleFocus = () => {
+      readSelectedStore();
+    };
+
+
     window.addEventListener(
       "storage",
       handleStorage
     );
+
+    window.addEventListener(
+      "message",
+      handleMessage
+    );
+
+    window.addEventListener(
+      "focus",
+      handleFocus
+    );
+
+    // =========================
+    // 輪詢備援
+    // postMessage 可能因為綠界頁面
+    // 設定 COOP 而讓 window.opener 失效，
+    // storage 事件在部分瀏覽器/情境下
+    // 也可能沒有即時觸發，
+    // 所以只要 popup 還開著，
+    // 就定期主動檢查一次 localStorage
+    // =========================
+    const pollTimer = setInterval(() => {
+      if (
+        storeWindowRef.current &&
+        !storeWindowRef.current.closed
+      ) {
+        readSelectedStore();
+      }
+    }, 400);
+
 
     return () => {
       window.removeEventListener(
         "storage",
         handleStorage
       );
+
+      window.removeEventListener(
+        "message",
+        handleMessage
+      );
+
+      window.removeEventListener(
+        "focus",
+        handleFocus
+      );
+
+      clearInterval(pollTimer);
     };
   }, []);
 
@@ -448,6 +535,8 @@ export default function CheckoutPage({
 
     const url =
       `${API_BASE_URL}/api/shipping/ecpay/map/`;
+
+    
 
     const width = 700;
     const height = 700;

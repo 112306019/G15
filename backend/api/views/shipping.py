@@ -83,8 +83,14 @@ def ecpay_store_map(request):
     產生綠界 Stage 超商選店表單。
     """
 
-    callback_url = request.build_absolute_uri(
+    callback_url = (
+        "https://g15-backend.onrender.com"
         "/api/shipping/ecpay/map/callback/"
+    )
+
+    print(
+        "CallbackURL:",
+        callback_url
     )
 
     html = f"""
@@ -203,7 +209,7 @@ def ecpay_store_map_callback(request):
 
     # React 開發環境
     frontend_url = (
-        f"http://localhost:5173/ecpay-store-result"
+        f"https://g15-frontend.onrender.com/ecpay-store-result"
         f"?{query_string}"
     )
 

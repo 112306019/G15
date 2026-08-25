@@ -28,6 +28,7 @@ from .views.platform import (
     get_all_missions,
     get_earnings_tracking,
     admin_settle_campaign_earnings,
+    admin_settle_vendor_earnings,
     admin_get_earnings,
     admin_list_settleable_campaigns,
 )
@@ -98,6 +99,7 @@ urlpatterns = [
     path('platform/mission/getAll', get_all_missions, name='platform-mission-get-all'),
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
     path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
+    path('platform/vendor/settle-earnings', admin_settle_vendor_earnings, name='platform-vendor-settle-earnings'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
 
@@ -183,6 +185,11 @@ urlpatterns = [
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),
     path('vendor/coupon/updateStatus', vendor.vendor_coupon_update_status, name='vendor-coupon-update-status'),
+
+    # Vendor 金流 API
+    path('vendor/finance/getOverview', vendor.get_vendor_finance_overview, name='vendor-finance-get-overview'),
+    path('vendor/finance/getTransactions', vendor.get_vendor_finance_transactions, name='vendor-finance-get-transactions'),
+    path('vendor/finance/requestPayout', vendor.vendor_request_payout, name='vendor-finance-request-payout'),
 
     # Vendor 聊天室 API
     path('vendor/chatroom/create', vendor.vendor_chatroom_create, name='vendor_chatroom_create'),
