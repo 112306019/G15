@@ -482,7 +482,8 @@ export default function LoginPage({
             {forgotStep === "reset" && (
               <>
                 <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">輸入驗證碼</h3>
-                <p className="mb-8 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{forgotEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-1 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{forgotEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-8 text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
                 <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={forgotCode} onChange={(e) => setForgotCode(e.target.value)} />
                 <InputField label="新密碼" icon={Lock} hint="至少8位" type="password" placeholder="請輸入新密碼" value={forgotNewPw} onChange={(e) => setForgotNewPw(e.target.value)} />
                 {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm text-[#C8522A] font-bold">{forgotError}</div>}
@@ -514,7 +515,8 @@ export default function LoginPage({
             {!verifyDone ? (
               <>
                 <h3 className="mb-2 text-2xl font-serif font-bold text-[#1A1A18]">驗證您的 Email</h3>
-                <p className="mb-8 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-1 text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-8 text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
                 <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value)} />
                 {verifyResendMsg && <div className="mb-4 rounded-xl bg-[#F5F0E8] px-4 py-3 text-sm font-bold text-[#1A1A18]">{verifyResendMsg}</div>}
                 {verifyError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-sm font-bold text-[#C8522A]">{verifyError}</div>}

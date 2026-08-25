@@ -373,9 +373,10 @@ export default function VendorLogin() {
             {!verifyDone ? (
               <>
                 <h3 className="text-lg font-serif font-bold text-[#1A1A18] mb-2">驗證您的 Email</h3>
-                <p className="mb-5 text-sm font-bold text-[#8C8880]">
+                <p className="mb-1 text-sm font-bold text-[#8C8880]">
                   驗證碼已寄至 <span className="text-[#1A1A18]">{verifyEmail}</span>，10 分鐘內有效。
                 </p>
+                <p className="mb-5 text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
 
                 <div className="relative mb-4">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#8C8880]">
