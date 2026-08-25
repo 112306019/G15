@@ -29,6 +29,9 @@ from .views.platform import (
     get_earnings_tracking,
     admin_settle_campaign_earnings,
     admin_settle_vendor_earnings,
+    admin_list_settleable_vendors,
+    admin_list_vendor_payouts,
+    admin_confirm_vendor_payout,
     admin_get_earnings,
     admin_list_settleable_campaigns,
 )
@@ -100,6 +103,9 @@ urlpatterns = [
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
     path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
     path('platform/vendor/settle-earnings', admin_settle_vendor_earnings, name='platform-vendor-settle-earnings'),
+    path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
+    path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
+    path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
 

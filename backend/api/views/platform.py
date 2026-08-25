@@ -30,7 +30,8 @@ from api.models import (
     CampaignProduct,
     Earnings,
     OrderItem,
-    KocWallet
+    KocWallet,
+    VendorPayouts
 
 )
 
@@ -40,6 +41,66 @@ from api.emails import send_koc_approval_email, send_vendor_approval_email
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
+
+
+# ==============================================================================
+# 財務相關 admin API 的共用權限檢查
+#
+# 背景：AdminLogin.jsx 的「登入身分權限」選單有 Super Admin / Reviewer / Finance
+# 三種角色，Finance 的定位是「財務員，僅看帳與審核」。但底下這些會動到金流的
+# admin API 原本完全沒檢查角色，只要帶得出存在的 Admin_id 就能呼叫——代表一個
+# Reviewer 帳號一樣能結算分潤、確認撥款。這支統一補上角色檢查。
+#
+# 目前只針對「金流」相關的 admin API 做角色限制（Admins.role 必須是
+# 'Super Admin' 或 'Finance' 才放行），KOC/廠商審核那些非金流的 admin API
+# 這次沒有動，範圍限定在這次討論的 AdminFinance.jsx 相關端點。
+# ==============================================================================
+
+FINANCE_ADMIN_ROLES = {'super_admin', 'finance'}
+
+
+def require_admin_role(request, allowed_roles, source='data'):
+    """
+    共用權限檢查：確認這個請求帶的 Admin_id 存在，且該管理員的 role 在允許清單裡。
+    source='data'：從 POST body 抓 Admin_id（給寫入類 API 用）
+    source='query'：從 query string 抓 Admin_id（給 GET 類 API 用）
+
+    回傳 (admin_obj, None) 代表通過檢查；
+    回傳 (None, Response) 代表沒通過，呼叫端要直接把這個 Response 回傳給前端、
+    不能繼續往下執行。
+    """
+    admin_id = (
+        request.data.get('Admin_id') if source == 'data'
+        else request.query_params.get('Admin_id')
+    )
+
+    if not admin_id:
+        return None, Response({
+            'success': False,
+            'err': 'Admin_id is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        admin_obj = Admins.objects.get(admin_id=admin_id)
+    except Admins.DoesNotExist:
+        return None, Response({
+            'success': False,
+            'err': 'Admin not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 比對時忽略大小寫跟前後空白，避免手動建立的測試資料（例如 "super admin"
+    # 或 "Super Admin " 多一個空格）誤判成沒有權限。allowed_roles 也用同一套
+    # 正規化處理，所以呼叫端傳 {'Super Admin', 'Finance'} 這種原始寫法即可。
+    normalized_role = (admin_obj.role or '').strip().lower()
+    normalized_allowed = {r.strip().lower() for r in allowed_roles}
+
+    if normalized_role not in normalized_allowed:
+        return None, Response({
+            'success': False,
+            'err': f'此帳號角色「{admin_obj.role}」無權限執行此操作'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    return admin_obj, None
 
 
 # ==============================================================================
@@ -216,8 +277,10 @@ def calculate_order_commission(order):
 # 廠商入帳：訂單付款完成後，依廠商分組計算「廠商應得淨額」並存入凍結餘額
 # 淨額 = 該廠商商品小計 - 這筆訂單已計算給 KOC 的分潤(若該分潤屬於同一廠商的活動) - 平台手續費
 #
-# 呼叫時機：跟 calculate_order_commission 同一個觸發點（訂單 payment_status 轉為
-# paid/completed 的地方，目前應該在 consumer.py 裡）。建議兩個函式一起呼叫：
+# 呼叫時機：跟 calculate_order_commission 同一個觸發點（consumer.py 的
+# update_order_status，訂單第一次被標記 order_status='completed' 的地方）。
+# 兩個函式一起呼叫，順序固定：先算 KOC 分潤，再算廠商淨額（廠商淨額要扣掉
+# 剛才算出來的 KOC 分潤）：
 #   commission_result = calculate_order_commission(order)
 #   vendor_results = calculate_vendor_earning(order)
 # ==============================================================================
@@ -346,16 +409,18 @@ def calculate_vendor_earning(order):
 # 廠商結算：出貨完成滿 N 天鑑賞期後，把廠商凍結餘額轉成可提領餘額
 # POST /platform_admin/vendor/settle-earnings
 #
-# 用途：after 出貨後鑑賞期過了，才能把「已入帳但還在凍結」的款項轉為可提領。
+# 用途：出貨後鑑賞期過了，才能把「已入帳但還在凍結」的款項轉為可提領。
 # 這支可以由排程（cron / celery beat）定期呼叫，也可以在後台放一顆手動按鈕呼叫。
+# 鑑賞期天數定義在 constants.py 的 VENDOR_SETTLEMENT_HOLD_DAYS。
 # ==============================================================================
-
-# 鑑賞期天數已搬進 constants.py（VENDOR_SETTLEMENT_HOLD_DAYS），這裡改成從那邊 import
-
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_settle_vendor_earnings(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
     vendor_id = request.data.get('vendor_id')  # 選填：只結算單一廠商；不帶則全廠商一起跑
 
     cutoff = timezone.now() - timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)
@@ -434,13 +499,204 @@ def admin_settle_vendor_earnings(request):
             'amount': txn.amount
         })
 
+    total_amount = sum(s['amount'] for s in settled)
+    distinct_vendor_ids = {s['vendor_id'] for s in settled}
+
+    # 稽核紀錄：單一廠商結算就直接關聯該廠商；一次跑全平台結算的話，
+    # AdminAuditLogs.vendor 留空，把涉及的廠商數量寫進 action_reason
+    log_vendor = None
+    if vendor_id and len(distinct_vendor_ids) <= 1:
+        log_vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='settle_vendor_earnings',
+        vendor=log_vendor,
+        action_reason=(
+            f'結算廠商淨額，共 {len(settled)} 筆訂單、涉及 {len(distinct_vendor_ids)} 個廠商，'
+            f'總金額 NT$ {total_amount}'
+        ),
+    )
+
     return Response({
         'success': True,
         'err': '',
         'settled_count': len(settled),
-        'total_amount': sum(s['amount'] for s in settled),
+        'total_amount': total_amount,
         'settled': settled,
         'skipped': skipped
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 待結算廠商列表：後台用，列出「有凍結餘額、且已經過了鑑賞期」的廠商，
+# 給後台一個總覽 + 一顆手動結算按鈕（比照 admin_list_settleable_campaigns 的設計）
+# GET /platform/vendors/settleable
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_settleable_vendors(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    cutoff = timezone.now() - timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)
+
+    income_txns = (
+        Transactions.objects
+        .filter(type="order_income", reference_type="order")
+        .select_related("vendor_wallet__vendor")
+    )
+
+    settled_keys = set(
+        Transactions.objects
+        .filter(type="settle", reference_type="order")
+        .values_list("vendor_wallet_id", "reference_id")
+    )
+
+    pending_income_txns = [
+        t for t in income_txns
+        if (t.vendor_wallet_id, t.reference_id) not in settled_keys
+    ]
+
+    order_ids = [t.reference_id for t in pending_income_txns]
+    orders_by_id = {
+        str(o.order_id): o
+        for o in Order.objects.filter(order_id__in=order_ids)
+    }
+
+    # 依廠商彙總：可結算金額(已過鑑賞期) vs 還在鑑賞期內的金額
+    by_vendor = {}
+
+    for t in pending_income_txns:
+        order = orders_by_id.get(t.reference_id)
+        vendor = t.vendor_wallet.vendor
+
+        entry = by_vendor.setdefault(vendor.vendor_id, {
+            'Vendor_id': vendor.vendor_id,
+            'Vendor_name': vendor.company_name,
+            'Eligible_count': 0,
+            'Eligible_amount': 0,
+            'Not_yet_eligible_count': 0,
+            'Not_yet_eligible_amount': 0,
+            'Earliest_eligible_at': None,
+        })
+
+        if order and order.delivered_at and order.delivered_at <= cutoff:
+            entry['Eligible_count'] += 1
+            entry['Eligible_amount'] += t.amount
+        else:
+            entry['Not_yet_eligible_count'] += 1
+            entry['Not_yet_eligible_amount'] += t.amount
+            if order and order.delivered_at:
+                eligible_at = order.delivered_at + timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)
+                if entry['Earliest_eligible_at'] is None or eligible_at < entry['Earliest_eligible_at']:
+                    entry['Earliest_eligible_at'] = eligible_at
+
+    # 只回傳「有可結算金額」的廠商，跟活動結算列表的邏輯一致，看板才不會被一堆 0 元的洗版
+    result = [v for v in by_vendor.values() if v['Eligible_amount'] > 0 or v['Not_yet_eligible_amount'] > 0]
+    result.sort(key=lambda v: v['Eligible_amount'], reverse=True)
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 廠商撥款申請：後台處理
+# GET  /platform/vendor/payouts             列出待處理的撥款申請
+# POST /platform/vendor/payout/confirm       把撥款申請標記為完成或失敗
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_vendor_payouts(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    payout_status = request.query_params.get('status', 'pending')
+
+    payouts = VendorPayouts.objects.select_related('vendor').order_by('-payout_date')
+
+    if payout_status:
+        payouts = payouts.filter(status=payout_status)
+
+    result = [{
+        'Payout_id': p.payout_id,
+        'Vendor_id': p.vendor_id,
+        'Vendor_name': p.vendor.company_name,
+        'Bank_display': f"{p.vendor.bank_code} {p.vendor.bank_account}" if p.vendor.bank_account else '未設定',
+        'Amount': p.amount,
+        'Payout_date': p.payout_date,
+        'Status': p.status,
+    } for p in payouts]
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_confirm_vendor_payout(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    payout_id = request.data.get('payout_id')
+    new_status = request.data.get('status')  # 'completed' 或 'failed'
+    action_reason = request.data.get('Action_reason')
+
+    if new_status not in ('completed', 'failed'):
+        return Response({
+            'success': False,
+            'err': "status 必須是 'completed' 或 'failed'"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payout = VendorPayouts.objects.select_related('vendor').get(payout_id=payout_id)
+    except VendorPayouts.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到這筆撥款申請'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if payout.status != 'pending':
+        return Response({
+            'success': False,
+            'err': f'這筆撥款申請已經是「{payout.status}」狀態，不能重複處理'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        payout.status = new_status
+        payout.save(update_fields=['status'])
+
+        # 如果匯款失敗，錢要退回廠商的可提領餘額，不能讓錢憑空消失
+        if new_status == 'failed':
+            wallet = VendorWallet.objects.select_for_update().get(vendor=payout.vendor)
+            wallet.balance_available = wallet.balance_available + payout.amount
+            wallet.save(update_fields=['balance_available', 'updated_at'])
+
+            Transactions.objects.create(
+                vendor_wallet=wallet,
+                type="withdraw_failed_refund",
+                amount=payout.amount,
+                reference_type="payout",
+                reference_id=str(payout.payout_id)
+            )
+
+        # 稽核紀錄：誰、對哪個廠商的哪一筆撥款申請、做了什麼判定
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='confirm_vendor_payout_completed' if new_status == 'completed' else 'confirm_vendor_payout_failed',
+            tasks_id=str(payout.payout_id),
+            vendor=payout.vendor,
+            action_reason=action_reason or f'撥款申請 #{payout.payout_id}，金額 NT$ {payout.amount}，標記為「{new_status}」',
+        )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'payout_id': payout.payout_id,
+        'status': payout.status,
     }, status=status.HTTP_200_OK)
 
 
@@ -452,6 +708,10 @@ def admin_settle_vendor_earnings(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_get_earnings(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
     earnings = Earnings.objects.select_related(
         'user', 'kocmission__application__campaign'
     ).order_by('-created_at')
@@ -482,6 +742,10 @@ def admin_get_earnings(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_list_settleable_campaigns(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
     now = timezone.now()
 
     campaigns = Campaigns.objects.select_related('vendor').all()
@@ -520,6 +784,10 @@ def admin_list_settleable_campaigns(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_settle_campaign_earnings(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
     campaign_id = request.data.get('Campaign_id')
 
     if not campaign_id:
@@ -612,6 +880,14 @@ def admin_settle_campaign_earnings(request):
         })
 
     total_amount = sum(item['amount'] for item in settled)
+
+    # 稽核紀錄：誰結算了哪個活動、結算了多少筆、多少錢
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='settle_campaign_earnings',
+        vendor=campaign.vendor,
+        action_reason=f'結算活動「{campaign.name}」，共 {len(settled)} 筆分潤，總金額 NT$ {total_amount}',
+    )
 
     return Response({
         'success': True,
@@ -1815,6 +2091,10 @@ def get_payments(request):
     付款方式留空——那條舊流程唯一記錄「轉帳」/「貨到付款」字樣的地方(Payment.payment_method)
     現在沒讀了，這個資訊目前無法從 Order/PaymentTransaction 還原。
     """
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
     order_id = request.query_params.get('Order_id', None)
     payment_transaction_id = request.query_params.get('Payment_id', None)
     payment_status = request.query_params.get('payment_status', None)
@@ -1853,31 +2133,72 @@ def get_payments(request):
 
 
 # ── 查看交易紀錄 ──
+# 修正：原本這裡讀的是 t.wallets_id，但 Transactions 已經改成 koc_wallet /
+# vendor_wallet 兩個各自獨立的外鍵（多型設計，見 models.py 裡的說明），沒有
+# 叫 wallets_id 的欄位，原本的寫法會直接噴 AttributeError，是壞的。
+# 改成用 koc_wallet / vendor_wallet 哪個有值來判斷這筆交易屬於哪種錢包，
+# 順便把持有人名稱帶出來，後台列表才看得出這筆錢是誰的。
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_transactions(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
     transaction_id = request.query_params.get('Transaction_ID', None)
+    wallet_type = request.query_params.get('Wallet_type', None)  # 'koc' 或 'vendor'，選填
     wallets_id = request.query_params.get('Wallets_id', None)
     reference_type = request.query_params.get('Reference_type', None)
 
-    transactions = Transactions.objects.all()
+    transactions = (
+        Transactions.objects
+        .select_related('koc_wallet__koc__user', 'vendor_wallet__vendor')
+        .order_by('-created_at')
+    )
 
     if transaction_id:
         transactions = transactions.filter(transaction_id=transaction_id)
-    if wallets_id:
-        transactions = transactions.filter(wallets_id=wallets_id)
     if reference_type:
         transactions = transactions.filter(reference_type=reference_type)
 
+    if wallet_type == 'koc':
+        transactions = transactions.filter(koc_wallet__isnull=False)
+        if wallets_id:
+            transactions = transactions.filter(koc_wallet_id=wallets_id)
+    elif wallet_type == 'vendor':
+        transactions = transactions.filter(vendor_wallet__isnull=False)
+        if wallets_id:
+            transactions = transactions.filter(vendor_wallet_id=wallets_id)
+
     result = []
     for t in transactions:
+        if t.koc_wallet_id:
+            owner_type = 'koc'
+            owner_wallet_id = t.koc_wallet_id
+            owner_id = t.koc_wallet.koc_id
+            owner_name = (
+                t.koc_wallet.koc.user.display_name
+                or t.koc_wallet.koc.user.name
+            ) if t.koc_wallet.koc and t.koc_wallet.koc.user else t.koc_wallet.koc_id
+        else:
+            owner_type = 'vendor'
+            owner_wallet_id = t.vendor_wallet_id
+            owner_id = t.vendor_wallet.vendor_id
+            owner_name = t.vendor_wallet.vendor.company_name if t.vendor_wallet.vendor else t.vendor_wallet.vendor_id
+
         result.append({
             'Transaction_ID': t.transaction_id,
-            'Wallets_id': t.wallets_id.wallets_id,
+            'Wallet_type': owner_type,
+            'Wallets_id': owner_wallet_id,
+            'Owner_id': owner_id,
+            'Owner_name': owner_name,
             'Type': t.type,
             'Amount': t.amount,
+            'Gross_amount': t.gross_amount,
+            'Fee_amount': t.fee_amount,
             'Reference_type': t.reference_type,
             'Reference_id': t.reference_id,
+            'created_at': t.created_at,
         })
 
     return Response(result, status=status.HTTP_200_OK)
