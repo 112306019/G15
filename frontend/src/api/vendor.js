@@ -10,6 +10,16 @@ export const loginVendor = (data) => {
   return api.post('/vendor/auth/login', data)
 }
 
+// 廠商註冊信箱驗證：輸入驗證碼確認信箱真的存在
+export const verifyVendorEmail = (data) => {
+  return api.post('/vendor/auth/verifyEmail', data)
+}
+
+// 重新寄送廠商註冊驗證碼
+export const resendVendorVerification = (data) => {
+  return api.post('/vendor/auth/resendVerification', data)
+}
+
 // 更新廠商資料
 export const getVendorProfile = (vendorId) => {
   return api.get('/vendor/profile/get', {

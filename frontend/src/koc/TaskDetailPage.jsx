@@ -272,7 +272,7 @@ export default function TaskDetailPage({ task, onBack }) {
         
         <button onClick={() => onBack(task.stage)} className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit">
           <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
-          返回任務中心
+          返回接案中心
         </button>
 
         <div className="mb-6">
@@ -491,7 +491,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 onClick={() => onBack(task.stage)}
                 className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
               >
-                返回任務中心
+                返回接案中心
               </button>
             </div>
           )}

@@ -164,23 +164,27 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ==============================================================================
 # Email
-# 沒設定 EMAIL_HOST_USER 時（本機開發預設）改用 console backend，
-# 寄信內容直接印在終端機，不會真的寄出去、也不需要真的 SMTP 帳密。
 # 正式環境只要在 .env 填上 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD 就會自動切換成真的寄信。
 # ==============================================================================
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "").strip("'\" ")
+# 應用程式密碼本身不該含任何空格；Google 畫面上是用空格分成 4 組方便閱讀
+# （例如 abcd efgh ijkl mnop），一不小心連空格整串複製貼上，.strip() 只清得掉頭尾、
+# 清不掉中間的空格，所以密碼這行額外用 replace 把字串裡所有空格都拿掉。
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "").strip("'\" ").replace(" ", "")
 
 if EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com").strip("'\" ")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "KOC Platform <no-reply@kocplatform.com>")
 
+# 讓 TLS 判斷不論大寫、小寫 true / 1 都能正確解析為 True
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ["true", "1", "t"]
+EMAIL_USE_SSL = False  # 明確關閉 SSL，避免與 TLS 衝突
+
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"KOC Platform <{EMAIL_HOST_USER}>")
 # ==============================================================================
 # ECPay 綠界科技
 # MerchantID / HashKey / HashIV 皆從環境變數讀取，不寫死在程式碼裡；
@@ -199,5 +203,13 @@ ECPAY_RETURN_URL = os.getenv("ECPAY_RETURN_URL", "")
 # 不能直接填前端網址：OrderResultURL 帶回的是 Form POST + CheckMacValue，前端 SPA 沒有能力接收、驗證這個請求。
 ECPAY_ORDER_RESULT_URL = os.getenv("ECPAY_ORDER_RESULT_URL", "")
 
-# 前端網站的網域，後端驗證完 OrderResultURL 通知後，會把瀏覽器導去 {FRONTEND_BASE_URL}/checkout/result?order_id=...
+# 消費者在綠界付款頁主動按「返回商店」時（例如 3D/簡訊 OTP 驗證失敗後顯示的按鈕）打的網址。
+# 官方文件明講這個導回「不會帶付款結果」，綠界不會附上任何可辨識交易的參數，
+# 所以送出去的 ClientBackURL 是我們自己在網址上加 ?merchant_trade_no=... 帶進去，
+# 這樣後端收到請求時才知道使用者是從哪一筆交易按「返回商店」離開的。
+# 一樣要能公開訪問（跟 ReturnURL/OrderResultURL 一樣本機開發需用 ngrok）。
+ECPAY_CLIENT_BACK_URL = os.getenv("ECPAY_CLIENT_BACK_URL", "")
+
+# 前端網站的網域，後端驗證完 OrderResultURL 通知、或處理完 ClientBackURL 後，
+# 會把瀏覽器導去 FRONTEND_BASE_URL 底下對應的頁面（結果頁 / 購物車）
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")

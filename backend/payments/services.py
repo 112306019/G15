@@ -14,7 +14,7 @@ import logging
 import secrets
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -22,6 +22,7 @@ import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
+from django.utils import timezone
 
 from api.models import Order
 
@@ -30,6 +31,11 @@ from .models import PaymentTransaction
 logger = logging.getLogger("payments")
 
 TW_TZ = ZoneInfo("Asia/Taipei")
+
+# pending 超過這個時間還沒收到任何結果通知，視為使用者已經放棄（例如直接關掉分頁，
+# 沒有點「返回商店」、也沒有等到 ReturnURL），從消費者端的訂單列表隱藏。
+# 30 分鐘是抓一個遠大於正常結帳耗時的容錯值，避免誤傷正在結帳中的訂單。
+PENDING_STALE_AFTER = timedelta(minutes=30)
 
 ECPAY_AIO_CHECKOUT_URL = {
     "stage": "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5",
@@ -67,12 +73,13 @@ def generate_check_mac_value(params: dict, hash_key: str, hash_iv: str) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest().upper()
 
 
-def _get_ecpay_credentials() -> tuple[str, str, str, str, str, str]:
+def _get_ecpay_credentials() -> tuple[str, str, str, str, str, str, str]:
     merchant_id = settings.ECPAY_MERCHANT_ID
     hash_key = settings.ECPAY_HASH_KEY
     hash_iv = settings.ECPAY_HASH_IV
     return_url = settings.ECPAY_RETURN_URL
     order_result_url = settings.ECPAY_ORDER_RESULT_URL
+    client_back_url = settings.ECPAY_CLIENT_BACK_URL
     env = settings.ECPAY_ENV
 
     missing = [
@@ -83,6 +90,7 @@ def _get_ecpay_credentials() -> tuple[str, str, str, str, str, str]:
             ("ECPAY_HASH_IV", hash_iv),
             ("ECPAY_RETURN_URL", return_url),
             ("ECPAY_ORDER_RESULT_URL", order_result_url),
+            ("ECPAY_CLIENT_BACK_URL", client_back_url),
         ]
         if not value
     ]
@@ -91,7 +99,7 @@ def _get_ecpay_credentials() -> tuple[str, str, str, str, str, str]:
     if env not in ECPAY_AIO_CHECKOUT_URL:
         raise ImproperlyConfigured(f"ECPAY_ENV 必須是 'stage' 或 'production'，目前是 {env!r}")
 
-    return merchant_id, hash_key, hash_iv, return_url, order_result_url, env
+    return merchant_id, hash_key, hash_iv, return_url, order_result_url, client_back_url, env
 
 
 def _generate_merchant_trade_no() -> str:
@@ -149,6 +157,53 @@ def get_order_payment_status(order) -> PaymentTransaction | None:
     return pick_relevant_payment(PaymentTransaction.objects.filter(order=order))
 
 
+def is_payment_effectively_failed(payment: PaymentTransaction) -> bool:
+    """
+    判斷一筆 PaymentTransaction 該不該被消費者端視為「不算數」：
+    真的失敗（status=failed），或卡在 pending 超過 PENDING_STALE_AFTER——
+    後者通常是使用者直接關分頁放棄，沒有走 ClientBackURL、也沒等到 ReturnURL，
+    系統永遠不會主動收到「這筆失敗了」的通知，只能用時間判斷已經被放棄。
+    """
+    if payment.status == PaymentTransaction.STATUS_FAILED:
+        return True
+    if payment.status == PaymentTransaction.STATUS_PENDING:
+        return timezone.now() - payment.created_at > PENDING_STALE_AFTER
+    return False
+
+
+@transaction.atomic
+def mark_payment_abandoned(merchant_trade_no: str) -> PaymentTransaction | None:
+    """
+    消費者在綠界付款頁按「返回商店」（ClientBackURL）離開時呼叫：把對應的
+    PaymentTransaction 標成 failed。只在還是 pending 時才動它——已經是 paid
+    的絕不能被這裡覆蓋掉（例如使用者按返回商店的同時，ReturnURL 剛好也送達了）。
+
+    這裡沒有、也不需要驗證 CheckMacValue：ClientBackURL 官方規格明講導回時
+    不會帶任何綠界簽章過的付款結果，這支函式只是「使用者自己說要放棄」的訊號，
+    不是在採信一筆可能被偽造的付款結果。就算誤標，後續真的收到 ReturnURL
+    時 process_ecpay_callback 一樣會覆蓋回正確狀態，不會造成金流誤判。
+    """
+    try:
+        payment = PaymentTransaction.objects.select_for_update().get(merchant_trade_no=merchant_trade_no)
+    except PaymentTransaction.DoesNotExist:
+        logger.error("ClientBackURL 找不到對應的 PaymentTransaction: MerchantTradeNo=%s", merchant_trade_no)
+        return None
+
+    if payment.status != PaymentTransaction.STATUS_PENDING:
+        logger.info(
+            "ClientBackURL 觸發時該筆已經不是 pending，不覆蓋: MerchantTradeNo=%s status=%s",
+            merchant_trade_no, payment.status,
+        )
+        return payment
+
+    payment.status = PaymentTransaction.STATUS_FAILED
+    payment.raw_response = {"_source": "ClientBackURL", "_note": "使用者在綠界付款頁按返回商店離開"}
+    payment.save(update_fields=["status", "raw_response", "updated_at"])
+
+    logger.info("ClientBackURL 已將交易標成 failed: MerchantTradeNo=%s", merchant_trade_no)
+    return payment
+
+
 def _build_item_name(order) -> str:
     """從 Order 底下的 OrderItem/Product 組出 ECPay ItemName，多筆商品以 # 分隔"""
     items = order.items.select_related("product").all().order_by("order_item_id")
@@ -164,9 +219,17 @@ def build_payment_form(payment: PaymentTransaction) -> dict:
     組裝 AIO 建立訂單參數、計算 CheckMacValue，回傳前端可直接 auto-submit 的表單資料：
     {"action": <綠界付款頁 URL>, "method": "POST", "fields": {...含 CheckMacValue}}
     """
-    merchant_id, hash_key, hash_iv, return_url, order_result_url, env = _get_ecpay_credentials()
+    merchant_id, hash_key, hash_iv, return_url, order_result_url, client_back_url, env = _get_ecpay_credentials()
 
     item_name = _build_item_name(payment.order)
+
+    # 消費者在綠界付款頁主動按「返回商店」時導回的網址（例如 3D/簡訊 OTP 驗證失敗時顯示的按鈕）。
+    # 官方文件明講這個導回「不會帶付款結果」，也不會附上任何可辨識交易的參數，
+    # 所以這裡自己在網址上帶 merchant_trade_no，讓 ecpay_client_back 這支 view
+    # 知道使用者是從哪一筆交易按「返回商店」離開的，才能把該筆 PaymentTransaction 標成 failed。
+    client_back_url_with_trade_no = (
+        f"{client_back_url}?{urllib.parse.urlencode({'merchant_trade_no': payment.merchant_trade_no})}"
+    )
 
     params = {
         "MerchantID": merchant_id,
@@ -178,6 +241,7 @@ def build_payment_form(payment: PaymentTransaction) -> dict:
         "ItemName": item_name,
         "ReturnURL": return_url,
         "OrderResultURL": order_result_url,
+        "ClientBackURL": client_back_url_with_trade_no,
         "ChoosePayment": "Credit",
         "EncryptType": "1",
     }
@@ -284,7 +348,7 @@ def query_trade_info(payment: PaymentTransaction) -> dict:
 
     Source: web_fetch https://developers.ecpay.com.tw/2890.md 2026-08-22
     """
-    merchant_id, hash_key, hash_iv, _return_url, _order_result_url, env = _get_ecpay_credentials()
+    merchant_id, hash_key, hash_iv, _return_url, _order_result_url, _client_back_url, env = _get_ecpay_credentials()
 
     params = {
         "MerchantID": merchant_id,

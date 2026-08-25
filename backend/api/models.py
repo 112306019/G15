@@ -613,6 +613,11 @@ class Vendor(models.Model):
     sender_address = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status',)
     created_at = models.DateTimeField(auto_now_add=True)
+    # 預設 True 是為了不影響這個欄位加進來之前就已經存在的廠商帳號；
+    # 新註冊的廠商會在 vendor_register 裡明確設成 False，寄出驗證碼後才會被翻成 True。
+    # 跟 status（審核中/已通過/已拒絕，代表平台審核廠商資格）是兩件事：
+    # is_verified 只代表「這個信箱真的存在、廠商收得到信」，審核通過與否是另一條流程。
+    is_verified = models.BooleanField(default=True, db_column='is_verified')
 
     # 金流：撥款銀行帳戶
     bank_code = models.CharField(max_length=10, blank=True, default='', db_column='bank_code')
@@ -624,7 +629,6 @@ class Vendor(models.Model):
         max_digits=5, decimal_places=2, default=Decimal('0.00'),
         db_column='platform_fee_rate'
     )
-
 
     class Meta:
         db_table = 'Vendor'
@@ -652,6 +656,22 @@ class Vendor(models.Model):
     def __str__(self):
         return self.company_name
 
+
+class VendorEmailVerificationCode(models.Model):
+    """廠商註冊時驗證信箱真的存在用的驗證碼，結構跟 EmailVerificationCode 對消費者/KOC 做的事一樣，
+    只是掛在 Vendor 底下——Vendor 是完全獨立的登入實體（不是 User），沒辦法共用同一張表。"""
+    verification_id = models.AutoField(primary_key=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='email_verification_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'VendorEmailVerificationCode'
+
+    def __str__(self):
+        return f"VendorEmailVerificationCode for {self.vendor_id}"
 
 
 class CampaignParticipants(models.Model):

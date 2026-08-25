@@ -10,7 +10,14 @@ from django.test import Client, TestCase, override_settings
 from api.models import Order, OrderItem, Product, User
 
 from .models import PaymentTransaction
-from .services import create_order_payment, generate_check_mac_value, query_trade_info, reconcile_payment_from_query
+from .services import (
+    create_order_payment,
+    generate_check_mac_value,
+    is_payment_effectively_failed,
+    mark_payment_abandoned,
+    query_trade_info,
+    reconcile_payment_from_query,
+)
 
 # 綠界公開測試帳號（AIO 金流），來源：SKILL.md §測試帳號，非正式環境機密
 ECPAY_TEST_SETTINGS = dict(
@@ -20,6 +27,7 @@ ECPAY_TEST_SETTINGS = dict(
     ECPAY_ENV="stage",
     ECPAY_RETURN_URL="https://example.com/api/payments/ecpay/notify/",
     ECPAY_ORDER_RESULT_URL="https://example.com/api/payments/ecpay/result/",
+    ECPAY_CLIENT_BACK_URL="https://example.com/api/payments/ecpay/client-back/",
     FRONTEND_BASE_URL="https://frontend.example.com",
 )
 
@@ -120,6 +128,11 @@ class CreatePaymentEndpointTests(PaymentsTestCase):
         self.assertEqual(set(fields["ItemName"].split("#")), {"手工皂禮盒組", "精油蠟燭"})
         self.assertTrue(fields["CheckMacValue"])
         self.assertEqual(fields["OrderResultURL"], "https://example.com/api/payments/ecpay/result/")
+        # ClientBackURL 指向後端（不是前端），且自己帶 merchant_trade_no 讓 ecpay_client_back 認得出是哪筆交易
+        self.assertEqual(
+            fields["ClientBackURL"],
+            f"https://example.com/api/payments/ecpay/client-back/?merchant_trade_no={fields['MerchantTradeNo']}",
+        )
 
     def test_missing_order_id_returns_400(self):
         resp = self.client.post("/api/payments/create/", data={})
@@ -470,3 +483,122 @@ class ReconcilePendingPaymentsCommandTests(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command("reconcile_pending_payments", "--merchant-trade-no=NOTEXIST00000001")
+
+
+class IsPaymentEffectivelyFailedTests(PaymentsTestCase):
+    """is_payment_effectively_failed —— 消費者端「這筆不算數」的判斷規則"""
+
+    def test_failed_status_is_effectively_failed(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+        payment.status = PaymentTransaction.STATUS_FAILED
+        payment.save(update_fields=["status"])
+        self.assertTrue(is_payment_effectively_failed(payment))
+
+    def test_paid_status_is_never_effectively_failed(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+        payment.status = PaymentTransaction.STATUS_PAID
+        payment.save(update_fields=["status"])
+        self.assertFalse(is_payment_effectively_failed(payment))
+
+    def test_fresh_pending_is_not_effectively_failed(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)  # 剛建立，created_at 是現在
+        self.assertFalse(is_payment_effectively_failed(payment))
+
+    def test_stale_pending_is_effectively_failed(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+        PaymentTransaction.objects.filter(pk=payment.pk).update(
+            created_at=timezone.now() - timedelta(minutes=31)
+        )
+        payment.refresh_from_db()
+        self.assertTrue(is_payment_effectively_failed(payment))
+
+
+class MarkPaymentAbandonedTests(PaymentsTestCase):
+    """mark_payment_abandoned —— ClientBackURL 觸發時的處理邏輯"""
+
+    def test_pending_payment_gets_marked_failed(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+
+        result = mark_payment_abandoned(payment.merchant_trade_no)
+
+        self.assertEqual(result.status, PaymentTransaction.STATUS_FAILED)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_FAILED)
+
+    def test_already_paid_payment_is_not_overwritten(self):
+        # 極端情境：使用者按返回商店的同時 ReturnURL 剛好也送達、已經標成 paid，
+        # ClientBackURL 這裡絕對不能把它改回 failed
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+        payment.status = PaymentTransaction.STATUS_PAID
+        payment.save(update_fields=["status"])
+
+        result = mark_payment_abandoned(payment.merchant_trade_no)
+
+        self.assertEqual(result.status, PaymentTransaction.STATUS_PAID)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_PAID)
+
+    def test_unknown_merchant_trade_no_returns_none_without_crashing(self):
+        result = mark_payment_abandoned("NOTEXIST00000001")
+        self.assertIsNone(result)
+
+
+class EcpayClientBackViewTests(PaymentsTestCase):
+    """GET /api/payments/ecpay/client-back/"""
+
+    def test_marks_payment_failed_and_redirects_to_cart(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+
+        resp = self.client.get(f"/api/payments/ecpay/client-back/?merchant_trade_no={payment.merchant_trade_no}")
+
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "https://frontend.example.com/cart")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentTransaction.STATUS_FAILED)
+
+    def test_missing_merchant_trade_no_still_redirects(self):
+        resp = self.client.get("/api/payments/ecpay/client-back/")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "https://frontend.example.com/cart")
+
+    def test_post_request_returns_405(self):
+        resp = self.client.post("/api/payments/ecpay/client-back/")
+        self.assertEqual(resp.status_code, 405)
+
+
+class ConsumerOrderViewStalePendingTests(PaymentsTestCase):
+    """GET /api/consumer/order/view —— 卡住太久的 pending 訂單也該從列表隱藏"""
+
+    def test_stale_pending_order_is_hidden(self):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        payment = create_order_payment(order)
+        PaymentTransaction.objects.filter(pk=payment.pk).update(
+            created_at=timezone.now() - timedelta(minutes=31)
+        )
+
+        resp = self.client.get(f"/api/consumer/order/view?User_id={self.user.user_id}")
+
+        order_ids = {row["Order_id"] for row in resp.json()}
+        self.assertNotIn(str(order.order_id), order_ids)
+
+    def test_fresh_pending_order_still_shows(self):
+        order = self.make_order(680, [(self.product1, 1, 680)])
+        create_order_payment(order)  # 剛建立，還在合理的結帳時間內
+
+        resp = self.client.get(f"/api/consumer/order/view?User_id={self.user.user_id}")
+
+        order_ids = {row["Order_id"] for row in resp.json()}
+        self.assertIn(str(order.order_id), order_ids)

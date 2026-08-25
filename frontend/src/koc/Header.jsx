@@ -6,7 +6,7 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
 
   const allNavItems = [
     { label: '購物頁面', key: 'shop', isKocOnly: false },
-    { label: '任務中心', key: 'home', isKocOnly: true },
+    { label: '接案中心', key: 'home', isKocOnly: true },
   ];
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);

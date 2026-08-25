@@ -483,9 +483,11 @@ export default function CheckoutPage({
   const couponDiscount =
     rawItemsTotal - itemsTotal;
 
+  const shippingAmount = shippingMethod === "cvs" ? 65 : 130;
+
   const grandTotal =
     itemsTotal +
-    initialSummary.shippingAmount;
+    shippingAmount;
 
   // ============================
   // 配送資料驗證
@@ -1642,7 +1644,7 @@ export default function CheckoutPage({
                 <span className="font-mono text-[#1A1A18]">
 
                   {formatNTD(
-                    initialSummary.shippingAmount
+                    shippingAmount
                   )}
 
                 </span>

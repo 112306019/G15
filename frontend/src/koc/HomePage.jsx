@@ -3,11 +3,11 @@ import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3
 import api from '../api/index';
 
 const STAGES = [
-  { id: 1, label: '代言申請', icon: Send, desc: '瀏覽並申請任務' },
+  { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
   { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
   { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 5, label: '已結案', icon: CheckCircle2, desc: '任務完成' },
+  { id: 5, label: '已結案', icon: CheckCircle2, desc: '案件完成' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
@@ -386,7 +386,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
 
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">任務管理</h2>
+        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">接案管理</h2>
         <button onClick={() => onNavigate('analysis')} className="bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3 rounded-full font-bold text-sm hover:border-[#1A1A18] hover:shadow-md transition-all flex items-center gap-2 group">
           <div className="w-6 h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
             <TrendingUp size={14} className="text-[#C8522A] group-hover:text-white transition-colors" />
