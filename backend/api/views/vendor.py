@@ -5,14 +5,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from django.db import transaction
 from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode
+from api.emails import send_vendor_email_verification_email
 from payments.services import get_order_payment_status
 from api.vendor_serializers import (
     VendorRegisterSerializer,
@@ -33,12 +34,23 @@ from api.views.shipping import (
 )
 
 
+VENDOR_VERIFICATION_CODE_TTL_MINUTES = 10
+
+
+def _generate_vendor_verification_code():
+    return f"{random.randint(0, 999999):06d}"
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_register(request):
     """
     廠商註冊
     URL: /vendor/auth/register
+
+    跟消費者/KOC 註冊（user_signup）一樣，要先寄驗證碼到信箱確認廠商真的收得到信，
+    才能完成註冊；廠商在完成信箱驗證前無法登入。這跟 Vendor.status（平台審核廠商資格
+    的 pending/approved/rejected）是兩件獨立的事，信箱驗證只是確認帳號本身能登入。
     """
     serializer = VendorRegisterSerializer(data=request.data)
 
@@ -51,11 +63,18 @@ def vendor_register(request):
     email = serializer.validated_data.get("email")
     tax_id = serializer.validated_data.get("tax_id")
 
-    if Vendor.objects.filter(email=email).exists():
-        return Response({
-            "success": False,
-            "err": "Email already exists"
-        }, status=status.HTTP_400_BAD_REQUEST)
+    existing_vendor = Vendor.objects.filter(email=email).first()
+    if existing_vendor:
+        if existing_vendor.is_verified:
+            return Response({
+                "success": False,
+                "err": "Email already exists"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # 之前註冊過但沒完成信箱驗證，視為未完成的舊紀錄，
+            # 刪掉重來，讓廠商可以用同一個 email 重新走一次註冊流程
+            VendorEmailVerificationCode.objects.filter(vendor=existing_vendor).delete()
+            existing_vendor.delete()
 
     if Vendor.objects.filter(tax_id=tax_id).exists():
         return Response({
@@ -63,15 +82,133 @@ def vendor_register(request):
             "err": "Tax ID already exists"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    vendor = serializer.save(
-        password=make_password(serializer.validated_data["password"])
-    )
+    try:
+        with transaction.atomic():
+            vendor = serializer.save(
+                password=make_password(serializer.validated_data["password"]),
+                is_verified=False,
+            )
+
+            code = _generate_vendor_verification_code()
+            VendorEmailVerificationCode.objects.create(
+                vendor=vendor,
+                code=code,
+                expires_at=timezone.now() + timedelta(minutes=VENDOR_VERIFICATION_CODE_TTL_MINUTES),
+            )
+            # 寄信失敗要讓整筆註冊一起 rollback，不然這個 email 會卡在
+            # 「已被註冊但帳號永遠拿不到驗證碼」的死狀態
+            send_vendor_email_verification_email(vendor, code)
+    except Exception as email_error:
+        return Response({
+            "success": False,
+            "err": "驗證信寄送失敗，請稍後再試"
+        }, status=status.HTTP_502_BAD_GATEWAY)
 
     return Response({
         "success": True,
         "err": "",
-        "vendor_id": vendor.vendor_id
+        "vendor_id": vendor.vendor_id,
+        "requiresVerification": True,
     }, status=status.HTTP_201_CREATED)
+
+
+## 廠商註冊信箱驗證：輸入驗證碼確認信箱真的存在
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_verify_email(request):
+    """
+    URL: /vendor/auth/verifyEmail
+    """
+    email = request.data.get("email")
+    code = request.data.get("code")
+
+    if not email or not code:
+        return Response({
+            "success": False,
+            "err": "email、code 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(email=email)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if vendor.is_verified:
+        return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
+    verification = VendorEmailVerificationCode.objects.filter(
+        vendor=vendor, code=code, is_used=False
+    ).order_by("-created_at").first()
+
+    if not verification:
+        return Response({
+            "success": False,
+            "err": "驗證碼錯誤"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if verification.expires_at < timezone.now():
+        return Response({
+            "success": False,
+            "err": "驗證碼已過期，請重新寄送"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor.is_verified = True
+    vendor.save(update_fields=["is_verified"])
+
+    verification.is_used = True
+    verification.save(update_fields=["is_used"])
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
+
+## 重新寄送廠商註冊驗證碼
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_resend_verification_code(request):
+    """
+    URL: /vendor/auth/resendVerification
+    """
+    email = request.data.get("email")
+
+    if not email:
+        return Response({
+            "success": False,
+            "err": "email 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(email=email)
+    except Vendor.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if vendor.is_verified:
+        return Response({
+            "success": False,
+            "err": "此帳號已經完成驗證"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    code = _generate_vendor_verification_code()
+    VendorEmailVerificationCode.objects.create(
+        vendor=vendor,
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=VENDOR_VERIFICATION_CODE_TTL_MINUTES),
+    )
+
+    try:
+        send_vendor_email_verification_email(vendor, code)
+    except Exception as email_error:
+        return Response({
+            "success": False,
+            "err": "驗證信寄送失敗，請稍後再試"
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
 
 
 @api_view(["POST"])
@@ -109,6 +246,17 @@ def vendor_login(request):
             "success": False,
             "err": "Invalid password"
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 信箱還沒驗證不能登入，前端要能分辨這種情況去導去驗證流程。
+    # 廠商登入表單只收 vendor_id（不像消費者登入收 email），前端沒有信箱可以直接開驗證彈窗，
+    # 所以這裡把 email 一併帶回去——這個時間點密碼已經驗證正確，不是洩漏帳號資訊給不相關的人。
+    if not vendor.is_verified:
+        return Response({
+            "success": False,
+            "err": "請先完成 Email 驗證",
+            "needsVerification": True,
+            "email": vendor.email,
+        }, status=status.HTTP_403_FORBIDDEN)
 
     return Response({
         "success": True,

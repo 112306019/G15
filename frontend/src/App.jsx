@@ -82,7 +82,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
 
   const allMenuItems = [
     { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
-    { icon: <Briefcase size={18} />, label: '我的任務', view: 'home', role: 'koc' },
+    { icon: <Briefcase size={18} />, label: '我的接案', view: 'home', role: 'koc' },
     { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },

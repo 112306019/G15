@@ -3,7 +3,7 @@ import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3
 import api from '../api/index';
 
 const STAGES = [
-  { id: 1, label: '代言申請', icon: Send, desc: '瀏覽並申請任務' },
+  { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請任務' },
   { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
   { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
