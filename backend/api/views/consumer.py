@@ -10,7 +10,7 @@ from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo
 from .platform import calculate_order_commission, calculate_vendor_earning
 from payments.models import PaymentTransaction
-from payments.services import pick_relevant_payment
+from payments.services import is_payment_effectively_failed, pick_relevant_payment
 
 
 def _has_active_campaign(product_id):
@@ -1107,15 +1107,18 @@ def view_order(request):
     if order_id:
         orders = orders.filter(order_id=order_id)
 
-    # 付款失敗的訂單不該出現在消費者的訂單列表/詳情裡：
+    # 付款失敗（或形同失敗）的訂單不該出現在消費者的訂單列表/詳情裡：
     # 走綠界付款失敗後，使用者只會回到購物車重新結帳（會建立一筆新訂單），
-    # 這筆失敗的舊訂單就變成沒有人會再去付款的孤兒訂單，顯示出來只會讓人誤會。
-    # 只有「最相關的付款紀錄剛好是 failed」才排除——還沒付過款(沒有 PaymentTransaction)、
-    # 或曾經失敗後來重試成功的訂單都正常顯示（pick_relevant_payment 本身就會優先挑成功的那筆）。
+    # 這筆舊訂單就變成沒有人會再去付款的孤兒訂單，顯示出來只會讓人誤會。
+    # is_payment_effectively_failed 涵蓋兩種情況：真的是 failed，或卡在 pending
+    # 超過 30 分鐘（使用者直接關分頁放棄，沒有走 ClientBackURL 也沒等到 ReturnURL，
+    # 系統永遠不會收到明確的失敗通知，只能用時間判斷）。
+    # 還沒付過款(沒有 PaymentTransaction)、或曾經失敗後來重試成功的訂單都正常顯示
+    # （pick_relevant_payment 本身就會優先挑成功的那筆）。
     order_list = []
     for order in orders:
         payment_tx = pick_relevant_payment(order.payment_transactions.all())
-        if payment_tx and payment_tx.status == PaymentTransaction.STATUS_FAILED:
+        if payment_tx and is_payment_effectively_failed(payment_tx):
             continue
         order_list.append(order)
 

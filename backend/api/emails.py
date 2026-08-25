@@ -79,6 +79,32 @@ def send_email_verification_email(user, code):
     )
 
 
+def send_vendor_email_verification_email(vendor, code):
+    """
+    廠商註冊時寄送信箱驗證碼，確認這個 Email 真的存在、廠商收得到信。
+    跟 send_email_verification_email 對消費者/KOC 做的事一樣，只是收件對象是 Vendor。
+
+    這封信是驗證流程的必要環節，寄信失敗要讓呼叫端知道並回報錯誤，
+    不能悄悄吞掉（不然帳號就卡在「永遠無法驗證」的狀態）。
+    """
+    subject = "【KOC Platform】請驗證您的廠商帳號 Email"
+    message = (
+        f"{vendor.contact_name or vendor.company_name} 您好，\n\n"
+        f"您的廠商註冊驗證碼為：{code}\n\n"
+        "此驗證碼將於 10 分鐘後失效，請盡快完成信箱驗證。\n"
+        "如果這不是您本人的操作，請忽略此信。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[vendor.email],
+        fail_silently=False,
+    )
+
+
 def send_password_reset_email(user, code):
     """
     忘記密碼流程寄送驗證碼。

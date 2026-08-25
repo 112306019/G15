@@ -5,7 +5,7 @@ from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -18,6 +18,7 @@ from .services import (
     build_payment_form,
     create_order_payment,
     get_order_payment_status,
+    mark_payment_abandoned,
     process_ecpay_callback,
     verify_check_mac_value,
 )
@@ -115,6 +116,27 @@ def ecpay_order_result(request):
         return redirect(f"{settings.FRONTEND_BASE_URL}/checkout/result")
 
     return redirect(f"{settings.FRONTEND_BASE_URL}/checkout/result?order_id={payment.order_id}")
+
+
+@require_GET
+def ecpay_client_back(request):
+    """
+    綠界 AIO 金流 ClientBackURL：消費者在付款頁主動按「返回商店」時導回這裡
+    （例如 3D/簡訊 OTP 驗證失敗後顯示的那顆按鈕）。
+
+    官方規格明講這個導回不會帶任何付款結果、也不會附上可辨識交易的參數，
+    所以這裡讀的 merchant_trade_no 是我們自己在 build_payment_form 塞進網址的，
+    不是綠界簽章過的資料——不需要也無法驗證 CheckMacValue，純粹是「使用者自己
+    說要放棄」的訊號。把對應的 PaymentTransaction 標成 failed（僅在還是 pending
+    時才動），避免這筆訂單永遠卡在 pending、一直出現在消費者的訂單列表裡。
+    """
+    merchant_trade_no = request.GET.get("merchant_trade_no")
+    if merchant_trade_no:
+        mark_payment_abandoned(merchant_trade_no)
+    else:
+        logger.error("ECPay ClientBackURL 沒有帶 merchant_trade_no，無法辨識是哪一筆交易")
+
+    return redirect(f"{settings.FRONTEND_BASE_URL}/cart")
 
 
 @api_view(["GET"])

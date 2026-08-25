@@ -149,6 +149,8 @@ urlpatterns = [
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),
+    path('vendor/auth/verifyEmail', vendor.vendor_verify_email, name='vendor-verify-email'),
+    path('vendor/auth/resendVerification', vendor.vendor_resend_verification_code, name='vendor-resend-verification'),
     path('vendor/profile/update', vendor.vendor_profile_update, name='vendor-profile-update'),
     path('vendor/profile/get', vendor.vendor_profile_get, name='vendor-profile-get'),
 

@@ -1,8 +1,9 @@
+import uuid
 from decimal import Decimal
 
 from django.test import Client, TestCase
 
-from api.models import Order, OrderItem, Product, User
+from api.models import Order, OrderItem, Product, User, Vendor, VendorEmailVerificationCode
 from payments.models import PaymentTransaction
 
 
@@ -200,3 +201,160 @@ class ConsumerOrderViewFailedPaymentTests(TestCase):
 
         order_ids = {row["Order_id"] for row in resp.json()}
         self.assertIn(str(order.order_id), order_ids)
+
+
+class VendorEmailVerificationTests(TestCase):
+    """
+    廠商註冊信箱驗證：跟消費者/KOC 的 user_signup/verify_email/resend_verification_code
+    是同一套邏輯，差別只在對象是 Vendor 不是 User。
+    """
+
+    def setUp(self):
+        self.client = Client()
+
+    def register(self, email="vendor-test@example.com", **overrides):
+        payload = {
+            "company_name": "測試公司",
+            "contact_name": "測試聯絡人",
+            "email": email,
+            "password": "testpass123",
+            "tax_id": str(uuid.uuid4().int)[:8],
+        }
+        payload.update(overrides)
+        return self.client.post("/api/vendor/auth/register", data=payload, content_type="application/json")
+
+    def get_latest_code(self, vendor_id):
+        return VendorEmailVerificationCode.objects.filter(
+            vendor_id=vendor_id
+        ).order_by("-created_at").first().code
+
+    def test_register_creates_unverified_vendor_and_sends_code(self):
+        resp = self.register()
+        self.assertEqual(resp.status_code, 201)
+        body = resp.json()
+        self.assertTrue(body["success"])
+        self.assertTrue(body["requiresVerification"])
+
+        vendor = Vendor.objects.get(vendor_id=body["vendor_id"])
+        self.assertFalse(vendor.is_verified)
+        self.assertTrue(VendorEmailVerificationCode.objects.filter(vendor=vendor).exists())
+
+    def test_unverified_vendor_cannot_login(self):
+        resp = self.register()
+        vendor_id = resp.json()["vendor_id"]
+
+        login_resp = self.client.post(
+            "/api/vendor/auth/login",
+            data={"vendor_id": vendor_id, "password": "testpass123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_resp.status_code, 403)
+        self.assertTrue(login_resp.json()["needsVerification"])
+
+    def test_wrong_code_is_rejected(self):
+        resp = self.register()
+        resp_wrong = self.client.post(
+            "/api/vendor/auth/verifyEmail",
+            data={"email": "vendor-test@example.com", "code": "000000"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp_wrong.status_code, 400)
+
+    def test_correct_code_verifies_and_unlocks_login(self):
+        resp = self.register()
+        vendor_id = resp.json()["vendor_id"]
+        code = self.get_latest_code(vendor_id)
+
+        verify_resp = self.client.post(
+            "/api/vendor/auth/verifyEmail",
+            data={"email": "vendor-test@example.com", "code": code},
+            content_type="application/json",
+        )
+        self.assertEqual(verify_resp.status_code, 200)
+        self.assertTrue(verify_resp.json()["success"])
+
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+        self.assertTrue(vendor.is_verified)
+
+        login_resp = self.client.post(
+            "/api/vendor/auth/login",
+            data={"vendor_id": vendor_id, "password": "testpass123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertTrue(login_resp.json()["success"])
+
+    def test_resend_blocked_once_verified(self):
+        resp = self.register()
+        vendor_id = resp.json()["vendor_id"]
+        code = self.get_latest_code(vendor_id)
+        self.client.post(
+            "/api/vendor/auth/verifyEmail",
+            data={"email": "vendor-test@example.com", "code": code},
+            content_type="application/json",
+        )
+
+        resend_resp = self.client.post(
+            "/api/vendor/auth/resendVerification",
+            data={"email": "vendor-test@example.com"},
+            content_type="application/json",
+        )
+        self.assertEqual(resend_resp.status_code, 400)
+
+    def test_resend_issues_new_working_code(self):
+        resp = self.register()
+        vendor_id = resp.json()["vendor_id"]
+
+        resend_resp = self.client.post(
+            "/api/vendor/auth/resendVerification",
+            data={"email": "vendor-test@example.com"},
+            content_type="application/json",
+        )
+        self.assertEqual(resend_resp.status_code, 200)
+
+        new_code = self.get_latest_code(vendor_id)
+        verify_resp = self.client.post(
+            "/api/vendor/auth/verifyEmail",
+            data={"email": "vendor-test@example.com", "code": new_code},
+            content_type="application/json",
+        )
+        self.assertEqual(verify_resp.status_code, 200)
+
+    def test_reregistering_unverified_email_deletes_stale_record(self):
+        first_resp = self.register(email="vendor-stale@example.com")
+        first_vendor_id = first_resp.json()["vendor_id"]
+        # vendor_id 是自動遞增字串，舊紀錄刪除後下一筆很可能重新分配到同一個 vendor_id，
+        # 所以要記住這筆驗證碼本身的 PK（verification_id），不能只憑 vendor_id 判斷「舊的還在不在」
+        first_verification_id = VendorEmailVerificationCode.objects.filter(
+            vendor_id=first_vendor_id
+        ).values_list("verification_id", flat=True).first()
+
+        second_resp = self.register(email="vendor-stale@example.com")
+        self.assertEqual(second_resp.status_code, 201)
+
+        # 舊的那一筆驗證碼紀錄（用 PK 精準指認）應該被一起刪掉，不會留下孤兒資料
+        self.assertFalse(
+            VendorEmailVerificationCode.objects.filter(verification_id=first_verification_id).exists()
+        )
+        self.assertEqual(Vendor.objects.filter(email="vendor-stale@example.com").count(), 1)
+
+    def test_reregistering_verified_email_is_rejected(self):
+        resp = self.register(email="vendor-verified@example.com")
+        vendor_id = resp.json()["vendor_id"]
+        code = self.get_latest_code(vendor_id)
+        self.client.post(
+            "/api/vendor/auth/verifyEmail",
+            data={"email": "vendor-verified@example.com", "code": code},
+            content_type="application/json",
+        )
+
+        second_resp = self.register(email="vendor-verified@example.com")
+        self.assertEqual(second_resp.status_code, 400)
+
+    def test_duplicate_tax_id_is_rejected(self):
+        tax_id = str(uuid.uuid4().int)[:8]
+        self.register(email="vendor-tax-a@example.com", tax_id=tax_id)
+
+        second_resp = self.register(email="vendor-tax-b@example.com", tax_id=tax_id)
+        self.assertEqual(second_resp.status_code, 400)
+        self.assertIn("Tax ID", second_resp.json()["err"])
