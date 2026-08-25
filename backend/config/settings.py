@@ -164,15 +164,22 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ==============================================================================
 # Email
-# 正式環境只要在 .env 填上 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD 就會自動切換成真的寄信。
+# 正式環境（Render）用 SendGrid HTTP API 寄信：Render 免費方案的防火牆會擋掉
+# 傳統 SMTP 587/465 埠，但 SendGrid 走 HTTPS 443 埠不受影響。SendGrid 的
+# Single Sender Verification 只需要驗證單一信箱，不用擁有自己的網域。
+# 本機開發沒填 SENDGRID_API_KEY 時，退回原本的 Gmail SMTP（或都沒填就用 console 印出來）。
 # ==============================================================================
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "").strip("'\" ")
+
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "").strip("'\" ")
 # 應用程式密碼本身不該含任何空格；Google 畫面上是用空格分成 4 組方便閱讀
 # （例如 abcd efgh ijkl mnop），一不小心連空格整串複製貼上，.strip() 只清得掉頭尾、
 # 清不掉中間的空格，所以密碼這行額外用 replace 把字串裡所有空格都拿掉。
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "").strip("'\" ").replace(" ", "")
 
-if EMAIL_HOST_USER:
+if SENDGRID_API_KEY:
+    EMAIL_BACKEND = "api.email_backend.SendGridEmailBackend"
+elif EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 else:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -184,6 +191,8 @@ EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ["true", "1", "t"]
 EMAIL_USE_SSL = False  # 明確關閉 SSL，避免與 TLS 衝突
 
+# SendGrid 的寄件人必須是通過 Single Sender Verification 的信箱，
+# 沒特別設定 DEFAULT_FROM_EMAIL 時就沿用原本 Gmail SMTP 的那個地址。
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", f"KOC Platform <{EMAIL_HOST_USER}>")
 # ==============================================================================
 # ECPay 綠界科技

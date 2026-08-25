@@ -1,8 +1,12 @@
 import uuid
 from decimal import Decimal
+from unittest.mock import patch
 
-from django.test import Client, TestCase
+import requests
+from django.core.mail import EmailMessage
+from django.test import Client, TestCase, override_settings
 
+from api.email_backend import SendGridEmailBackend
 from api.models import Order, OrderItem, Product, User, Vendor, VendorEmailVerificationCode
 from payments.models import PaymentTransaction
 
@@ -358,3 +362,90 @@ class VendorEmailVerificationTests(TestCase):
         second_resp = self.register(email="vendor-tax-b@example.com", tax_id=tax_id)
         self.assertEqual(second_resp.status_code, 400)
         self.assertIn("Tax ID", second_resp.json()["err"])
+
+
+class _MockResponse:
+    def __init__(self, status_code=200):
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
+
+
+@override_settings(SENDGRID_API_KEY="test-sendgrid-key")
+class SendGridEmailBackendTests(TestCase):
+    """透過 SendGrid HTTP API 寄信的 backend —— 全程 mock requests.post，不打真正的 SendGrid"""
+
+    def _build_message(self, **kwargs):
+        return EmailMessage(
+            subject=kwargs.get("subject", "測試信件"),
+            body=kwargs.get("body", "測試內容"),
+            from_email=kwargs.get("from_email", "KOC Platform <sender@example.com>"),
+            to=kwargs.get("to", ["user@example.com"]),
+            cc=kwargs.get("cc"),
+            bcc=kwargs.get("bcc"),
+        )
+
+    @patch("api.email_backend.requests.post")
+    def test_send_messages_posts_expected_payload(self, mock_post):
+        mock_post.return_value = _MockResponse(202)
+        message = self._build_message()
+
+        sent = SendGridEmailBackend().send_messages([message])
+
+        self.assertEqual(sent, 1)
+        called_url = mock_post.call_args.args[0]
+        self.assertEqual(called_url, "https://api.sendgrid.com/v3/mail/send")
+
+        headers = mock_post.call_args.kwargs["headers"]
+        self.assertEqual(headers["Authorization"], "Bearer test-sendgrid-key")
+
+        payload = mock_post.call_args.kwargs["json"]
+        self.assertEqual(payload["from"], {"email": "sender@example.com", "name": "KOC Platform"})
+        self.assertEqual(payload["personalizations"], [{"to": [{"email": "user@example.com"}]}])
+        self.assertEqual(payload["subject"], "測試信件")
+        self.assertEqual(payload["content"], [{"type": "text/plain", "value": "測試內容"}])
+
+    @patch("api.email_backend.requests.post")
+    def test_send_messages_includes_cc_and_bcc_when_present(self, mock_post):
+        mock_post.return_value = _MockResponse(202)
+        message = self._build_message(cc=["cc@example.com"], bcc=["bcc@example.com"])
+
+        SendGridEmailBackend().send_messages([message])
+
+        personalization = mock_post.call_args.kwargs["json"]["personalizations"][0]
+        self.assertEqual(personalization["cc"], [{"email": "cc@example.com"}])
+        self.assertEqual(personalization["bcc"], [{"email": "bcc@example.com"}])
+
+    @override_settings(SENDGRID_API_KEY="")
+    def test_missing_api_key_raises_when_not_fail_silently(self):
+        message = self._build_message()
+
+        with self.assertRaises(ValueError):
+            SendGridEmailBackend().send_messages([message])
+
+    @override_settings(SENDGRID_API_KEY="")
+    def test_missing_api_key_returns_zero_when_fail_silently(self):
+        message = self._build_message()
+
+        sent = SendGridEmailBackend(fail_silently=True).send_messages([message])
+
+        self.assertEqual(sent, 0)
+
+    @patch("api.email_backend.requests.post")
+    def test_http_error_raises_when_not_fail_silently(self, mock_post):
+        mock_post.return_value = _MockResponse(500)
+        message = self._build_message()
+
+        with self.assertRaises(Exception):
+            SendGridEmailBackend().send_messages([message])
+
+    @patch("api.email_backend.requests.post")
+    def test_http_error_fails_silently_when_requested(self, mock_post):
+        mock_post.return_value = _MockResponse(500)
+        message = self._build_message()
+
+        sent = SendGridEmailBackend(fail_silently=True).send_messages([message])
+
+        self.assertEqual(sent, 0)
