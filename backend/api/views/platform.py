@@ -1,4 +1,7 @@
 import logging
+import csv
+import io
+from django.http import HttpResponse
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import timedelta
 
@@ -31,7 +34,8 @@ from api.models import (
     Earnings,
     OrderItem,
     KocWallet,
-    VendorPayouts
+    VendorPayouts,
+    Payouts
 
 )
 
@@ -632,6 +636,105 @@ def admin_list_vendor_payouts(request):
     } for p in payouts]
 
     return Response(result, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 匯出轉帳資訊：結算完之後，財務要實際去銀行系統把錢匯出去，這支把「目前所有
+# 還沒處理的撥款申請」匯出成 CSV，包含銀行帳戶資訊跟金額，財務可以直接拿去
+# 對照銀行的批次匯款作業。
+#
+# 廠商跟 KOC 分開匯出（各自的銀行欄位結構本來就不完全一樣：廠商有獨立的
+# bank_account_name「戶名」欄位，KOC 沒有；財務實際作業上兩邊送的銀行批次
+# 範本也大概率不同），用 type 參數區分，各自產生獨立檔案，不會混在同一份。
+#
+# 注意：這支只是「匯出」，不會改變任何撥款申請的狀態。匯款實際做完之後，
+# 還是要回來個別按「標記完成」（廠商走 admin_confirm_vendor_payout；
+# KOC 目前沒有對應的後台確認端點，是舊的既有缺口，這次沒有一併補）。
+#
+# GET /platform/payouts/export?type=vendor|koc&status=pending
+# （status 預設 pending，也可以帶其他狀態匯出歷史紀錄；type 為必填）
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_export_payout_transfers(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    export_type = request.query_params.get('type')
+    export_status = request.query_params.get('status', 'pending')
+
+    if export_type not in ('vendor', 'koc'):
+        return Response({
+            'success': False,
+            'err': "type 必須是 'vendor' 或 'koc'"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    rows = []
+
+    if export_type == 'vendor':
+        fieldnames = ['撥款單號', '廠商ID', '廠商名稱', '銀行代碼', '銀行帳號', '戶名', '金額', '申請日期']
+
+        vendor_payouts = (
+            VendorPayouts.objects
+            .select_related('vendor')
+            .filter(status=export_status)
+            .order_by('payout_date')
+        )
+        for p in vendor_payouts:
+            vendor = p.vendor
+            rows.append({
+                '撥款單號': p.payout_id,
+                '廠商ID': vendor.vendor_id,
+                '廠商名稱': vendor.company_name,
+                '銀行代碼': vendor.bank_code or '',
+                '銀行帳號': vendor.bank_account or '',
+                '戶名': vendor.bank_account_name or '',
+                '金額': p.amount,
+                '申請日期': p.payout_date,
+            })
+
+    else:  # export_type == 'koc'
+        fieldnames = ['撥款單號', 'KOC用戶ID', 'KOC名稱', '銀行代碼', '銀行帳號', '戶名', '金額', '申請日期']
+
+        koc_payouts = (
+            Payouts.objects
+            .select_related('koc__koc_profile')
+            .filter(status=export_status)
+            .order_by('payout_date')
+        )
+        for p in koc_payouts:
+            user = p.koc
+            koc_profile = getattr(user, 'koc_profile', None)
+            rows.append({
+                '撥款單號': p.payout_id,
+                'KOC用戶ID': user.user_id,
+                'KOC名稱': user.display_name or user.name,
+                '銀行代碼': (koc_profile.bank_number if koc_profile else '') or '',
+                '銀行帳號': (koc_profile.bank_account if koc_profile else '') or '',
+                # KOC 資料表沒有獨立的「戶名」欄位（跟廠商不一樣，Vendor 有
+                # bank_account_name，KOC 只有 bank_number/bank_account），
+                # 這裡退回用 User.display_name 或 User.name 當戶名，實務上
+                # 財務可能還是要人工核對戶名是否跟本人身分證姓名一致。
+                '戶名': user.display_name or user.name,
+                '金額': p.amount,
+                '申請日期': p.payout_date,
+            })
+
+    # 用 io.StringIO 組 CSV 內容，開頭加 UTF-8 BOM（\ufeff）是因為財務多半用
+    # Windows 版 Excel 直接開啟，沒有 BOM 的話中文欄位會變亂碼。
+    buffer = io.StringIO()
+    buffer.write('\ufeff')
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+
+    today_str = timezone.localdate().isoformat()
+    response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="payout_transfers_{export_type}_{export_status}_{today_str}.csv"'
+    return response
 
 
 @api_view(['POST'])

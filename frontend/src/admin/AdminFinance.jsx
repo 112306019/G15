@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import {
   Search, Filter, CreditCard, DollarSign, Wallet,
-  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert
+  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download
 } from 'lucide-react';
 
 export default function AdminFinance() {
@@ -17,6 +17,7 @@ export default function AdminFinance() {
   const [settlingVendorId, setSettlingVendorId] = useState(null);
   const [vendorPayouts, setVendorPayouts] = useState([]);
   const [confirmingPayoutId, setConfirmingPayoutId] = useState(null);
+  const [exportingPayouts, setExportingPayouts] = useState(null); // null | 'vendor' | 'koc'
 
   const [loading, setLoading] = useState(true);
 
@@ -43,6 +44,10 @@ export default function AdminFinance() {
             : e.status === 'withdrawable' ? '可提領'
               : '待定',
         })));
+      } else if (!earnRes.ok) {
+        // 請求失敗時後端回傳的是物件（{success:false, err:...}）不是陣列，
+        // 不能直接吞掉不處理，不然畫面會停在舊資料、看起來像「按了結算沒反應」
+        console.error("分潤資料載入失敗", earnData?.err || earnRes.status);
       }
 
       const settleRes = await fetch(`${API_BASE_URL}/api/platform/campaigns/settleable?Admin_id=${adminId}`, {
@@ -59,6 +64,8 @@ export default function AdminFinance() {
           pendingCount: c.Pending_count,
           pendingAmount: c.Pending_amount,
         })));
+      } else if (!settleRes.ok) {
+        console.error("待結算活動載入失敗", settleData?.err || settleRes.status);
       }
     } catch (err) {
       console.error("收益資料載入失敗", err);
@@ -92,8 +99,27 @@ export default function AdminFinance() {
         return;
       }
 
+      // 先做本地端的樂觀更新：不管重新抓資料的網路請求後續是否順利，
+      // 使用者按下結算的當下就要立刻看到這筆活動從「待結算」消失，
+      // 不然畫面感覺起來就像「按了沒反應」，還要手動整頁重新整理才會消失。
+      setSettleableCampaigns(prev => prev.filter(c => c.campaignId !== campaignId));
+
+      const settledEarningsIds = new Set(
+        (data.settled || []).map(s => s.earnings_id)
+      );
+      if (settledEarningsIds.size > 0) {
+        setEarnings(prev => prev.map(e =>
+          settledEarningsIds.has(e.earningId)
+            ? { ...e, status: '可提領' }
+            : e
+        ));
+      }
+
       alert(`已結算 ${data.settled_count} 筆分潤，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
-      fetchEarningsData();
+
+      // 再跟後端同步一次真正的最新狀態，樂觀更新只是先讓畫面看起來對，
+      // 這次才是真正的資料來源；如果失敗也已經先印出錯誤方便排查。
+      await fetchEarningsData();
     } catch (err) {
       console.error("結算失敗", err);
       alert("結算失敗，請稍後再試");
@@ -124,6 +150,8 @@ export default function AdminFinance() {
           notYetEligibleAmount: v.Not_yet_eligible_amount,
           earliestEligibleAt: v.Earliest_eligible_at,
         })));
+      } else if (!settleRes.ok) {
+        console.error("待結算廠商載入失敗", settleData?.err || settleRes.status);
       }
 
       const payoutData = await payoutRes.json();
@@ -137,6 +165,8 @@ export default function AdminFinance() {
           payoutDate: p.Payout_date,
           status: p.Status,
         })));
+      } else if (!payoutRes.ok) {
+        console.error("待處理撥款申請載入失敗", payoutData?.err || payoutRes.status);
       }
     } catch (err) {
       console.error("廠商金流資料載入失敗", err);
@@ -169,6 +199,10 @@ export default function AdminFinance() {
         alert(data.err || "結算失敗，請稍後再試");
         return;
       }
+
+      // 樂觀更新：立刻把這個廠商從「待結算」清單移除，不等重新抓資料的
+      // 網路請求（跟上面 KOC 活動結算同一個原因，避免看起來像沒反應）
+      setSettleableVendors(prev => prev.filter(v => v.vendorId !== vendorId));
 
       alert(`已結算 ${data.settled_count} 筆，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
       await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
@@ -211,12 +245,54 @@ export default function AdminFinance() {
         return;
       }
 
+      // 樂觀更新：立刻把這筆撥款申請從「待處理」清單移除
+      setVendorPayouts(prev => prev.filter(p => p.payoutId !== payoutId));
+
       await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
     } catch (err) {
       console.error("撥款處理失敗", err);
       alert("處理失敗，請稍後再試");
     } finally {
       setConfirmingPayoutId(null);
+    }
+  };
+
+  const handleExportPayouts = async (exportType) => {
+    if (!adminId) {
+      alert("找不到管理員登入資訊，請重新登入後再試一次");
+      return;
+    }
+
+    setExportingPayouts(exportType);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/payouts/export?type=${exportType}&status=pending&Admin_id=${adminId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        // 匯出失敗時後端一樣是回 JSON 物件（{success:false, err:...}），
+        // 不是 CSV，所以要先檢查狀態碼，不能直接把失敗訊息當檔案下載下去
+        const errData = await res.json().catch(() => null);
+        alert(errData?.err || "匯出失敗，請稍後再試");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // 檔名照後端 Content-Disposition 給的日期命名；這裡簡單給一個預設檔名，
+      // 瀏覽器實際下載時通常還是會採用回應標頭裡的檔名
+      a.download = `payout_transfers_${exportType}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("匯出轉帳資訊失敗", err);
+      alert("匯出失敗，請稍後再試");
+    } finally {
+      setExportingPayouts(null);
     }
   };
 
@@ -238,6 +314,8 @@ export default function AdminFinance() {
           referenceId: t.Reference_id || "-",
           date: t.created_at ? new Date(t.created_at).toLocaleDateString("zh-TW") : "-",
         })));
+      } else if (!txRes.ok) {
+        console.error("交易紀錄載入失敗", txData?.err || txRes.status);
       }
     } catch (err) {
       console.error("交易紀錄載入失敗", err);
@@ -311,6 +389,22 @@ export default function AdminFinance() {
           </div>
           <button className="flex items-center justify-center w-10 h-10 bg-white border border-[#E2DDD4] rounded-xl text-[#1A1A18] hover:bg-[#F8F9FA] transition-all shadow-sm">
             <Filter size={16} />
+          </button>
+          <button
+            onClick={() => handleExportPayouts('vendor')}
+            disabled={!!exportingPayouts}
+            className="flex items-center gap-2 px-5 h-10 bg-[#1A1A18] text-[#F5F0E8] rounded-xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
+          >
+            <Download size={16} />
+            {exportingPayouts === 'vendor' ? "匯出中..." : "匯出廠商轉帳"}
+          </button>
+          <button
+            onClick={() => handleExportPayouts('koc')}
+            disabled={!!exportingPayouts}
+            className="flex items-center gap-2 px-5 h-10 bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-xl text-sm font-bold hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
+          >
+            <Download size={16} />
+            {exportingPayouts === 'koc' ? "匯出中..." : "匯出KOC轉帳"}
           </button>
         </div>
       </div>

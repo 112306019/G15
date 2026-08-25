@@ -32,6 +32,7 @@ from .views.platform import (
     admin_list_settleable_vendors,
     admin_list_vendor_payouts,
     admin_confirm_vendor_payout,
+    admin_export_payout_transfers,
     admin_get_earnings,
     admin_list_settleable_campaigns,
 )
@@ -106,6 +107,7 @@ urlpatterns = [
     path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
     path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
     path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
+    path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
 
@@ -155,8 +157,6 @@ urlpatterns = [
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),
-    path('vendor/auth/verifyEmail', vendor.vendor_verify_email, name='vendor-verify-email'),
-    path('vendor/auth/resendVerification', vendor.vendor_resend_verification_code, name='vendor-resend-verification'),
     path('vendor/profile/update', vendor.vendor_profile_update, name='vendor-profile-update'),
     path('vendor/profile/get', vendor.vendor_profile_get, name='vendor-profile-get'),
 
