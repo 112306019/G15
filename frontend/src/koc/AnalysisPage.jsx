@@ -40,7 +40,7 @@ export default function AnalysisPage({ onBack, onViewData }) {
         className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
-        返回任務管理
+        返回接案管理
       </button>
 
       <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">合作收益總覽</h2>
