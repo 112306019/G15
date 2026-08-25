@@ -1077,6 +1077,11 @@ def vendor_campaign_delete(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_campaign_getlist(request):
+    # 讀取活動列表前先跑一次過期同步，不然 end_date 已過的活動會一直卡在
+    # status='active'（後台卡片顯示「招募中」），因為全專案沒有排程會自動
+    # 更新這個欄位，只能靠讀取的當下 lazy-write 補上。
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
     campaign_status = request.GET.get("status")
 
