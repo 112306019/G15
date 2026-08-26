@@ -2,6 +2,7 @@ import logging
 import csv
 import io
 from django.http import HttpResponse
+from django.contrib.auth.hashers import check_password
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import timedelta
 
@@ -2093,7 +2094,7 @@ def admin_login(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
 
-    if admin.password != password:
+    if not check_password(password, admin.password):
         return Response(
             {'success': False, 'err': '帳號或密碼錯誤'},
             status=status.HTTP_401_UNAUTHORIZED
@@ -2107,7 +2108,6 @@ def admin_login(request):
         'Admin_id': admin.admin_id,
         'Name': admin.name,
         'Email': admin.email,
-        'Password': admin.password,
         'Role': admin.role,
         'Status': admin.status,
         'Last_login_at': admin.last_login_at,
