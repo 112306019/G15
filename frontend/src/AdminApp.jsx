@@ -25,7 +25,7 @@ export default function AdminApp() {
   const [adminEmail, setAdminEmail] = useState('');
 
   // 🌟 管理員身分狀態
-  const [adminRole, setAdminRole] = useState('Super Admin');
+  const [adminRole, setAdminRole] = useState('super_admin');
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
@@ -53,13 +53,13 @@ export default function AdminApp() {
 
   // 🌟 根據角色定義左側選單與允許的路由
   const allMenuItems = [
-    { id: 'overview', label: '平台總覽', icon: <LayoutDashboard size={20} />, path: '/admin', roles: ['Super Admin', 'Finance', 'Reviewer'] },
-    { id: 'vendors', label: '廠商管理', icon: <Store size={20} />, path: '/admin/vendors', roles: ['Super Admin', 'Reviewer', 'Finance'] },
-    { id: 'influencers', label: 'KOC 管理', icon: <UserCheck size={20} />, path: '/admin/influencers', roles: ['Super Admin', 'Reviewer', 'Finance'] },
-    { id: 'consumers', label: '一般使用者', icon: <Users size={20} />, path: '/admin/consumers', roles: ['Super Admin', 'Reviewer'] },
-    { id: 'missions', label: '任務與活動追蹤', icon: <ClipboardList size={20} />, path: '/admin/missions', roles: ['Super Admin', 'Reviewer'] },
-    { id: 'finance', label: '訂單與財務', icon: <CreditCard size={20} />, path: '/admin/finance', roles: ['Super Admin', 'Finance'] },
-    { id: 'logs', label: '操作紀錄', icon: <History size={20} />, path: '/admin/logs', roles: ['Super Admin', 'Reviewer', 'Finance'] },
+    { id: 'overview', label: '平台總覽', icon: <LayoutDashboard size={20} />, path: '/admin', roles: ['super_admin', 'finance', 'reviewer'] },
+    { id: 'vendors', label: '廠商管理', icon: <Store size={20} />, path: '/admin/vendors', roles: ['super_admin', 'reviewer', 'finance'] },
+    { id: 'influencers', label: 'KOC 管理', icon: <UserCheck size={20} />, path: '/admin/influencers', roles: ['super_admin', 'reviewer', 'finance'] },
+    { id: 'consumers', label: '一般使用者', icon: <Users size={20} />, path: '/admin/consumers', roles: ['super_admin', 'reviewer'] },
+    { id: 'missions', label: '任務與活動追蹤', icon: <ClipboardList size={20} />, path: '/admin/missions', roles: ['super_admin', 'reviewer'] },
+    { id: 'finance', label: '訂單與財務', icon: <CreditCard size={20} />, path: '/admin/finance', roles: ['super_admin', 'finance'] },
+    { id: 'logs', label: '操作紀錄', icon: <History size={20} />, path: '/admin/logs', roles: ['super_admin', 'reviewer', 'finance'] },
   ];
 
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
@@ -152,14 +152,14 @@ export default function AdminApp() {
         <div className="p-10 flex-1">
           <Routes>
             <Route path="/" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Finance', 'Reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'finance', 'reviewer']}>
                 <AdminOverview currentRole={adminRole} />
               </ProtectedRoute>
             } />
 
             {/* 🌟 廠商管理模組 */}
             <Route path="/vendors" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminVendors />
               </ProtectedRoute>
             } />
@@ -167,7 +167,7 @@ export default function AdminApp() {
             <Route
               path="/vendors/:id"
               element={
-                <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                   <AdminVendorDetail />
                 </ProtectedRoute>
               }
@@ -176,17 +176,17 @@ export default function AdminApp() {
 
             {/* 🌟 KOC 管理模組 */}
             <Route path="/influencers" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminInfluencers />
               </ProtectedRoute>
             } />
             <Route path="/influencers/pending" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminKOCPending />
               </ProtectedRoute>
             } />
             <Route path="/influencers/:id" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminKocDetail koc={{
                   id: 'U0089',
                   name: '王大寶',
@@ -209,33 +209,33 @@ export default function AdminApp() {
 
             {/* 🌟 一般使用者模組 */}
             <Route path="/consumers" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminConsumers />
               </ProtectedRoute>
             } />
             <Route path="/consumers/:id" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminConsumerDetail />
               </ProtectedRoute>
             } />
 
             {/* 🌟 任務與活動追蹤模組 */}
             <Route path="/missions" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminMissions />
               </ProtectedRoute>
             } />
 
             {/* 🌟 訂單與財務金流模組 */}
             <Route path="/finance" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminFinance />
               </ProtectedRoute>
             } />
 
             {/* 🌟 系統操作紀錄模組 */}
             <Route path="/logs" element={
-              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminLogs />
               </ProtectedRoute>
             } />
