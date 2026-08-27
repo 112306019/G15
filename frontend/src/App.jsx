@@ -393,16 +393,6 @@ function MainSystem() {
     return view;
   };
 
-  if (roleSyncing) {
-    return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">載入中...</p>
-      </div>
-    );
-  }
-
-  const showHeader = !['welcome', 'login'].includes(view);
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
@@ -443,6 +433,16 @@ function MainSystem() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
+
+  if (roleSyncing) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">載入中...</p>
+      </div>
+    );
+  }
+
+  const showHeader = !['welcome', 'login'].includes(view);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
