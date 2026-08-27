@@ -506,8 +506,6 @@ def admin_settle_vendor_earnings(request):
     total_amount = sum(s['amount'] for s in settled)
     distinct_vendor_ids = {s['vendor_id'] for s in settled}
 
-    # 稽核紀錄：單一廠商結算就直接關聯該廠商；一次跑全平台結算的話，
-    # AdminAuditLogs.vendor 留空，把涉及的廠商數量寫進 action_reason
     log_vendor = None
     if vendor_id and len(distinct_vendor_ids) <= 1:
         log_vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
@@ -522,13 +520,91 @@ def admin_settle_vendor_earnings(request):
         ),
     )
 
+    from decimal import Decimal, ROUND_HALF_UP
+    from api.models import VendorInvoice
+    from api.ecpay_invoice import issue_b2b_invoice
+
+    settled_amount_by_vendor = {}
+    for s in settled:
+        settled_amount_by_vendor.setdefault(s['vendor_id'], Decimal('0'))
+        settled_amount_by_vendor[s['vendor_id']] += Decimal(str(s['amount']))
+
+    invoices = []
+    for v_id, vendor_settlement_amount in settled_amount_by_vendor.items():
+        vendor_obj = Vendor.objects.filter(vendor_id=v_id).first()
+        if not vendor_obj or not vendor_obj.tax_id:
+            invoices.append({
+                'vendor_id': v_id,
+                'status': 'failed',
+                'error': '廠商無統一編號，無法開立發票'
+            })
+            continue
+
+        fee_rate = vendor_obj.platform_fee_rate or Decimal('0.00')
+        if fee_rate <= 0:
+            continue
+
+        service_fee = (vendor_settlement_amount * fee_rate / Decimal('100')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        tax_amount = (service_fee * Decimal('0.05')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        grand_total = service_fee + tax_amount
+
+        relate_number = f"INV{int(timezone.now().timestamp())}{v_id}"[:20]
+
+        invoice_record = VendorInvoice.objects.create(
+            vendor=vendor_obj,
+            relate_number=relate_number,
+            settlement_amount=vendor_settlement_amount,
+            service_fee=service_fee,
+            tax_amount=tax_amount,
+            total_amount=grand_total,
+            status='pending',
+        )
+
+        try:
+            success, invoice_number, message = issue_b2b_invoice(
+                relate_number=relate_number,
+                buyer_tax_id=vendor_obj.tax_id,
+                item_name='平台服務費',
+                sales_amount=int(service_fee),
+                tax_amount=int(tax_amount),
+            )
+            if success:
+                invoice_record.status = 'issued'
+                invoice_record.invoice_number = invoice_number
+            else:
+                invoice_record.status = 'failed'
+                invoice_record.error_message = message
+            invoice_record.save()
+
+            invoices.append({
+                'vendor_id': v_id,
+                'status': invoice_record.status,
+                'invoice_number': invoice_record.invoice_number,
+                'service_fee': str(service_fee),
+                'error': invoice_record.error_message,
+            })
+        except Exception as e:
+            invoice_record.status = 'failed'
+            invoice_record.error_message = str(e)
+            invoice_record.save()
+            invoices.append({
+                'vendor_id': v_id,
+                'status': 'failed',
+                'error': str(e)
+            })
+
     return Response({
         'success': True,
         'err': '',
         'settled_count': len(settled),
         'total_amount': total_amount,
         'settled': settled,
-        'skipped': skipped
+        'skipped': skipped,
+        'invoices': invoices
     }, status=status.HTTP_200_OK)
 
 
