@@ -413,6 +413,37 @@ function MainSystem() {
     navigate('/welcome', { replace: true });
   };
 
+  // 閒置 30 分鐘自動登出：只在已登入狀態下才需要偵測，
+  // 監聽常見的使用者活動事件，只要有動作就重新計時，
+  // 完全沒有活動達到門檻時間才觸發登出。
+  useEffect(() => {
+    const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let idleTimer = null;
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        handleLogout();
+        setAppToast("閒置時間過長，已自動登出，請重新登入。");
+        setTimeout(() => setAppToast(""), 4000);
+      }, IDLE_LIMIT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetIdleTimer));
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetIdleTimer));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
       {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} onLogout={handleLogout} />}

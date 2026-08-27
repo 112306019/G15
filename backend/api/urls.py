@@ -187,6 +187,7 @@ urlpatterns = [
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
     path('vendor/order/getDetail', vendor.vendor_order_get_detail, name='vendor-order-get-detail'),
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
+    path('vendor/order/uploadInvoice', vendor.vendor_order_upload_invoice, name='vendor-order-upload-invoice'),
 
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),

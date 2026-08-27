@@ -18,7 +18,8 @@ import {
   getVendorOrderDetail,
   updateVendorShipping,
   createVendorLogistics,
-  queryVendorLogistics
+  queryVendorLogistics,
+  uploadVendorInvoice
 } from '../api/vendor'
 
 import {
@@ -244,18 +245,25 @@ function OrderDetailModal({
   onClose,
   onUpdateShipping,
   onCreateLogistics,
-  onQueryLogistics
+  onQueryLogistics,
+  onUploadInvoice,
+  vendorId
 }) {
   const [
     nextShippingStatus,
     setNextShippingStatus
   ] = useState('')
 
+  const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
+  const [invoiceUploading, setInvoiceUploading] = useState(false)
+  const [invoiceUploadMsg, setInvoiceUploadMsg] = useState('')
 
   useEffect(() => {
     setNextShippingStatus(
       order?.shippingStatus || ''
     )
+    setInvoiceNumberInput(order?.invoiceNumber || '')
+    setInvoiceUploadMsg('')
   }, [order])
 
 
@@ -767,6 +775,63 @@ function OrderDetailModal({
 
             <Card className="p-6">
               <div className="text-sm font-bold text-[#1A1A18] mb-4">
+                發票管理
+              </div>
+
+              {order.invoiceNumber ? (
+                <div className="text-sm">
+                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    發票號碼
+                  </div>
+                  <div className="font-bold text-[#1A1A18]">
+                    {order.invoiceNumber}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input
+                    type="text"
+                    value={invoiceNumberInput}
+                    onChange={event => setInvoiceNumberInput(event.target.value)}
+                    placeholder="請輸入發票號碼（例如 AB12345678）"
+                    className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+                  />
+                  <Button
+                    variant="brand"
+                    disabled={invoiceUploading}
+                    onClick={() =>
+                      onUploadInvoice(
+                        invoiceNumberInput,
+                        order.orderId,
+                        vendorId,
+                        setInvoiceUploading,
+                        setInvoiceUploadMsg
+                      )
+                    }
+                    className="gap-2"
+                  >
+                    {invoiceUploading ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" />
+                        上傳中...
+                      </>
+                    ) : (
+                      '上傳發票號碼'
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {invoiceUploadMsg && (
+                <div className="text-xs font-bold text-[#C8522A] mt-2">
+                  {invoiceUploadMsg}
+                </div>
+              )}
+            </Card>
+
+
+            <Card className="p-6">
+              <div className="text-sm font-bold text-[#1A1A18] mb-4">
                 更新出貨狀態
               </div>
 
@@ -961,6 +1026,9 @@ export default function Orders() {
             shippingStatus:
               order.shipping_status,
 
+            invoiceNumber:
+              order.invoice_number || '',
+
             hasAddress:
               Boolean(order.has_address),
 
@@ -1133,6 +1201,9 @@ export default function Orders() {
 
         shippingStatus:
           detail.shipping_status,
+
+        invoiceNumber:
+          detail.invoice_number || '',
 
         addressId:
           detail.address_id,
@@ -1379,6 +1450,51 @@ export default function Orders() {
       )
     } finally {
       setShippingUpdating(false)
+    }
+  }
+
+  async function handleUploadInvoice(invoiceNumber, orderId, vendorId, setUploading, setMsg) {
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      setMsg('請輸入發票號碼')
+      return
+    }
+
+    try {
+      setUploading(true)
+      setMsg('')
+
+      const response = await uploadVendorInvoice({
+        vendor_id: vendorId,
+        order_id: orderId,
+        invoice_number: invoiceNumber.trim(),
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '上傳發票號碼失敗')
+      }
+
+      setOrders(previous =>
+        previous.map(order =>
+          order.orderId === orderId
+            ? { ...order, invoiceNumber: invoiceNumber.trim() }
+            : order
+        )
+      )
+
+      setSelectedOrder(previous =>
+        previous ? { ...previous, invoiceNumber: invoiceNumber.trim() } : previous
+      )
+
+      toast.success('發票號碼已上傳，已通知消費者')
+    } catch (error) {
+      const apiError = error.response?.data?.err
+      setMsg(
+        typeof apiError === 'string'
+          ? apiError
+          : error.message || '上傳發票號碼失敗'
+      )
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -2006,6 +2122,10 @@ export default function Orders() {
         onQueryLogistics={
           handleQueryLogistics
         }
+        onUploadInvoice={
+          handleUploadInvoice
+        }
+        vendorId={vendorId}
       />
     </div>
   )
