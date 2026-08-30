@@ -17,6 +17,7 @@ import {
   getVendorOrders,
   getVendorOrderDetail,
   updateVendorShipping,
+  respondVendorCancelRequest,
   createVendorLogistics,
   queryVendorLogistics
 } from '../api/vendor'
@@ -56,6 +57,7 @@ const paymentLabels = {
   paid: '已付款',
   failed: '付款失敗',
   refunded: '已退款',
+  refund_pending: '待退款',
   cancelled: '已取消'
 }
 
@@ -213,6 +215,9 @@ function PaymentBadge({
   const isPaid =
     status === 'paid'
 
+  const isRefundPending =
+    status === 'refund_pending'
+
   return (
     <span
       className={cn(
@@ -223,7 +228,9 @@ function PaymentBadge({
         `,
         isPaid
           ? 'bg-green-50 text-green-700'
-          : 'bg-[#F8F9FA] text-[#8C8880]'
+          : isRefundPending
+            ? 'bg-amber-50 text-amber-700'
+            : 'bg-[#F8F9FA] text-[#8C8880]'
       )}
     >
       {paymentLabels[status] ||
@@ -884,6 +891,11 @@ export default function Orders() {
   ] = useState(false)
 
   const [
+    cancelRespondingId,
+    setCancelRespondingId
+  ] = useState(null)
+
+  const [
     logisticsCreating,
     setLogisticsCreating
   ] = useState(false)
@@ -1379,6 +1391,66 @@ export default function Orders() {
       )
     } finally {
       setShippingUpdating(false)
+    }
+  }
+
+
+  async function handleRespondCancelRequest(order, approve) {
+    const confirmed = await confirm({
+      title: approve
+        ? '核准這筆訂單的取消申請？'
+        : '拒絕這筆訂單的取消申請？',
+      description: approve
+        ? '核准後訂單將標記為已取消，商品庫存會加回去。'
+        : '拒絕後訂單會退回備貨中，繼續原本的出貨流程。',
+      confirmText: approve ? '核准取消' : '拒絕申請',
+    })
+
+    if (!confirmed) return
+
+    try {
+      setCancelRespondingId(order.orderId)
+
+      const response = await respondVendorCancelRequest({
+        vendor_id: vendorId,
+        order_id: order.orderId,
+        approve,
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '處理取消申請失敗')
+      }
+
+      const updatedOrderStatus = response.data?.order_status
+      const updatedShippingStatus = response.data?.shipping_status
+
+      setOrders(previous =>
+        previous.map(o =>
+          o.orderId === order.orderId
+            ? {
+                ...o,
+                orderStatus: updatedOrderStatus,
+                shippingStatus: updatedShippingStatus,
+              }
+            : o
+        )
+      )
+
+      toast.success(
+        approve ? '已核准取消，訂單狀態更新為已取消' : '已拒絕取消申請'
+      )
+    } catch (error) {
+      const apiError = error.response?.data?.err
+
+      toast.error(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message || '處理取消申請失敗'
+      )
+    } finally {
+      setCancelRespondingId(null)
     }
   }
 
@@ -1949,6 +2021,37 @@ export default function Orders() {
                                 </span>
                               )}
                           </div>
+
+                          {order.orderStatus === 'cancel_requested' && (
+                            <div
+                              className="mt-2 flex flex-col items-start gap-1.5"
+                              onClick={event => event.stopPropagation()}
+                            >
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 whitespace-nowrap">
+                                買家申請取消訂單
+                              </span>
+
+                              <div className="flex flex-nowrap items-center gap-1.5">
+                                <Button
+                                  variant="outline"
+                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
+                                  disabled={cancelRespondingId === order.orderId}
+                                  onClick={() => handleRespondCancelRequest(order, true)}
+                                >
+                                  核准
+                                </Button>
+
+                                <Button
+                                  variant="danger"
+                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
+                                  disabled={cancelRespondingId === order.orderId}
+                                  onClick={() => handleRespondCancelRequest(order, false)}
+                                >
+                                  拒絕
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </td>
 
                         <td className="p-5 text-sm font-medium text-[#8C8880] whitespace-nowrap">

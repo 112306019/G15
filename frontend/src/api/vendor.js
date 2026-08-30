@@ -167,6 +167,11 @@ export const updateVendorShipping = (data) => {
   return api.post('/vendor/order/updateShipping', data)
 }
 
+// 核准或拒絕消費者的取消訂單申請
+export const respondVendorCancelRequest = (data) => {
+  return api.post('/vendor/order/respondCancelRequest', data)
+}
+
 export const createVendorLogistics = data =>
   api.post('/vendor/order/createLogistics', data)
 
@@ -229,6 +234,34 @@ export const sendVendorChatMessage = data => {
 // 將 KOC 訊息標記為已讀
 export const markVendorChatroomRead = data => {
   return api.post('/vendor/chatroom/markRead', data)
+}
+
+// 取得（或建立）客服聊天室
+export const getOrCreateVendorSupportRoom = vendorId => {
+  return api.post('/vendor/support/getOrCreateRoom', { vendor_id: vendorId })
+}
+
+// 取得客服聊天室訊息
+export const getVendorSupportMessages = vendorId => {
+  return api.get('/vendor/support/getMessages', {
+    params: {
+      vendor_id: vendorId
+    }
+  })
+}
+
+// 廠商在客服聊天室發送訊息
+export const sendVendorSupportMessage = data => {
+  return api.post('/vendor/support/sendMessage', data)
+}
+
+// 客服未讀訊息數
+export const getVendorSupportUnreadCount = vendorId => {
+  return api.get('/vendor/support/unreadCount', {
+    params: {
+      vendor_id: vendorId
+    }
+  })
 }
 
 // 廠商成效總覽

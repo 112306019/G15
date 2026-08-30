@@ -204,6 +204,27 @@ def mark_payment_abandoned(merchant_trade_no: str) -> PaymentTransaction | None:
     return payment
 
 
+def mark_payment_refund_pending(payment: PaymentTransaction) -> PaymentTransaction:
+    """
+    訂單取消時，如果這筆訂單已經付款成功，把對應的 PaymentTransaction 標成
+    refund_pending（待退款）。
+
+    DoAction（信用卡退款）只能在 ECPay 正式環境呼叫，測試帳號完全無法使用、
+    也無法在這個階段驗證串接是否正確，所以先不自動退款，只把狀態標出來，
+    讓廠商/客服知道要去 ECPay 商家後台手動處理這筆退款。等申請到正式帳號、
+    DoAction 真的串起來之後，這裡再改成呼叫退款 API。
+
+    非 paid 狀態（例如本來就還沒付款、已經是 failed）呼叫這裡不做任何事，
+    直接原樣傳回，避免不小心把不該動的狀態覆蓋掉。
+    """
+    if payment.status != PaymentTransaction.STATUS_PAID:
+        return payment
+
+    payment.status = PaymentTransaction.STATUS_REFUND_PENDING
+    payment.save(update_fields=["status", "updated_at"])
+    return payment
+
+
 def _build_item_name(order) -> str:
     """從 Order 底下的 OrderItem/Product 組出 ECPay ItemName，多筆商品以 # 分隔"""
     items = order.items.select_related("product").all().order_by("order_item_id")

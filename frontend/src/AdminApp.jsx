@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Store, UserCheck,
-  ClipboardList, CreditCard, LogOut, History, ShieldAlert
+  ClipboardList, CreditCard, LogOut, History, ShieldAlert, Headset, FileText
 } from 'lucide-react';
 
 // 🌟 引入切好的各個頁面元件
@@ -17,6 +17,8 @@ import AdminVendorDetail from './admin/AdminVendorDetail';
 import AdminMissions from './admin/AdminMissions';
 import AdminFinance from './admin/AdminFinance';
 import AdminLogs from './admin/AdminLogs';
+import AdminSupport from './admin/AdminSupport';
+import AdminTaxForms from './admin/AdminTaxForms';
 
 export default function AdminApp() {
   const navigate = useNavigate();
@@ -59,6 +61,8 @@ export default function AdminApp() {
     { id: 'consumers', label: '一般使用者', icon: <Users size={20} />, path: '/admin/consumers', roles: ['Super Admin', 'Reviewer'] },
     { id: 'missions', label: '任務與活動追蹤', icon: <ClipboardList size={20} />, path: '/admin/missions', roles: ['Super Admin', 'Reviewer'] },
     { id: 'finance', label: '訂單與財務', icon: <CreditCard size={20} />, path: '/admin/finance', roles: ['Super Admin', 'Finance'] },
+    { id: 'taxForms', label: '勞報單審核', icon: <FileText size={20} />, path: '/admin/tax-forms', roles: ['Super Admin', 'Finance'] },
+    { id: 'support', label: '客服聊天室', icon: <Headset size={20} />, path: '/admin/support', roles: ['Super Admin', 'Reviewer', 'Finance'] },
     { id: 'logs', label: '操作紀錄', icon: <History size={20} />, path: '/admin/logs', roles: ['Super Admin', 'Reviewer', 'Finance'] },
   ];
 
@@ -230,6 +234,20 @@ export default function AdminApp() {
             <Route path="/finance" element={
               <ProtectedRoute allowedRoles={['Super Admin', 'Finance']}>
                 <AdminFinance />
+              </ProtectedRoute>
+            } />
+
+            {/* 🌟 勞報單審核模組 */}
+            <Route path="/tax-forms" element={
+              <ProtectedRoute allowedRoles={['Super Admin', 'Finance']}>
+                <AdminTaxForms />
+              </ProtectedRoute>
+            } />
+
+            {/* 🌟 客服聊天室模組 */}
+            <Route path="/support" element={
+              <ProtectedRoute allowedRoles={['Super Admin', 'Reviewer', 'Finance']}>
+                <AdminSupport />
               </ProtectedRoute>
             } />
 

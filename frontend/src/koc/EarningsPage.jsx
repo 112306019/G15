@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
-import { Wallet, Landmark, FileText, Clock, ChevronRight } from 'lucide-react';
+import { Wallet, FileText, FileSignature, Clock, ChevronRight } from 'lucide-react';
 
-export default function EarningsPage({ onDetail, onTrack }) {
+export default function EarningsPage({ onDetail, onTrack, onTaxFormRecords }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
   const [withdrawable, setWithdrawable] = useState(0);
   const [pending, setPending] = useState(0);
-  const [hasBankAccount, setHasBankAccount] = useState(false);
 
   useEffect(() => {
     const fetchRevenue = async () => {
@@ -18,7 +17,6 @@ export default function EarningsPage({ onDetail, onTrack }) {
         if (res.data.success) {
           setWithdrawable(res.data.withdrawable_amount);
           setPending(res.data.pending_amount);
-          setHasBankAccount(res.data.hasBankAccount);
         }
       } catch (err) {
         console.error('載入收益失敗', err);
@@ -28,19 +26,6 @@ export default function EarningsPage({ onDetail, onTrack }) {
     };
     fetchRevenue();
   }, []);
-
-  const handleTransfer = () => {
-    if (!hasBankAccount) {
-      alert('請先至個人資訊頁面綁定銀行帳戶');
-      return;
-    }
-    if (withdrawable === 0) {
-      alert('目前沒有可提領的金額');
-      return;
-    }
-    // TODO: 串接轉帳 API（等綠界金流完成後再補）
-    alert('轉帳功能開發中，敬請期待');
-  };
 
   return (
     <div className="animate-in fade-in duration-500 font-sans">
@@ -81,11 +66,11 @@ export default function EarningsPage({ onDetail, onTrack }) {
 
               <div className="flex flex-col sm:flex-row gap-4">
                 <button
-                  onClick={handleTransfer}
+                  onClick={onTaxFormRecords}
                   className="flex-1 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-8 py-4 rounded-2xl text-sm font-bold tracking-widest hover:bg-[#C8522A] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md"
                 >
-                  <Landmark size={18} />
-                  轉帳至銀行帳戶
+                  <FileSignature size={18} />
+                  查看勞報單紀錄
                 </button>
                 <button
                   onClick={onDetail}
@@ -125,7 +110,7 @@ export default function EarningsPage({ onDetail, onTrack }) {
 
           {/* 輔助說明小提示 */}
           <p className="text-xs font-bold text-[#8C8880] text-center mt-8">
-            ※ 待定收益將在訂單完成且過鑑賞期後，自動轉入可提領餘額。
+            ※ 待定收益將在案件完成且優惠碼的推廣期間結束後，自動結算至可提領餘額。
           </p>
 
         </div>

@@ -211,6 +211,10 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     # 出貨狀態變成 'delivered' 的當下寫入，作為鑑賞期倒數的起算點
     delivered_at = models.DateTimeField(null=True, blank=True, db_column='delivered_at')
+    # 廠商拒絕消費者「備貨中」取消申請時寫入，用來擋消費者對同一筆訂單重複申請取消。
+    # 拒絕後 order_status 會退回 pending 繼續原本流程，所以不能只靠 order_status 判斷，
+    # 需要這個獨立欄位記住「這筆訂單已經被拒絕過一次」。
+    cancel_rejected_at = models.DateTimeField(null=True, blank=True, db_column='cancel_rejected_at')
 
     class Meta:
         db_table = 'Order'
@@ -279,6 +283,43 @@ class KOCMissionNew(models.Model):
 
     def __str__(self):
         return f"Mission {self.kocmission_id} for KOC {self.koc_id} (Stage: {self.stage})"
+
+
+class RemunerationForm(models.Model):
+    """
+    勞務報酬單（勞報單）：案件完成推廣後，KOC 下載固定範本簽署，上傳到自己的雲端硬碟，
+    把「公開檢視連結」貼回來給平台審核。平台不接收檔案直接上傳，只收連結。
+    一個 KOCMissionNew 只會有一張勞報單，還沒送出過連結之前不會有這筆紀錄
+    （用 get_or_create 在第一次提交時才建立，見 koc_submit_tax_form_link）。
+    """
+    STATUS_CHOICES = [
+        ('pending_review', '待審核'),
+        ('approved', '審核通過'),
+        ('rejected', '已退回'),
+    ]
+
+    form_id = models.AutoField(primary_key=True)
+    kocmission = models.OneToOneField(
+        KOCMissionNew,
+        on_delete=models.CASCADE,
+        related_name='remuneration_form',
+        db_column='kocmission_id'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_review', db_column='status')
+    cloud_link_url = models.URLField(max_length=500, db_column='cloud_link_url')
+    submitted_at = models.DateTimeField(db_column='submitted_at')
+    reviewed_at = models.DateTimeField(null=True, blank=True, db_column='reviewed_at')
+    # 對應 Admins.admin_id，不是外鍵（跟其他 admin_id 欄位一樣走鬆散關聯）
+    reviewed_by_admin_id = models.CharField(max_length=50, blank=True, null=True, db_column='reviewed_by_admin_id')
+    reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'RemunerationForm'
+
+    def __str__(self):
+        return f"RemunerationForm {self.form_id} for Mission {self.kocmission_id} ({self.status})"
 
 
 class Submissions(models.Model):
@@ -837,6 +878,59 @@ class Message(models.Model):
     class Meta:
         db_table = 'Message'
         ordering = ['created_at']  # 依時間排序，最舊的在最上面
+
+
+class SupportChatRoom(models.Model):
+    """
+    客服聊天室：廠商或消費者（含 KOC，因為 KOC 也是 User）跟平台客服的對話串。
+    跟 ChatRoom（廠商-KOC 針對特定任務的聊天室）是分開的兩件事，不共用。
+    每個廠商/消費者只會有一間持續使用的客服聊天室，不是每次諮詢都開新的一間。
+    """
+    PARTICIPANT_TYPE_CHOICES = [
+        ('vendor', '廠商'),
+        ('user', '消費者'),  # 涵蓋一般消費者跟 KOC，兩者都是 User，客服端不再細分
+    ]
+
+    room_id = models.AutoField(primary_key=True)
+    participant_type = models.CharField(max_length=20, choices=PARTICIPANT_TYPE_CHOICES, db_column='participant_type')
+    # 對應 Vendor.vendor_id 或 User.user_id，依 participant_type 而定，不是外鍵
+    participant_id = models.CharField(max_length=50, db_column='participant_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'SupportChatRoom'
+        unique_together = ('participant_type', 'participant_id')
+
+    def __str__(self):
+        return f"SupportChatRoom {self.room_id} ({self.participant_type}:{self.participant_id})"
+
+
+class SupportMessage(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('vendor', '廠商'),
+        ('user', '消費者'),
+        ('admin', '客服'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(
+        SupportChatRoom,
+        on_delete=models.CASCADE,
+        related_name='messages',
+        db_column='room_id'
+    )
+    sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
+    # 對應 Vendor.vendor_id / User.user_id / Admins.admin_id，依 sender_role 而定，不是外鍵
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    # 對方是否已讀（vendor/user 發的訊息看客服有沒有讀；admin 發的訊息看廠商/消費者有沒有讀）
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'SupportMessage'
+        ordering = ['created_at']
+
 
 class LoginHistory(models.Model):
     log_id = models.AutoField(primary_key=True)

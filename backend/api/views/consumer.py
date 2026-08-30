@@ -9,8 +9,9 @@ from django.db import transaction
 from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo
 from .platform import calculate_order_commission, calculate_vendor_earning
+from .constants import restore_order_stock
 from payments.models import PaymentTransaction
-from payments.services import is_payment_effectively_failed, pick_relevant_payment
+from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
 
 def _has_active_campaign(product_id):
@@ -1204,6 +1205,7 @@ def view_order(request):
             'order_status': order.order_status,
             'payment_status': order.payment_status,
             'shipping_status': order.shipping_status,
+            'cancel_rejected': bool(order.cancel_rejected_at),
             'Address_id': order.address_id,
             'created_at': order.created_at,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
@@ -1450,6 +1452,110 @@ def update_order_status(request):
         response_data['vendor_earning'] = vendor_result
 
     return Response(response_data, status=status.HTTP_200_OK)
+
+
+# ── 取消訂單 ──
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def cancel_order(request):
+    """
+    消費者取消訂單。
+
+    - 待出貨（unshipped）：廠商還沒開始備貨，直接取消，庫存立刻加回去。
+    - 備貨中（preparing）：廠商已經在準備商品，改成 cancel_requested，
+      等廠商核准或拒絕；核准後才會真的變成 cancelled、庫存才加回去
+      （見 vendor.vendor_order_respond_cancel_request）。
+    - 已出貨/已送達：不能取消，要走退貨流程（目前系統還沒有）。
+    """
+    order_id = request.data.get('order_id') or request.data.get('Order_id')
+    user_id = request.data.get('user_id') or request.data.get('User_id')
+    guest_id = request.data.get('guest_id') or request.data.get('Guest_id')
+
+    if not order_id:
+        return Response(
+            {'success': False, 'err': 'order_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        order = Order.objects.get(order_id=order_id)
+    except Order.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '訂單不存在'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if user_id and str(order.user_id) != str(user_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if guest_id and str(order.guest_id) != str(guest_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if order.order_status == 'cancelled':
+        return Response(
+            {'success': False, 'err': '此訂單已經是取消狀態'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.order_status == 'cancel_requested':
+        return Response(
+            {'success': False, 'err': '取消申請審核中，請等待廠商回覆'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.order_status == 'completed':
+        return Response(
+            {'success': False, 'err': '此訂單已完成，無法取消'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.cancel_rejected_at:
+        return Response(
+            {'success': False, 'err': '賣家已拒絕您的取消申請，無法再次申請取消'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    payment_tx = None
+
+    with transaction.atomic():
+        if order.shipping_status == 'unshipped':
+            order.order_status = 'cancelled'
+            order.shipping_status = 'cancelled'
+            order.save(update_fields=['order_status', 'shipping_status'])
+
+            shipment = ShipmentInfo.objects.filter(order=order).first()
+            if shipment:
+                shipment.shipping_status = 'cancelled'
+                shipment.save(update_fields=['shipping_status', 'updated_at'])
+
+            restore_order_stock(order)
+
+            payment_tx = get_order_payment_status(order)
+            if payment_tx:
+                mark_payment_refund_pending(payment_tx)
+        elif order.shipping_status == 'preparing':
+            order.order_status = 'cancel_requested'
+            order.save(update_fields=['order_status'])
+        else:
+            return Response(
+                {'success': False, 'err': '訂單已出貨，無法取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'order_id': str(order.order_id),
+        'order_status': order.order_status,
+        'shipping_status': order.shipping_status,
+        'payment_status': payment_tx.status if payment_tx else None,
+    }, status=status.HTTP_200_OK)
 
 
 # ── 查看商品所屬活動 ──

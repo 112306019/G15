@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Star, ShoppingCart, User, Heart, MessageCircle, Settings, LogOut } from 'lucide-react';
+import { Star, ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut } from 'lucide-react';
 
 // 🟢 接收 cartCount
-export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, onLogout }) {
+export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, supportUnreadCount = 0, onLogout }) {
 
   const allNavItems = [
     { label: '購物頁面', key: 'shop', isKocOnly: false },
@@ -94,6 +94,19 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
             <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
           </div>
         )}
+
+        <div
+          className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+          onClick={() => onNavigate?.('support')}
+        >
+          <Headset size={22} strokeWidth={2.5} className={activeTab === 'support' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+
+          {supportUnreadCount > 0 && (
+            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+              {supportUnreadCount}
+            </span>
+          )}
+        </div>
 
         <div
           className="relative"

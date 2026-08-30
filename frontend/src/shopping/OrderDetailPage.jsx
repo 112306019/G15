@@ -42,6 +42,8 @@ function getDeliveryMethodLabel(shipment) {
 export default function OrderDetailPage({ onBack, orderId }) {
   const [orderData, setOrderData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   const token = localStorage.getItem("token");
 
@@ -78,6 +80,40 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
     fetchOrder();
   }, [orderId, token]);
+
+  const handleCancelOrder = async () => {
+    setCancelError("");
+    setCancelSubmitting(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/consumer/order/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          user_id: orderData.User_id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.err || "取消訂單失敗");
+      }
+
+      setOrderData((prev) => ({
+        ...prev,
+        order_status: data.order_status,
+        shipping_status: data.shipping_status,
+      }));
+    } catch (err) {
+      setCancelError(err.message || "取消訂單失敗，請稍後再試");
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
 
   const shippingStatus = orderData?.shipping_status || "unshipped";
 
@@ -330,6 +366,72 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
               <div className="mt-1 text-xs text-[#8C8880]">
                 感謝您確認收貨
+              </div>
+            </div>
+          )}
+
+        {!isCancelled && orderData.order_status === "cancel_requested" && (
+          <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+            <div className="text-sm font-bold text-[#9A6700]">
+              取消申請審核中
+            </div>
+
+            <div className="mt-1 text-xs text-[#8C8880]">
+              廠商已開始備貨，正在等待廠商確認是否同意取消
+            </div>
+          </div>
+        )}
+
+        {!isCancelled &&
+          orderData.order_status !== "cancel_requested" &&
+          orderData.cancel_rejected && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+              <div className="text-sm font-bold text-[#C8522A]">
+                賣家已拒絕取消訂單
+              </div>
+
+              <div className="mt-1 text-xs text-[#8C8880]">
+                此訂單將依原訂流程繼續處理，無法再次申請取消
+              </div>
+            </div>
+          )}
+
+        {!isCancelled &&
+          !orderData.cancel_rejected &&
+          orderData.order_status === "pending" &&
+          (shippingStatus === "unshipped" || shippingStatus === "preparing") && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-[#1A1A18]">
+                    {shippingStatus === "unshipped" ? "尚未開始備貨，可取消訂單" : "已開始備貨，取消需經廠商同意"}
+                  </div>
+
+                  {shippingStatus === "preparing" && (
+                    <div className="mt-1 text-xs text-[#8C8880]">
+                      送出申請後，需等待廠商核准才會正式取消
+                    </div>
+                  )}
+                </div>
+
+                {cancelError && (
+                  <div className="text-xs font-bold text-[#C8522A]">
+                    {cancelError}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleCancelOrder}
+                  disabled={cancelSubmitting}
+                  className="rounded-full border border-[#C8522A] px-8 py-3 text-sm font-bold text-[#C8522A] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#FDF0ED] disabled:opacity-50"
+                >
+                  {cancelSubmitting
+                    ? "處理中..."
+                    : shippingStatus === "unshipped"
+                    ? "取消訂單"
+                    : "申請取消訂單"}
+                </button>
               </div>
             </div>
           )}
