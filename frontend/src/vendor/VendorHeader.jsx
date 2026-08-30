@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Star, User, MessageCircle, Settings, LogOut } from 'lucide-react';
+import { User, MessageCircle, Settings, LogOut } from 'lucide-react';
+
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 export default function VendorHeader() {
   const navigate = useNavigate();
@@ -28,15 +31,20 @@ export default function VendorHeader() {
     <header className="bg-white border-b border-[#E2DDD4] px-12 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
       <div className="flex items-center gap-12">
         
-        {/* LOGO (加入 Hover 動效) */}
         <div 
-          className="flex items-center gap-2 cursor-pointer transition-colors group" 
+          className="flex items-center gap-3 cursor-pointer transition-all hover:scale-[1.02] hover:opacity-80" 
           onClick={() => navigate('/vendor')}
         >
-          <Star size={20} className="text-[#1A1A18] fill-[#1A1A18] group-hover:text-[#C8522A] group-hover:fill-[#C8522A] transition-colors" />
-          <span className="font-black tracking-widest text-[#1A1A18] uppercase text-lg group-hover:text-[#C8522A] transition-colors">
-            LOGO
-          </span>
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="h-9 w-9 object-cover rounded-full shadow-sm" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-6 w-auto object-contain mix-blend-multiply translate-y-0.5" 
+          />
         </div>
         
         {/* 上方選單 (套用焦糖橘與拿鐵色系) */}

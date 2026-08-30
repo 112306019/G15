@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Star,
   ArrowLeft,
   Building2,
   Mail,
@@ -17,6 +16,9 @@ import {
   verifyVendorEmail,
   resendVendorVerification
 } from '../api/vendor'
+
+import LogoIcon from '../assets/logo.jpg'
+import LogoText from '../assets/ShareBuy.png'
 
 export default function VendorLogin() {
   const navigate = useNavigate()
@@ -197,14 +199,17 @@ export default function VendorLogin() {
       {/* 核心：懸浮玻璃卡片 */}
       <div className="w-full max-w-[440px] relative z-10">
         
-        {/* 頂部 Logo */}
-        <div className="flex flex-col justify-center items-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-tr from-[#C8522A] to-[#B89B6A] rounded-[1.2rem] flex items-center justify-center shadow-lg mb-4 transform rotate-3">
-            <Star size={26} className="text-[#F5F0E8] fill-[#F5F0E8] -rotate-3" />
-          </div>
-          <span className="font-black tracking-[0.15em] text-[#1A1A18] uppercase text-2xl font-serif">
-            Vendor Portal
-          </span>
+        <div className="flex flex-col justify-center items-center mb-8 gap-3">
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="h-14 w-14 object-cover rounded-full shadow-sm" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain translate-y-1 mix-blend-multiply contrast-125" 
+          />
         </div>
 
         <div className="bg-white/85 backdrop-blur-xl rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_60px_rgba(26,26,24,0.05)] border border-white">
@@ -240,7 +245,6 @@ export default function VendorLogin() {
             </div>
           )}
 
-          {/* 🌟 修復排版：拔除固定高度，改用 flex-col 與 gap-4 讓間距保持緊湊 */}
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             
             {isLogin ? (
