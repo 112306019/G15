@@ -1206,6 +1206,7 @@ def view_order(request):
             'payment_status': order.payment_status,
             'shipping_status': order.shipping_status,
             'cancel_rejected': bool(order.cancel_rejected_at),
+            'cancel_reason': order.cancel_reason,
             'Address_id': order.address_id,
             'created_at': order.created_at,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
@@ -1470,10 +1471,17 @@ def cancel_order(request):
     order_id = request.data.get('order_id') or request.data.get('Order_id')
     user_id = request.data.get('user_id') or request.data.get('User_id')
     guest_id = request.data.get('guest_id') or request.data.get('Guest_id')
+    reason = (request.data.get('reason') or '').strip()
 
     if not order_id:
         return Response(
             {'success': False, 'err': 'order_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not reason:
+        return Response(
+            {'success': False, 'err': '請填寫取消原因'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -1527,7 +1535,8 @@ def cancel_order(request):
         if order.shipping_status == 'unshipped':
             order.order_status = 'cancelled'
             order.shipping_status = 'cancelled'
-            order.save(update_fields=['order_status', 'shipping_status'])
+            order.cancel_reason = reason
+            order.save(update_fields=['order_status', 'shipping_status', 'cancel_reason'])
 
             shipment = ShipmentInfo.objects.filter(order=order).first()
             if shipment:
@@ -1541,7 +1550,8 @@ def cancel_order(request):
                 mark_payment_refund_pending(payment_tx)
         elif order.shipping_status == 'preparing':
             order.order_status = 'cancel_requested'
-            order.save(update_fields=['order_status'])
+            order.cancel_reason = reason
+            order.save(update_fields=['order_status', 'cancel_reason'])
         else:
             return Response(
                 {'success': False, 'err': '訂單已出貨，無法取消'},

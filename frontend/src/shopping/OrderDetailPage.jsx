@@ -44,6 +44,8 @@ export default function OrderDetailPage({ onBack, orderId }) {
   const [loading, setLoading] = useState(true);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const token = localStorage.getItem("token");
 
@@ -81,7 +83,18 @@ export default function OrderDetailPage({ onBack, orderId }) {
     fetchOrder();
   }, [orderId, token]);
 
+  const openCancelModal = () => {
+    setCancelError("");
+    setCancelReason("");
+    setCancelModalOpen(true);
+  };
+
   const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      setCancelError("請填寫取消原因");
+      return;
+    }
+
     setCancelError("");
     setCancelSubmitting(true);
 
@@ -94,6 +107,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
         body: JSON.stringify({
           order_id: orderId,
           user_id: orderData.User_id,
+          reason: cancelReason.trim(),
         }),
       });
 
@@ -108,6 +122,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
         order_status: data.order_status,
         shipping_status: data.shipping_status,
       }));
+      setCancelModalOpen(false);
     } catch (err) {
       setCancelError(err.message || "取消訂單失敗，請稍後再試");
     } finally {
@@ -414,23 +429,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
                   )}
                 </div>
 
-                {cancelError && (
-                  <div className="text-xs font-bold text-[#C8522A]">
-                    {cancelError}
-                  </div>
-                )}
-
                 <button
                   type="button"
-                  onClick={handleCancelOrder}
-                  disabled={cancelSubmitting}
+                  onClick={openCancelModal}
                   className="rounded-full border border-[#C8522A] px-8 py-3 text-sm font-bold text-[#C8522A] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#FDF0ED] disabled:opacity-50"
                 >
-                  {cancelSubmitting
-                    ? "處理中..."
-                    : shippingStatus === "unshipped"
-                    ? "取消訂單"
-                    : "申請取消訂單"}
+                  {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
                 </button>
               </div>
             </div>
@@ -657,6 +661,58 @@ export default function OrderDetailPage({ onBack, orderId }) {
           )}
         </div>
       </div>
+
+      {cancelModalOpen && (
+        <div
+          className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={() => !cancelSubmitting && setCancelModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">
+              {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
+            </h3>
+            <p className="text-xs font-bold text-[#8C8880] mb-4">
+              請告訴我們取消原因，方便我們了解並改善服務
+            </p>
+
+            <textarea
+              rows={4}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="請輸入取消原因"
+              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-3"
+            />
+
+            {cancelError && (
+              <div className="mb-3 text-xs font-bold text-[#C8522A]">
+                {cancelError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelModalOpen(false)}
+                disabled={cancelSubmitting}
+                className="flex-1 rounded-2xl border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
+              >
+                返回
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelOrder}
+                disabled={cancelSubmitting}
+                className="flex-1 rounded-2xl bg-[#C8522A] py-3 text-sm font-bold text-white transition-all hover:bg-[#A64220] disabled:opacity-50"
+              >
+                {cancelSubmitting ? "處理中..." : "確認送出"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

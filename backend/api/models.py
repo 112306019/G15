@@ -215,6 +215,8 @@ class Order(models.Model):
     # 拒絕後 order_status 會退回 pending 繼續原本流程，所以不能只靠 order_status 判斷，
     # 需要這個獨立欄位記住「這筆訂單已經被拒絕過一次」。
     cancel_rejected_at = models.DateTimeField(null=True, blank=True, db_column='cancel_rejected_at')
+    # 買家申請取消訂單時填寫的原因（不管是待出貨直接取消，還是備貨中送出申請）
+    cancel_reason = models.TextField(null=True, blank=True, db_column='cancel_reason')
 
     class Meta:
         db_table = 'Order'

@@ -287,7 +287,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -304,6 +304,44 @@ class CancelOrderTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)  # 5 + 2（訂單數量）
 
+    def test_cancel_saves_reason_on_order(self):
+        order = self.make_order(shipping_status="unshipped")
+
+        self.client.post(
+            "/api/consumer/order/cancel",
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "買錯尺寸了"},
+            content_type="application/json",
+        )
+
+        order.refresh_from_db()
+        self.assertEqual(order.cancel_reason, "買錯尺寸了")
+
+    def test_cancel_requested_also_saves_reason(self):
+        order = self.make_order(shipping_status="preparing")
+
+        self.client.post(
+            "/api/consumer/order/cancel",
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "臨時不需要了"},
+            content_type="application/json",
+        )
+
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, "cancel_requested")
+        self.assertEqual(order.cancel_reason, "臨時不需要了")
+
+    def test_cancel_without_reason_is_rejected(self):
+        order = self.make_order(shipping_status="unshipped")
+
+        resp = self.client.post(
+            "/api/consumer/order/cancel",
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "   "},
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        order.refresh_from_db()
+        self.assertEqual(order.order_status, "pending")  # 沒有被改動
+
     def test_cancel_while_unshipped_marks_paid_transaction_refund_pending(self):
         order = self.make_order(shipping_status="unshipped")
         order.payment_status = "paid"
@@ -315,7 +353,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -330,7 +368,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -344,7 +382,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -365,7 +403,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -378,7 +416,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -389,7 +427,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -400,7 +438,7 @@ class CancelOrderTests(TestCase):
 
         resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.other_user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.other_user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 
@@ -489,7 +527,7 @@ class CancelOrderTests(TestCase):
         # 但這筆訂單已經被拒絕過一次，不該讓消費者無限重複申請。
         second_resp = self.client.post(
             "/api/consumer/order/cancel",
-            data={"order_id": str(order.order_id), "user_id": self.user.user_id},
+            data={"order_id": str(order.order_id), "user_id": self.user.user_id, "reason": "不需要了"},
             content_type="application/json",
         )
 

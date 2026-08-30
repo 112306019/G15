@@ -352,6 +352,19 @@ function OrderDetailModal({
               </Card>
             </div>
 
+            {order.orderStatus === 'cancel_requested' && (
+              <div className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-200">
+                <div className="text-xs font-bold text-amber-700 mb-1.5">
+                  買家申請取消訂單
+                </div>
+                <div className="text-sm text-[#1A1A18]">
+                  {order.cancelReason
+                    ? `取消原因：${order.cancelReason}`
+                    : '買家未填寫取消原因'}
+                </div>
+              </div>
+            )}
+
 
             <Card className="overflow-hidden">
               <div className="px-6 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4]">
@@ -967,6 +980,9 @@ export default function Orders() {
             orderStatus:
               order.order_status,
 
+            cancelReason:
+              order.cancel_reason,
+
             paymentStatus:
               order.payment_status,
 
@@ -1139,6 +1155,9 @@ export default function Orders() {
 
         orderStatus:
           detail.order_status,
+
+        cancelReason:
+          detail.cancel_reason,
 
         paymentStatus:
           detail.payment_status,
@@ -2030,6 +2049,12 @@ export default function Orders() {
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 whitespace-nowrap">
                                 買家申請取消訂單
                               </span>
+
+                              {order.cancelReason && (
+                                <span className="text-[11px] text-[#8C8880] max-w-[200px] leading-snug">
+                                  取消原因：{order.cancelReason}
+                                </span>
+                              )}
 
                               <div className="flex flex-nowrap items-center gap-1.5">
                                 <Button

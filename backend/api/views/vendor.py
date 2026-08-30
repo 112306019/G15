@@ -1838,6 +1838,7 @@ def vendor_order_getlist(request):
                 "order_status": order.order_status,
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
+                "cancel_reason": order.cancel_reason,
 
                 # 宅配才需要實際地址。
                 # CVS 即使 detail_address 是空字串，也不能被視為「缺少配送資訊」。
@@ -2266,6 +2267,7 @@ def vendor_order_get_detail(request):
             "order_status": order.order_status,
             "payment_status": order.payment_status,
             "shipping_status": order.shipping_status,
+            "cancel_reason": order.cancel_reason,
             "address_id": order.address_id,
 
             # 原本收件資料保留
