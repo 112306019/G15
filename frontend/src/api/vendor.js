@@ -173,6 +173,9 @@ export const createVendorLogistics = data =>
 export const queryVendorLogistics = data =>
   api.post('/vendor/order/queryLogistics', data)
 
+export const uploadVendorInvoice = data =>
+  api.post('/vendor/order/uploadInvoice', data)
+
 
 // 獲取優惠碼使用紀錄
 export const getVendorCouponUsage = (
