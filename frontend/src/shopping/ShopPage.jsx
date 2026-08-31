@@ -51,11 +51,13 @@ function ShoppingBagIcon() {
 }
 
 // 🌟 乾淨的商品卡片 (維持 font-sans，避免字體雜亂)
-function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
+function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
+  const isSoldOut = Number(stock) <= 0;
+
   return (
     <div className="group flex flex-col gap-3 cursor-pointer" onClick={onClick}>
       <div className="relative flex aspect-square w-full items-center justify-center rounded-2xl overflow-hidden bg-[#E2DDD4]/20 shadow-sm transition-all duration-300 group-hover:shadow-md">
-        <div 
+        <div
           className="absolute inset-0 transition-transform duration-700 ease-out group-hover:scale-105"
           style={imageUrl ? undefined : { background: gradient }}
         >
@@ -63,7 +65,7 @@ function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#
             <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
           )}
         </div>
-        
+
         {/* 缺圖時的 Icon */}
         {!imageUrl && (
           <svg className="h-10 w-10 text-[#1A1A18]/10 relative z-10 transition-transform duration-700 group-hover:scale-105" fill="currentColor" viewBox="0 0 24 24">
@@ -71,20 +73,24 @@ function ProductCard({ name, price, gradient = "linear-gradient(135deg,#D8D4CC,#
           </svg>
         )}
 
-        {/* 購物車按鈕 */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onAdd(); }}
-          className="absolute bottom-4 right-4 translate-y-6 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100 bg-[#1A1A18] text-[#F5F0E8] p-2.5 rounded-full hover:bg-[#C8522A] shadow-md"
-        >
-          <ShoppingBagIcon />
-        </button>
+        {/* 購物車按鈕：售罄時不給加入購物車 */}
+        {!isSoldOut && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd(); }}
+            className="absolute bottom-4 right-4 translate-y-6 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100 bg-[#1A1A18] text-[#F5F0E8] p-2.5 rounded-full hover:bg-[#C8522A] shadow-md"
+          >
+            <ShoppingBagIcon />
+          </button>
+        )}
       </div>
-      
+
       <div className="flex flex-col px-1 pt-1 font-sans">
         <h3 className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-relaxed transition-colors group-hover:text-[#C8522A] min-h-[40px]">
           {name}
         </h3>
-        <div className="mt-1 text-sm font-black tracking-wide text-[#8C8880]">{price}</div>
+        <div className="mt-1 text-sm font-black tracking-wide text-[#8C8880]">
+          {isSoldOut ? "此商品已售罄" : price}
+        </div>
       </div>
     </div>
   );
@@ -408,6 +414,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       key={p.product_id}
                       name={p.Product_name}
                       price={formatNTD(p.discounted_price || p.price)}
+                      stock={p.stock}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -432,6 +439,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       key={p.product_id}
                       name={p.Product_name}
                       price={formatNTD(p.discounted_price || p.price)}
+                      stock={p.stock}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -474,6 +482,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     key={p.product_id}
                     name={p.Product_name}
                     price={formatNTD(p.discounted_price || p.price)}
+                    stock={p.stock}
                     gradient={p.gradient}
                     imageUrl={p.image_url}
                     onAdd={() => handleAdd(p.Product_id)}

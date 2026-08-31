@@ -226,11 +226,13 @@ def mark_payment_refund_pending(payment: PaymentTransaction) -> PaymentTransacti
 
 
 def _build_item_name(order) -> str:
-    """從 Order 底下的 OrderItem/Product 組出 ECPay ItemName，多筆商品以 # 分隔"""
+    """從 Order 底下的 OrderItem/Product 組出 ECPay ItemName，多筆商品以 # 分隔；運費另外列一項，讓消費者在付款頁看得出 TotalAmount 裡含運費"""
     items = order.items.select_related("product").all().order_by("order_item_id")
     names = [item.product.product_name for item in items]
     if not names:
         raise ValueError(f"Order {order.order_id} 底下沒有任何 OrderItem，無法組出 ItemName")
+    if order.shipping_fee:
+        names.append("運費")
     return "#".join(names)[:200]
 
 

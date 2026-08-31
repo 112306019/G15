@@ -46,6 +46,7 @@ export default function ProductDetailPage({
         name: product.Product_name,
         price: `NTD$ ${product.discounted_price || product.price}`,
         rawPrice: Number(product.discounted_price || product.price) || 0,
+        stock: Number(product.stock ?? 0),
         rating: 4.8,
         description: product.description || "",
         reviewsCount: 0,
@@ -288,8 +289,16 @@ export default function ProductDetailPage({
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={handleBuyNow} className="flex-1 bg-[#C8522A] text-white py-4 rounded-full font-bold tracking-wide hover:bg-[#A64220] hover:-translate-y-0.5 transition-all shadow-md">立即訂購</button>
-              <button onClick={handleAddCart} className="flex-1 bg-white border border-[#1A1A18] text-[#1A1A18] py-4 rounded-full font-bold tracking-wide hover:bg-[#F5F0E8] hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2"><ShoppingBag size={18} /> 加入購物車</button>
+              {productDetail.stock <= 0 ? (
+                <div className="flex-1 bg-gray-200 text-gray-500 py-4 rounded-full font-bold tracking-wide text-center">
+                  已售完
+                </div>
+              ) : (
+                <>
+                  <button onClick={handleBuyNow} className="flex-1 bg-[#C8522A] text-white py-4 rounded-full font-bold tracking-wide hover:bg-[#A64220] hover:-translate-y-0.5 transition-all shadow-md">立即訂購</button>
+                  <button onClick={handleAddCart} className="flex-1 bg-white border border-[#1A1A18] text-[#1A1A18] py-4 rounded-full font-bold tracking-wide hover:bg-[#F5F0E8] hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2"><ShoppingBag size={18} /> 加入購物車</button>
+                </>
+              )}
             </div>
           </div>
         </div>

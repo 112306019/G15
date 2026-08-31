@@ -205,6 +205,8 @@ class Order(models.Model):
     address = models.ForeignKey('Address', on_delete=models.SET_NULL, db_column='address_id', null=True, blank=True, related_name='orders')
     promotion_code = models.CharField(max_length=50, blank=True, null=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # total_amount 已內含運費，這個欄位只是額外記錄運費是多少，方便日後拆分顯示/對帳
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     order_status = models.CharField(max_length=50, default='pending')
     payment_status = models.CharField(max_length=50, default='unpaid')
     shipping_status = models.CharField(max_length=50, default='unshipped')

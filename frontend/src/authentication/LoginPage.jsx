@@ -409,7 +409,7 @@ export default function LoginPage({
                     <InputField label="全名" icon={User} placeholder="請輸入姓名" value={regName} onChange={(e) => setRegName(e.target.value)} />
                   </div>
                   <div className="col-span-2">
-                    <InputField label="聯絡方式" icon={Mail} placeholder="電子郵件或手機號碼" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+                    <InputField label="聯絡方式" icon={Mail} placeholder="電子郵件" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
                   </div>
                   <div className="col-span-2">
                     <InputField label="設定密碼" icon={Lock} hint="至少8位" type="password" placeholder="輸入密碼" value={regPw} onChange={(e) => setRegPw(e.target.value)} />
