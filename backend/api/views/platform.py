@@ -36,12 +36,23 @@ from api.models import (
     OrderItem,
     KocWallet,
     VendorPayouts,
-    Payouts
+    Payouts,
+    ReturnRequest
 
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, sync_expired_promoting_missions
+from api.views.constants import (
+    ROLE_CODE_MAP,
+    STAGE_CODE_MAP,
+    EARNINGS_STATUS_CODE_MAP,
+    EARNINGS_STATUS_CHOICES_MAP,
+    VENDOR_SETTLEMENT_HOLD_DAYS,
+    RETURN_REQUEST_WINDOW_DAYS,
+    is_return_window_open,
+    has_unresolved_return_request,
+    sync_expired_promoting_missions,
+)
 from api.emails import send_koc_approval_email, send_vendor_approval_email
 from payments.services import pick_relevant_payment
 
@@ -62,6 +73,16 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 FINANCE_ADMIN_ROLES = {'super_admin', 'finance'}
+
+
+def normalize_admin_role(value):
+    """把 Super Admin / super admin / super_admin 統一成 super_admin。"""
+    return (
+        (value or '')
+        .strip()
+        .lower()
+        .replace(' ', '_')
+    )
 
 
 def require_admin_role(request, allowed_roles, source='data'):
@@ -96,8 +117,11 @@ def require_admin_role(request, allowed_roles, source='data'):
     # 比對時忽略大小寫跟前後空白，避免手動建立的測試資料（例如 "super admin"
     # 或 "Super Admin " 多一個空格）誤判成沒有權限。allowed_roles 也用同一套
     # 正規化處理，所以呼叫端傳 {'Super Admin', 'Finance'} 這種原始寫法即可。
-    normalized_role = (admin_obj.role or '').strip().lower()
-    normalized_allowed = {r.strip().lower() for r in allowed_roles}
+    normalized_role = normalize_admin_role(admin_obj.role)
+    normalized_allowed = {
+        normalize_admin_role(role)
+        for role in allowed_roles
+    }
 
     if normalized_role not in normalized_allowed:
         return None, Response({
@@ -411,6 +435,206 @@ def calculate_vendor_earning(order):
 
 
 # ==============================================================================
+# 退貨退款收回分潤/廠商淨額
+#
+# 呼叫時機：ReturnRequest 的退款動作完成的當下（退貨審核 API，另外實作，
+# 尚未包含在這次的修改範圍）。這支只負責「錢要怎麼收回」，不負責把
+# return_request.status 改成 'refunded'——那是呼叫端的責任，順序上應該是
+# 先呼叫這支確認錢收回成功，再把 ReturnRequest 狀態落定，避免狀態已經是
+# refunded、但錢實際上沒收回成功的不一致。
+# ==============================================================================
+
+def reverse_earning_and_vendor_income_for_return(return_request):
+    """
+    整張訂單全額退款後，收回該訂單已建立的 KOC 分潤與廠商淨額。
+
+    第一版只支援全額退款，因此 refunded_amount 必須等於 Order.total_amount。
+    不再使用退款比例做部分退款分攤，避免多商品／多廠商訂單被錯誤等比例扣款。
+    """
+    order = return_request.order
+    if not order:
+        return {
+            'success': False,
+            'message': '此退貨申請沒有關聯的訂單'
+        }
+
+    refunded_amount = return_request.refunded_amount
+    if refunded_amount is None:
+        return {
+            'success': False,
+            'message': 'refunded_amount 尚未填寫，無法執行退款帳務'
+        }
+
+    total_amount = Decimal(str(order.total_amount))
+    refunded_amount = Decimal(str(refunded_amount))
+
+    if total_amount <= 0:
+        return {
+            'success': False,
+            'message': '訂單總金額異常，無法執行退款帳務'
+        }
+
+    if refunded_amount != total_amount:
+        return {
+            'success': False,
+            'message': '目前只支援整張訂單全額退款，退款金額必須等於訂單總金額'
+        }
+
+    vendor_ids = set(
+        OrderItem.objects.filter(order=order)
+        .values_list('product__vendor_id', flat=True)
+    )
+    if len(vendor_ids) != 1:
+        return {
+            'success': False,
+            'message': '目前整張訂單退款僅支援單一廠商訂單'
+        }
+
+    results = {
+        'success': True,
+        'refund_ratio': 1.0,
+        'refund_scope': 'full_order',
+        'earning_adjustment': None,
+        'vendor_adjustments': [],
+        'needs_manual_review': [],
+    }
+
+    # 全額退款後，讓既有銷售／營收查詢可以用 payment_status 排除這張訂單。
+    order.payment_status = 'refunded'
+    order.save(update_fields=['payment_status'])
+
+    # ── 收回 KOC 分潤 ──
+    earning = (
+        Earnings.objects
+        .select_related('kocmission__koc')
+        .filter(order=order)
+        .exclude(status='cancelled')
+        .first()
+    )
+
+    if earning and earning.kocmission and earning.kocmission.koc:
+        delta = earning.amount
+
+        if delta > 0:
+            if earning.status in ('pending', 'withdrawable'):
+                # 同一筆 return_request 已經有扣款流水就不再重複扣。
+                existing_koc_deduction = Transactions.objects.filter(
+                    koc_wallet__koc=earning.kocmission.koc,
+                    type='return_deduction',
+                    reference_type='return_request',
+                    reference_id=str(return_request.return_id)
+                ).exists()
+
+                if not existing_koc_deduction:
+                    with transaction.atomic():
+                        wallet, _ = KocWallet.objects.select_for_update().get_or_create(
+                            koc=earning.kocmission.koc
+                        )
+                        if earning.status == 'pending':
+                            wallet.balance_frozen = max(0, wallet.balance_frozen - delta)
+                            wallet.save(update_fields=['balance_frozen', 'updated_at'])
+                        else:  # withdrawable
+                            wallet.balance_available = max(0, wallet.balance_available - delta)
+                            wallet.save(update_fields=['balance_available', 'updated_at'])
+
+                        Transactions.objects.create(
+                            koc_wallet=wallet,
+                            type='return_deduction',
+                            amount=-delta,
+                            reference_type='return_request',
+                            reference_id=str(return_request.return_id)
+                        )
+
+                # 全額退款後保留 amount / original_amount 作稽核紀錄，
+                # 只用 status='cancelled' 表示這筆分潤已失效。
+                earning.status = 'cancelled'
+                earning.cancelled_by_return_request = return_request
+                earning.save(
+                    update_fields=['status', 'cancelled_by_return_request']
+                )
+
+                results['earning_adjustment'] = {
+                    'earnings_id': earning.earnings_id,
+                    'original_amount': earning.original_amount or earning.amount,
+                    'deducted': delta,
+                    'effective_amount': 0
+                }
+            else:  # transferred：已撥出去，不能直接從平台錢包硬扣
+                earning.cancelled_by_return_request = return_request
+                earning.save(update_fields=['cancelled_by_return_request'])
+                results['needs_manual_review'].append({
+                    'type': 'koc_earning',
+                    'earnings_id': earning.earnings_id,
+                    'amount_to_recover': delta,
+                    'reason': '分潤已撥款完成，無法自動從錢包扣回，需人工處理'
+                })
+
+    # ── 收回廠商淨額 ──
+    vendor_income_txns = (
+        Transactions.objects
+        .filter(
+            type='order_income',
+            reference_type='order',
+            reference_id=str(order.order_id)
+        )
+        .select_related('vendor_wallet__vendor')
+    )
+
+    already_settled_keys = set(
+        Transactions.objects
+        .filter(type='settle', reference_type='order')
+        .values_list('vendor_wallet_id', 'reference_id')
+    )
+
+    for txn in vendor_income_txns:
+        delta = txn.amount
+        if delta <= 0:
+            continue
+
+        key = (txn.vendor_wallet_id, txn.reference_id)
+
+        if key not in already_settled_keys:
+            existing_vendor_deduction = Transactions.objects.filter(
+                vendor_wallet_id=txn.vendor_wallet_id,
+                type='return_deduction',
+                reference_type='return_request',
+                reference_id=str(return_request.return_id)
+            ).exists()
+
+            if not existing_vendor_deduction:
+                with transaction.atomic():
+                    wallet = VendorWallet.objects.select_for_update().get(
+                        pk=txn.vendor_wallet_id
+                    )
+                    wallet.balance_frozen = max(0, wallet.balance_frozen - delta)
+                    wallet.save(update_fields=['balance_frozen', 'updated_at'])
+
+                    Transactions.objects.create(
+                        vendor_wallet=wallet,
+                        type='return_deduction',
+                        amount=-delta,
+                        reference_type='return_request',
+                        reference_id=str(return_request.return_id)
+                    )
+            else:
+                wallet = txn.vendor_wallet
+
+            results['vendor_adjustments'].append({
+                'vendor_id': wallet.vendor_id,
+                'deducted': delta
+            })
+        else:
+            results['needs_manual_review'].append({
+                'type': 'vendor_income',
+                'vendor_wallet_id': txn.vendor_wallet_id,
+                'amount_to_recover': delta,
+                'reason': '廠商此筆款項已結算成可提領，無法自動扣回，需人工處理'
+            })
+
+    return results
+
+
+# ==============================================================================
 # 廠商結算：出貨完成滿 N 天鑑賞期後，把廠商凍結餘額轉成可提領餘額
 # POST /platform_admin/vendor/settle-earnings
 #
@@ -475,10 +699,29 @@ def admin_settle_vendor_earnings(request):
             })
             continue
 
+        # 全額退款完成的訂單，其 Vendor frozen 已在退款流程中用
+        # return_deduction 收回，絕對不能再把原本 order_income 結算回 available。
+        if order.payment_status == 'refunded':
+            skipped.append({
+                'transaction_id': txn.transaction_id,
+                'reason': '此訂單已全額退款，不再進行廠商結算'
+            })
+            continue
+
         if order.delivered_at > cutoff:
             skipped.append({
                 'transaction_id': txn.transaction_id,
                 'reason': f'鑑賞期尚未結束，需等到 {(order.delivered_at + timedelta(days=VENDOR_SETTLEMENT_HOLD_DAYS)).isoformat()}'
+            })
+            continue
+
+        # 就算鑑賞期天數上已經到了，只要這張訂單還有退貨申請卡在處理中
+        # （還沒被拒絕、還沒退款完成、消費者也沒自己撤回），就不能放行，
+        # 不然退貨核准要退款的時候，廠商這筆錢可能已經被領走了。
+        if has_unresolved_return_request(order):
+            skipped.append({
+                'transaction_id': txn.transaction_id,
+                'reason': '此訂單有退貨申請尚未結案，暫緩結算'
             })
             continue
 
@@ -588,7 +831,16 @@ def admin_list_settleable_vendors(request):
             'Earliest_eligible_at': None,
         })
 
-        if order and order.delivered_at and order.delivered_at <= cutoff:
+        # 已全額退款的訂單不應再出現在待結算看板，因為原本 frozen
+        # 已經在退款流程中收回，也不應再被算成可結算或等待結算金額。
+        if order and order.payment_status == 'refunded':
+            continue
+
+        order_time_eligible = bool(order and order.delivered_at and order.delivered_at <= cutoff)
+        # 天數到了還不夠，還要沒有退貨申請卡在處理中，兩個條件都過才算真的可結算
+        order_eligible = order_time_eligible and not has_unresolved_return_request(order)
+
+        if order_eligible:
             entry['Eligible_count'] += 1
             entry['Eligible_amount'] += t.amount
         else:
@@ -859,7 +1111,7 @@ def admin_list_settleable_campaigns(request):
         pending = Earnings.objects.filter(
             kocmission__application__campaign=campaign,
             status=EARNINGS_STATUS_CHOICES_MAP['pending']
-        )
+        ).select_related('order')
 
         pending_count = pending.count()
 
@@ -870,6 +1122,26 @@ def admin_list_settleable_campaigns(request):
         eligible_at = campaign.end_date + timedelta(
             days=campaign.promo_days or 0
         )
+        campaign_date_eligible = eligible_at <= now
+
+        # 活動效期過了只是第一道門檻，個別訂單如果還在退貨期內、或有退貨
+        # 申請還沒結案，那筆分潤還是不能結算——這裡先算出「現在按下結算
+        # 實際能清掉幾筆、多少錢」，讓後台看得出跟 Pending_amount 的落差
+        # 是被退貨卡住，不是系統算錯。
+        settleable_count = 0
+        settleable_amount = 0
+        return_blocked_count = 0
+
+        if campaign_date_eligible:
+            for earning in pending:
+                order = earning.order
+                if not order:
+                    continue
+                if is_return_window_open(order) or has_unresolved_return_request(order):
+                    return_blocked_count += 1
+                    continue
+                settleable_count += 1
+                settleable_amount += earning.amount
 
         result.append({
             'Campaign_id': str(campaign.campaign_id),
@@ -877,9 +1149,12 @@ def admin_list_settleable_campaigns(request):
             'Vendor_name': campaign.vendor.company_name if campaign.vendor else None,
             'End_date': campaign.end_date,
             'Settlement_eligible_at': eligible_at,
-            'Is_eligible': eligible_at <= now,
+            'Is_eligible': campaign_date_eligible,
             'Pending_count': pending_count,
             'Pending_amount': pending_amount,
+            'Settleable_count': settleable_count,
+            'Settleable_amount': settleable_amount,
+            'Return_blocked_count': return_blocked_count,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -924,7 +1199,7 @@ def admin_settle_campaign_earnings(request):
     # 轉成可提領餘額的對象。
     earnings = (
         Earnings.objects
-        .select_related('kocmission__koc', 'user')
+        .select_related('kocmission__koc', 'user', 'order')
         .filter(
             kocmission__application__campaign=campaign,
             status=EARNINGS_STATUS_CHOICES_MAP['pending']
@@ -941,6 +1216,33 @@ def admin_settle_campaign_earnings(request):
             skipped.append({
                 'earnings_id': earning.earnings_id,
                 'reason': '找不到對應的 KOC'
+            })
+            continue
+
+        # 活動效期過了不代表這筆分潤對應的訂單也結束了——訂單自己的退貨
+        # 期限、以及是否有退貨申請卡在處理中，是第二道獨立的門檻，兩個都
+        # 過才能真的轉可提領。
+        order = earning.order
+
+        if not order or not order.delivered_at:
+            skipped.append({
+                'earnings_id': earning.earnings_id,
+                'reason': '找不到對應訂單的送達時間，暫緩結算'
+            })
+            continue
+
+        if is_return_window_open(order):
+            deadline = order.delivered_at + timedelta(days=RETURN_REQUEST_WINDOW_DAYS)
+            skipped.append({
+                'earnings_id': earning.earnings_id,
+                'reason': f'此訂單退貨期限尚未結束，需等到 {deadline.isoformat()}'
+            })
+            continue
+
+        if has_unresolved_return_request(order):
+            skipped.append({
+                'earnings_id': earning.earnings_id,
+                'reason': '此訂單有退貨申請尚未結案，暫緩結算'
             })
             continue
 
@@ -1419,6 +1721,7 @@ def admin_coupon_usage(request):
     commission_by_kocmission_id = {
         row['kocmission']: row['total']
         for row in Earnings.objects.filter(kocmission_id__in=kocmission_ids)
+        .exclude(status='cancelled')
         .values('kocmission')
         .annotate(total=Sum('amount'))
     }
@@ -1542,6 +1845,7 @@ def admin_performance(request):
     all_time_commission_by_kocmission_id = {
         row['kocmission']: row['total']
         for row in Earnings.objects.filter(kocmission_id__in=kocmission_ids)
+        .exclude(status='cancelled')
         .values('kocmission')
         .annotate(total=Sum('amount'))
     }
@@ -1593,7 +1897,7 @@ def admin_performance(request):
             order__in=completed_orders,
             created_at__year=year,
             created_at__month=month,
-        )
+        ).exclude(status='cancelled')
 
         monthly_commission = sum(
             float(earning.amount or 0)
@@ -2342,3 +2646,187 @@ def get_audit_logs(request):
         })
 
     return Response(result, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 退貨爭議：廠商拒絕退貨後，消費者提出爭議（見 consumer.py 的
+# dispute_return_request），status 會變成 'disputed'，這裡是 Admin 端的
+# 判定入口。
+# GET  /platform/returns/disputes          列出待判定的爭議
+# POST /platform/returns/disputes/resolve  判定同意退款或維持拒絕
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_return_disputes(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    disputes = (
+        ReturnRequest.objects
+        .filter(status='disputed')
+        .select_related('order', 'user')
+        .order_by('-requested_at')
+    )
+
+    result = []
+    for r in disputes:
+        result.append({
+            'Return_id': str(r.return_id),
+            'Order_id': str(r.order_id),
+            'User_id': r.user_id,
+            'Reason': r.reason,
+            'Description': r.description,
+            'Requested_amount': str(r.requested_amount),
+            'Vendor_note': r.vendor_note,
+            'Requested_at': r.requested_at,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_resolve_return_dispute(request):
+    """
+    Admin 判定爭議退貨。
+
+    跟 vendor.py 的 vendor_return_process_refund 用同一套安全模式：
+    整段包在 transaction.atomic 裡、退款帳務失敗就整筆 rollback，不會
+    出現「ReturnRequest 已經是 refunded，但錢其實沒收回成功」的不一致
+    ——這支原本沒有這層保護，是這次補上的，跟 vendor_return_process_refund
+    當初漏改成同一套模式一樣的問題。
+
+    第一版只支援整張訂單全額退款、單一廠商訂單，跟
+    reverse_earning_and_vendor_income_for_return 的限制一致；Admin 不能
+    透過 Refunded_amount 帶出跟訂單總額不同的金額，理由跟 vendor 端一樣：
+    避免用還沒做的部分退款/多廠商拆帳邏輯誤扣帳。
+    """
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    return_id = request.data.get('Return_id')
+    decision = request.data.get('Decision')  # 'approve_refund' 或 'reject'
+    admin_note = request.data.get('Admin_note', '')
+
+    if not return_id or decision not in ('approve_refund', 'reject'):
+        return Response({
+            'success': False,
+            'err': 'Return_id 為必填，Decision 必須是 approve_refund 或 reject'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        with transaction.atomic():
+            try:
+                return_request = (
+                    ReturnRequest.objects
+                    .select_for_update()
+                    .select_related('order')
+                    .get(return_id=return_id)
+                )
+            except ReturnRequest.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'err': '找不到此退貨申請'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            if return_request.status != 'disputed':
+                return Response({
+                    'success': False,
+                    'err': f'此退貨申請目前狀態是「{return_request.status}」，不是爭議中，無法在這裡判定'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if decision == 'reject':
+                return_request.status = 'rejected'
+                return_request.rejected_at = timezone.now()
+                return_request.admin = admin_obj
+                return_request.admin_note = admin_note
+                return_request.save(
+                    update_fields=['status', 'rejected_at', 'admin', 'admin_note']
+                )
+
+                AdminAuditLogs.objects.create(
+                    admin_id=admin_obj,
+                    action_type='resolve_return_dispute_reject',
+                    action_reason=f'爭議退貨 {return_id} 判定維持拒絕退款，原因：{admin_note}',
+                )
+
+                return Response({
+                    'success': True,
+                    'err': '',
+                    'return_id': str(return_request.return_id),
+                    'status': return_request.status,
+                }, status=status.HTTP_200_OK)
+
+            # decision == 'approve_refund'
+            # 同一個 transaction 內重新確認是單一廠商訂單，避免並發下資料被改動
+            vendor_ids = set(
+                OrderItem.objects.filter(order=return_request.order)
+                .values_list('product__vendor_id', flat=True)
+            )
+            if len(vendor_ids) != 1:
+                return Response({
+                    'success': False,
+                    'err': '目前整張訂單退款僅支援單一廠商訂單；此訂單包含多個廠商商品，無法在此判定退款'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            order_total = Decimal(str(return_request.order.total_amount))
+            if order_total <= 0:
+                return Response({
+                    'success': False,
+                    'err': '訂單總金額異常，無法退款'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 第一版只支援整張訂單全額退款，不接受 Admin 帶出跟訂單總額
+            # 不同的金額——理由跟 vendor_return_process_refund 一樣。
+            return_request.refunded_amount = order_total
+            return_request.admin = admin_obj
+            return_request.admin_note = admin_note
+            return_request.status = 'refunding'
+            return_request.save(
+                update_fields=['refunded_amount', 'admin', 'admin_note', 'status']
+            )
+
+            reversal_result = reverse_earning_and_vendor_income_for_return(return_request)
+            if not reversal_result.get('success'):
+                # 丟例外讓 transaction.atomic rollback：refunding、refunded_amount、
+                # 錢包與 Transactions 都一起回到判定前的狀態，不會卡在半套狀態。
+                raise ValueError(
+                    reversal_result.get('message') or '退款帳務處理失敗'
+                )
+
+            return_request.status = 'refunded'
+            return_request.refunded_at = timezone.now()
+            return_request.save(update_fields=['status', 'refunded_at'])
+
+            AdminAuditLogs.objects.create(
+                admin_id=admin_obj,
+                action_type='resolve_return_dispute_approve',
+                action_reason=(
+                    f'爭議退貨 {return_id} 判定同意退款 NT$ {order_total}，'
+                    f'原因：{admin_note}'
+                ),
+            )
+
+        return Response({
+            'success': True,
+            'err': '',
+            'return_id': str(return_request.return_id),
+            'status': return_request.status,
+            'refund_scope': 'full_order',
+            'refunded_amount': str(order_total),
+            'reversal': reversal_result,
+        }, status=status.HTTP_200_OK)
+
+    except ValueError as error:
+        return Response({
+            'success': False,
+            'err': str(error)
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as error:
+        return Response({
+            'success': False,
+            'err': f'退款帳務處理失敗：{error}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

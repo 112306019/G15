@@ -19,6 +19,11 @@ export default function AdminFinance() {
   const [confirmingPayoutId, setConfirmingPayoutId] = useState(null);
   const [exportingPayouts, setExportingPayouts] = useState(null); // null | 'vendor' | 'koc'
 
+  const [returnDisputes, setReturnDisputes] = useState([]);
+  const [loadingDisputes, setLoadingDisputes] = useState(false);
+  const [resolvingReturnId, setResolvingReturnId] = useState(null);
+  const [returnNotes, setReturnNotes] = useState({});
+
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem("admin_token");
@@ -296,6 +301,103 @@ export default function AdminFinance() {
     }
   };
 
+  const RETURN_REASON_LABELS = {
+    defective: '商品瑕疵',
+    mismatched: '商品與描述不符',
+    wrong_size: '尺寸不合',
+    no_longer_needed: '不符合需求',
+    other: '其他',
+  };
+
+  const fetchReturnDisputes = async () => {
+    if (!adminId) return;
+    try {
+      setLoadingDisputes(true);
+      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes?Admin_id=${adminId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.err || "退貨爭議載入失敗");
+
+      setReturnDisputes(Array.isArray(data) ? data.map(item => ({
+        returnId: item.Return_id,
+        orderId: item.Order_id,
+        userId: item.User_id,
+        reason: item.Reason,
+        description: item.Description || "",
+        requestedAmount: Number(item.Requested_amount || 0),
+        vendorNote: item.Vendor_note || "",
+        requestedAt: item.Requested_at,
+      })) : []);
+    } catch (err) {
+      console.error("退貨爭議載入失敗", err);
+      alert(err.message || "退貨爭議載入失敗");
+    } finally {
+      setLoadingDisputes(false);
+    }
+  };
+
+  const handleResolveReturnDispute = async (item, decision) => {
+    const adminNote = (returnNotes[item.returnId] || "").trim();
+
+    if (!adminNote) {
+      alert("請先填寫平台判定說明");
+      return;
+    }
+
+    const isApprove = decision === "approve_refund";
+    const confirmed = window.confirm(
+      isApprove
+        ? `確定核准此筆整單退款 NT$ ${item.requestedAmount.toLocaleString()}？`
+        : "確定維持廠商拒絕，不核准此筆退款嗎？"
+    );
+    if (!confirmed) return;
+
+    try {
+      setResolvingReturnId(item.returnId);
+
+      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes/resolve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          Admin_id: adminId,
+          Return_id: item.returnId,
+          Decision: decision,
+          Admin_note: adminNote,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data?.err || "退貨爭議判定失敗");
+      }
+
+      setReturnDisputes(prev => prev.filter(row => row.returnId !== item.returnId));
+      setReturnNotes(prev => {
+        const next = { ...prev };
+        delete next[item.returnId];
+        return next;
+      });
+
+      alert(isApprove ? "已核准此筆退款" : "已維持廠商拒絕");
+
+      await Promise.all([
+        fetchReturnDisputes(),
+        fetchTransactions(),
+        fetchEarningsData(),
+        fetchVendorFinanceData(),
+      ]);
+    } catch (err) {
+      console.error("退貨爭議判定失敗", err);
+      alert(err.message || "退貨爭議判定失敗，請稍後再試");
+    } finally {
+      setResolvingReturnId(null);
+    }
+  };
+
   const fetchTransactions = async () => {
     try {
       const txRes = await fetch(`${API_BASE_URL}/api/platform/transactions?Wallet_type=vendor&Admin_id=${adminId}`, {
@@ -344,6 +446,7 @@ export default function AdminFinance() {
         await fetchTransactions();
         await fetchEarningsData();
         await fetchVendorFinanceData();
+        await fetchReturnDisputes();
       } catch (err) {
         console.error("財務資料載入失敗", err);
       } finally {
@@ -434,6 +537,23 @@ export default function AdminFinance() {
           }`}
         >
           <Wallet size={18} /> 廠商交易與錢包
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('returns');
+            fetchReturnDisputes();
+          }}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'returns' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+          }`}
+        >
+          <ShieldAlert size={18} /> 退貨爭議
+          {returnDisputes.length > 0 && (
+            <span className="ml-1 min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#C8522A] text-white text-[10px]">
+              {returnDisputes.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -649,9 +769,12 @@ export default function AdminFinance() {
                     {transactions.length === 0 ? (
                       <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有交易紀錄</td></tr>
                     ) : transactions.map((tx, idx) => {
-                      // amount 在資料庫裡一律存正數(絕對值)，方向要看 type 判斷，
-                      // 不能像原本那樣直接看 amount 正負（withdraw 也是存正數）
-                      const isOutflow = tx.type === 'withdraw';
+                      // withdraw 通常存正數；return_deduction 在退款流程中會存負數。
+                      // 顯示時統一依交易類型判斷方向，再取絕對值，避免出現 '+-850'。
+                      const isOutflow =
+                        tx.type === 'withdraw' ||
+                        tx.type === 'return_deduction';
+                      const displayAmount = Math.abs(Number(tx.amount || 0));
                       return (
                         <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
                           <td className="px-6 py-4">
@@ -666,7 +789,7 @@ export default function AdminFinance() {
                           <td className="px-6 py-4">
                             <div className={`font-black text-sm flex items-center gap-1 ${isOutflow ? 'text-[#C8522A]' : 'text-[#B89B6A]'}`}>
                               {isOutflow ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
-                              {isOutflow ? '-' : '+'}{tx.amount?.toLocaleString()}
+                              {isOutflow ? '-' : '+'}{displayAmount.toLocaleString()}
                             </div>
                             {tx.grossAmount != null && (
                               <div className="text-[10px] text-[#8C8880] mt-0.5">
@@ -682,6 +805,187 @@ export default function AdminFinance() {
                   </tbody>
                 </table>
               </>
+            )}
+
+            {/* TAB 4: 退貨爭議 */}
+            {activeTab === 'returns' && (
+              <div className="p-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">
+                      退貨爭議處理
+                    </h2>
+                    <p className="text-xs text-[#8C8880] mt-1">
+                      顯示廠商拒絕後，由消費者提出爭議、等待平台判定的案件。
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={fetchReturnDisputes}
+                    disabled={loadingDisputes}
+                    className="px-5 py-2.5 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
+                  >
+                    {loadingDisputes ? '重新整理中...' : '重新整理'}
+                  </button>
+                </div>
+
+                {loadingDisputes ? (
+                  <div className="py-20 text-center text-[#8C8880] font-bold">
+                    退貨爭議載入中...
+                  </div>
+                ) : returnDisputes.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <CheckCircle
+                      size={34}
+                      className="mx-auto text-green-600 mb-3"
+                    />
+                    <div className="font-bold text-[#1A1A18]">
+                      目前沒有待處理的退貨爭議
+                    </div>
+                    <div className="text-xs text-[#8C8880] mt-2">
+                      消費者提出爭議後，案件會顯示在這裡。
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {returnDisputes.map(item => (
+                      <div
+                        key={item.returnId}
+                        className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden"
+                      >
+                        <div className="px-6 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div>
+                            <div className="text-xs text-[#8C8880] font-bold">
+                              訂單編號
+                            </div>
+                            <div className="mt-1 font-mono text-sm font-black text-[#1A1A18] break-all">
+                              {item.orderId}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-3 py-1.5 rounded-full bg-[#FDF0ED] text-[#C8522A] text-xs font-bold">
+                              爭議處理中
+                            </span>
+
+                            <span className="px-3 py-1.5 rounded-full bg-[#F5F0E8] text-[#1A1A18] text-xs font-black">
+                              NT$ {item.requestedAmount.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div>
+                              <div className="text-xs font-bold text-[#8C8880] mb-1">
+                                消費者
+                              </div>
+                              <div className="text-sm font-bold text-[#1A1A18]">
+                                {item.userId || '—'}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="text-xs font-bold text-[#8C8880] mb-1">
+                                消費者退貨原因
+                              </div>
+                              <div className="rounded-xl bg-[#F8F9FA] px-4 py-3 text-sm font-bold text-[#1A1A18]">
+                                {RETURN_REASON_LABELS[item.reason] || item.reason || '—'}
+                              </div>
+                            </div>
+
+                            {item.description && (
+                              <div>
+                                <div className="text-xs font-bold text-[#8C8880] mb-1">
+                                  消費者說明／爭議補充
+                                </div>
+                                <div className="rounded-xl bg-[#F8F9FA] px-4 py-3 text-sm leading-relaxed text-[#1A1A18] whitespace-pre-line">
+                                  {item.description}
+                                </div>
+                              </div>
+                            )}
+
+                            <div>
+                              <div className="text-xs font-bold text-[#8C8880] mb-1">
+                                廠商拒絕理由
+                              </div>
+                              <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-sm leading-relaxed text-[#9A6700] whitespace-pre-line">
+                                {item.vendorNote || '廠商未留下拒絕理由'}
+                              </div>
+                            </div>
+
+                            <div className="text-xs text-[#8C8880]">
+                              申請時間：
+                              {item.requestedAt
+                                ? new Date(item.requestedAt).toLocaleString('zh-TW')
+                                : '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-xs font-bold text-[#8C8880] mb-2">
+                              平台判定說明
+                              <span className="text-[#C8522A] ml-1">*</span>
+                            </div>
+
+                            <textarea
+                              rows={7}
+                              value={returnNotes[item.returnId] || ''}
+                              onChange={event =>
+                                setReturnNotes(prev => ({
+                                  ...prev,
+                                  [item.returnId]: event.target.value,
+                                }))
+                              }
+                              placeholder="請填寫平台判定依據，例如：經確認此商品不屬於排除七日解除權之商品，因此核准退款。"
+                              className="w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+                            />
+
+                            <div className="mt-3 rounded-xl bg-[#F5F0E8] px-4 py-3 text-xs leading-relaxed text-[#8C8880]">
+                              平台應依訂單資料、消費者說明與廠商拒絕理由進行判定。
+                            </div>
+
+                            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResolveReturnDispute(item, 'reject')
+                                }
+                                disabled={
+                                  resolvingReturnId === item.returnId ||
+                                  !(returnNotes[item.returnId] || '').trim()
+                                }
+                                className="px-5 py-3 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {resolvingReturnId === item.returnId
+                                  ? '處理中...'
+                                  : '維持拒絕'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResolveReturnDispute(item, 'approve_refund')
+                                }
+                                disabled={
+                                  resolvingReturnId === item.returnId ||
+                                  !(returnNotes[item.returnId] || '').trim()
+                                }
+                                className="px-5 py-3 rounded-full bg-[#1A1A18] text-[#F5F0E8] text-sm font-bold hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {resolvingReturnId === item.returnId
+                                  ? '處理中...'
+                                  : '核准退款'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
           </div>

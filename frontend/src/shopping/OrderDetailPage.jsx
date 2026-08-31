@@ -12,6 +12,9 @@ import {
   Home,
   UserRound,
   Phone,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 
 function formatNTD(amount) {
@@ -39,9 +42,52 @@ function getDeliveryMethodLabel(shipment) {
   return shipment.logistics_type || "未設定";
 }
 
+
+function getFullRecipientAddress(recipient) {
+  if (!recipient) return "未提供";
+
+  const parts = [
+    recipient.city,
+    recipient.district,
+    recipient.detail_address,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return parts.length > 0 ? parts.join("") : "未提供";
+}
+
+
+const RETURN_REASON_OPTIONS = [
+  { value: "defective", label: "商品瑕疵" },
+  { value: "mismatched", label: "商品與描述不符" },
+  { value: "wrong_size", label: "尺寸不合" },
+  { value: "no_longer_needed", label: "不符合需求" },
+  { value: "other", label: "其他" },
+];
+
+const RETURN_STATUS_LABELS = {
+  requested: "退貨申請審核中",
+  approved: "廠商已同意退貨",
+  rejected: "廠商拒絕退貨",
+  disputed: "平台爭議審核中",
+  returning: "商品退回中",
+  received: "廠商已收到退貨",
+  refunding: "退款處理中",
+  refunded: "退款完成",
+  cancelled: "退貨申請已取消",
+};
+
 export default function OrderDetailPage({ onBack, orderId }) {
   const [orderData, setOrderData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [returnRequests, setReturnRequests] = useState([]);
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnReason, setReturnReason] = useState("defective");
+  const [returnDescription, setReturnDescription] = useState("");
+  const [completingOrder, setCompletingOrder] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -78,6 +124,139 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
     fetchOrder();
   }, [orderId, token]);
+
+
+  const userId = localStorage.getItem("userId");
+
+  const fetchReturnRequests = async () => {
+    if (!orderId || !userId) return;
+    try {
+      setReturnLoading(true);
+      const res = await fetch(
+        `${API_BASE_URL}/api/consumer/order/return/list?Order_id=${orderId}&User_id=${userId}`
+      );
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setReturnRequests(data);
+      }
+    } catch (err) {
+      console.error("退貨退款資料載入失敗", err);
+    } finally {
+      setReturnLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReturnRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, userId]);
+
+  const latestReturn = returnRequests[0] || null;
+  const hasOpenReturn = latestReturn && !["rejected", "refunded", "cancelled"].includes(latestReturn.status);
+
+  const canCreateReturn =
+    orderData?.shipping_status === "delivered" &&
+    ["paid", "completed"].includes(orderData?.payment_status) &&
+    orderData?.payment_status !== "refunded" &&
+    !hasOpenReturn &&
+    !latestReturn;
+
+  const handleCreateReturn = async () => {
+    if (!userId || !orderId || returnSubmitting) return;
+    try {
+      setReturnSubmitting(true);
+      const res = await fetch(`${API_BASE_URL}/api/consumer/order/return/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Order_id: orderId,
+          User_id: userId,
+          reason: returnReason,
+          description: returnDescription.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.err || "申請退貨退款失敗");
+      }
+      setShowReturnModal(false);
+      setReturnDescription("");
+      await fetchReturnRequests();
+    } catch (err) {
+      alert(err.message || "申請退貨退款失敗");
+    } finally {
+      setReturnSubmitting(false);
+    }
+  };
+
+  const handleDispute = async () => {
+    if (!latestReturn || latestReturn.status !== "rejected") return;
+    const extra = window.prompt("若不接受廠商拒絕結果，可補充爭議說明：", "");
+    if (extra === null) return;
+
+    try {
+      setReturnSubmitting(true);
+      const res = await fetch(`${API_BASE_URL}/api/consumer/order/return/dispute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Return_id: latestReturn.return_id,
+          User_id: userId,
+          description: extra,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.err || "提出爭議失敗");
+      }
+      await fetchReturnRequests();
+    } catch (err) {
+      alert(err.message || "提出爭議失敗");
+    } finally {
+      setReturnSubmitting(false);
+    }
+  };
+
+
+  const handleCompleteOrder = async () => {
+    if (!orderId || !orderData || completingOrder) return;
+
+    try {
+      setCompletingOrder(true);
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/consumer/order/update`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            Order_id: orderId,
+            User_id: orderData.User_id,
+            order_status: "completed",
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.err || "完成訂單失敗");
+      }
+
+      setOrderData((prev) => ({
+        ...prev,
+        order_status: "completed",
+        completed_at: data.completed_at || prev?.completed_at,
+      }));
+    } catch (err) {
+      console.error("完成訂單失敗", err);
+      alert(err.message || "完成訂單失敗");
+    } finally {
+      setCompletingOrder(false);
+    }
+  };
 
   const shippingStatus = orderData?.shipping_status || "unshipped";
 
@@ -260,80 +439,123 @@ export default function OrderDetailPage({ onBack, orderId }) {
           </div>
         )}
 
-        {!isCancelled &&
-          shippingStatus === "delivered" &&
-          orderData.order_status !== "completed" && (
-            <div className="mt-8 border-t border-[#E2DDD4] pt-6">
-              <div className="flex flex-col items-center justify-center gap-4 text-center">
+      </div>
+
+
+      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
+        <h3 className="mb-5 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block" />
+          訂單操作
+        </h3>
+
+        {shippingStatus !== "delivered" ? (
+          <div className="text-sm text-[#8C8880]">
+            商品送達後，可在這裡確認完成訂單或申請退貨退款。
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm font-bold text-[#1A1A18]">
-                    包裹已送達
+                  <div className="font-bold text-[#1A1A18]">
+                    {orderData.order_status === "completed" ? "✓ 訂單已完成" : "商品已送達"}
                   </div>
 
-                  <div className="mt-1 text-xs text-[#8C8880]">
-                    確認收到商品後，即可完成此筆訂單
+                  <div className="mt-1 text-xs leading-relaxed text-[#8C8880]">
+                    {orderData.order_status === "completed"
+                      ? "你已確認收到商品；若仍在退貨申請期限內，仍可依規則提出退貨退款。完成訂單後，對應商品的代言任務也會開放申請。"
+                      : "確認收到商品後可完成訂單，完成後即可解鎖對應商品的代言任務。若商品有問題，也可在期限內申請退貨退款。"}
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(
-                        `${API_BASE_URL}/api/consumer/order/update`,
-                        {
-                          method: "PATCH",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({
-                            Order_id: orderId,
-                            User_id: orderData.User_id,
-                            order_status: "completed",
-                          }),
-                        }
-                      );
-
-                      const data = await res.json();
-
-                      if (!res.ok) {
-                        throw new Error(
-                          data.err || "確認收貨失敗"
-                        );
-                      }
-
-                      setOrderData((prev) => ({
-                        ...prev,
-                        order_status: "completed",
-                      }));
-                    } catch (err) {
-                      console.error(
-                        "確認收貨失敗",
-                        err
-                      );
-                    }
-                  }}
-                  className="rounded-full bg-[#C8522A] px-8 py-3 text-sm font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#A64220]"
-                >
-                  確認收貨
-                </button>
+                {orderData.order_status !== "completed" && (
+                  <button
+                    type="button"
+                    onClick={handleCompleteOrder}
+                    disabled={completingOrder || Boolean(hasOpenReturn)}
+                    className="shrink-0 rounded-full bg-[#C8522A] px-7 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-[#A64220] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {completingOrder ? "處理中..." : "完成訂單"}
+                  </button>
+                )}
               </div>
+
+              {hasOpenReturn && orderData.order_status !== "completed" && (
+                <div className="mt-3 text-xs font-bold text-[#C8522A]">
+                  此訂單目前有退貨退款申請處理中，暫不開放完成訂單。
+                </div>
+              )}
             </div>
-          )}
 
-        {!isCancelled &&
-          orderData.order_status === "completed" && (
-            <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
-              <div className="text-sm font-bold text-[#1A1A18]">
-                ✓ 訂單已完成
-              </div>
+            <div className="border-t border-[#E2DDD4] pt-5">
+              <div className="mb-3 text-sm font-bold text-[#1A1A18]">退貨退款</div>
 
-              <div className="mt-1 text-xs text-[#8C8880]">
-                感謝您確認收貨
-              </div>
+              {returnLoading ? (
+                <div className="text-sm text-[#8C8880]">退貨退款資料載入中...</div>
+              ) : latestReturn ? (
+                <div className="rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-5">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {latestReturn.status === "refunded" ? (
+                          <CheckCircle2 size={18} className="text-green-600" />
+                        ) : latestReturn.status === "rejected" ? (
+                          <AlertTriangle size={18} className="text-[#C8522A]" />
+                        ) : (
+                          <RotateCcw size={18} className="text-[#C8522A]" />
+                        )}
+                        <span className="font-bold text-[#1A1A18]">
+                          {RETURN_STATUS_LABELS[latestReturn.status] || latestReturn.status}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 text-xs text-[#8C8880] space-y-1">
+                        <div>申請退款金額：{formatNTD(latestReturn.requested_amount)}</div>
+                        {latestReturn.refunded_amount != null && (
+                          <div>實際退款金額：{formatNTD(latestReturn.refunded_amount)}</div>
+                        )}
+                        {latestReturn.vendor_note && <div>廠商說明：{latestReturn.vendor_note}</div>}
+                        {latestReturn.admin_note && <div>平台說明：{latestReturn.admin_note}</div>}
+                      </div>
+                    </div>
+
+                    {latestReturn.status === "rejected" && (
+                      <button
+                        type="button"
+                        onClick={handleDispute}
+                        disabled={returnSubmitting}
+                        className="rounded-full border border-[#C8522A] px-6 py-3 text-sm font-bold text-[#C8522A] hover:bg-[#FDF0ED] disabled:opacity-50"
+                      >
+                        提出爭議
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : canCreateReturn ? (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="text-sm text-[#8C8880]">
+                    若商品有問題，可在平台允許的退貨期限內申請整張訂單全額退款。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowReturnModal(true)}
+                    className="shrink-0 rounded-full border border-[#1A1A18] bg-white px-7 py-3 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#1A1A18] hover:text-white"
+                  >
+                    申請退貨退款
+                  </button>
+                </div>
+              ) : orderData.payment_status === "refunded" ? (
+                <div className="text-sm font-bold text-green-700">此訂單已完成退款。</div>
+              ) : (
+                <div className="text-sm text-[#8C8880]">
+                  此訂單目前沒有可操作的退貨退款申請。
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
       </div>
+
 
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
         <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
@@ -407,7 +629,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                     配送地址
                   </div>
                   <div className="font-bold leading-relaxed text-[#1A1A18]">
-                    {recipient?.detail_address || "未提供"}
+                    {getFullRecipientAddress(recipient)}
                   </div>
                 </div>
               </div>
@@ -533,7 +755,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 配送地址
               </span>
               <span className="text-[#1A1A18] font-bold leading-relaxed">
-                {recipient?.detail_address || "未填寫"}
+                {getFullRecipientAddress(recipient) === "未提供" ? "未填寫" : getFullRecipientAddress(recipient)}
               </span>
             </div>
           )}
@@ -555,6 +777,57 @@ export default function OrderDetailPage({ onBack, orderId }) {
           )}
         </div>
       </div>
+
+
+      {showReturnModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
+            <h3 className="text-xl font-serif font-black text-[#1A1A18]">申請整張訂單退貨退款</h3>
+            <p className="mt-2 text-sm text-[#8C8880]">
+              此版本僅支援整張訂單全額退款，退款金額由後端依訂單總額計算。
+            </p>
+
+            <label className="mt-6 block text-sm font-bold text-[#1A1A18]">退貨原因</label>
+            <select
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+            >
+              {RETURN_REASON_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>{item.label}</option>
+              ))}
+            </select>
+
+            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">補充說明</label>
+            <textarea
+              value={returnDescription}
+              onChange={(e) => setReturnDescription(e.target.value)}
+              rows={4}
+              placeholder="可補充商品狀況或退貨原因..."
+              className="mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+            />
+
+            <div className="mt-7 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowReturnModal(false)}
+                disabled={returnSubmitting}
+                className="flex-1 rounded-xl border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateReturn}
+                disabled={returnSubmitting}
+                className="flex-[2] rounded-xl bg-[#1A1A18] py-3 text-sm font-bold text-white hover:bg-[#C8522A] disabled:opacity-50"
+              >
+                {returnSubmitting ? "送出中..." : `確認申請 ${formatNTD(orderData.total_amount)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

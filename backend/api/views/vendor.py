@@ -12,9 +12,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
 from api.emails import send_vendor_email_verification_email
 from payments.services import get_order_payment_status
+from .platform import reverse_earning_and_vendor_income_for_return
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -2366,6 +2367,375 @@ def vendor_order_update_shipping(request):
             else None
         )
     }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 退貨退款：廠商端
+# GET  /vendor/return/getlist          列出這個廠商訂單的退貨申請
+# POST /vendor/return/review           同意 / 拒絕退貨申請
+# POST /vendor/return/confirmReceived  確認收到消費者退回的商品
+# POST /vendor/return/processRefund    執行退款（收回分潤/廠商淨額）
+# ==============================================================================
+
+def _get_return_request_for_vendor(return_id, vendor_id):
+    """
+    第一版整張訂單退款只支援單一廠商訂單。
+
+    因此不只是「訂單裡有一項商品屬於此廠商」就算有權限，而是整張訂單
+    的所有 OrderItem 都必須屬於目前 vendor_id，避免多廠商訂單中其中一個
+    廠商可以替其他廠商的商品一起核准／退款。
+    """
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return None, Response(
+            {"success": False, "err": "找不到此退貨申請"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    vendor_ids = set(
+        OrderItem.objects.filter(order=return_request.order)
+        .values_list('product__vendor_id', flat=True)
+    )
+
+    if len(vendor_ids) != 1:
+        return None, Response(
+            {
+                "success": False,
+                "err": "目前整張訂單退款僅支援單一廠商訂單；此訂單包含多個廠商商品"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if str(next(iter(vendor_ids), '')) != str(vendor_id):
+        return None, Response(
+            {"success": False, "err": "此退貨申請不屬於這個廠商"},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    return return_request, None
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_return_getlist(request):
+    vendor_id = request.GET.get("vendor_id")
+    status_filter = request.GET.get("status")
+
+    if not vendor_id:
+        return Response(
+            {"success": False, "err": "vendor_id is required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    order_ids = OrderItem.objects.filter(
+        product__vendor_id=vendor_id
+    ).values_list("order_id", flat=True).distinct()
+
+    returns = ReturnRequest.objects.filter(
+        order_id__in=order_ids
+    ).select_related("order").order_by("-requested_at")
+
+    if status_filter:
+        returns = returns.filter(status=status_filter)
+
+    result = []
+    for r in returns:
+        result.append({
+            "return_id": str(r.return_id),
+            "order_id": str(r.order_id),
+            "user_id": r.user_id,
+            "reason": r.reason,
+            "description": r.description,
+            "status": r.status,
+            "requested_amount": str(r.requested_amount),
+            "refunded_amount": str(r.refunded_amount) if r.refunded_amount is not None else None,
+            "requested_at": r.requested_at,
+            'vendor_note': r.vendor_note,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def vendor_return_review(request):
+    vendor_id = request.data.get('vendor_id')
+    return_id = request.data.get('return_id')
+    action = request.data.get('action')
+    vendor_note = (
+        request.data.get('vendor_note')
+        or ''
+    ).strip()
+
+    if (
+        not vendor_id
+        or not return_id
+        or action not in (
+            'approve',
+            'reject',
+        )
+    ):
+        return Response(
+            {
+                'success': False,
+                'err': (
+                    'vendor_id、return_id 為必填，'
+                    'action 必須是 approve 或 reject'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 拒絕退貨時一定要留下理由
+    if (
+        action == 'reject'
+        and not vendor_note
+    ):
+        return Response(
+            {
+                'success': False,
+                'err': '拒絕退貨時必須填寫拒絕理由'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request, err = (
+        _get_return_request_for_vendor(
+            return_id,
+            vendor_id
+        )
+    )
+
+    if err:
+        return err
+
+    if (
+        return_request.status
+        != 'requested'
+    ):
+        return Response(
+            {
+                'success': False,
+                'err': (
+                    '此退貨申請目前狀態是'
+                    f'「{return_request.status}」，'
+                    '不是申請中，無法審核'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if action == 'approve':
+        return_request.status = (
+            'approved'
+        )
+
+        return_request.approved_at = (
+            timezone.now()
+        )
+
+        return_request.rejected_at = None
+
+    else:
+        return_request.status = (
+            'rejected'
+        )
+
+        return_request.rejected_at = (
+            timezone.now()
+        )
+
+        return_request.approved_at = None
+
+    return_request.vendor_note = (
+        vendor_note
+    )
+
+    return_request.save(
+        update_fields=[
+            'status',
+            'approved_at',
+            'rejected_at',
+            'vendor_note',
+        ]
+    )
+
+    return Response(
+        {
+            'success': True,
+            'err': '',
+            'return_id': str(
+                return_request.return_id
+            ),
+            'status':
+                return_request.status,
+            'vendor_note':
+                return_request.vendor_note,
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_return_confirm_received(request):
+    """廠商確認收到消費者退回的商品，退款流程的下一步。"""
+    vendor_id = request.data.get("vendor_id")
+    return_id = request.data.get("return_id")
+
+    if not vendor_id or not return_id:
+        return Response(
+            {"success": False, "err": "vendor_id、return_id 為必填"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request, err = _get_return_request_for_vendor(return_id, vendor_id)
+    if err:
+        return err
+
+    if return_request.status not in ("approved", "returning"):
+        return Response(
+            {"success": False, "err": f"此退貨申請目前狀態是「{return_request.status}」，尚未到可確認收貨的階段"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.status = "received"
+    return_request.returned_at = timezone.now()
+    return_request.save(update_fields=["status", "returned_at"])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "return_id": str(return_request.return_id),
+        "status": return_request.status,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_return_process_refund(request):
+    """
+    執行整張訂單全額退款的「平台內部帳務」處理。
+
+    第一版規則：
+    - 只支援整張訂單全額退款
+    - 退款金額固定等於 ReturnRequest.requested_amount / Order.total_amount
+    - 不接受前端傳 refunded_amount 改變退款金額
+    - 內部帳務收回成功後，才把 ReturnRequest 標記為 refunded
+
+    目前仍不會自動呼叫綠界退款 API；ecpay_refund_trade_no 僅用來記錄
+    外部退款完成後取得的交易識別資料。
+    """
+    vendor_id = request.data.get("vendor_id")
+    return_id = request.data.get("return_id")
+    ecpay_refund_trade_no = request.data.get("ecpay_refund_trade_no", "")
+
+    if not vendor_id or not return_id:
+        return Response(
+            {"success": False, "err": "vendor_id、return_id 為必填"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        with transaction.atomic():
+            try:
+                return_request = (
+                    ReturnRequest.objects
+                    .select_for_update()
+                    .select_related('order')
+                    .get(return_id=return_id)
+                )
+            except ReturnRequest.DoesNotExist:
+                return Response(
+                    {"success": False, "err": "找不到此退貨申請"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 同一個 transaction 內重新做廠商歸屬檢查，避免並發下資料被改動。
+            vendor_ids = set(
+                OrderItem.objects.filter(order=return_request.order)
+                .values_list('product__vendor_id', flat=True)
+            )
+            if len(vendor_ids) != 1:
+                return Response(
+                    {
+                        "success": False,
+                        "err": "目前整張訂單退款僅支援單一廠商訂單；此訂單包含多個廠商商品"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if str(next(iter(vendor_ids), '')) != str(vendor_id):
+                return Response(
+                    {"success": False, "err": "此退貨申請不屬於這個廠商"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            if return_request.status not in ("approved", "returning", "received"):
+                return Response(
+                    {"success": False, "err": f"此退貨申請目前狀態是「{return_request.status}」，尚未到可退款的階段"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            order_total = Decimal(str(return_request.order.total_amount))
+            requested_total = Decimal(str(return_request.requested_amount))
+
+            if order_total <= 0:
+                return Response(
+                    {"success": False, "err": "訂單總金額異常，無法退款"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 第一版只支援整張訂單全額退款。若遇到舊資料 requested_amount
+            # 不是整張訂單金額，直接拒絕，避免用舊的部分退款資料誤扣帳。
+            if requested_total != order_total:
+                return Response(
+                    {
+                        "success": False,
+                        "err": "目前只支援整張訂單全額退款，此退貨申請金額與訂單總金額不一致"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            return_request.refunded_amount = order_total
+            return_request.ecpay_refund_trade_no = ecpay_refund_trade_no
+            return_request.status = "refunding"
+            return_request.save(
+                update_fields=["refunded_amount", "ecpay_refund_trade_no", "status"]
+            )
+
+            reversal_result = reverse_earning_and_vendor_income_for_return(return_request)
+            if not reversal_result.get("success"):
+                # 丟 exception 讓 transaction.atomic rollback：refunding、refunded_amount、
+                # 錢包與 Transactions 都一起回到執行退款前的狀態。
+                raise ValueError(
+                    reversal_result.get("message") or "退款帳務處理失敗"
+                )
+
+            return_request.status = "refunded"
+            return_request.refunded_at = timezone.now()
+            return_request.save(update_fields=["status", "refunded_at"])
+
+        return Response({
+            "success": True,
+            "err": "",
+            "return_id": str(return_request.return_id),
+            "status": return_request.status,
+            "refund_scope": "full_order",
+            "refunded_amount": str(return_request.refunded_amount),
+            "reversal": reversal_result,
+        }, status=status.HTTP_200_OK)
+
+    except ValueError as error:
+        return Response(
+            {"success": False, "err": str(error)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as error:
+        return Response(
+            {"success": False, "err": f"退款帳務處理失敗：{error}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(["GET"])

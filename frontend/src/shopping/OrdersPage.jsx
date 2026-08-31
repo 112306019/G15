@@ -37,6 +37,14 @@ function StatusBadge({ status }) {
     complete: { text: "訂單已完成", className: "bg-[#E8F5E8] text-[#4A9B4A]" },
     cancelled: { text: "已取消", className: "bg-[#F5EAE8] text-[#C8522A]" },
     shipping: { text: "運送中", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
+    requested: { text: "退貨審核中", className: "bg-[#FFF8E7] text-[#9A6700]" },
+    approved: { text: "已同意退貨", className: "bg-[#FFF8E7] text-[#9A6700]" },
+    rejected: { text: "退貨被拒絕", className: "bg-[#F5EAE8] text-[#C8522A]" },
+    disputed: { text: "爭議處理中", className: "bg-[#FDF0ED] text-[#C8522A]" },
+    returning: { text: "退貨中", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
+    received: { text: "廠商已收貨", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
+    refunding: { text: "退款處理中", className: "bg-[#FFF8E7] text-[#9A6700]" },
+    refunded: { text: "已退款", className: "bg-[#E8F5E8] text-[#4A9B4A]" },
   };
   const s = map[status] || { text: "狀態未知", className: "bg-[#F5F0E8] text-[#8C8880]" };
   return (
@@ -46,10 +54,16 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderCard({ vendorName, items = [], onTrack }) {
+function OrderCard({ vendorName, items = [], onTrack, shippingStatus, orderStatus }) {
   return (
     <div className="cursor-pointer flex flex-col gap-5 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
       <span className="block text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+
+      {shippingStatus === "delivered" && orderStatus !== "completed" && (
+        <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-xs font-bold text-[#9A6700]">
+          商品已送達，完成訂單後即可解鎖對應商品的代言任務
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {items.map((it, idx) => (
@@ -194,6 +208,7 @@ export default function OrdersPage({
 }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [returnByOrder, setReturnByOrder] = useState({});
 
   const userId = localStorage.getItem("userId");
 
@@ -206,6 +221,22 @@ export default function OrdersPage({
         const data = await res.json();
         if (Array.isArray(data)) {
           setOrders(data);
+
+          try {
+            const returnRes = await fetch(
+              `${API_BASE_URL}/api/consumer/order/return/list?User_id=${userId}`
+            );
+            const returnData = await returnRes.json();
+            if (Array.isArray(returnData)) {
+              const map = {};
+              returnData.forEach((item) => {
+                if (!map[item.order_id]) map[item.order_id] = item;
+              });
+              setReturnByOrder(map);
+            }
+          } catch (returnErr) {
+            console.error("退貨退款狀態載入失敗", returnErr);
+          }
         }
       } catch (err) {
         console.error("訂單載入失敗", err);
@@ -222,6 +253,8 @@ export default function OrdersPage({
   ).map((o) => ({
     id: o.Order_id,
     vendorName: o.vendor_name,
+    shippingStatus: o.shipping_status,
+    orderStatus: o.order_status,
     items: (o.items || []).map((item) => ({
       name: item.product_name || `商品 ${item.Product_id}`,
       image: item.image_url,
@@ -229,11 +262,20 @@ export default function OrdersPage({
   }));
 
   const historyOrders = orders.filter(
-    (o) => o.order_status === "completed" || o.order_status === "cancelled"
+    (o) =>
+      o.order_status === "completed" ||
+      o.order_status === "cancelled" ||
+      o.payment_status === "refunded"
   ).map((o) => ({
     id: o.Order_id,
     vendorName: o.vendor_name,
-    status: o.order_status === "completed" ? "complete" : "cancelled",
+    status:
+      returnByOrder[o.Order_id]?.status ||
+      (o.payment_status === "refunded"
+        ? "refunded"
+        : o.order_status === "completed"
+          ? "complete"
+          : "cancelled"),
     date: new Date(o.created_at).toLocaleDateString("zh-TW"),
     time: new Date(o.created_at).toLocaleTimeString("zh-TW"),
     items: (o.items || []).map(item => ({
@@ -270,6 +312,8 @@ export default function OrdersPage({
               key={o.id}
               vendorName={o.vendorName}
               items={o.items}
+              shippingStatus={o.shippingStatus}
+              orderStatus={o.orderStatus}
               onTrack={() => onTrackOrder?.(o.id)}
             />
           ))}

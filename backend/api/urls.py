@@ -35,6 +35,8 @@ from .views.platform import (
     admin_export_payout_transfers,
     admin_get_earnings,
     admin_list_settleable_campaigns,
+    admin_list_return_disputes,
+    admin_resolve_return_dispute,
 )
 from .views.consumer import (
     get_products,
@@ -56,6 +58,9 @@ from .views.consumer import (
     payment_result,
     update_order_status,
     get_product_campaign,
+    create_return_request,
+    get_return_requests,
+    dispute_return_request,
 )
 
 from .views import koc, vendor
@@ -110,6 +115,8 @@ urlpatterns = [
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
+    path('platform/returns/disputes', admin_list_return_disputes, name='platform-returns-disputes'),
+    path('platform/returns/disputes/resolve', admin_resolve_return_dispute, name='platform-returns-disputes-resolve'),
 
     # auth
     path('user/signUp', user_signup, name='user-signup'),
@@ -153,6 +160,11 @@ urlpatterns = [
     path('consumer/order/update', update_order_status, name='update-order-status'),
     
     path('consumer/product/campaign', get_product_campaign, name='get-product-campaign'),
+
+    # consumer - 退貨退款
+    path('consumer/order/return/create', create_return_request, name='create-return-request'),
+    path('consumer/order/return/list', get_return_requests, name='get-return-requests'),
+    path('consumer/order/return/dispute', dispute_return_request, name='dispute-return-request'),
     
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
@@ -187,6 +199,12 @@ urlpatterns = [
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
     path('vendor/order/getDetail', vendor.vendor_order_get_detail, name='vendor-order-get-detail'),
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
+
+    # Vendor 退貨退款 API
+    path('vendor/return/getlist', vendor.vendor_return_getlist, name='vendor-return-getlist'),
+    path('vendor/return/review', vendor.vendor_return_review, name='vendor-return-review'),
+    path('vendor/return/confirmReceived', vendor.vendor_return_confirm_received, name='vendor-return-confirm-received'),
+    path('vendor/return/processRefund', vendor.vendor_return_process_refund, name='vendor-return-process-refund'),
 
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),

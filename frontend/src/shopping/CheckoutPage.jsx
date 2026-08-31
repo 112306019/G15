@@ -114,7 +114,7 @@ function formatNTD(amount) {
   }`;
 }
 
-function isValidCVSReceiverName(name) {
+function isValidReceiverName(name) {
   const value = String(name || "").trim();
 
   // 中文姓名：2～5 個中文字
@@ -122,8 +122,9 @@ function isValidCVSReceiverName(name) {
     return true;
   }
 
-  // 英文姓名：4～10 個半形英文字母，可包含空白
-  if (/^[A-Za-z ]{4,10}$/.test(value)) {
+  // 英文姓名：4～10 個字元，可使用半形英文字母與單一空白分隔
+  // 例如 John / Amy Chen；不接受前後空白或連續兩個以上空白。
+  if (/^[A-Za-z]+(?: [A-Za-z]+)*$/.test(value) && value.length >= 4 && value.length <= 10) {
     return true;
   }
 
@@ -504,14 +505,12 @@ export default function CheckoutPage({
     recipientDistrict.trim().length > 0 &&
     recipientAddress.trim().length > 0;
 
-  const cvsReceiverNameValid =
-    shippingMethod !== "cvs" ||
-    isValidCVSReceiverName(recipient);
+  const receiverNameValid =
+    isValidReceiverName(recipient);
 
   const shippingValid =
-    recipient.trim().length > 0 &&
+    receiverNameValid &&
     recipientPhoneValid &&
-    cvsReceiverNameValid &&
     (
       shippingMethod === "home"
         ? homeAddressValid
@@ -702,12 +701,32 @@ export default function CheckoutPage({
   // ShipmentInfo 下一步再接。
   // ============================
   const handlePay = async () => {
-    if (!canPay) {
+    if (!isLoggedIn) {
+      onGoToLogin?.();
       return;
     }
 
-    if (!isLoggedIn) {
-      onGoToLogin?.();
+    if (!receiverNameValid) {
+      setPayError("收件人姓名格式不正確：中文請輸入 2～5 個字，英文請輸入 4～10 個字元。");
+      return;
+    }
+
+    if (!recipientPhoneValid) {
+      setPayError("請輸入 09 開頭的 10 碼手機號碼。");
+      return;
+    }
+
+    if (shippingMethod === "home" && !homeAddressValid) {
+      setPayError("請完整填寫宅配地址。");
+      return;
+    }
+
+    if (shippingMethod === "cvs" && !selectedStore?.store_id) {
+      setPayError("請先選擇 7-ELEVEN 取貨門市。");
+      return;
+    }
+
+    if (!canPay) {
       return;
     }
 
@@ -1145,38 +1164,29 @@ export default function CheckoutPage({
                 value={recipient}
                 onChange={(e) =>
                   setRecipient(
-                    e.target.value
+                    e.target.value.slice(0, 10)
                   )
                 }
-                placeholder="請輸入收件人姓名"
+                maxLength={10}
+                placeholder="中文 2～5 字，英文 4～10 字元"
                 className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                  recipient.trim() &&
-                  (
-                    shippingMethod !== "cvs" ||
-                    isValidCVSReceiverName(recipient)
-                  )
+                  recipient.trim() && receiverNameValid
                     ? "border-[#6BBF6B] bg-white"
-                    : recipient.trim() &&
-                      shippingMethod === "cvs" &&
-                      !isValidCVSReceiverName(recipient)
+                    : recipient.trim() && !receiverNameValid
                     ? "border-[#C8522A] bg-white"
                     : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
                 }`}
               />
 
-              {shippingMethod === "cvs" && (
-                <p
-                  className={`mt-2 text-[11px] ${
-                    recipient.trim() &&
-                    !isValidCVSReceiverName(recipient)
-                      ? "font-bold text-[#C8522A]"
-                      : "text-[#8C8880]"
-                  }`}
-                >
-                  7-ELEVEN 取貨姓名需為中文 2～5 個字，
-                  或英文 4～10 個半形英文字母。
-                </p>
-              )}
+              <p
+                className={`mt-2 text-[11px] ${
+                  recipient.trim() && !receiverNameValid
+                    ? "font-bold text-[#C8522A]"
+                    : "text-[#8C8880]"
+                }`}
+              >
+                收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。
+              </p>
 
             </div>
 
@@ -1558,11 +1568,11 @@ export default function CheckoutPage({
 
             <p className="mt-3 text-[12px] text-[#8C8880]">
 
-              {shippingMethod === "home"
-                ? "請填寫收件人姓名、09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
-                : !cvsReceiverNameValid
-                ? "7-ELEVEN 取貨姓名需為中文 2～5 個字，或英文 4～10 個半形英文字母。"
-                : "請填寫收件人姓名、09 開頭手機號碼，並選擇取貨門市。"}
+              {!receiverNameValid
+                ? "收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。"
+                : shippingMethod === "home"
+                ? "請填寫 09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
+                : "請填寫 09 開頭手機號碼，並選擇取貨門市。"}
 
             </p>
 

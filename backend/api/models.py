@@ -209,8 +209,14 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=50, default='unpaid')
     shipping_status = models.CharField(max_length=50, default='unshipped')
     created_at = models.DateTimeField(auto_now_add=True)
-    # 出貨狀態變成 'delivered' 的當下寫入，作為鑑賞期倒數的起算點
+    # 出貨狀態變成 'delivered' 的當下寫入（vendor.py），作為退貨期限與廠商鑑賞期的起算點。
+    # 注意：這是廠商標記送達的時間，不是消費者確認收貨的時間，兩者可能不同——
+    # 退貨期限一定要用這個欄位算，不能等消費者確認收貨才起算。
     delivered_at = models.DateTimeField(null=True, blank=True, db_column='delivered_at')
+
+    # order_status 第一次變成 'completed'（消費者確認收貨，見 consumer.py 的
+    # update_order_status）的當下寫入，純粹作稽核/報表用，不作為退貨期限依據。
+    completed_at = models.DateTimeField(null=True, blank=True, db_column='completed_at')
 
     class Meta:
         db_table = 'Order'
@@ -722,6 +728,7 @@ class Earnings(models.Model):
         ('pending', '待定'),
         ('withdrawable', '可提領'),
         ('transferred', '已轉帳'),
+        ('cancelled', '已取消'),  # 新增：訂單退貨退款後，這筆分潤被全額收回
     ]
 
     earnings_id = models.AutoField(primary_key=True)
@@ -742,12 +749,35 @@ class Earnings(models.Model):
         blank=True,
         related_name='earnings'
     )
+    # amount：目前生效的分潤金額。部分退款時會被往下調整，全額退款/取消時維持
+    # 原值不變，改用 status='cancelled' 表示「這筆金額不算數了」，
+    # 這樣才留得住「本來算出多少錢」的紀錄，不會因為改成 0 而失去稽核軌跡。
     amount = models.IntegerField()
+    # original_amount：第一次計算出來、從未被退款調整過的原始金額。
+    # 舊資料沒有這個值，view 層讀取時如果是 None 就以 amount 當作 original_amount。
+    original_amount = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
+    # 因為哪一筆退貨申請被取消/調整，退貨爭議追查用；正常分潤這欄是空的
+    cancelled_by_return_request = models.ForeignKey(
+        'ReturnRequest',
+        on_delete=models.SET_NULL,
+        db_column='cancelled_by_return_request_id',
+        null=True,
+        blank=True,
+        related_name='cancelled_earnings'
+    )
 
     class Meta:
         db_table = 'Earnings'
+
+    def save(self, *args, **kwargs):
+        # 新建立時自動把 original_amount 補成跟 amount 一樣，之後 amount 被
+        # 退款邏輯調整時 original_amount 才不會跟著變動——呼叫端不需要每次
+        # 都手動記得帶這個欄位。
+        if self.original_amount is None:
+            self.original_amount = self.amount
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Earnings {self.earnings_id}"
@@ -944,3 +974,109 @@ class ShipmentInfo(models.Model):
 
     def __str__(self):
         return f"Shipment {self.shipment_id} - Order {self.order_id}"
+
+
+# ==============================================================================
+# 6. 退貨退款模組
+# ==============================================================================
+
+class ReturnRequest(models.Model):
+    """消費者退貨退款申請。
+
+    獨立於 Order 之外，不把退貨狀態塞進 Order.order_status——
+    Order.order_status='completed' 現在的語意是「消費者已確認收貨」
+    （見 consumer.py 的 update_order_status），退貨期間內訂單仍然是
+    'completed'，能不能申請退貨完全由 ReturnRequest 能不能新建來判斷
+    （檢查 Order.delivered_at + RETURN_REQUEST_WINDOW_DAYS），不靠
+    order_status 的值。
+
+    v1 先做整張訂單層級退貨（order_item 留空）；要支援單一品項退貨時，
+    再把 order_item 改成必填，並在 view 層驗證該品項屬於這張 order、
+    重新計算 requested_amount 只算該品項的 subtotal。
+    """
+
+    REASON_CHOICES = [
+        ('defective', '商品瑕疵'),
+        ('mismatched', '商品與描述不符'),
+        ('wrong_size', '尺寸不合'),
+        ('no_longer_needed', '不符合需求'),
+        ('other', '其他'),
+    ]
+
+    STATUS_CHOICES = [
+        ('requested', '申請中'),
+        ('approved', '已同意'),
+        ('rejected', '已拒絕'),
+        ('disputed', '爭議中'),      # 廠商拒絕、消費者不服，進入 Admin 判定
+        ('returning', '商品退回中'),
+        ('received', '廠商已收貨'),
+        ('refunding', '退款處理中'),
+        ('refunded', '退款完成'),
+        ('cancelled', '消費者自行取消申請'),
+    ]
+
+    return_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        db_column='order_id',
+        related_name='return_requests'
+    )
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.CASCADE,
+        db_column='order_item_id',
+        null=True,
+        blank=True,
+        related_name='return_requests'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='user_id',
+        related_name='return_requests'
+    )
+
+    reason = models.CharField(max_length=50, choices=REASON_CHOICES)
+    description = models.TextField(blank=True, null=True)
+
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='requested')
+
+    # 消費者申請當下要求退的金額（前端算好帶進來，或後端依 order/order_item
+    # 的 subtotal 算）。refunded_amount 才是實際退款完成的金額，兩者可能因為
+    # 廠商/Admin 判定成部分退款而不同。
+    requested_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    vendor_note = models.TextField(blank=True, null=True)
+    admin_note = models.TextField(blank=True, null=True)
+
+    # 只有走到 Admin 爭議判定（status='disputed' 之後）才會有值
+    admin = models.ForeignKey(
+        'Admins',
+        on_delete=models.SET_NULL,
+        db_column='admin_id',
+        null=True,
+        blank=True,
+        related_name='return_disputes'
+    )
+
+    # 綠界退款/退貨 API 回傳的交易編號，財務對帳用；退款是否真的透過金流商
+    # 退成功，要看這個欄位有沒有值，不能只看 status='refunded'
+    ecpay_refund_trade_no = models.CharField(max_length=50, blank=True, null=True)
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    returned_at = models.DateTimeField(null=True, blank=True)   # 廠商確認收到退回商品
+    refunded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'Return_Request'
+        indexes = [
+            models.Index(fields=['order', 'status']),
+        ]
+
+    def __str__(self):
+        return f"ReturnRequest {self.return_id} for Order {self.order_id} ({self.status})"

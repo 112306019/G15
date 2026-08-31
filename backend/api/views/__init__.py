@@ -34,4 +34,6 @@ from .platform import (
     koc_get_list,
     koc_get_detail,
     koc_mission_stage_update,
+    admin_list_return_disputes,
+    admin_resolve_return_dispute,
 )
