@@ -192,15 +192,23 @@ export const updateVendorShipping = (data) => {
   return api.post('/vendor/order/updateShipping', data)
 }
 
+
 // 建立物流單
 export const createVendorLogistics = (data) => {
   return api.post('/vendor/order/createLogistics', data)
 }
 
+// 核准或拒絕消費者的取消訂單申請
+export const respondVendorCancelRequest = (data) => {
+  return api.post('/vendor/order/respondCancelRequest', data)
+}
+
+
 // 查詢物流單
 export const queryVendorLogistics = (data) => {
   return api.post('/vendor/order/queryLogistics', data)
 }
+
 
 // ======================================================
 // 退貨退款
@@ -257,6 +265,11 @@ export const processVendorReturnRefund = (
 // ======================================================
 // 優惠碼
 // ======================================================
+
+export const uploadVendorInvoice = data =>
+  api.post('/vendor/order/uploadInvoice', data)
+
+
 
 // 獲取優惠碼使用紀錄
 export const getVendorCouponUsage = (
@@ -345,9 +358,38 @@ export const markVendorChatroomRead = (
   )
 }
 
+
 // ======================================================
 // 成效分析
 // ======================================================
+
+// 取得（或建立）客服聊天室
+export const getOrCreateVendorSupportRoom = vendorId => {
+  return api.post('/vendor/support/getOrCreateRoom', { vendor_id: vendorId })
+}
+
+// 取得客服聊天室訊息
+export const getVendorSupportMessages = vendorId => {
+  return api.get('/vendor/support/getMessages', {
+    params: {
+      vendor_id: vendorId
+    }
+  })
+}
+
+// 廠商在客服聊天室發送訊息
+export const sendVendorSupportMessage = data => {
+  return api.post('/vendor/support/sendMessage', data)
+}
+
+// 客服未讀訊息數
+export const getVendorSupportUnreadCount = vendorId => {
+  return api.get('/vendor/support/unreadCount', {
+    params: {
+      vendor_id: vendorId
+    }
+  })
+}
 
 // 廠商成效總覽
 export const getVendorAnalyticsOverview = (

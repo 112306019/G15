@@ -24,6 +24,8 @@ from .koc import (
     send_chat_message,
     koc_chatroom_getlist,
     koc_chatroom_mark_read,
+    submit_tax_form_link,
+    get_tax_form_data,
 )
 # 有新寫的 function 就要補進來
 

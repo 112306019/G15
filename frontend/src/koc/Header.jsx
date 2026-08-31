@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Star, ShoppingCart, User, Heart, MessageCircle, Settings, LogOut } from 'lucide-react';
+import { ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut } from 'lucide-react';
+
+// 引入 Logo 圖片
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 // 🟢 接收 cartCount
-export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, onLogout }) {
+export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, supportUnreadCount = 0, onLogout }) {
 
   const allNavItems = [
     { label: '購物頁面', key: 'shop', isKocOnly: false },
@@ -30,11 +34,22 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
       <div className="flex items-center gap-8">
 
         <div
-          className="bg-[#F5F0E8] px-6 py-2 rounded-full flex items-center gap-2 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
+          className="bg-[#F5F0E8] px-4 py-1.5 rounded-full flex items-center gap-2.5 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
           onClick={() => onNavigate?.('shop')}
         >
-          <Star size={18} className="text-[#1A1A18] fill-[#1A1A18]" />
-          <span className="font-black tracking-widest text-[#1A1A18] uppercase">Logo</span>
+          {/* 左側：圓形 Icon */}
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Icon" 
+            className="h-8 w-8 object-cover rounded-full shadow-sm" 
+          />
+          
+          {/* 右側：文字 Logo */}
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain mix-blend-multiply" 
+          />
         </div>
 
         <div className="h-6 w-px bg-[#E2DDD4]"></div>
@@ -94,6 +109,19 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
             <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
           </div>
         )}
+
+        <div
+          className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+          onClick={() => onNavigate?.('support')}
+        >
+          <Headset size={22} strokeWidth={2.5} className={activeTab === 'support' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+
+          {supportUnreadCount > 0 && (
+            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+              {supportUnreadCount}
+            </span>
+          )}
+        </div>
 
         <div
           className="relative"

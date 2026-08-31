@@ -1,6 +1,8 @@
 import { API_BASE_URL } from '../config';
 import React, { useState } from "react";
 import { ArrowLeft, Mail, Lock, User, ShieldCheck } from "lucide-react";
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 function InputField({ label, hint, icon: Icon, ...props }) {
   return (
@@ -296,7 +298,7 @@ export default function LoginPage({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#F5F0E8] font-sans text-[#1A1A18] duration-500 animate-in fade-in p-6 relative overflow-hidden">
 
-      {/* 背景環境光暈 (Ambient Glow) - 移除 animate-pulse，改為靜態 */}
+      {/* 背景環境光暈 (Ambient Glow) */}
       <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] bg-[#C8522A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.15] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] bg-[#B89B6A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.2] pointer-events-none"></div>
 
@@ -315,14 +317,17 @@ export default function LoginPage({
       {/* 懸浮玻璃卡片 (Glassmorphism) */}
       <div className="w-full max-w-[440px] relative z-10">
         
-        {/* 頂部 Logo */}
-        <div className="mb-8 flex flex-col items-center justify-center">
-          <div className="w-12 h-12 bg-gradient-to-tr from-[#C8522A] to-[#B89B6A] rounded-[1rem] shadow-lg flex items-center justify-center mb-4 text-white transform rotate-3">
-             <ShieldCheck size={24} strokeWidth={2.5} className="-rotate-3" />
-          </div>
-          <h1 className="text-2xl font-serif font-black tracking-[0.15em] uppercase text-[#1A1A18]">
-            KOC Platform
-          </h1>
+        <div className="mb-8 flex flex-col items-center justify-center gap-3">
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="h-14 w-14 object-cover rounded-full shadow-sm" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain mix-blend-multiply" 
+          />
         </div>
 
         <div className="rounded-[2.5rem] bg-white/80 backdrop-blur-xl p-8 md:p-10 shadow-[0_20px_60px_rgba(26,26,24,0.08)] border border-white">
@@ -342,7 +347,7 @@ export default function LoginPage({
             </button>
           </div>
 
-          <div className="min-h-[340px]">
+          <div className="relative transition-all duration-300">
             {isLogin ? (
               <div className="animate-in slide-in-from-left-4 fade-in duration-300">
                 
@@ -404,7 +409,7 @@ export default function LoginPage({
                     <InputField label="全名" icon={User} placeholder="請輸入姓名" value={regName} onChange={(e) => setRegName(e.target.value)} />
                   </div>
                   <div className="col-span-2">
-                    <InputField label="聯絡方式" icon={Mail} placeholder="電子郵件或手機號碼" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+                    <InputField label="聯絡方式" icon={Mail} placeholder="電子郵件" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
                   </div>
                   <div className="col-span-2">
                     <InputField label="設定密碼" icon={Lock} hint="至少8位" type="password" placeholder="輸入密碼" value={regPw} onChange={(e) => setRegPw(e.target.value)} />

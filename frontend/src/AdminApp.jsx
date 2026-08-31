@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Store, UserCheck,
-  ClipboardList, CreditCard, LogOut, History, ShieldAlert
+  ClipboardList, CreditCard, LogOut, History, ShieldAlert, Headset, FileText
 } from 'lucide-react';
 
 // 🌟 引入切好的各個頁面元件
@@ -17,6 +17,8 @@ import AdminVendorDetail from './admin/AdminVendorDetail';
 import AdminMissions from './admin/AdminMissions';
 import AdminFinance from './admin/AdminFinance';
 import AdminLogs from './admin/AdminLogs';
+import AdminSupport from './admin/AdminSupport';
+import AdminTaxForms from './admin/AdminTaxForms';
 
 export default function AdminApp() {
   const navigate = useNavigate();
@@ -52,6 +54,11 @@ export default function AdminApp() {
   if (!isAuthenticated) return null;
 
   // 🌟 根據角色定義左側選單與允許的路由
+  //
+  // 角色字串一律用後端 Admins.role 實際存的 snake_case 格式
+  // （'super_admin' / 'finance' / 'reviewer'），不要用 'Super Admin' 這種
+  // 大寫+空格的寫法——這裡沒有像 AdminFinance.jsx 那樣做大小寫正規化，
+  // 用錯格式會讓 includes() 永遠比對不到，選單項目/路由直接對所有角色隱藏。
   const allMenuItems = [
     { id: 'overview', label: '平台總覽', icon: <LayoutDashboard size={20} />, path: '/admin', roles: ['super_admin', 'finance', 'reviewer'] },
     { id: 'vendors', label: '廠商管理', icon: <Store size={20} />, path: '/admin/vendors', roles: ['super_admin', 'reviewer', 'finance'] },
@@ -59,6 +66,8 @@ export default function AdminApp() {
     { id: 'consumers', label: '一般使用者', icon: <Users size={20} />, path: '/admin/consumers', roles: ['super_admin', 'reviewer'] },
     { id: 'missions', label: '任務與活動追蹤', icon: <ClipboardList size={20} />, path: '/admin/missions', roles: ['super_admin', 'reviewer'] },
     { id: 'finance', label: '訂單與財務', icon: <CreditCard size={20} />, path: '/admin/finance', roles: ['super_admin', 'finance'] },
+    { id: 'taxForms', label: '勞報單審核', icon: <FileText size={20} />, path: '/admin/tax-forms', roles: ['super_admin', 'finance'] },
+    { id: 'support', label: '客服聊天室', icon: <Headset size={20} />, path: '/admin/support', roles: ['super_admin', 'reviewer', 'finance'] },
     { id: 'logs', label: '操作紀錄', icon: <History size={20} />, path: '/admin/logs', roles: ['super_admin', 'reviewer', 'finance'] },
   ];
 
@@ -230,6 +239,20 @@ export default function AdminApp() {
             <Route path="/finance" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminFinance />
+              </ProtectedRoute>
+            } />
+
+            {/* 🌟 勞報單審核模組 */}
+            <Route path="/tax-forms" element={
+              <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
+                <AdminTaxForms />
+              </ProtectedRoute>
+            } />
+
+            {/* 🌟 客服聊天室模組 */}
+            <Route path="/support" element={
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+                <AdminSupport />
               </ProtectedRoute>
             } />
 

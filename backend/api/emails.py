@@ -30,6 +30,32 @@ def send_koc_approval_email(user):
     )
 
 
+def send_invoice_notification_email(order):
+    """
+    廠商回填發票號碼後，寄信通知消費者。
+
+    寄信失敗不應該讓上傳流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    user = order.user
+    subject = "您的訂單發票已開立"
+    message = (
+        f"{user.display_name or user.name} 您好，\n\n"
+        f"您的訂單（訂單編號：{order.order_id}）發票已由廠商開立完成。\n"
+        f"發票號碼：{order.invoice_number}\n\n"
+        "請妥善保存此發票號碼，作為報稅或退換貨之憑證。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
 def send_vendor_approval_email(vendor):
     """
     廠商審核通過後寄送通知信。
@@ -118,6 +144,31 @@ def send_password_reset_email(user, code):
         f"您的密碼重設驗證碼為：{code}\n\n"
         "此驗證碼將於 10 分鐘後失效，請盡快完成密碼重設。\n"
         "如果這不是您本人的操作，請忽略此信，您的密碼不會被變更。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+
+
+def send_tax_form_rejected_email(user, campaign_name, reject_reason):
+    """
+    勞務報酬單被退回時通知 KOC。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    subject = f"【KOC Platform】您的勞務報酬單被退回：{campaign_name}"
+    message = (
+        f"{user.display_name or user.name} 您好，\n\n"
+        f"您針對「{campaign_name}」提交的勞務報酬單經審核後需要修正：\n\n"
+        f"退回原因：{reject_reason}\n\n"
+        "請登入平台重新上傳連結。\n\n"
         "KOC Platform 團隊"
     )
 

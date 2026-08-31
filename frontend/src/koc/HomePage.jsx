@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, FileText } from 'lucide-react';
 import api from '../api/index';
+import TaxFormModal from './TaxFormModal';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
@@ -23,6 +24,14 @@ const STAGE_MAP = {
   5: 4,           // 已結案：stage=4(completed)
 };
 
+// 勞務報酬單（勞報單）狀態徽章對照
+const TAX_FORM_BADGE = {
+  not_submitted: { label: '待上傳勞報單', cls: 'bg-[#F5F0E8] text-[#8C8880]' },
+  pending_review: { label: '勞報單審核中', cls: 'bg-[#FDF0ED] text-[#C8522A]' },
+  rejected: { label: '勞報單退回', cls: 'bg-red-50 text-red-600' },
+  approved: { label: '審核通過 (待撥款)', cls: 'bg-green-50 text-green-700' },
+};
+
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [activeStage, setActiveStage] = useState(1);
@@ -37,6 +46,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
+  const [taxFormTask, setTaxFormTask] = useState(null);
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
@@ -163,6 +173,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             vendorFeedback: m.vendor_feedback || null,
             promoCode: null,
             earningsTotal: m.earnings_total,
+            isExpired: m.is_expired || false,
           });
 
           const writing = writingRes.data.success
@@ -193,6 +204,10 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               stage: activeStage,
               promoCode: null,
               earningsTotal: m.earnings_total,
+              isExpired: m.is_expired || false,
+              taxFormStatus: m.tax_form_status || 'not_submitted',
+              taxFormUrl: m.tax_form_url || null,
+              taxFormRejectReason: m.tax_form_reject_reason || null,
             })));
           }
         }
@@ -361,6 +376,34 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
               <span className="text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
             </div>
+
+            {task.taxFormStatus === 'not_submitted' && (
+              <button
+                onClick={() => setTaxFormTask(task)}
+                className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+              >
+                <FileText size={16}/> 上傳勞報單連結
+              </button>
+            )}
+
+            {task.taxFormStatus === 'pending_review' && (
+              <button
+                onClick={() => setTaxFormTask(task)}
+                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2"
+              >
+                <FileText size={16}/> 檢視/修改連結
+              </button>
+            )}
+
+            {task.taxFormStatus === 'rejected' && (
+              <button
+                onClick={() => setTaxFormTask(task)}
+                className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+              >
+                <FileText size={16}/> 重新上傳連結
+              </button>
+            )}
+
             <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
               <Search size={16}/> 查看詳情
             </button>
@@ -402,7 +445,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <span className="text-[#C8522A]"></span> 賺取分潤超簡單，跟著進度走！
           </h3>
           <div className="flex items-center gap-4 text-sm font-bold text-[#F5F0E8]/80">
-            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請任務</span>
+            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請接案</span>
             <ChevronRight size={14} className="text-[#8C8880]" />
             <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">2</span> 撰寫文案</span>
             <ChevronRight size={14} className="text-[#8C8880]" />
@@ -534,7 +577,15 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                     </div>
                   )}
                 </div>
-                {task.stage === 2 && (
+                {task.isExpired ? (
+                  <span className="text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
+                    已過期
+                  </span>
+                ) : task.stage === 5 ? (
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${TAX_FORM_BADGE[task.taxFormStatus]?.cls || TAX_FORM_BADGE.not_submitted.cls}`}>
+                    {TAX_FORM_BADGE[task.taxFormStatus]?.label || TAX_FORM_BADGE.not_submitted.label}
+                  </span>
+                ) : task.stage === 2 && (
                   <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
                     {task.isSubmitted ? '已繳交・審核中' : task.isRevising ? '文案退回，請修改' : '撰寫中'}
                   </span>
@@ -599,6 +650,24 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 上傳勞務報酬單連結彈出視窗 */}
+      {taxFormTask && (
+        <TaxFormModal
+          task={taxFormTask}
+          userId={user_id}
+          onClose={() => setTaxFormTask(null)}
+          onSubmitted={(newStatus, newUrl) => {
+            setTasks(previous =>
+              previous.map(t =>
+                t.id === taxFormTask.id
+                  ? { ...t, taxFormStatus: newStatus, taxFormUrl: newUrl, taxFormRejectReason: null }
+                  : t
+              )
+            );
+          }}
+        />
       )}
 
       {/* 申請成功彈出視窗 */}

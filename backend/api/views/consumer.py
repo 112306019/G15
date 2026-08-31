@@ -10,9 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
-from api.views.constants import is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
+from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
 from payments.models import PaymentTransaction
-from payments.services import is_payment_effectively_failed, pick_relevant_payment
+from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
 
 def _has_active_campaign(product_id):
@@ -496,6 +496,7 @@ def view_wishlist(request):
             'product_name': w.product.product_name,
             'price': w.product.discounted_price or w.product.price,
             'image_url': w.product.image_url,
+            'stock': w.product.stock,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -638,6 +639,12 @@ def create_guest(request):
         'Guest_id': guest.guest_id,
         'Order_id': guest.order_id.order_id,
     }, status=status.HTTP_201_CREATED)
+
+
+# 運費也是後端自己算，不採信前端傳的金額，理由同下面「後端重新計算金額」——
+# 這兩個數字要跟 CheckoutPage.jsx 的 shippingAmount 保持一致，之後那邊改價要記得同步。
+SHIPPING_FEE_HOME = Decimal('130')
+SHIPPING_FEE_CVS = Decimal('65')
 
 
 # ── 建立訂單 ──
@@ -988,7 +995,7 @@ def create_order(request):
                 rounding=ROUND_HALF_UP
             )
 
-    total_amount = sum(
+    items_total = sum(
         (
             line['final_subtotal']
             for line in line_items
@@ -998,6 +1005,14 @@ def create_order(request):
         Decimal('0.01'),
         rounding=ROUND_HALF_UP
     )
+
+    shipping_fee = (
+        SHIPPING_FEE_CVS
+        if shipping_method == 'cvs'
+        else SHIPPING_FEE_HOME
+    )
+
+    total_amount = items_total + shipping_fee
 
     # ============================
     # 建立訂單
@@ -1056,6 +1071,7 @@ def create_order(request):
                 promotion_code or ''
             ),
             total_amount=total_amount,
+            shipping_fee=shipping_fee,
             order_status='pending',
             payment_status='unpaid',
             shipping_status='unshipped',
@@ -1166,6 +1182,11 @@ def create_order(request):
             'totalAmount':
                 float(
                     order.total_amount
+                ),
+
+            'shippingFee':
+                float(
+                    order.shipping_fee
                 ),
 
             'itemCount':
@@ -1315,9 +1336,12 @@ def view_order(request):
             'Guest_id': order.guest_id,
             'Promotion_code': order.promotion_code,
             'total_amount': float(order.total_amount),
+            'shipping_fee': float(order.shipping_fee),
             'order_status': order.order_status,
             'payment_status': order.payment_status,
             'shipping_status': order.shipping_status,
+            'cancel_rejected': bool(order.cancel_rejected_at),
+            'cancel_reason': order.cancel_reason,
             'Address_id': order.address_id,
             'created_at': order.created_at,
             'delivered_at': order.delivered_at,
@@ -1545,6 +1569,119 @@ def update_order_status(request):
         response_data['vendor_earning'] = vendor_result
 
     return Response(response_data, status=status.HTTP_200_OK)
+
+
+# ── 取消訂單 ──
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def cancel_order(request):
+    """
+    消費者取消訂單。
+
+    - 待出貨（unshipped）：廠商還沒開始備貨，直接取消，庫存立刻加回去。
+    - 備貨中（preparing）：廠商已經在準備商品，改成 cancel_requested，
+      等廠商核准或拒絕；核准後才會真的變成 cancelled、庫存才加回去
+      （見 vendor.vendor_order_respond_cancel_request）。
+    - 已出貨/已送達：不能取消，要走退貨流程（目前系統還沒有）。
+    """
+    order_id = request.data.get('order_id') or request.data.get('Order_id')
+    user_id = request.data.get('user_id') or request.data.get('User_id')
+    guest_id = request.data.get('guest_id') or request.data.get('Guest_id')
+    reason = (request.data.get('reason') or '').strip()
+
+    if not order_id:
+        return Response(
+            {'success': False, 'err': 'order_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not reason:
+        return Response(
+            {'success': False, 'err': '請填寫取消原因'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        order = Order.objects.get(order_id=order_id)
+    except Order.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '訂單不存在'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if user_id and str(order.user_id) != str(user_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if guest_id and str(order.guest_id) != str(guest_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if order.order_status == 'cancelled':
+        return Response(
+            {'success': False, 'err': '此訂單已經是取消狀態'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.order_status == 'cancel_requested':
+        return Response(
+            {'success': False, 'err': '取消申請審核中，請等待廠商回覆'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.order_status == 'completed':
+        return Response(
+            {'success': False, 'err': '此訂單已完成，無法取消'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.cancel_rejected_at:
+        return Response(
+            {'success': False, 'err': '賣家已拒絕您的取消申請，無法再次申請取消'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    payment_tx = None
+
+    with transaction.atomic():
+        if order.shipping_status == 'unshipped':
+            order.order_status = 'cancelled'
+            order.shipping_status = 'cancelled'
+            order.cancel_reason = reason
+            order.save(update_fields=['order_status', 'shipping_status', 'cancel_reason'])
+
+            shipment = ShipmentInfo.objects.filter(order=order).first()
+            if shipment:
+                shipment.shipping_status = 'cancelled'
+                shipment.save(update_fields=['shipping_status', 'updated_at'])
+
+            restore_order_stock(order)
+
+            payment_tx = get_order_payment_status(order)
+            if payment_tx:
+                mark_payment_refund_pending(payment_tx)
+        elif order.shipping_status == 'preparing':
+            order.order_status = 'cancel_requested'
+            order.cancel_reason = reason
+            order.save(update_fields=['order_status', 'cancel_reason'])
+        else:
+            return Response(
+                {'success': False, 'err': '訂單已出貨，無法取消'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'order_id': str(order.order_id),
+        'order_status': order.order_status,
+        'shipping_status': order.shipping_status,
+        'payment_status': payment_tx.status if payment_tx else None,
+    }, status=status.HTTP_200_OK)
 
 
 # ── 查看商品所屬活動 ──

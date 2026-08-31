@@ -35,6 +35,7 @@ from api.models import (
     Earnings,
     OrderItem,
     KocWallet,
+    RemunerationForm,
     VendorPayouts,
     Payouts,
     ReturnRequest
@@ -42,18 +43,9 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import (
-    ROLE_CODE_MAP,
-    STAGE_CODE_MAP,
-    EARNINGS_STATUS_CODE_MAP,
-    EARNINGS_STATUS_CHOICES_MAP,
-    VENDOR_SETTLEMENT_HOLD_DAYS,
-    RETURN_REQUEST_WINDOW_DAYS,
-    is_return_window_open,
-    has_unresolved_return_request,
-    sync_expired_promoting_missions,
-)
 from api.emails import send_koc_approval_email, send_vendor_approval_email
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
@@ -750,8 +742,6 @@ def admin_settle_vendor_earnings(request):
     total_amount = sum(s['amount'] for s in settled)
     distinct_vendor_ids = {s['vendor_id'] for s in settled}
 
-    # 稽核紀錄：單一廠商結算就直接關聯該廠商；一次跑全平台結算的話，
-    # AdminAuditLogs.vendor 留空，把涉及的廠商數量寫進 action_reason
     log_vendor = None
     if vendor_id and len(distinct_vendor_ids) <= 1:
         log_vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
@@ -766,13 +756,91 @@ def admin_settle_vendor_earnings(request):
         ),
     )
 
+    from decimal import Decimal, ROUND_HALF_UP
+    from api.models import VendorInvoice
+    from api.ecpay_invoice import issue_b2b_invoice
+
+    settled_amount_by_vendor = {}
+    for s in settled:
+        settled_amount_by_vendor.setdefault(s['vendor_id'], Decimal('0'))
+        settled_amount_by_vendor[s['vendor_id']] += Decimal(str(s['amount']))
+
+    invoices = []
+    for v_id, vendor_settlement_amount in settled_amount_by_vendor.items():
+        vendor_obj = Vendor.objects.filter(vendor_id=v_id).first()
+        if not vendor_obj or not vendor_obj.tax_id:
+            invoices.append({
+                'vendor_id': v_id,
+                'status': 'failed',
+                'error': '廠商無統一編號，無法開立發票'
+            })
+            continue
+
+        fee_rate = vendor_obj.platform_fee_rate or Decimal('0.00')
+        if fee_rate <= 0:
+            continue
+
+        service_fee = (vendor_settlement_amount * fee_rate / Decimal('100')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        tax_amount = (service_fee * Decimal('0.05')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        grand_total = service_fee + tax_amount
+
+        relate_number = f"INV{int(timezone.now().timestamp())}{v_id}"[:20]
+
+        invoice_record = VendorInvoice.objects.create(
+            vendor=vendor_obj,
+            relate_number=relate_number,
+            settlement_amount=vendor_settlement_amount,
+            service_fee=service_fee,
+            tax_amount=tax_amount,
+            total_amount=grand_total,
+            status='pending',
+        )
+
+        try:
+            success, invoice_number, message = issue_b2b_invoice(
+                relate_number=relate_number,
+                buyer_tax_id=vendor_obj.tax_id,
+                item_name='平台服務費',
+                sales_amount=int(service_fee),
+                tax_amount=int(tax_amount),
+            )
+            if success:
+                invoice_record.status = 'issued'
+                invoice_record.invoice_number = invoice_number
+            else:
+                invoice_record.status = 'failed'
+                invoice_record.error_message = message
+            invoice_record.save()
+
+            invoices.append({
+                'vendor_id': v_id,
+                'status': invoice_record.status,
+                'invoice_number': invoice_record.invoice_number,
+                'service_fee': str(service_fee),
+                'error': invoice_record.error_message,
+            })
+        except Exception as e:
+            invoice_record.status = 'failed'
+            invoice_record.error_message = str(e)
+            invoice_record.save()
+            invoices.append({
+                'vendor_id': v_id,
+                'status': 'failed',
+                'error': str(e)
+            })
+
     return Response({
         'success': True,
         'err': '',
         'settled_count': len(settled),
         'total_amount': total_amount,
         'settled': settled,
-        'skipped': skipped
+        'skipped': skipped,
+        'invoices': invoices
     }, status=status.HTTP_200_OK)
 
 
@@ -2654,7 +2722,6 @@ def get_audit_logs(request):
 # 判定入口。
 # GET  /platform/returns/disputes          列出待判定的爭議
 # POST /platform/returns/disputes/resolve  判定同意退款或維持拒絕
-# ==============================================================================
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -2684,7 +2751,6 @@ def admin_list_return_disputes(request):
         })
 
     return Response(result, status=status.HTTP_200_OK)
-
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -2830,3 +2896,131 @@ def admin_resolve_return_dispute(request):
             'success': False,
             'err': f'退款帳務處理失敗：{error}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ==============================================================================
+# 勞務報酬單（勞報單）審核
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_get_tax_forms(request):
+    """
+    勞報單列表，給平台/財務審核用。
+    URL: /platform/taxForms/getlist?status=pending_review（status 可省略，省略就回全部）
+    """
+    status_filter = request.query_params.get('status')
+
+    valid_statuses = {choice[0] for choice in RemunerationForm.STATUS_CHOICES}
+    if status_filter and status_filter not in valid_statuses:
+        return Response({
+            'success': False,
+            'err': f"status 必須是 {', '.join(sorted(valid_statuses))} 其中之一"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    forms = RemunerationForm.objects.select_related(
+        'kocmission__koc__user',
+        'kocmission__application__campaign',
+    ).order_by('-submitted_at')
+
+    if status_filter:
+        forms = forms.filter(status=status_filter)
+
+    mission_ids = [form.kocmission_id for form in forms]
+    earnings_totals = (
+        Earnings.objects.filter(kocmission_id__in=mission_ids)
+        .values('kocmission_id')
+        .annotate(total=Sum('amount'))
+    )
+    earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
+
+    result = []
+    for form in forms:
+        mission = form.kocmission
+        campaign = mission.application.campaign
+        koc_user = mission.koc.user if mission.koc else None
+
+        result.append({
+            'form_id': form.form_id,
+            'kocmission_id': mission.kocmission_id,
+            'koc_id': mission.koc_id,
+            'koc_name': (koc_user.display_name or koc_user.name) if koc_user else '',
+            'campaign_name': campaign.name,
+            'vendor_name': campaign.vendor.company_name,
+            'amount': earnings_map.get(mission.kocmission_id, 0),
+            'status': form.status,
+            'cloud_link_url': form.cloud_link_url,
+            'submitted_at': form.submitted_at,
+            'reviewed_at': form.reviewed_at,
+            'reject_reason': form.reject_reason,
+        })
+
+    return Response({
+        'success': True,
+        'err': '',
+        'forms': result,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_review_tax_form(request):
+    """
+    平台/財務審核勞報單：通過或退回。
+    URL: /platform/taxForms/review
+
+    Request:
+    {
+        "form_id": 1,
+        "admin_id": "1",
+        "action": "approve" | "reject",
+        "reject_reason": "連結權限未開放"   # action=reject 時必填
+    }
+    """
+    form_id = request.data.get('form_id')
+    admin_id = request.data.get('admin_id')
+    action = request.data.get('action')
+    reject_reason = (request.data.get('reject_reason') or '').strip()
+
+    if not form_id:
+        return Response({'success': False, 'err': 'form_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not admin_id:
+        return Response({'success': False, 'err': 'admin_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+    if action not in ('approve', 'reject'):
+        return Response({'success': False, 'err': "action 必須是 'approve' 或 'reject'"}, status=status.HTTP_400_BAD_REQUEST)
+    if action == 'reject' and not reject_reason:
+        return Response({'success': False, 'err': '退回時必須填寫原因'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        form = RemunerationForm.objects.select_related(
+            'kocmission__koc__user',
+            'kocmission__application__campaign',
+        ).get(form_id=form_id)
+    except RemunerationForm.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的勞報單'}, status=status.HTTP_404_NOT_FOUND)
+
+    if form.status == 'approved':
+        return Response({'success': False, 'err': '此勞報單已經審核通過，無法再次審核'}, status=status.HTTP_400_BAD_REQUEST)
+
+    form.status = 'approved' if action == 'approve' else 'rejected'
+    form.reviewed_at = timezone.now()
+    form.reviewed_by_admin_id = str(admin_id)
+    form.reject_reason = reject_reason if action == 'reject' else None
+    form.save(update_fields=['status', 'reviewed_at', 'reviewed_by_admin_id', 'reject_reason'])
+
+    if action == 'reject':
+        koc_user = form.kocmission.koc.user if form.kocmission.koc else None
+        if koc_user and koc_user.email:
+            try:
+                send_tax_form_rejected_email(
+                    koc_user, form.kocmission.application.campaign.name, reject_reason,
+                )
+            except Exception:
+                logger.exception('勞報單退回通知信寄送失敗：form_id=%s', form.form_id)
+
+    return Response({
+        'success': True,
+        'err': '',
+        'form_id': form.form_id,
+        'status': form.status,
+    }, status=status.HTTP_200_OK)

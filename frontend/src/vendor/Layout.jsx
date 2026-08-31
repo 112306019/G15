@@ -1,5 +1,5 @@
-import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import VendorHeader from './VendorHeader';
 import { ToastProvider } from './components/ui/Toast';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
@@ -19,9 +19,39 @@ const titles = {
 
 export default function VendorLayout() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const key = Object.keys(titles).filter(k => k !== '/vendor').find(k => pathname.startsWith(k)) ?? '/vendor';
   const { title, sub } = titles[key] ?? titles['/vendor'];
   const isChat = pathname === '/vendor/chat';
+
+  // 閒置 30 分鐘自動登出：偵測常見的使用者活動事件，
+  // 只要有動作就重新計時，完全沒有活動達到門檻時間才觸發登出。
+  useEffect(() => {
+    const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
+    const vendorId = localStorage.getItem('vendor_id');
+    if (!vendorId) return;
+
+    let idleTimer = null;
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        localStorage.removeItem('vendor_id');
+        navigate('/vendor-login');
+      }, IDLE_LIMIT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetIdleTimer));
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetIdleTimer));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ToastProvider>

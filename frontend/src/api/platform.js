@@ -102,3 +102,49 @@ export const getAllMissions = (params = {}) => {
 export const getEarningsTracking = (params = {}) => {
   return api.get('/platform/mission/getEarningsTracking', { params })
 }
+
+
+// ======================================================
+// 客服聊天室
+// ======================================================
+
+// 取得聊天室列表（依廠商端／消費者端分類）
+export const getAdminSupportRooms = (participantType) => {
+  return api.get('/platform/support/getRooms', {
+    params: { participant_type: participantType }
+  })
+}
+
+// 取得指定聊天室的訊息
+export const getAdminSupportMessages = (roomId) => {
+  return api.get('/platform/support/getMessages', {
+    params: { room_id: roomId }
+  })
+}
+
+// 客服發送訊息
+export const sendAdminSupportMessage = (data) => {
+  return api.post('/platform/support/sendMessage', data)
+}
+
+// 將該聊天室的訊息標記為已讀
+export const markAdminSupportRead = (roomId) => {
+  return api.post('/platform/support/markRead', { room_id: roomId })
+}
+
+
+// ======================================================
+// 勞務報酬單（勞報單）審核
+// ======================================================
+
+// 取得勞報單列表（status 可省略，省略回全部）
+export const getAdminTaxForms = (status) => {
+  return api.get('/platform/taxForms/getlist', {
+    params: status ? { status } : {}
+  })
+}
+
+// 審核勞報單（通過或退回）
+export const reviewAdminTaxForm = (data) => {
+  return api.post('/platform/taxForms/review', data)
+}

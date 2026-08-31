@@ -9,3 +9,4 @@ gunicorn==26.0.0
 python-dotenv==1.2.2
 boto3
 requests==2.34.2
+pycryptodome==3.23.0

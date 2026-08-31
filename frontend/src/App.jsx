@@ -8,12 +8,14 @@ import HomePage from './koc/HomePage';
 import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
+import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
 import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
 import KocIntroPage from './shopping/KocIntroPage';import ChatPage from './koc/ChatPage';
+import TaxFormPrintView from './koc/TaxFormPrintView';
 
 // === Shopping 相關頁面 ===
 import ReviewPage from './shopping/ReviewPage';
@@ -26,6 +28,7 @@ import ECPayStoreResult from './shopping/ECPayStoreResult';
 import OrdersPage from './shopping/OrdersPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
+import SupportChatPage from './shopping/SupportChatPage';
 
 // === Authentication & Vendor ===
 import LoginPage from './authentication/LoginPage';
@@ -60,8 +63,10 @@ const VIEW_TO_PATH = {
   orders: '/orders',
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
+  tax_form_records: '/earnings/tax-forms',
   pending_detail: '/earnings/pending',
   favorites: '/favorites',
+  support: '/support',
   applyKoc: '/apply-koc',
   kocIntro: '/koc-intro',  review: '/review',
 };
@@ -266,6 +271,7 @@ function MainSystem() {
     return 'guest';
   });
   const [cartCount, setCartCount] = useState(0);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
 
   // 從後端同步購物車數量
   const syncCartCount = async () => {
@@ -280,6 +286,19 @@ function MainSystem() {
       }
     } catch (err) {
       console.error("購物車數量同步失敗", err);
+    }
+  };
+
+  // 從後端同步客服未讀訊息數
+  const syncSupportUnreadCount = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/user/support/unreadCount?user_id=${userId}`);
+      const data = await res.json();
+      setSupportUnreadCount(data.unread_count || 0);
+    } catch (err) {
+      console.error("客服未讀數同步失敗", err);
     }
   };
 
@@ -319,6 +338,7 @@ function MainSystem() {
       }
     };
     syncUserRole();
+    syncSupportUnreadCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -340,7 +360,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail',
-      'home', 'earnings', 'earnings_detail', 'pending_detail', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat'
+      'home', 'earnings', 'earnings_detail', 'pending_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -388,20 +408,10 @@ function MainSystem() {
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'pending_detail'].includes(view)) return 'earnings';
+    if (['earnings', 'earnings_detail', 'pending_detail', 'tax_form_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail'].includes(view)) return 'orders';
     return view;
   };
-
-  if (roleSyncing) {
-    return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">載入中...</p>
-      </div>
-    );
-  }
-
-  const showHeader = !['welcome', 'login'].includes(view);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -413,9 +423,50 @@ function MainSystem() {
     navigate('/welcome', { replace: true });
   };
 
+  // 閒置 30 分鐘自動登出：只在已登入狀態下才需要偵測，
+  // 監聽常見的使用者活動事件，只要有動作就重新計時，
+  // 完全沒有活動達到門檻時間才觸發登出。
+  useEffect(() => {
+    const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let idleTimer = null;
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        handleLogout();
+        setAppToast("閒置時間過長，已自動登出，請重新登入。");
+        setTimeout(() => setAppToast(""), 4000);
+      }, IDLE_LIMIT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetIdleTimer));
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetIdleTimer));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
+
+  if (roleSyncing) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">載入中...</p>
+      </div>
+    );
+  }
+
+  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print/');
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
-      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} onLogout={handleLogout} />}
+      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} supportUnreadCount={supportUnreadCount} onLogout={handleLogout} />}
 
       <Routes>
         <Route path="/" element={null} />
@@ -522,6 +573,8 @@ function MainSystem() {
 
         <Route path="/chat" element={<ChatPage />} />
 
+        <Route path="/tax-form-print/:kocmissionId" element={<TaxFormPrintView />} />
+
         {/* 下面這些頁面共用左側 Sidebar 的殼 */}
         <Route path="/home" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
@@ -580,13 +633,23 @@ function MainSystem() {
 
         <Route path="/earnings" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <EarningsPage onDetail={() => handleNavigate('earnings_detail')} onTrack={() => handleNavigate('pending_detail')} />
+            <EarningsPage
+              onDetail={() => handleNavigate('earnings_detail')}
+              onTrack={() => handleNavigate('pending_detail')}
+              onTaxFormRecords={() => handleNavigate('tax_form_records')}
+            />
           </ShellLayout>
         } />
 
         <Route path="/earnings/detail" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <EarningsDetailPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/tax-forms" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <TaxFormRecordsPage onBack={() => handleNavigate('earnings')} />
           </ShellLayout>
         } />
 
@@ -601,6 +664,14 @@ function MainSystem() {
             <FavoritesPage
               onAddToCart={() => setCartCount(c => c + 1)}
               onNavigate={handleNavigate}
+            />
+          </ShellLayout>
+        } />
+
+        <Route path="/support" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <SupportChatPage
+              onBack={() => { syncSupportUnreadCount(); handleNavigate('shop'); }}
             />
           </ShellLayout>
         } />

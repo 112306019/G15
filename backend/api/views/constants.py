@@ -67,6 +67,23 @@ def sync_expired_promoting_missions():
         'campaigns_closed': updated_campaigns
     }
 
+def restore_order_stock(order):
+    """
+    訂單取消時（不論是消費者直接取消還是廠商核准取消申請）把商品庫存加回去，
+    對稱於 consumer.create_order 下單當下扣庫存的邏輯。
+    """
+    from api.models import OrderItem
+
+    items = OrderItem.objects.filter(order=order).select_related('product')
+
+    for item in items:
+        product = item.product
+        if not product:
+            continue
+        product.stock = product.stock + item.quantity
+        product.save(update_fields=['stock'])
+
+
 # Submissions.status: 資料庫字串 <-> API 對外 integer
 SUBMISSION_STATUS_CODE_MAP = {
     'pending': 0,

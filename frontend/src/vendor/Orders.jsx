@@ -17,12 +17,14 @@ import {
   getVendorOrders,
   getVendorOrderDetail,
   updateVendorShipping,
+  respondVendorCancelRequest,
   createVendorLogistics,
   queryVendorLogistics,
   getVendorReturns,
   reviewVendorReturn,
   confirmVendorReturnReceived,
-  processVendorReturnRefund
+  processVendorReturnRefund,
+  uploadVendorInvoice,
 } from '../api/vendor'
 
 import {
@@ -60,6 +62,7 @@ const paymentLabels = {
   paid: '已付款',
   failed: '付款失敗',
   refunded: '已退款',
+  refund_pending: '待退款',
   cancelled: '已取消'
 }
 
@@ -217,6 +220,9 @@ function PaymentBadge({
   const isPaid =
     status === 'paid'
 
+  const isRefundPending =
+    status === 'refund_pending'
+
   return (
     <span
       className={cn(
@@ -227,7 +233,9 @@ function PaymentBadge({
         `,
         isPaid
           ? 'bg-green-50 text-green-700'
-          : 'bg-[#F8F9FA] text-[#8C8880]'
+          : isRefundPending
+            ? 'bg-amber-50 text-amber-700'
+            : 'bg-[#F8F9FA] text-[#8C8880]'
       )}
     >
       {paymentLabels[status] ||
@@ -248,18 +256,25 @@ function OrderDetailModal({
   onClose,
   onUpdateShipping,
   onCreateLogistics,
-  onQueryLogistics
+  onQueryLogistics,
+  onUploadInvoice,
+  vendorId
 }) {
   const [
     nextShippingStatus,
     setNextShippingStatus
   ] = useState('')
 
+  const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
+  const [invoiceUploading, setInvoiceUploading] = useState(false)
+  const [invoiceUploadMsg, setInvoiceUploadMsg] = useState('')
 
   useEffect(() => {
     setNextShippingStatus(
       order?.shippingStatus || ''
     )
+    setInvoiceNumberInput(order?.invoiceNumber || '')
+    setInvoiceUploadMsg('')
   }, [order])
 
 
@@ -348,6 +363,19 @@ function OrderDetailModal({
                 />
               </Card>
             </div>
+
+            {order.orderStatus === 'cancel_requested' && (
+              <div className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-200">
+                <div className="text-xs font-bold text-amber-700 mb-1.5">
+                  買家申請取消訂單
+                </div>
+                <div className="text-sm text-[#1A1A18]">
+                  {order.cancelReason
+                    ? `取消原因：${order.cancelReason}`
+                    : '買家未填寫取消原因'}
+                </div>
+              </div>
+            )}
 
 
             <Card className="overflow-hidden">
@@ -766,6 +794,63 @@ function OrderDetailModal({
                     </div>
                   )}
               </div>
+            </Card>
+
+
+            <Card className="p-6">
+              <div className="text-sm font-bold text-[#1A1A18] mb-4">
+                發票管理
+              </div>
+
+              {order.invoiceNumber ? (
+                <div className="text-sm">
+                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    發票號碼
+                  </div>
+                  <div className="font-bold text-[#1A1A18]">
+                    {order.invoiceNumber}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input
+                    type="text"
+                    value={invoiceNumberInput}
+                    onChange={event => setInvoiceNumberInput(event.target.value)}
+                    placeholder="請輸入發票號碼（例如 AB12345678）"
+                    className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+                  />
+                  <Button
+                    variant="brand"
+                    disabled={invoiceUploading}
+                    onClick={() =>
+                      onUploadInvoice(
+                        invoiceNumberInput,
+                        order.orderId,
+                        vendorId,
+                        setInvoiceUploading,
+                        setInvoiceUploadMsg
+                      )
+                    }
+                    className="gap-2"
+                  >
+                    {invoiceUploading ? (
+                      <>
+                        <Loader2 size={15} className="animate-spin" />
+                        上傳中...
+                      </>
+                    ) : (
+                      '上傳發票號碼'
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {invoiceUploadMsg && (
+                <div className="text-xs font-bold text-[#C8522A] mt-2">
+                  {invoiceUploadMsg}
+                </div>
+              )}
             </Card>
 
 
@@ -1395,6 +1480,11 @@ export default function Orders() {
   ] = useState(false)
 
   const [
+    cancelRespondingId,
+    setCancelRespondingId
+  ] = useState(null)
+
+  const [
     logisticsCreating,
     setLogisticsCreating
   ] = useState(false)
@@ -1466,11 +1556,17 @@ export default function Orders() {
             orderStatus:
               order.order_status,
 
+            cancelReason:
+              order.cancel_reason,
+
             paymentStatus:
               order.payment_status,
 
             shippingStatus:
               order.shipping_status,
+
+            invoiceNumber:
+              order.invoice_number || '',
 
             hasAddress:
               Boolean(order.has_address),
@@ -1639,11 +1735,17 @@ export default function Orders() {
         orderStatus:
           detail.order_status,
 
+        cancelReason:
+          detail.cancel_reason,
+
         paymentStatus:
           detail.payment_status,
 
         shippingStatus:
           detail.shipping_status,
+
+        invoiceNumber:
+          detail.invoice_number || '',
 
         addressId:
           detail.address_id,
@@ -1890,6 +1992,111 @@ export default function Orders() {
       )
     } finally {
       setShippingUpdating(false)
+    }
+  }
+
+  async function handleUploadInvoice(invoiceNumber, orderId, vendorId, setUploading, setMsg) {
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      setMsg('請輸入發票號碼')
+      return
+    }
+
+    try {
+      setUploading(true)
+      setMsg('')
+
+      const response = await uploadVendorInvoice({
+        vendor_id: vendorId,
+        order_id: orderId,
+        invoice_number: invoiceNumber.trim(),
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '上傳發票號碼失敗')
+      }
+
+      setOrders(previous =>
+        previous.map(order =>
+          order.orderId === orderId
+            ? { ...order, invoiceNumber: invoiceNumber.trim() }
+            : order
+        )
+      )
+
+      setSelectedOrder(previous =>
+        previous ? { ...previous, invoiceNumber: invoiceNumber.trim() } : previous
+      )
+
+      toast.success('發票號碼已上傳，已通知消費者')
+    } catch (error) {
+      const apiError = error.response?.data?.err
+      setMsg(
+        typeof apiError === 'string'
+          ? apiError
+          : error.message || '上傳發票號碼失敗'
+      )
+    } finally {
+      setUploading(false)
+    }
+  }
+
+
+  async function handleRespondCancelRequest(order, approve) {
+    const confirmed = await confirm({
+      title: approve
+        ? '核准這筆訂單的取消申請？'
+        : '拒絕這筆訂單的取消申請？',
+      description: approve
+        ? '核准後訂單將標記為已取消，商品庫存會加回去。'
+        : '拒絕後訂單會退回備貨中，繼續原本的出貨流程。',
+      confirmText: approve ? '核准取消' : '拒絕申請',
+    })
+
+    if (!confirmed) return
+
+    try {
+      setCancelRespondingId(order.orderId)
+
+      const response = await respondVendorCancelRequest({
+        vendor_id: vendorId,
+        order_id: order.orderId,
+        approve,
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '處理取消申請失敗')
+      }
+
+      const updatedOrderStatus = response.data?.order_status
+      const updatedShippingStatus = response.data?.shipping_status
+
+      setOrders(previous =>
+        previous.map(o =>
+          o.orderId === order.orderId
+            ? {
+                ...o,
+                orderStatus: updatedOrderStatus,
+                shippingStatus: updatedShippingStatus,
+              }
+            : o
+        )
+      )
+
+      toast.success(
+        approve ? '已核准取消，訂單狀態更新為已取消' : '已拒絕取消申請'
+      )
+    } catch (error) {
+      const apiError = error.response?.data?.err
+
+      toast.error(
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+            ? JSON.stringify(apiError)
+            : error.message || '處理取消申請失敗'
+      )
+    } finally {
+      setCancelRespondingId(null)
     }
   }
 
@@ -2462,6 +2669,43 @@ export default function Orders() {
                                 </span>
                               )}
                           </div>
+
+                          {order.orderStatus === 'cancel_requested' && (
+                            <div
+                              className="mt-2 flex flex-col items-start gap-1.5"
+                              onClick={event => event.stopPropagation()}
+                            >
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 whitespace-nowrap">
+                                買家申請取消訂單
+                              </span>
+
+                              {order.cancelReason && (
+                                <span className="text-[11px] text-[#8C8880] max-w-[200px] leading-snug">
+                                  取消原因：{order.cancelReason}
+                                </span>
+                              )}
+
+                              <div className="flex flex-nowrap items-center gap-1.5">
+                                <Button
+                                  variant="outline"
+                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
+                                  disabled={cancelRespondingId === order.orderId}
+                                  onClick={() => handleRespondCancelRequest(order, true)}
+                                >
+                                  核准
+                                </Button>
+
+                                <Button
+                                  variant="danger"
+                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
+                                  disabled={cancelRespondingId === order.orderId}
+                                  onClick={() => handleRespondCancelRequest(order, false)}
+                                >
+                                  拒絕
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </td>
 
                         <td className="p-5 text-sm font-medium text-[#8C8880] whitespace-nowrap">
@@ -2519,6 +2763,10 @@ export default function Orders() {
         onQueryLogistics={
           handleQueryLogistics
         }
+        onUploadInvoice={
+          handleUploadInvoice
+        }
+        vendorId={vendorId}
       />
     </div>
   )

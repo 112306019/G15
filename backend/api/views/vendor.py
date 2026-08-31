@@ -11,11 +11,12 @@ from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
-from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions
+from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
-from api.emails import send_vendor_email_verification_email
-from payments.services import get_order_payment_status
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
+
 from api.vendor_serializers import (
     VendorRegisterSerializer,
     VendorLoginSerializer,
@@ -1802,6 +1803,25 @@ def vendor_order_getlist(request):
         for item in order_items
     }
 
+    # 付款失敗（或形同失敗）的訂單不該出現在廠商的訂單管理裡，
+    # 跟消費者「我的訂單」用同一套判斷（is_payment_effectively_failed）。
+    orders_with_transactions = Order.objects.filter(
+        order_id__in=order_ids
+    ).prefetch_related("payment_transactions")
+
+    failed_order_ids = set()
+    for order in orders_with_transactions:
+        payment_tx = pick_relevant_payment(order.payment_transactions.all())
+        if payment_tx and is_payment_effectively_failed(payment_tx):
+            failed_order_ids.add(order.order_id)
+
+    order_items = [
+        item for item in order_items
+        if item.order_id not in failed_order_ids
+    ]
+
+    order_ids = order_ids - failed_order_ids
+
     shipment_by_order = {
         shipment.order_id: shipment
         for shipment in ShipmentInfo.objects.filter(
@@ -1825,6 +1845,8 @@ def vendor_order_getlist(request):
                 "order_status": order.order_status,
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
+                "cancel_reason": order.cancel_reason,
+                "invoice_number": order.invoice_number,
 
                 # 宅配才需要實際地址。
                 # CVS 即使 detail_address 是空字串，也不能被視為「缺少配送資訊」。
@@ -2130,6 +2152,14 @@ def vendor_order_get_detail(request):
 
     payment_tx = get_order_payment_status(order)
 
+    # 跟訂單列表一致：付款失敗（或形同失敗）的訂單不該讓廠商看到，
+    # 直接連結過來也視為找不到，而不是顯示一筆付款失敗的訂單。
+    if payment_tx and is_payment_effectively_failed(payment_tx):
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
     shipment = ShipmentInfo.objects.filter(
         order_id=order_id
     ).first()
@@ -2245,7 +2275,9 @@ def vendor_order_get_detail(request):
             "order_status": order.order_status,
             "payment_status": order.payment_status,
             "shipping_status": order.shipping_status,
+            "cancel_reason": order.cancel_reason,
             "address_id": order.address_id,
+            "invoice_number": order.invoice_number,
 
             # 原本收件資料保留
             "shipping_info": shipping_info,
@@ -2367,6 +2399,7 @@ def vendor_order_update_shipping(request):
             else None
         )
     }, status=status.HTTP_200_OK)
+
 
 
 # ==============================================================================
@@ -2614,6 +2647,89 @@ def vendor_return_confirm_received(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+def vendor_order_respond_cancel_request(request):
+    """
+    廠商核准或拒絕消費者在「備貨中」狀態發起的取消申請。
+
+    approve=True：訂單正式變成 cancelled，商品庫存加回去。
+    approve=False：訂單退回 pending，繼續原本的備貨/出貨流程，庫存不變。
+    """
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+    approve = request.data.get("approve")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not order_id:
+        return Response({
+            "success": False,
+            "err": "order_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if approve is None:
+        return Response({
+            "success": False,
+            "err": "approve is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    order_items = OrderItem.objects.filter(
+        order_id=order_id,
+        product__vendor_id=vendor_id
+    ).select_related("order", "product")
+
+    if not order_items.exists():
+        return Response({
+            "success": False,
+            "err": "Order not found or does not belong to this vendor"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order = order_items[0].order
+
+    if order.order_status != "cancel_requested":
+        return Response({
+            "success": False,
+            "err": "此訂單目前沒有待審核的取消申請"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    payment_tx = None
+
+    with transaction.atomic():
+        if approve:
+            order.order_status = "cancelled"
+            order.shipping_status = "cancelled"
+            order.save(update_fields=["order_status", "shipping_status"])
+
+            shipment = ShipmentInfo.objects.filter(order=order).first()
+            if shipment:
+                shipment.shipping_status = "cancelled"
+                shipment.save(update_fields=["shipping_status", "updated_at"])
+
+            restore_order_stock(order)
+
+            payment_tx = get_order_payment_status(order)
+            if payment_tx:
+                mark_payment_refund_pending(payment_tx)
+        else:
+            order.order_status = "pending"
+            order.cancel_rejected_at = timezone.now()
+            order.save(update_fields=["order_status", "cancel_rejected_at"])
+    return Response({
+        "success": True,
+        "err": "",
+        "order_id": str(order.order_id),
+        "order_status": order.order_status,
+        "shipping_status": order.shipping_status,
+        "cancel_rejected": bool(order.cancel_rejected_at),
+        "payment_status": payment_tx.status if payment_tx else None,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
 def vendor_return_process_refund(request):
     """
     執行整張訂單全額退款的「平台內部帳務」處理。
@@ -2736,6 +2852,49 @@ def vendor_return_process_refund(request):
             {"success": False, "err": f"退款帳務處理失敗：{error}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_upload_invoice(request):
+    """
+    廠商自行用綠界（或其他系統）開立發票後，回填發票號碼給平台。
+    平台收到後存進 Order，並寄信通知消費者；平台本身不代開發票，
+    不需要碰廠商的金流帳密。
+    URL: /vendor/order/uploadInvoice
+    """
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+    invoice_number = request.data.get("invoice_number")
+
+    if not vendor_id or not order_id or not invoice_number:
+        return Response({
+            "success": False,
+            "err": "vendor_id、order_id、invoice_number 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.select_related("user").get(order_id=order_id)
+    except Order.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的訂單"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order.invoice_number = invoice_number
+    order.invoice_uploaded_at = timezone.now()
+    order.save(update_fields=["invoice_number", "invoice_uploaded_at"])
+
+    try:
+        send_invoice_notification_email(order)
+    except Exception as e:
+        print(f"發票通知信寄送失敗（order_id={order_id}）: {e}")
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order_id": str(order.order_id),
+        "invoice_number": order.invoice_number
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

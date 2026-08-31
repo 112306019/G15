@@ -88,6 +88,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
   const [returnReason, setReturnReason] = useState("defective");
   const [returnDescription, setReturnDescription] = useState("");
   const [completingOrder, setCompletingOrder] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const token = localStorage.getItem("token");
 
@@ -124,7 +128,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
     fetchOrder();
   }, [orderId, token]);
-
 
   const userId = localStorage.getItem("userId");
 
@@ -217,7 +220,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
     }
   };
 
-
   const handleCompleteOrder = async () => {
     if (!orderId || !orderData || completingOrder) return;
 
@@ -258,6 +260,53 @@ export default function OrderDetailPage({ onBack, orderId }) {
     }
   };
 
+  const openCancelModal = () => {
+    setCancelError("");
+    setCancelReason("");
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      setCancelError("請填寫取消原因");
+      return;
+    }
+
+    setCancelError("");
+    setCancelSubmitting(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/consumer/order/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          user_id: orderData.User_id,
+          reason: cancelReason.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.err || "取消訂單失敗");
+      }
+
+      setOrderData((prev) => ({
+        ...prev,
+        order_status: data.order_status,
+        shipping_status: data.shipping_status,
+      }));
+      setCancelModalOpen(false);
+    } catch (err) {
+      setCancelError(err.message || "取消訂單失敗，請稍後再試");
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
   const shippingStatus = orderData?.shipping_status || "unshipped";
 
   const isCancelled =
@@ -289,6 +338,15 @@ export default function OrderDetailPage({ onBack, orderId }) {
   ];
 
   const totalAmount = orderData?.total_amount ?? 0;
+  const shippingFee = orderData?.shipping_fee ?? 0;
+
+  const items = orderData?.items || [];
+  const itemsSubtotal = items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+  const itemsRawTotal = items.reduce(
+    (sum, item) => sum + Number(item.Unit_price || 0) * Number(item.quantity || 0),
+    0
+  );
+  const couponDiscount = Math.max(0, itemsRawTotal - itemsSubtotal);
 
   const createdAt = orderData?.created_at
     ? new Date(orderData.created_at)
@@ -360,24 +418,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
       <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">
         訂單細節
       </h2>
-
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2.5rem] border border-[#E2DDD4] bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
-        <div>
-          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">
-            #{orderData.Order_id}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
-            <span>訂購於 {createdDate}</span>
-            <span>•</span>
-            <span>{createdTime}</span>
-          </div>
-        </div>
-
-        <div className="mt-4 md:mt-0 font-mono text-4xl font-black text-[#C8522A]">
-          {formatNTD(totalAmount)}
-        </div>
-      </div>
 
       <div className="mb-16 rounded-[2rem] border border-[#E2DDD4] bg-white px-6 py-8 shadow-sm">
         {isCancelled ? (
@@ -554,6 +594,61 @@ export default function OrderDetailPage({ onBack, orderId }) {
             </div>
           </div>
         )}
+
+        {!isCancelled && orderData.order_status === "cancel_requested" && (
+          <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+            <div className="text-sm font-bold text-[#9A6700]">
+              取消申請審核中
+            </div>
+
+            <div className="mt-1 text-xs text-[#8C8880]">
+              廠商已開始備貨，正在等待廠商確認是否同意取消
+            </div>
+          </div>
+        )}
+
+        {!isCancelled &&
+          orderData.order_status !== "cancel_requested" &&
+          orderData.cancel_rejected && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6 text-center">
+              <div className="text-sm font-bold text-[#C8522A]">
+                賣家已拒絕取消訂單
+              </div>
+
+              <div className="mt-1 text-xs text-[#8C8880]">
+                此訂單將依原訂流程繼續處理，無法再次申請取消
+              </div>
+            </div>
+          )}
+
+        {!isCancelled &&
+          !orderData.cancel_rejected &&
+          orderData.order_status === "pending" &&
+          (shippingStatus === "unshipped" || shippingStatus === "preparing") && (
+            <div className="mt-8 border-t border-[#E2DDD4] pt-6">
+              <div className="flex flex-col items-center justify-center gap-4 text-center">
+                <div>
+                  <div className="text-sm font-bold text-[#1A1A18]">
+                    {shippingStatus === "unshipped" ? "尚未開始備貨，可取消訂單" : "已開始備貨，取消需經廠商同意"}
+                  </div>
+
+                  {shippingStatus === "preparing" && (
+                    <div className="mt-1 text-xs text-[#8C8880]">
+                      送出申請後，需等待廠商核准才會正式取消
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={openCancelModal}
+                  className="rounded-full border border-[#C8522A] px-8 py-3 text-sm font-bold text-[#C8522A] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#FDF0ED] disabled:opacity-50"
+                >
+                  {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
+                </button>
+              </div>
+            </div>
+          )}
       </div>
 
 
@@ -653,10 +748,66 @@ export default function OrderDetailPage({ onBack, orderId }) {
         )}
       </div>
 
+      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
+        <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block" />
+          收件資訊
+        </h3>
+
+        <div className="space-y-4 text-sm font-medium">
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <UserRound size={15} />
+              收件人
+            </span>
+            <span className="text-[#1A1A18] font-bold">
+              {recipient?.recipient_name || "未填寫"}
+            </span>
+          </div>
+
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <Phone size={15} />
+              聯絡電話
+            </span>
+            <span className="text-[#1A1A18] font-bold">
+              {recipient?.phone || "未填寫"}
+            </span>
+          </div>
+
+          {isHome && (
+            <div className="flex items-start">
+              <span className="w-28 flex-shrink-0 text-[#8C8880]">
+                配送地址
+              </span>
+              <span className="text-[#1A1A18] font-bold leading-relaxed">
+                {getFullRecipientAddress(recipient) === "未提供" ? "未填寫" : getFullRecipientAddress(recipient)}
+              </span>
+            </div>
+          )}
+
+          <div className="flex">
+            <span className="w-28 text-[#8C8880]">付款狀態</span>
+            <span className="text-[#1A1A18] font-bold">
+              {orderData.payment_status === "paid" ? "已付款" : "未付款"}
+            </span>
+          </div>
+
+          {orderData.Promotion_code && (
+            <div className="flex">
+              <span className="w-28 text-[#8C8880]">優惠碼</span>
+              <span className="text-[#1A1A18] font-bold">
+                {orderData.Promotion_code}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm overflow-hidden">
         <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block" />
-          商品目錄
+          訂單資訊
         </h3>
 
         <div className="overflow-x-auto">
@@ -720,64 +871,60 @@ export default function OrderDetailPage({ onBack, orderId }) {
             </tbody>
           </table>
         </div>
-      </div>
 
-      <div className="rounded-[2rem] border border-[#E2DDD4] bg-[#F8F9FA] p-8 shadow-sm">
-        <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block" />
-          收件資訊
-        </h3>
-
-        <div className="space-y-4 text-sm font-medium">
-          <div className="flex items-start">
-            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
-              <UserRound size={15} />
-              收件人
-            </span>
-            <span className="text-[#1A1A18] font-bold">
-              {recipient?.recipient_name || "未填寫"}
+        <div className="mt-6 space-y-2 border-t border-[#E2DDD4] pt-6 text-sm font-medium">
+          <div className="flex items-center justify-between">
+            <span className="text-[#8C8880]">商品小計</span>
+            <span className="font-mono font-bold text-[#1A1A18]">
+              {formatNTD(itemsRawTotal)}
             </span>
           </div>
 
-          <div className="flex items-start">
-            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
-              <Phone size={15} />
-              聯絡電話
-            </span>
-            <span className="text-[#1A1A18] font-bold">
-              {recipient?.phone || "未填寫"}
-            </span>
-          </div>
-
-          {isHome && (
-            <div className="flex items-start">
-              <span className="w-28 flex-shrink-0 text-[#8C8880]">
-                配送地址
+          {couponDiscount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[#8C8880]">
+                優惠券折抵
+                {orderData.Promotion_code ? `（${orderData.Promotion_code}）` : ""}
               </span>
-              <span className="text-[#1A1A18] font-bold leading-relaxed">
-                {getFullRecipientAddress(recipient) === "未提供" ? "未填寫" : getFullRecipientAddress(recipient)}
+              <span className="font-mono font-bold text-[#C8522A]">
+                -{formatNTD(couponDiscount)}
               </span>
             </div>
           )}
 
-          <div className="flex">
-            <span className="w-28 text-[#8C8880]">付款狀態</span>
-            <span className="text-[#1A1A18] font-bold">
-              {orderData.payment_status === "paid" ? "已付款" : "未付款"}
+          <div className="flex items-center justify-between">
+            <span className="text-[#8C8880]">運費</span>
+            <span className="font-mono font-bold text-[#1A1A18]">
+              {formatNTD(shippingFee)}
             </span>
           </div>
 
-          {orderData.Promotion_code && (
-            <div className="flex">
-              <span className="w-28 text-[#8C8880]">優惠碼</span>
-              <span className="text-[#1A1A18] font-bold">
-                {orderData.Promotion_code}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center justify-end gap-3 border-t border-[#E2DDD4] pt-4 mt-2">
+            <span className="text-base font-bold text-[#1A1A18]">訂單金額：</span>
+            <span className="font-mono text-xl font-black text-[#C8522A]">
+              {formatNTD(totalAmount)}
+            </span>
+          </div>
         </div>
       </div>
 
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2rem] border border-[#E2DDD4] bg-white p-6 shadow-sm">
+        <div>
+          <div className="mb-2 font-mono text-base font-bold text-[#1A1A18]">
+            訂單編號：#{orderData.Order_id}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
+            <span>訂購於 {createdDate}</span>
+            <span>•</span>
+            <span>{createdTime}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 md:mt-0 font-mono text-xl font-black text-[#C8522A]">
+          {formatNTD(totalAmount)}
+        </div>
+      </div>
 
       {showReturnModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm">
@@ -823,6 +970,58 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 className="flex-[2] rounded-xl bg-[#1A1A18] py-3 text-sm font-bold text-white hover:bg-[#C8522A] disabled:opacity-50"
               >
                 {returnSubmitting ? "送出中..." : `確認申請 ${formatNTD(orderData.total_amount)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelModalOpen && (
+        <div
+          className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={() => !cancelSubmitting && setCancelModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">
+              {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
+            </h3>
+            <p className="text-xs font-bold text-[#8C8880] mb-4">
+              請告訴我們取消原因，方便我們了解並改善服務
+            </p>
+
+            <textarea
+              rows={4}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="請輸入取消原因"
+              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-3"
+            />
+
+            {cancelError && (
+              <div className="mb-3 text-xs font-bold text-[#C8522A]">
+                {cancelError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelModalOpen(false)}
+                disabled={cancelSubmitting}
+                className="flex-1 rounded-2xl border border-[#E2DDD4] py-3 text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
+              >
+                返回
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelOrder}
+                disabled={cancelSubmitting}
+                className="flex-1 rounded-2xl bg-[#C8522A] py-3 text-sm font-bold text-white transition-all hover:bg-[#A64220] disabled:opacity-50"
+              >
+                {cancelSubmitting ? "處理中..." : "確認送出"}
               </button>
             </div>
           </div>

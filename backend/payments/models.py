@@ -11,11 +11,16 @@ class PaymentTransaction(models.Model):
     STATUS_PENDING = "pending"
     STATUS_PAID = "paid"
     STATUS_FAILED = "failed"
+    # 訂單取消時如果這筆已經付款成功，目前系統還沒有自動退款（DoAction 只能在
+    # ECPay 正式環境跑，測試帳號無法驗證），先標成「待退款」讓廠商/客服知道
+    # 要去綠界後台手動處理，之後正式帳號申請下來、DoAction 串好了再改成自動退款。
+    STATUS_REFUND_PENDING = "refund_pending"
 
     STATUS_CHOICES = [
         (STATUS_PENDING, "待付款"),
         (STATUS_PAID, "付款成功"),
         (STATUS_FAILED, "付款失敗"),
+        (STATUS_REFUND_PENDING, "待退款"),
     ]
 
     payment_transaction_id = models.BigAutoField(primary_key=True)

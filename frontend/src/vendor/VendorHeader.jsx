@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Star, User, MessageCircle, Settings, LogOut } from 'lucide-react';
+import { User, MessageCircle, Headset, Settings, LogOut } from 'lucide-react';
+
+import { getVendorSupportUnreadCount } from '../api/vendor';
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 export default function VendorHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const vendorId = localStorage.getItem('vendor_id');
+    if (!vendorId) return;
+
+    getVendorSupportUnreadCount(vendorId)
+      .then(response => setSupportUnreadCount(response.data?.unread_count || 0))
+      .catch(err => console.error('客服未讀數載入失敗：', err));
+  }, [location.pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('vendor_id');
@@ -28,15 +42,20 @@ export default function VendorHeader() {
     <header className="bg-white border-b border-[#E2DDD4] px-12 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
       <div className="flex items-center gap-12">
         
-        {/* LOGO (加入 Hover 動效) */}
         <div 
-          className="flex items-center gap-2 cursor-pointer transition-colors group" 
+          className="flex items-center gap-3 cursor-pointer transition-all hover:scale-[1.02] hover:opacity-80" 
           onClick={() => navigate('/vendor')}
         >
-          <Star size={20} className="text-[#1A1A18] fill-[#1A1A18] group-hover:text-[#C8522A] group-hover:fill-[#C8522A] transition-colors" />
-          <span className="font-black tracking-widest text-[#1A1A18] uppercase text-lg group-hover:text-[#C8522A] transition-colors">
-            LOGO
-          </span>
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="h-9 w-9 object-cover rounded-full shadow-sm" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-6 w-auto object-contain mix-blend-multiply translate-y-0.5" 
+          />
         </div>
         
         {/* 上方選單 (套用焦糖橘與拿鐵色系) */}
@@ -65,7 +84,7 @@ export default function VendorHeader() {
       <div className="flex items-center gap-4">
         
         {/* 聊天室按鈕 */}
-        <button 
+        <button
           onClick={() => navigate('/vendor/chat')}
           className="relative p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
           title="聊天室"
@@ -73,6 +92,20 @@ export default function VendorHeader() {
           <MessageCircle size={20} />
           {/* 小紅點提示 (套用焦糖橘色) */}
           <span className="absolute top-2 right-2 w-2 h-2 bg-[#C8522A] rounded-full border border-white shadow-sm" />
+        </button>
+
+        {/* 客服按鈕 */}
+        <button
+          onClick={() => navigate('/vendor/support')}
+          className="relative p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
+          title="客服諮詢"
+        >
+          <Headset size={20} />
+          {supportUnreadCount > 0 && (
+            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+              {supportUnreadCount}
+            </span>
+          )}
         </button>
 
         {/* 頭像按鈕 (hover 顯示設定/登出選單) */}

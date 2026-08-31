@@ -37,7 +37,10 @@ from .views.platform import (
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
     admin_resolve_return_dispute,
+    admin_get_tax_forms,
+    admin_review_tax_form,
 )
+
 from .views.consumer import (
     get_products,
     get_product_detail,
@@ -61,11 +64,13 @@ from .views.consumer import (
     create_return_request,
     get_return_requests,
     dispute_return_request,
+    cancel_order,
 )
 
 from .views import koc, vendor
 from .views.vendor import vendor_upload_image
 from .views import shipping
+from .views import support
 
 urlpatterns = [
     # koc
@@ -79,6 +84,8 @@ urlpatterns = [
     path('koc/mission/getDetail', views.mission_get_detail, name='koc-mission-get-detail'),
     path('koc/mission/getlist', views.get_mission_list, name='koc-mission-get-list'),
     path('koc/mission/getStageCounts', views.get_mission_stage_counts, name='koc-mission-get-stage-counts'),
+    path('koc/mission/submitTaxFormLink', views.submit_tax_form_link, name='koc-mission-submit-tax-form-link'),
+    path('koc/mission/taxFormData', views.get_tax_form_data, name='koc-mission-tax-form-data'),
     path('koc/application/remove/<int:application_id>', views.remove_application, name='koc-application-remove'),
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
@@ -132,6 +139,8 @@ urlpatterns = [
     path('platform/payments', get_payments, name='platform-payments'),
     path('platform/transactions', get_transactions, name='platform-transactions'),
     path('platform/audit/logs', get_audit_logs, name='platform-audit-logs'),
+    path('platform/taxForms/getlist', admin_get_tax_forms, name='platform-tax-forms-get-list'),
+    path('platform/taxForms/review', admin_review_tax_form, name='platform-tax-forms-review'),
     # consumer - 商品
     path('consumer/products', get_products, name='get-products'),
     path('consumer/product/detail', get_product_detail, name='get-product-detail'),
@@ -158,7 +167,8 @@ urlpatterns = [
     path('consumer/payment/update', update_payment, name='update-payment'),
     path('consumer/payments/result', payment_result, name='payment-result'),
     path('consumer/order/update', update_order_status, name='update-order-status'),
-    
+    path('consumer/order/cancel', cancel_order, name='cancel-order'),
+
     path('consumer/product/campaign', get_product_campaign, name='get-product-campaign'),
 
     # consumer - 退貨退款
@@ -169,6 +179,8 @@ urlpatterns = [
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
     path('vendor/auth/login', vendor.vendor_login, name='vendor-login'),
+    path('vendor/auth/verifyEmail', vendor.vendor_verify_email, name='vendor-verify-email'),
+    path('vendor/auth/resendVerification', vendor.vendor_resend_verification_code, name='vendor-resend-verification'),
     path('vendor/profile/update', vendor.vendor_profile_update, name='vendor-profile-update'),
     path('vendor/profile/get', vendor.vendor_profile_get, name='vendor-profile-get'),
 
@@ -199,6 +211,8 @@ urlpatterns = [
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
     path('vendor/order/getDetail', vendor.vendor_order_get_detail, name='vendor-order-get-detail'),
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
+    path('vendor/order/respondCancelRequest', vendor.vendor_order_respond_cancel_request, name='vendor-order-respond-cancel-request'),
+    path('vendor/order/uploadInvoice', vendor.vendor_order_upload_invoice, name='vendor-order-upload-invoice'),
 
     # Vendor 退貨退款 API
     path('vendor/return/getlist', vendor.vendor_return_getlist, name='vendor-return-getlist'),
@@ -225,6 +239,24 @@ urlpatterns = [
     # Vendor 分析 API
     path('vendor/analytics/overview', vendor.vendor_analytics_overview, name='vendor-analytics-overview'),
     path('vendor/analytics/productPerformance', vendor.vendor_product_performance, name='vendor-product-performance'),
+
+    # Vendor 客服聊天室 API
+    path('vendor/support/getOrCreateRoom', support.vendor_support_get_or_create_room, name='vendor-support-get-or-create-room'),
+    path('vendor/support/getMessages', support.vendor_support_get_messages, name='vendor-support-get-messages'),
+    path('vendor/support/sendMessage', support.vendor_support_send_message, name='vendor-support-send-message'),
+    path('vendor/support/unreadCount', support.vendor_support_unread_count, name='vendor-support-unread-count'),
+
+    # 消費者 / KOC 客服聊天室 API（共用同一組 User 帳號）
+    path('user/support/getOrCreateRoom', support.user_support_get_or_create_room, name='user-support-get-or-create-room'),
+    path('user/support/getMessages', support.user_support_get_messages, name='user-support-get-messages'),
+    path('user/support/sendMessage', support.user_support_send_message, name='user-support-send-message'),
+    path('user/support/unreadCount', support.user_support_unread_count, name='user-support-unread-count'),
+
+    # 平台客服聊天室 API
+    path('platform/support/getRooms', support.admin_support_get_rooms, name='admin-support-get-rooms'),
+    path('platform/support/getMessages', support.admin_support_get_messages, name='admin-support-get-messages'),
+    path('platform/support/sendMessage', support.admin_support_send_message, name='admin-support-send-message'),
+    path('platform/support/markRead', support.admin_support_mark_read, name='admin-support-mark-read'),
 
     # Admin API
     # Platform Admin 平台端 API
