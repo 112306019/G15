@@ -1473,10 +1473,12 @@ def get_analytics_detail(request):
         })
 
     # 直接從 Earnings 表加總這個任務(kocmission)的分潤，
-    # 不用 coupon.total_commission 這個快取計數欄位，避免兩邊資料不同步
+    # 不用 coupon.total_commission 這個快取計數欄位，避免兩邊資料不同步。
+    # 要排除 status='cancelled'——這是訂單全額退款後被收回的分潤，
+    # 不能算進 KOC 自己看到的總分潤裡，不然退貨後這個數字還是虛高。
     mission_commission = Earnings.objects.filter(
         kocmission=mission
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(status='cancelled').aggregate(total=Sum('amount'))['total'] or 0
 
     return Response({
         "success": True,

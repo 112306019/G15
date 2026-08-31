@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from api.models import Admins, User, PasswordResetCode, EmailVerificationCode, LoginHistory
+from api.models import User, PasswordResetCode, EmailVerificationCode, LoginHistory
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
 from api.emails import send_password_reset_email, send_email_verification_email
@@ -272,54 +272,6 @@ def user_login(request):
         'token': str(refresh.access_token),
     }, status=status.HTTP_200_OK)
 
-
-
-
-
-## 平台管理員登入
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def admin_login(request):
-    email = request.data.get('Email')
-    password = request.data.get('Password')
-
-    # 驗證必填欄位
-    if not email or not password:
-        return Response(
-            {'success': False, 'err': 'Email 和 Password 為必填'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    # 查找管理員
-    try:
-        admin = Admins.objects.get(email=email)
-    except Admins.DoesNotExist:
-        return Response(
-            {'success': False, 'err': '帳號或密碼錯誤'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-    # 驗證密碼（目前用明文比對，之後可改成 check_password）
-    if admin.password != password:
-        return Response(
-            {'success': False, 'err': '帳號或密碼錯誤'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
-    # 更新最後登入時間
-    admin.last_login_at = timezone.now()
-    admin.save()
-
-    return Response({
-        'success': True,
-        'Admin_id': admin.admin_id,
-        'Name': admin.name,
-        'Email': admin.email,
-        'Password': admin.password,
-        'Role': admin.role,
-        'Status': admin.status,
-        'Last_login_at': admin.last_login_at,
-    }, status=status.HTTP_200_OK)
 
 
 ## 忘記密碼：寄送驗證碼到使用者信箱

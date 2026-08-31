@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+import { Image as ImageIcon, CheckCircle2, PackageCheck, Info } from 'lucide-react';
 import api from '../api/index';
 
 export default function ApplyPage() {
+  const user_id = localStorage.getItem('userId');
+  const koc_id = localStorage.getItem('kocId');
   const [activeTab, setActiveTab] = useState('pending');
   const [showModal, setShowModal] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
@@ -17,6 +19,13 @@ export default function ApplyPage() {
 
     const fetchData = async () => {
       setLoading(true);
+
+      if (!user_id) {
+        setError('找不到登入資訊，請重新登入後再試');
+        setLoading(false);
+        return;
+      }
+
       try {
         const [availableRes, appliedRes] = await Promise.all([
           api.get('/koc/application/getAvailableList', {
@@ -57,9 +66,14 @@ export default function ApplyPage() {
 
     fetchData();
     return () => controller.abort();
-  }, []);
+  }, [user_id]);
 
   const handleApply = async (product) => {
+    if (!koc_id) {
+      alert('找不到 KOC 身分資訊，請重新登入或重新切換 KOC 身分後再試');
+      return;
+    }
+
     try {
       const res = await api.post('/koc/application/applyMission', {
         koc_id: koc_id,
@@ -95,6 +109,21 @@ export default function ApplyPage() {
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
       <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">代言申請區</h2>
+
+      <div className="mb-8 rounded-[1.5rem] border border-[#E2DDD4] bg-[#F8F9FA] px-6 py-5">
+        <div className="flex items-start gap-4">
+          <div className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#FDF0ED] text-[#C8522A]">
+            <PackageCheck size={20} />
+          </div>
+          <div>
+            <div className="font-bold text-[#1A1A18]">完成訂單後，即可解鎖對應商品的代言任務</div>
+            <div className="mt-1 text-sm leading-relaxed text-[#8C8880]">
+              商品送達後，請先到「我的訂單」確認收貨並完成訂單；系統確認你已收到商品後，
+              該商品目前可申請的代言活動才會出現在「待申請」列表。
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 按鈕組：一開始就渲染，使用者可以自由切換 */}
       <div className="flex gap-4 mb-10">
@@ -174,8 +203,26 @@ export default function ApplyPage() {
             ))
           ) : (
             /* 狀態 3：載入完畢且確實「沒有資料」才顯示 */
-            <div className="px-10 py-16 text-center text-[#8C8880] font-bold">
-              目前沒有相關紀錄
+            <div className="px-10 py-16 text-center">
+              {activeTab === 'pending' ? (
+                <div className="mx-auto max-w-lg">
+                  <Info size={28} className="mx-auto mb-3 text-[#C8522A]" />
+                  <div className="font-bold text-[#1A1A18]">目前沒有可申請的代言任務</div>
+                  <div className="mt-2 text-sm font-medium leading-relaxed text-[#8C8880]">
+                    如果你已經購買商品，請確認對應訂單是否已完成。
+                    完成訂單後，符合資格且仍在招募期間的代言任務才會出現在這裡。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => window.location.assign('/orders')}
+                    className="mt-5 rounded-full border border-[#1A1A18] bg-white px-6 py-2.5 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#1A1A18] hover:text-white"
+                  >
+                    前往我的訂單
+                  </button>
+                </div>
+              ) : (
+                <div className="font-bold text-[#8C8880]">目前沒有已申請紀錄</div>
+              )}
             </div>
           )}
         </div>

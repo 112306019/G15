@@ -20,7 +20,11 @@ import {
   respondVendorCancelRequest,
   createVendorLogistics,
   queryVendorLogistics,
-  uploadVendorInvoice
+  getVendorReturns,
+  reviewVendorReturn,
+  confirmVendorReturnReceived,
+  processVendorReturnRefund,
+  uploadVendorInvoice,
 } from '../api/vendor'
 
 import {
@@ -929,6 +933,513 @@ function OrderDetailModal({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+
+
+const RETURN_STATUS_LABELS = {
+  requested: '待審核',
+  approved: '已同意退貨',
+  rejected: '已拒絕',
+  disputed: '平台爭議處理中',
+  returning: '商品退回中',
+  received: '已收到退貨',
+  refunding: '退款處理中',
+  refunded: '退款完成',
+  cancelled: '已取消',
+}
+
+const RETURN_REASON_LABELS = {
+  defective: '商品瑕疵',
+  mismatched: '商品與描述不符',
+  wrong_size: '尺寸不合',
+  no_longer_needed: '不符合需求',
+  other: '其他',
+}
+
+
+const VENDOR_REJECT_REASON_OPTIONS = [
+  {
+    value: 'exception',
+    label: '商品屬依法排除七日解除權之例外'
+  },
+  {
+    value: 'damaged',
+    label: '商品有非必要檢查造成的毀損或變更'
+  },
+  {
+    value: 'invalid_info',
+    label: '訂單／退貨申請資料不符'
+  },
+  {
+    value: 'expired',
+    label: '已超過平台可申請退貨期限'
+  },
+  {
+    value: 'other',
+    label: '其他'
+  }
+]
+
+function ReturnManagementPanel({ vendorId }) {
+  const { toast } = useToast()
+  const confirm = useConfirm()
+  const [returns, setReturns] = useState([])
+  const [loadingReturns, setLoadingReturns] = useState(true)
+  const [actingId, setActingId] = useState(null)
+  const [rejectModalOpen, setRejectModalOpen] = useState(false)
+  const [rejectTarget, setRejectTarget] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectDescription, setRejectDescription] = useState('')
+
+  const loadReturns = async () => {
+    if (!vendorId) return
+    try {
+      setLoadingReturns(true)
+      const response = await getVendorReturns(vendorId)
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '退貨申請載入失敗')
+      }
+      setReturns(Array.isArray(response.data) ? response.data : [])
+    } catch (error) {
+      const apiError = error.response?.data?.err
+      toast.error(
+        typeof apiError === 'string'
+          ? apiError
+          : error.message || '退貨申請載入失敗'
+      )
+    } finally {
+      setLoadingReturns(false)
+    }
+  }
+
+  useEffect(() => {
+    loadReturns()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorId])
+
+  const reviewReturn = async (item, action) => {
+    if (action === 'reject') {
+      setRejectTarget(item)
+      setRejectReason('')
+      setRejectDescription('')
+      setRejectModalOpen(true)
+      return
+    }
+
+    const ok = await confirm({
+      title: '同意這筆整單退貨？',
+      description:
+        '同意後，消費者將進入商品退回流程。',
+      confirmText: '同意退貨',
+    })
+
+    if (!ok) return
+
+    try {
+      setActingId(item.return_id)
+
+      const response = await reviewVendorReturn({
+        vendor_id: vendorId,
+        return_id: item.return_id,
+        action: 'approve',
+        vendor_note: '',
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(
+          response.data.err || '處理失敗'
+        )
+      }
+
+      toast.success('已同意退貨申請')
+      await loadReturns()
+    } catch (error) {
+      toast.error(
+        error.response?.data?.err ||
+        error.message ||
+        '處理失敗'
+      )
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const closeRejectModal = () => {
+    if (actingId) return
+
+    setRejectModalOpen(false)
+    setRejectTarget(null)
+    setRejectReason('')
+    setRejectDescription('')
+  }
+
+  const submitRejectReturn = async () => {
+    if (!rejectTarget) return
+
+    if (!rejectReason) {
+      toast.error('請先選擇拒絕原因')
+      return
+    }
+
+    if (
+      rejectReason === 'other' &&
+      !rejectDescription.trim()
+    ) {
+      toast.error('選擇「其他」時請填寫補充說明')
+      return
+    }
+
+    const selectedReason =
+      VENDOR_REJECT_REASON_OPTIONS.find(
+        item => item.value === rejectReason
+      )
+
+    const vendorNote = [
+      `拒絕原因：${selectedReason?.label || rejectReason}`,
+      rejectDescription.trim()
+        ? `補充說明：${rejectDescription.trim()}`
+        : ''
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    const ok = await confirm({
+      title: '確認提出拒絕？',
+      description:
+        '拒絕理由會提供給消費者查看；消費者之後仍可提出爭議，由平台管理員判定。',
+      confirmText: '確認提出拒絕',
+    })
+
+    if (!ok) return
+
+    try {
+      setActingId(rejectTarget.return_id)
+
+      const response = await reviewVendorReturn({
+        vendor_id: vendorId,
+        return_id: rejectTarget.return_id,
+        action: 'reject',
+        vendor_note: vendorNote,
+      })
+
+      if (response.data?.success === false) {
+        throw new Error(
+          response.data.err || '拒絕退貨失敗'
+        )
+      }
+
+      toast.success('已提出拒絕')
+      setRejectModalOpen(false)
+      setRejectTarget(null)
+      setRejectReason('')
+      setRejectDescription('')
+      await loadReturns()
+    } catch (error) {
+      toast.error(
+        error.response?.data?.err ||
+        error.message ||
+        '拒絕退貨失敗'
+      )
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const confirmReceived = async (item) => {
+    const ok = await confirm({
+      title: '確認已收到退回商品？',
+      description: '確認後此案件會進入可執行退款階段。',
+      confirmText: '確認收到',
+    })
+    if (!ok) return
+
+    try {
+      setActingId(item.return_id)
+      const response = await confirmVendorReturnReceived({
+        vendor_id: vendorId,
+        return_id: item.return_id,
+      })
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '確認收貨失敗')
+      }
+      toast.success('已確認收到退回商品')
+      await loadReturns()
+    } catch (error) {
+      toast.error(error.response?.data?.err || error.message || '確認收貨失敗')
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const processRefund = async (item) => {
+    const ok = await confirm({
+      title: `執行整張訂單全額退款 NT$ ${Number(item.requested_amount || 0).toLocaleString()}？`,
+      description:
+        '此版本僅支援整張訂單全額退款。若尚未串接綠界自動退款 API，請先確認外部退款作業，再執行平台內部帳務收回。',
+      confirmText: '執行全額退款',
+    })
+    if (!ok) return
+
+    try {
+      setActingId(item.return_id)
+      const response = await processVendorReturnRefund({
+        vendor_id: vendorId,
+        return_id: item.return_id,
+      })
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '退款處理失敗')
+      }
+      toast.success('退款帳務已完成')
+      await loadReturns()
+    } catch (error) {
+      toast.error(error.response?.data?.err || error.message || '退款處理失敗')
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const activeReturns = returns.filter(item => item.status !== 'cancelled')
+
+  return (
+    <div className="bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden">
+      <div className="px-7 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-serif font-black text-[#1A1A18]">退貨退款管理</h2>
+          <p className="text-xs text-[#8C8880] font-medium mt-1">
+            第一版僅支援單一廠商訂單的整張訂單全額退貨退款
+          </p>
+        </div>
+        <span className="text-xs font-bold bg-white border border-[#E2DDD4] rounded-full px-3 py-1.5 text-[#8C8880]">
+          {activeReturns.length} 筆
+        </span>
+      </div>
+
+      {loadingReturns ? (
+        <div className="py-12 text-center text-sm font-bold text-[#8C8880]">
+          <Loader2 size={16} className="inline mr-2 animate-spin" />
+          退貨申請載入中...
+        </div>
+      ) : activeReturns.length === 0 ? (
+        <div className="py-12 text-center text-sm font-bold text-[#8C8880]">
+          目前沒有退貨退款申請
+        </div>
+      ) : (
+        <div className="divide-y divide-[#E2DDD4]">
+          {activeReturns.map(item => (
+            <div key={item.return_id} className="px-7 py-5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-mono font-bold text-[#1A1A18]">
+                      訂單 {item.order_id}
+                    </span>
+                    <span className="text-[11px] font-bold rounded-full bg-[#FDF0ED] text-[#C8522A] px-3 py-1">
+                      {RETURN_STATUS_LABELS[item.status] || item.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-[#8C8880] space-y-1">
+                    <div>
+                      原因：{RETURN_REASON_LABELS[item.reason] || item.reason}
+                      {item.description ? `｜${item.description}` : ''}
+                    </div>
+                    <div>
+                      申請退款：NT$ {Number(item.requested_amount || 0).toLocaleString()}
+                      {item.refunded_amount != null
+                        ? `｜已退款 NT$ ${Number(item.refunded_amount).toLocaleString()}`
+                        : ''}
+                    </div>
+                    <div>消費者：{item.user_id || '—'}</div>
+
+                    {item.vendor_note && (
+                      <div className="mt-2 rounded-xl bg-[#F8F9FA] border border-[#E2DDD4] px-4 py-3 text-[#1A1A18] whitespace-pre-line">
+                        <span className="font-bold">廠商處理說明：</span>
+                        {' '}
+                        {item.vendor_note}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {item.status === 'requested' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={actingId === item.return_id}
+                        onClick={() => reviewReturn(item, 'reject')}
+                      >
+                        提出拒絕
+                      </Button>
+                      <Button
+                        variant="brand"
+                        disabled={actingId === item.return_id}
+                        onClick={() => reviewReturn(item, 'approve')}
+                      >
+                        同意退貨
+                      </Button>
+                    </>
+                  )}
+
+                  {['approved', 'returning'].includes(item.status) && (
+                    <Button
+                      variant="brand"
+                      disabled={actingId === item.return_id}
+                      onClick={() => confirmReceived(item)}
+                    >
+                      確認收到退貨
+                    </Button>
+                  )}
+
+                  {item.status === 'received' && (
+                    <Button
+                      variant="brand"
+                      disabled={actingId === item.return_id}
+                      onClick={() => processRefund(item)}
+                    >
+                      執行全額退款
+                    </Button>
+                  )}
+
+                  {item.status === 'disputed' && (
+                    <span className="text-xs font-bold text-[#C8522A] bg-[#FDF0ED] rounded-xl px-4 py-3">
+                      等待平台判定
+                    </span>
+                  )}
+
+                  {item.status === 'refunded' && (
+                    <span className="text-xs font-bold text-green-700 bg-green-50 rounded-xl px-4 py-3">
+                      退款完成
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {rejectModalOpen && rejectTarget && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+            onClick={closeRejectModal}
+          />
+
+          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-serif font-black text-[#1A1A18]">
+                  提出退貨拒絕
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[#8C8880]">
+                  請提供具體拒絕依據。拒絕後，消費者仍可提出爭議並交由平台審核。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeRejectModal}
+                disabled={Boolean(actingId)}
+                className="shrink-0 rounded-full p-2 text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-xl bg-[#F8F9FA] px-4 py-3 text-xs font-mono font-bold text-[#8C8880] break-all">
+              訂單 {rejectTarget.order_id}
+            </div>
+
+            <label className="mt-6 block text-sm font-bold text-[#1A1A18]">
+              拒絕原因
+              <span className="ml-1 text-[#C8522A]">*</span>
+            </label>
+
+            <select
+              value={rejectReason}
+              onChange={event =>
+                setRejectReason(event.target.value)
+              }
+              className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+            >
+              <option value="">請選擇拒絕原因</option>
+
+              {VENDOR_REJECT_REASON_OPTIONS.map(
+                item => (
+                  <option
+                    key={item.value}
+                    value={item.value}
+                  >
+                    {item.label}
+                  </option>
+                )
+              )}
+            </select>
+
+            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">
+              補充說明
+              {rejectReason === 'other' && (
+                <span className="ml-1 text-[#C8522A]">*</span>
+              )}
+            </label>
+
+            <textarea
+              value={rejectDescription}
+              onChange={event =>
+                setRejectDescription(
+                  event.target.value
+                )
+              }
+              rows={4}
+              placeholder="請說明拒絕退貨的具體原因或商品狀況..."
+              className="mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+            />
+
+            <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#FFF8E7] px-4 py-3 text-xs leading-relaxed text-[#9A6700]">
+              <AlertTriangle
+                size={15}
+                className="mt-0.5 shrink-0"
+              />
+              廠商不應任意拒絕符合退貨資格的申請；此處的理由將保留供消費者與平台後續爭議審核。
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                disabled={Boolean(actingId)}
+                onClick={closeRejectModal}
+                className="flex-1"
+              >
+                取消
+              </Button>
+
+              <Button
+                variant="danger"
+                disabled={
+                  Boolean(actingId) ||
+                  !rejectReason ||
+                  (
+                    rejectReason === 'other' &&
+                    !rejectDescription.trim()
+                  )
+                }
+                onClick={submitRejectReturn}
+                className="flex-[2] gap-2"
+              >
+                {actingId === rejectTarget.return_id && (
+                  <Loader2
+                    size={15}
+                    className="animate-spin"
+                  />
+                )}
+                確認提出拒絕
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1876,6 +2387,8 @@ export default function Orders() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
+
+      <ReturnManagementPanel vendorId={vendorId} />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full overflow-x-auto">

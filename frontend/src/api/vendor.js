@@ -10,7 +10,7 @@ export const loginVendor = (data) => {
   return api.post('/vendor/auth/login', data)
 }
 
-// 廠商註冊信箱驗證：輸入驗證碼確認信箱真的存在
+// 廠商註冊信箱驗證
 export const verifyVendorEmail = (data) => {
   return api.post('/vendor/auth/verifyEmail', data)
 }
@@ -20,7 +20,10 @@ export const resendVendorVerification = (data) => {
   return api.post('/vendor/auth/resendVerification', data)
 }
 
-// 更新廠商資料
+// ======================================================
+// 廠商個人資料
+// ======================================================
+
 export const getVendorProfile = (vendorId) => {
   return api.get('/vendor/profile/get', {
     params: {
@@ -32,6 +35,10 @@ export const getVendorProfile = (vendorId) => {
 export const updateVendorProfile = (data) => {
   return api.post('/vendor/profile/update', data)
 }
+
+// ======================================================
+// 商品
+// ======================================================
 
 // 獲取商品清單
 export const getVendorProducts = (vendorId, status) => {
@@ -53,14 +60,19 @@ export const updateVendorProduct = (data) => {
   return api.post('/vendor/product/update', data)
 }
 
-export const deleteVendorProduct = data =>
-  api.post('/vendor/product/delete', data)
+// 刪除商品
+export const deleteVendorProduct = (data) => {
+  return api.post('/vendor/product/delete', data)
+}
 
 // 修改商品狀態
 export const updateVendorProductStatus = (data) => {
   return api.post('/vendor/product/updateStatus', data)
 }
 
+// ======================================================
+// 活動 / Campaign
+// ======================================================
 
 // 獲取活動清單
 export const getVendorCampaigns = (vendorId, status) => {
@@ -82,9 +94,14 @@ export const updateVendorCampaign = (data) => {
   return api.post('/vendor/campaign/update', data)
 }
 
-//刪除活動草稿
-export const deleteVendorCampaign = data =>
-  api.post('/vendor/campaign/delete', data)
+// 刪除活動草稿
+export const deleteVendorCampaign = (data) => {
+  return api.post('/vendor/campaign/delete', data)
+}
+
+// ======================================================
+// KOC 報名
+// ======================================================
 
 // 獲取 KOC 報名清單
 export const getVendorApplications = (
@@ -93,7 +110,7 @@ export const getVendorApplications = (
   applicationStatus = ''
 ) => {
   const params = {
-    vendor_id: vendorId
+    vendor_id: vendorId,
   }
 
   if (campaignId) {
@@ -105,7 +122,7 @@ export const getVendorApplications = (
   }
 
   return api.get('/vendor/application/getlist', {
-    params
+    params,
   })
 }
 
@@ -114,34 +131,39 @@ export const reviewVendorApplication = (data) => {
   return api.post('/vendor/application/review', data)
 }
 
+// ======================================================
+// 投稿 / 任務成果
+// ======================================================
+
 // 獲取投稿內容
 export const getVendorSubmissions = (
   vendorId,
   submissionType = ''
 ) => {
   const params = {
-    vendor_id: vendorId
+    vendor_id: vendorId,
   }
 
   if (submissionType) {
-    params.submission_type =
-      submissionType
+    params.submission_type = submissionType
   }
 
   return api.get(
     '/vendor/mission/getSubmissionDetail',
     {
-      params
+      params,
     }
   )
 }
-
-
 
 // 審核投稿
 export const reviewVendorSubmission = (data) => {
   return api.post('/vendor/mission/reviewSubmission', data)
 }
+
+// ======================================================
+// 訂單
+// ======================================================
 
 // 獲取訂單清單
 export const getVendorOrders = (vendorId) => {
@@ -153,7 +175,10 @@ export const getVendorOrders = (vendorId) => {
 }
 
 // 獲取訂單詳情
-export const getVendorOrderDetail = (vendorId, orderId) => {
+export const getVendorOrderDetail = (
+  vendorId,
+  orderId
+) => {
   return api.get('/vendor/order/getDetail', {
     params: {
       vendor_id: vendorId,
@@ -167,19 +192,83 @@ export const updateVendorShipping = (data) => {
   return api.post('/vendor/order/updateShipping', data)
 }
 
+
+// 建立物流單
+export const createVendorLogistics = (data) => {
+  return api.post('/vendor/order/createLogistics', data)
+}
+
 // 核准或拒絕消費者的取消訂單申請
 export const respondVendorCancelRequest = (data) => {
   return api.post('/vendor/order/respondCancelRequest', data)
 }
 
-export const createVendorLogistics = data =>
-  api.post('/vendor/order/createLogistics', data)
 
-export const queryVendorLogistics = data =>
-  api.post('/vendor/order/queryLogistics', data)
+// 查詢物流單
+export const queryVendorLogistics = (data) => {
+  return api.post('/vendor/order/queryLogistics', data)
+}
+
+
+// ======================================================
+// 退貨退款
+// ======================================================
+
+// 取得廠商退貨退款申請
+export const getVendorReturns = (
+  vendorId,
+  status = ''
+) => {
+  const params = {
+    vendor_id: vendorId,
+  }
+
+  if (status) {
+    params.status = status
+  }
+
+  return api.get('/vendor/return/getlist', {
+    params,
+  })
+}
+
+// 審核退貨申請
+// action:
+// approve = 同意
+// reject = 拒絕
+export const reviewVendorReturn = (data) => {
+  return api.post('/vendor/return/review', data)
+}
+
+// 確認已收到消費者退回商品
+export const confirmVendorReturnReceived = (
+  data
+) => {
+  return api.post(
+    '/vendor/return/confirmReceived',
+    data
+  )
+}
+
+// 執行整張訂單全額退款
+// 注意：目前後端只支援整單全額退款，
+// 不要從前端傳 refunded_amount
+export const processVendorReturnRefund = (
+  data
+) => {
+  return api.post(
+    '/vendor/return/processRefund',
+    data
+  )
+}
+
+// ======================================================
+// 優惠碼
+// ======================================================
 
 export const uploadVendorInvoice = data =>
   api.post('/vendor/order/uploadInvoice', data)
+
 
 
 // 獲取優惠碼使用紀錄
@@ -198,22 +287,39 @@ export const getVendorCouponUsage = (
 }
 
 // 修改優惠碼狀態
-export const updateVendorCouponStatus = (data) => {
-  return api.post('/vendor/coupon/updateStatus', data)
+export const updateVendorCouponStatus = (
+  data
+) => {
+  return api.post(
+    '/vendor/coupon/updateStatus',
+    data
+  )
 }
 
+// ======================================================
+// 聊天室
+// ======================================================
+
 // 建立聊天室
-export const createVendorChatroom = data => {
-  return api.post('/vendor/chatroom/create', data)
+export const createVendorChatroom = (data) => {
+  return api.post(
+    '/vendor/chatroom/create',
+    data
+  )
 }
 
 // 取得廠商聊天室清單
-export const getVendorChatrooms = vendorId => {
-  return api.get('/vendor/chatroom/getlist', {
-    params: {
-      vendor_id: vendorId
+export const getVendorChatrooms = (
+  vendorId
+) => {
+  return api.get(
+    '/vendor/chatroom/getlist',
+    {
+      params: {
+        vendor_id: vendorId,
+      },
     }
-  })
+  )
 }
 
 // 取得聊天室訊息
@@ -221,23 +327,41 @@ export const getVendorChatMessages = (
   vendorId,
   roomId
 ) => {
-  return api.get('/vendor/chatroom/getMessages', {
-    params: {
-      vendor_id: vendorId,
-      room_id: roomId
+  return api.get(
+    '/vendor/chatroom/getMessages',
+    {
+      params: {
+        vendor_id: vendorId,
+        room_id: roomId,
+      },
     }
-  })
+  )
 }
 
 // 廠商發送訊息
-export const sendVendorChatMessage = data => {
-  return api.post('/vendor/chatroom/sendMessage', data)
+export const sendVendorChatMessage = (
+  data
+) => {
+  return api.post(
+    '/vendor/chatroom/sendMessage',
+    data
+  )
 }
 
 // 將 KOC 訊息標記為已讀
-export const markVendorChatroomRead = data => {
-  return api.post('/vendor/chatroom/markRead', data)
+export const markVendorChatroomRead = (
+  data
+) => {
+  return api.post(
+    '/vendor/chatroom/markRead',
+    data
+  )
 }
+
+
+// ======================================================
+// 成效分析
+// ======================================================
 
 // 取得（或建立）客服聊天室
 export const getOrCreateVendorSupportRoom = vendorId => {
@@ -268,35 +392,17 @@ export const getVendorSupportUnreadCount = vendorId => {
 }
 
 // 廠商成效總覽
-export const getVendorAnalyticsOverview = (vendorId) => {
-  return api.get('/vendor/analytics/overview', {
-    params: {
-      vendor_id: vendorId,
-    },
-  })
-}
-
-// 金流總覽（可提領/凍結中金額、是否已綁定銀行帳戶）
-export const getVendorFinanceOverview = (vendorId) => {
-  return api.get('/vendor/finance/getOverview', {
-    params: {
-      vendor_id: vendorId,
-    },
-  })
-}
-
-// 金流明細列表
-export const getVendorFinanceTransactions = (vendorId) => {
-  return api.get('/vendor/finance/getTransactions', {
-    params: {
-      vendor_id: vendorId,
-    },
-  })
-}
-
-// 申請撥款
-export const requestVendorPayout = (data) => {
-  return api.post('/vendor/finance/requestPayout', data)
+export const getVendorAnalyticsOverview = (
+  vendorId
+) => {
+  return api.get(
+    '/vendor/analytics/overview',
+    {
+      params: {
+        vendor_id: vendorId,
+      },
+    }
+  )
 }
 
 // 商品成效
@@ -306,12 +412,57 @@ export const getVendorProductPerformance = (
   startDate,
   endDate
 ) => {
-  return api.get('/vendor/analytics/productPerformance', {
-    params: {
-      vendor_id: vendorId,
-      campaign_id: campaignId,
-      start_date: startDate,
-      end_date: endDate,
-    },
-  })
+  return api.get(
+    '/vendor/analytics/productPerformance',
+    {
+      params: {
+        vendor_id: vendorId,
+        campaign_id: campaignId,
+        start_date: startDate,
+        end_date: endDate,
+      },
+    }
+  )
+}
+
+// ======================================================
+// 金流
+// ======================================================
+
+// 金流總覽
+export const getVendorFinanceOverview = (
+  vendorId
+) => {
+  return api.get(
+    '/vendor/finance/getOverview',
+    {
+      params: {
+        vendor_id: vendorId,
+      },
+    }
+  )
+}
+
+// 金流明細列表
+export const getVendorFinanceTransactions = (
+  vendorId
+) => {
+  return api.get(
+    '/vendor/finance/getTransactions',
+    {
+      params: {
+        vendor_id: vendorId,
+      },
+    }
+  )
+}
+
+// 申請撥款
+export const requestVendorPayout = (
+  data
+) => {
+  return api.post(
+    '/vendor/finance/requestPayout',
+    data
+  )
 }
