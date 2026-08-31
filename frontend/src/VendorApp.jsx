@@ -9,6 +9,7 @@ import Orders        from './vendor/Orders'
 import Analytics     from './vendor/Analytics'
 import ContentReview from './vendor/ContentReview'
 import Chat          from './vendor/Chat'
+import Support       from './vendor/Support'
 import Settings      from './vendor/Settings'
 import ProductAnalytics from './vendor/ProductAnalytics'
 
@@ -26,6 +27,7 @@ export default function VendorApp() {
         <Route path="analytics"    element={<Analytics />}     />
         <Route path="review"       element={<ContentReview />} />
         <Route path="chat"         element={<Chat />}          />
+        <Route path="support"      element={<Support />}       />
         <Route path="settings"     element={<Settings />}      />
         <Route path="product-analytics" element={<ProductAnalytics />} />
       </Route>

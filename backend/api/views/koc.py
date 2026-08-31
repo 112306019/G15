@@ -1,4 +1,8 @@
+from datetime import timedelta
+
 import requests
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Sum
@@ -22,7 +26,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -791,11 +795,34 @@ def get_mission_list(request):
         if submission.kocmission_id not in revising_feedback_map:
             revising_feedback_map[submission.kocmission_id] = submission.vendor_feedback
 
+    # 🔥 批次查出勞報單狀態，已結案的任務卡片才需要顯示
+    completed_mission_ids = [
+        mission.kocmission_id for mission in missions
+        if mission.stage == 'completed'
+    ]
+    tax_form_map = {
+        form.kocmission_id: form
+        for form in RemunerationForm.objects.filter(kocmission_id__in=completed_mission_ids)
+    }
+
+    today = timezone.localdate()
+
     result = []
     for mission in missions:
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
         vendor_feedback = revising_feedback_map.get(mission.kocmission_id)
+        tax_form = tax_form_map.get(mission.kocmission_id)
+
+        # 任務是否已過期：不管卡在哪個階段，只要現在日期超過「活動截止日 + 推廣寬限天數」
+        # 就算過期。已結案(completed)代表任務本身有正常跑完，不算過期；
+        # promoting 階段另外有 sync_expired_promoting_missions 用 end_date（不含寬限期）
+        # 提早轉成 completed，所以實務上這裡主要會抓到卡在撰寫/審核/上傳階段沒完成的任務。
+        is_expired = (
+            mission.stage != 'completed'
+            and campaign.end_date is not None
+            and today > (campaign.end_date + timedelta(days=campaign.promo_days or 0)).date()
+        )
 
         result.append({
             "KOCMission_id": str(mission.kocmission_id),
@@ -807,6 +834,10 @@ def get_mission_list(request):
             "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage in ('promoting', 'completed') else 0,
             "is_revising": vendor_feedback is not None,
             "vendor_feedback": vendor_feedback,
+            "is_expired": is_expired,
+            "tax_form_status": tax_form.status if tax_form else "not_submitted",
+            "tax_form_url": tax_form.cloud_link_url if tax_form else None,
+            "tax_form_reject_reason": tax_form.reject_reason if tax_form else None,
         })
 
     return Response({
@@ -814,6 +845,133 @@ def get_mission_list(request):
         "err": "",
         "missions": result
     }, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_tax_form_data(request):
+    """
+    取得勞務報酬單所需資料，給前端用瀏覽器直接渲染/列印成單據
+    （不再由後端產生 PDF）。
+    URL: /koc/mission/taxFormData?User_id=xxx&kocmission_id=1
+
+    只回傳系統裡目前有的資料；身分證字號、代扣稅額、二代健保費、執行業務代號
+    這些系統沒有收集或不計算的欄位，前端會顯示成空白手填欄位。
+    """
+    user_id = request.query_params.get('User_id')
+    kocmission_id = request.query_params.get('kocmission_id')
+
+    if not user_id:
+        return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not kocmission_id:
+        return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = KOCMissionNew.objects.select_related(
+            'koc__user', 'application__campaign__vendor',
+        ).get(kocmission_id=kocmission_id)
+    except KOCMissionNew.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if not mission.koc or str(mission.koc.user_id) != str(user_id):
+        return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
+
+    koc_user = mission.koc.user
+    campaign = mission.application.campaign
+    vendor = campaign.vendor
+
+    amount = Earnings.objects.filter(kocmission=mission).aggregate(total=Sum('amount'))['total'] or 0
+
+    vendor_address = ''.join(filter(None, [vendor.sender_city, vendor.sender_district, vendor.sender_address]))
+
+    return Response({
+        'success': True,
+        'err': '',
+        'mission_id': mission.kocmission_id,
+        'koc_name': koc_user.display_name or koc_user.name,
+        'koc_phone': koc_user.phone,
+        'koc_email': koc_user.email,
+        'koc_address': mission.koc.address,
+        'vendor_name': vendor.company_name,
+        'vendor_tax_id': vendor.tax_id,
+        'vendor_address': vendor_address,
+        'campaign_name': campaign.name,
+        'campaign_start_date': campaign.start_date.strftime('%Y-%m-%d') if campaign.start_date else None,
+        'campaign_end_date': campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
+        'amount': amount,
+    }, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_tax_form_link(request):
+    """
+    KOC 提交（或退回後重新提交）勞務報酬單的雲端連結。
+    URL: /koc/mission/submitTaxFormLink
+
+    只有已結案(completed)的任務才能提交；一旦審核通過就鎖住，不能再改連結
+    （要改的話要先聯絡客服走別的流程，不是這支 API 的範圍）。
+    """
+    user_id = request.data.get('User_id')
+    kocmission_id = request.data.get('kocmission_id')
+    url = (request.data.get('url') or '').strip()
+
+    if not user_id:
+        return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not kocmission_id:
+        return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not url:
+        return Response({'success': False, 'err': '請貼上雲端分享連結'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    validator = URLValidator(schemes=['http', 'https'])
+    try:
+        validator(url)
+    except ValidationError:
+        return Response({'success': False, 'err': '連結格式不正確，請確認是完整的網址'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = KOCMissionNew.objects.select_related('koc').get(kocmission_id=kocmission_id)
+    except KOCMissionNew.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if not mission.koc or str(mission.koc.user_id) != str(user_id):
+        return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
+
+    if mission.stage != 'completed':
+        return Response({'success': False, 'err': '案件尚未結案，還不能提交勞報單'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    existing = RemunerationForm.objects.filter(kocmission=mission).first()
+    if existing and existing.status == 'approved':
+        return Response({'success': False, 'err': '此勞報單已審核通過，無法再次提交'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    now = timezone.now()
+
+    if existing:
+        existing.cloud_link_url = url
+        existing.status = 'pending_review'
+        existing.submitted_at = now
+        existing.reject_reason = None
+        existing.reviewed_at = None
+        existing.reviewed_by_admin_id = None
+        existing.save(update_fields=[
+            'cloud_link_url', 'status', 'submitted_at', 'reject_reason', 'reviewed_at', 'reviewed_by_admin_id',
+        ])
+        form = existing
+    else:
+        form = RemunerationForm.objects.create(
+            kocmission=mission,
+            cloud_link_url=url,
+            status='pending_review',
+            submitted_at=now,
+        )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'tax_form_status': form.status,
+        'tax_form_url': form.cloud_link_url,
+    }, status=http_status.HTTP_200_OK)
+
 
 #計算任務次數
 @api_view(['GET'])

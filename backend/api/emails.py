@@ -154,3 +154,28 @@ def send_password_reset_email(user, code):
         recipient_list=[user.email],
         fail_silently=False,
     )
+
+
+def send_tax_form_rejected_email(user, campaign_name, reject_reason):
+    """
+    勞務報酬單被退回時通知 KOC。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    subject = f"【KOC Platform】您的勞務報酬單被退回：{campaign_name}"
+    message = (
+        f"{user.display_name or user.name} 您好，\n\n"
+        f"您針對「{campaign_name}」提交的勞務報酬單經審核後需要修正：\n\n"
+        f"退回原因：{reject_reason}\n\n"
+        "請登入平台重新上傳連結。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )

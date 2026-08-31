@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, MessageCircle, Settings, LogOut } from 'lucide-react';
+import { User, MessageCircle, Headset, Settings, LogOut } from 'lucide-react';
 
+import { getVendorSupportUnreadCount } from '../api/vendor';
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
 
@@ -9,6 +10,16 @@ export default function VendorHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const vendorId = localStorage.getItem('vendor_id');
+    if (!vendorId) return;
+
+    getVendorSupportUnreadCount(vendorId)
+      .then(response => setSupportUnreadCount(response.data?.unread_count || 0))
+      .catch(err => console.error('客服未讀數載入失敗：', err));
+  }, [location.pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('vendor_id');
@@ -73,7 +84,7 @@ export default function VendorHeader() {
       <div className="flex items-center gap-4">
         
         {/* 聊天室按鈕 */}
-        <button 
+        <button
           onClick={() => navigate('/vendor/chat')}
           className="relative p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
           title="聊天室"
@@ -81,6 +92,20 @@ export default function VendorHeader() {
           <MessageCircle size={20} />
           {/* 小紅點提示 (套用焦糖橘色) */}
           <span className="absolute top-2 right-2 w-2 h-2 bg-[#C8522A] rounded-full border border-white shadow-sm" />
+        </button>
+
+        {/* 客服按鈕 */}
+        <button
+          onClick={() => navigate('/vendor/support')}
+          className="relative p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
+          title="客服諮詢"
+        >
+          <Headset size={20} />
+          {supportUnreadCount > 0 && (
+            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+              {supportUnreadCount}
+            </span>
+          )}
         </button>
 
         {/* 頭像按鈕 (hover 顯示設定/登出選單) */}
