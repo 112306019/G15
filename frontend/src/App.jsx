@@ -413,16 +413,6 @@ function MainSystem() {
     return view;
   };
 
-  if (roleSyncing) {
-    return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">載入中...</p>
-      </div>
-    );
-  }
-
-  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print/');
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
@@ -432,6 +422,47 @@ function MainSystem() {
     setCartCount(0);
     navigate('/welcome', { replace: true });
   };
+
+  // 閒置 30 分鐘自動登出：只在已登入狀態下才需要偵測，
+  // 監聽常見的使用者活動事件，只要有動作就重新計時，
+  // 完全沒有活動達到門檻時間才觸發登出。
+  useEffect(() => {
+    const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let idleTimer = null;
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        handleLogout();
+        setAppToast("閒置時間過長，已自動登出，請重新登入。");
+        setTimeout(() => setAppToast(""), 4000);
+      }, IDLE_LIMIT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetIdleTimer));
+
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetIdleTimer));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
+
+  if (roleSyncing) {
+    return (
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+        <p className="text-[#8C8880]">載入中...</p>
+      </div>
+    );
+  }
+
+  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print/');
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">

@@ -218,6 +218,11 @@ class Order(models.Model):
     # 買家申請取消訂單時填寫的原因（不管是待出貨直接取消，還是備貨中送出申請）
     cancel_reason = models.TextField(null=True, blank=True, db_column='cancel_reason')
 
+    # 廠商自行用綠界（或其他）系統開立發票後，回填發票號碼給平台，
+    # 平台收到後寄信通知消費者；平台本身不代開發票，不需要碰廠商的金流帳密。
+    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
+
     class Meta:
         db_table = 'Order'
 
@@ -698,6 +703,38 @@ class Vendor(models.Model):
 
     def __str__(self):
         return self.company_name
+
+
+
+class VendorInvoice(models.Model):
+    """
+    平台開給廠商的 B2B 電子發票紀錄（平台服務費/抽成）。
+    每次廠商結算完成後，依 platform_fee_rate 計算服務費金額，
+    呼叫綠界 B2B 電子發票 API 開立，並把結果存下來。
+    """
+    STATUS_CHOICES = [
+        ('pending', '待開立'),
+        ('issued', '開立成功'),
+        ('failed', '開立失敗'),
+    ]
+
+    invoice_id = models.AutoField(primary_key=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='invoices')
+    relate_number = models.CharField(max_length=20, unique=True, db_column='relate_number')
+    settlement_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='settlement_amount')
+    service_fee = models.DecimalField(max_digits=12, decimal_places=2, db_column='service_fee')
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='tax_amount')
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='total_amount')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status')
+    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    error_message = models.TextField(blank=True, null=True, db_column='error_message')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+
+    class Meta:
+        db_table = 'Vendor_Invoice'
+
+    def __str__(self):
+        return f"Invoice {self.invoice_id} for {self.vendor_id} ({self.status})"
 
 
 class VendorEmailVerificationCode(models.Model):

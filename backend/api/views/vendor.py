@@ -13,7 +13,7 @@ from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions
-from api.emails import send_vendor_email_verification_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from api.vendor_serializers import (
     VendorRegisterSerializer,
@@ -1077,6 +1077,11 @@ def vendor_campaign_delete(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_campaign_getlist(request):
+    # 讀取活動列表前先跑一次過期同步，不然 end_date 已過的活動會一直卡在
+    # status='active'（後台卡片顯示「招募中」），因為全專案沒有排程會自動
+    # 更新這個欄位，只能靠讀取的當下 lazy-write 補上。
+    sync_expired_promoting_missions()
+
     vendor_id = request.GET.get("vendor_id")
     campaign_status = request.GET.get("status")
 
@@ -1839,6 +1844,7 @@ def vendor_order_getlist(request):
                 "payment_status": order.payment_status,
                 "shipping_status": order.shipping_status,
                 "cancel_reason": order.cancel_reason,
+                "invoice_number": order.invoice_number,
 
                 # 宅配才需要實際地址。
                 # CVS 即使 detail_address 是空字串，也不能被視為「缺少配送資訊」。
@@ -2269,6 +2275,7 @@ def vendor_order_get_detail(request):
             "shipping_status": order.shipping_status,
             "cancel_reason": order.cancel_reason,
             "address_id": order.address_id,
+            "invoice_number": order.invoice_number,
 
             # 原本收件資料保留
             "shipping_info": shipping_info,
@@ -2473,6 +2480,50 @@ def vendor_order_respond_cancel_request(request):
         "shipping_status": order.shipping_status,
         "cancel_rejected": bool(order.cancel_rejected_at),
         "payment_status": payment_tx.status if payment_tx else None,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_order_upload_invoice(request):
+    """
+    廠商自行用綠界（或其他系統）開立發票後，回填發票號碼給平台。
+    平台收到後存進 Order，並寄信通知消費者；平台本身不代開發票，
+    不需要碰廠商的金流帳密。
+    URL: /vendor/order/uploadInvoice
+    """
+    vendor_id = request.data.get("vendor_id")
+    order_id = request.data.get("order_id")
+    invoice_number = request.data.get("invoice_number")
+
+    if not vendor_id or not order_id or not invoice_number:
+        return Response({
+            "success": False,
+            "err": "vendor_id、order_id、invoice_number 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.select_related("user").get(order_id=order_id)
+    except Order.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的訂單"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    order.invoice_number = invoice_number
+    order.invoice_uploaded_at = timezone.now()
+    order.save(update_fields=["invoice_number", "invoice_uploaded_at"])
+
+    try:
+        send_invoice_notification_email(order)
+    except Exception as e:
+        print(f"發票通知信寄送失敗（order_id={order_id}）: {e}")
+
+    return Response({
+        "success": True,
+        "err": "",
+        "order_id": str(order.order_id),
+        "invoice_number": order.invoice_number
     }, status=status.HTTP_200_OK)
 
 

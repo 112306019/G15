@@ -29,6 +29,10 @@ from .views.platform import (
     get_earnings_tracking,
     admin_settle_campaign_earnings,
     admin_settle_vendor_earnings,
+    admin_list_settleable_vendors,
+    admin_list_vendor_payouts,
+    admin_confirm_vendor_payout,
+    admin_export_payout_transfers,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_get_tax_forms,
@@ -106,6 +110,10 @@ urlpatterns = [
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
     path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
     path('platform/vendor/settle-earnings', admin_settle_vendor_earnings, name='platform-vendor-settle-earnings'),
+    path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
+    path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
+    path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
+    path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
 
@@ -191,6 +199,7 @@ urlpatterns = [
     path('vendor/order/getDetail', vendor.vendor_order_get_detail, name='vendor-order-get-detail'),
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
     path('vendor/order/respondCancelRequest', vendor.vendor_order_respond_cancel_request, name='vendor-order-respond-cancel-request'),
+    path('vendor/order/uploadInvoice', vendor.vendor_order_upload_invoice, name='vendor-order-upload-invoice'),
 
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),

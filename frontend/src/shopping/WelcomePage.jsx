@@ -1,12 +1,15 @@
 import React from 'react';
 import { Store, Sparkles, ArrowRight, Compass } from 'lucide-react';
+import LogoIcon from '../assets/logo.jpg';
+// 🌟 引入 ShareBuy 文字圖片
+import LogoText from '../assets/ShareBuy.png';
 
 export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop }) {
   return (
     <div className="flex min-h-screen font-sans animate-in fade-in duration-700">
       
       {/* =========================================
-          🟢 左側：高級品牌形象區 (版面縮小至 1/3)
+          品牌形象區 (版面縮小至 1/3)
       ========================================== */}
       <div className="hidden md:flex md:w-1/3 bg-[#1A1A18] relative overflow-hidden flex-col justify-between p-8 lg:p-12">
         
@@ -15,28 +18,37 @@ export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop 
         <div className="absolute bottom-[-10%] right-[-10%] w-[25rem] h-[25rem] bg-[#B89B6A] rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
 
         <div className="relative z-10 flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block shadow-[0_0_15px_rgba(200,82,42,0.5)]"></span>
-          <h1 className="text-xl font-black text-[#F5F0E8] tracking-[0.2em] uppercase">KOC</h1>
-          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[9px] px-2 py-0.5 rounded-full tracking-widest font-bold">
-            ECOSYSTEM
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-full object-cover shadow-[0_0_15px_rgba(200,82,42,0.5)]" 
+          />
+          {/* 🌟 1. 電腦版 (深色背景)：加大為 h-7、translate-y-1 往下移，加上增加對比與些微白光陰影讓其更跳脫 */}
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain translate-y-1 contrast-125 brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" 
+          />
+          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[9px] px-2 py-0.5 rounded-full tracking-widest font-bold mt-1">
+            SOCIAL COMMERCE
           </span>
         </div>
 
         <div className="relative z-10 my-auto">
           {/* 標題因應版面變窄，微調為 4xl/5xl */}
           <h2 className="text-4xl lg:text-5xl font-serif text-[#F5F0E8] leading-[1.15] mb-6">
-            Connect. <br/>
-            Create. <br/>
-            <span className="text-[#C8522A] italic">Convert.</span>
+            Discover. <br/>
+            Share. <br/>
+            <span className="text-[#C8522A] italic">Earn.</span>
           </h2>
           <p className="text-[#8C8880] text-base leading-relaxed font-medium">
-            無論您是尋求曝光的品牌方，還是具備影響力的創作者，在這裡都能找到屬於您的舞台。
+            無論您是尋求曝光的品牌商家、具備影響力的 KOC，還是熱愛探索好物的消費者，ShareBuy 都能為您創造全新價值。
           </p>
         </div>
 
         <div className="relative z-10 flex items-start gap-3 text-[#8C8880] text-xs font-bold border-t border-white/10 pt-6">
           <Compass size={16} className="text-[#B89B6A] shrink-0 mt-0.5"/>
-          <span>Empowering brands and creators to grow together.</span>
+          <span>Empowering brands, creators, and shoppers to thrive together.</span>
         </div>
       </div>
 
@@ -47,8 +59,17 @@ export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop 
         
         {/* 手機版小 Logo */}
         <div className="absolute top-8 left-8 flex md:hidden items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          <h1 className="text-lg font-black text-[#1A1A18] tracking-widest uppercase">KOC</h1>
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-full object-cover shadow-sm" 
+          />
+          {/* 🌟 2. 手機版 (淺色背景)：同樣加大 h-7、translate-y-1 往下移，並加深對比度 */}
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain translate-y-1 mix-blend-multiply contrast-125" 
+          />
         </div>
 
         {/* 稍微加寬 max-w-lg (從 448px 加寬到 512px)，讓兩張卡片更大氣 */}
@@ -59,7 +80,7 @@ export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop 
             <p className="text-[#8C8880] font-bold text-sm tracking-wide">加入平台生態圈，解鎖完整功能</p>
           </div>
 
-          {/* 🌟 核心註冊區：並排大型卡片 */}
+          {/* 核心註冊區：並排大型卡片 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 lg:gap-6 mb-12">
             
             {/* 廠商大卡片 */}
@@ -97,7 +118,7 @@ export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop 
             <div className="h-px flex-1 bg-[#E2DDD4]"></div>
           </div>
 
-          {/* 🌟 弱化的一般消費者區 */}
+          {/* 一般消費者區 */}
           <div className="flex flex-col items-center justify-center text-center">
             <span className="text-xs font-bold text-[#8C8880] mb-3">
               沒有要發案或接案？
