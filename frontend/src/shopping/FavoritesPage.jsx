@@ -44,6 +44,7 @@ export default function FavoritesPage({ onNavigate }) {
               Product_name: item.product_name,
               price: item.price,
               image_url: item.image_url,
+              stock: item.stock,
             },
           })));
         }

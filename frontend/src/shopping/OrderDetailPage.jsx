@@ -161,6 +161,15 @@ export default function OrderDetailPage({ onBack, orderId }) {
   ];
 
   const totalAmount = orderData?.total_amount ?? 0;
+  const shippingFee = orderData?.shipping_fee ?? 0;
+
+  const items = orderData?.items || [];
+  const itemsSubtotal = items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+  const itemsRawTotal = items.reduce(
+    (sum, item) => sum + Number(item.Unit_price || 0) * Number(item.quantity || 0),
+    0
+  );
+  const couponDiscount = Math.max(0, itemsRawTotal - itemsSubtotal);
 
   const createdAt = orderData?.created_at
     ? new Date(orderData.created_at)
@@ -232,24 +241,6 @@ export default function OrderDetailPage({ onBack, orderId }) {
       <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">
         訂單細節
       </h2>
-
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2.5rem] border border-[#E2DDD4] bg-white p-8 shadow-sm hover:shadow-md transition-shadow">
-        <div>
-          <div className="mb-2 font-mono text-2xl font-bold text-[#1A1A18]">
-            #{orderData.Order_id}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
-            <span>訂購於 {createdDate}</span>
-            <span>•</span>
-            <span>{createdTime}</span>
-          </div>
-        </div>
-
-        <div className="mt-4 md:mt-0 font-mono text-4xl font-black text-[#C8522A]">
-          {formatNTD(totalAmount)}
-        </div>
-      </div>
 
       <div className="mb-16 rounded-[2rem] border border-[#E2DDD4] bg-white px-6 py-8 shadow-sm">
         {isCancelled ? (
@@ -537,10 +528,66 @@ export default function OrderDetailPage({ onBack, orderId }) {
         )}
       </div>
 
+      <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm">
+        <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block" />
+          收件資訊
+        </h3>
+
+        <div className="space-y-4 text-sm font-medium">
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <UserRound size={15} />
+              收件人
+            </span>
+            <span className="text-[#1A1A18] font-bold">
+              {recipient?.recipient_name || "未填寫"}
+            </span>
+          </div>
+
+          <div className="flex items-start">
+            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
+              <Phone size={15} />
+              聯絡電話
+            </span>
+            <span className="text-[#1A1A18] font-bold">
+              {recipient?.phone || "未填寫"}
+            </span>
+          </div>
+
+          {isHome && (
+            <div className="flex items-start">
+              <span className="w-28 flex-shrink-0 text-[#8C8880]">
+                配送地址
+              </span>
+              <span className="text-[#1A1A18] font-bold leading-relaxed">
+                {recipient?.detail_address || "未填寫"}
+              </span>
+            </div>
+          )}
+
+          <div className="flex">
+            <span className="w-28 text-[#8C8880]">付款狀態</span>
+            <span className="text-[#1A1A18] font-bold">
+              {orderData.payment_status === "paid" ? "已付款" : "未付款"}
+            </span>
+          </div>
+
+          {orderData.Promotion_code && (
+            <div className="flex">
+              <span className="w-28 text-[#8C8880]">優惠碼</span>
+              <span className="text-[#1A1A18] font-bold">
+                {orderData.Promotion_code}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mb-8 rounded-[2rem] border border-[#E2DDD4] bg-white p-8 shadow-sm overflow-hidden">
         <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#1A1A18] rounded-full inline-block" />
-          商品目錄
+          訂單資訊
         </h3>
 
         <div className="overflow-x-auto">
@@ -604,61 +651,58 @@ export default function OrderDetailPage({ onBack, orderId }) {
             </tbody>
           </table>
         </div>
+
+        <div className="mt-6 space-y-2 border-t border-[#E2DDD4] pt-6 text-sm font-medium">
+          <div className="flex items-center justify-between">
+            <span className="text-[#8C8880]">商品小計</span>
+            <span className="font-mono font-bold text-[#1A1A18]">
+              {formatNTD(itemsRawTotal)}
+            </span>
+          </div>
+
+          {couponDiscount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[#8C8880]">
+                優惠券折抵
+                {orderData.Promotion_code ? `（${orderData.Promotion_code}）` : ""}
+              </span>
+              <span className="font-mono font-bold text-[#C8522A]">
+                -{formatNTD(couponDiscount)}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="text-[#8C8880]">運費</span>
+            <span className="font-mono font-bold text-[#1A1A18]">
+              {formatNTD(shippingFee)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-[#E2DDD4] pt-4 mt-2">
+            <span className="text-base font-bold text-[#1A1A18]">訂單金額：</span>
+            <span className="font-mono text-xl font-black text-[#C8522A]">
+              {formatNTD(totalAmount)}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="rounded-[2rem] border border-[#E2DDD4] bg-[#F8F9FA] p-8 shadow-sm">
-        <h3 className="mb-6 text-lg font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#8C8880] rounded-full inline-block" />
-          收件資訊
-        </h3>
-
-        <div className="space-y-4 text-sm font-medium">
-          <div className="flex items-start">
-            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
-              <UserRound size={15} />
-              收件人
-            </span>
-            <span className="text-[#1A1A18] font-bold">
-              {recipient?.recipient_name || "未填寫"}
-            </span>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-[2rem] border border-[#E2DDD4] bg-white p-6 shadow-sm">
+        <div>
+          <div className="mb-2 font-mono text-base font-bold text-[#1A1A18]">
+            訂單編號：#{orderData.Order_id}
           </div>
 
-          <div className="flex items-start">
-            <span className="w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-2">
-              <Phone size={15} />
-              聯絡電話
-            </span>
-            <span className="text-[#1A1A18] font-bold">
-              {recipient?.phone || "未填寫"}
-            </span>
+          <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-[#8C8880]">
+            <span>訂購於 {createdDate}</span>
+            <span>•</span>
+            <span>{createdTime}</span>
           </div>
+        </div>
 
-          {isHome && (
-            <div className="flex items-start">
-              <span className="w-28 flex-shrink-0 text-[#8C8880]">
-                配送地址
-              </span>
-              <span className="text-[#1A1A18] font-bold leading-relaxed">
-                {recipient?.detail_address || "未填寫"}
-              </span>
-            </div>
-          )}
-
-          <div className="flex">
-            <span className="w-28 text-[#8C8880]">付款狀態</span>
-            <span className="text-[#1A1A18] font-bold">
-              {orderData.payment_status === "paid" ? "已付款" : "未付款"}
-            </span>
-          </div>
-
-          {orderData.Promotion_code && (
-            <div className="flex">
-              <span className="w-28 text-[#8C8880]">優惠碼</span>
-              <span className="text-[#1A1A18] font-bold">
-                {orderData.Promotion_code}
-              </span>
-            </div>
-          )}
+        <div className="mt-4 md:mt-0 font-mono text-xl font-black text-[#C8522A]">
+          {formatNTD(totalAmount)}
         </div>
       </div>
 

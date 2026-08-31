@@ -420,6 +420,7 @@ def view_wishlist(request):
             'product_name': w.product.product_name,
             'price': w.product.discounted_price or w.product.price,
             'image_url': w.product.image_url,
+            'stock': w.product.stock,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -562,6 +563,12 @@ def create_guest(request):
         'Guest_id': guest.guest_id,
         'Order_id': guest.order_id.order_id,
     }, status=status.HTTP_201_CREATED)
+
+
+# 運費也是後端自己算，不採信前端傳的金額，理由同下面「後端重新計算金額」——
+# 這兩個數字要跟 CheckoutPage.jsx 的 shippingAmount 保持一致，之後那邊改價要記得同步。
+SHIPPING_FEE_HOME = Decimal('130')
+SHIPPING_FEE_CVS = Decimal('65')
 
 
 # ── 建立訂單 ──
@@ -878,7 +885,7 @@ def create_order(request):
                 rounding=ROUND_HALF_UP
             )
 
-    total_amount = sum(
+    items_total = sum(
         (
             line['final_subtotal']
             for line in line_items
@@ -888,6 +895,14 @@ def create_order(request):
         Decimal('0.01'),
         rounding=ROUND_HALF_UP
     )
+
+    shipping_fee = (
+        SHIPPING_FEE_CVS
+        if shipping_method == 'cvs'
+        else SHIPPING_FEE_HOME
+    )
+
+    total_amount = items_total + shipping_fee
 
     # ============================
     # 建立訂單
@@ -946,6 +961,7 @@ def create_order(request):
                 promotion_code or ''
             ),
             total_amount=total_amount,
+            shipping_fee=shipping_fee,
             order_status='pending',
             payment_status='unpaid',
             shipping_status='unshipped',
@@ -1056,6 +1072,11 @@ def create_order(request):
             'totalAmount':
                 float(
                     order.total_amount
+                ),
+
+            'shippingFee':
+                float(
+                    order.shipping_fee
                 ),
 
             'itemCount':
@@ -1202,6 +1223,7 @@ def view_order(request):
             'Guest_id': order.guest_id,
             'Promotion_code': order.promotion_code,
             'total_amount': float(order.total_amount),
+            'shipping_fee': float(order.shipping_fee),
             'order_status': order.order_status,
             'payment_status': order.payment_status,
             'shipping_status': order.shipping_status,

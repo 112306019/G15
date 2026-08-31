@@ -243,6 +243,81 @@ class ConsumerOrderViewFailedPaymentTests(TestCase):
         self.assertIn(str(order.order_id), order_ids)
 
 
+class CreateOrderShippingFeeTests(TestCase):
+    """
+    POST /api/consumer/order/create —— total_amount 之前只算商品小計，漏掉運費，
+    導致導去綠界付款頁的金額比 CheckoutPage.jsx 顯示給消費者看的少。
+    現在後端要自己依 shipping_method 算運費（不採信前端傳的金額，跟商品金額同一套防竄改邏輯），
+    併入 total_amount，並存進新增的 Order.shipping_fee 欄位。
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(
+            role="consumer", name="測試用戶", email="shipping-fee-test@example.com",
+            password="x", phone="0900000000",
+        )
+        self.product = Product.objects.create(
+            vendor_id="V00001", product_name="測試商品", price=500, stock=10, status="active"
+        )
+
+    def create_order(self, shipping_method, **overrides):
+        payload = {
+            "User_id": self.user.user_id,
+            "items": [{"Product_id": self.product.product_id, "Quantity": 1}],
+            "shipping_method": shipping_method,
+            "recipient": "測試收件人",
+            "recipient_phone": "0912345678",
+            "recipient_address": "測試地址123號",
+            "recipient_city": "台北市",
+            "recipient_district": "大安區",
+            "recipient_postal_code": "106",
+            "store_id": "12345",
+            "store_name": "測試門市",
+            "store_address": "測試門市地址",
+        }
+        payload.update(overrides)
+        return self.client.post(
+            "/api/consumer/order/create", data=payload, content_type="application/json"
+        )
+
+    def test_home_delivery_adds_shipping_fee_to_total(self):
+        resp = self.create_order("home")
+        self.assertEqual(resp.status_code, 201)
+        body = resp.json()
+        self.assertEqual(body["shippingFee"], 130.0)
+        self.assertEqual(body["totalAmount"], 630.0)  # 500 商品 + 130 運費
+
+        order = Order.objects.get(order_id=body["orderId"])
+        self.assertEqual(order.shipping_fee, 130)
+        self.assertEqual(order.total_amount, 630)
+
+    def test_cvs_pickup_adds_lower_shipping_fee_to_total(self):
+        resp = self.create_order("cvs")
+        self.assertEqual(resp.status_code, 201)
+        body = resp.json()
+        self.assertEqual(body["shippingFee"], 65.0)
+        self.assertEqual(body["totalAmount"], 565.0)  # 500 商品 + 65 運費
+
+    def test_client_supplied_total_amount_is_ignored(self):
+        # 前端就算送一個亂改過的 total_amount，後端也要自己重算，不能被繞過
+        resp = self.create_order("home", total_amount=1)
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["totalAmount"], 630.0)
+
+    def test_ecpay_total_amount_includes_shipping_fee(self):
+        order_resp = self.create_order("home")
+        order_id = order_resp.json()["orderId"]
+
+        pay_resp = self.client.post(
+            "/api/payments/create/", data={"Order_id": order_id, "amount": "1"}
+        )
+        self.assertEqual(pay_resp.status_code, 200)
+        fields = pay_resp.json()["fields"]
+        self.assertEqual(fields["TotalAmount"], "630")
+        self.assertIn("運費", fields["ItemName"].split("#"))
+
+
 class CancelOrderTests(TestCase):
     """
     消費者取消訂單：
