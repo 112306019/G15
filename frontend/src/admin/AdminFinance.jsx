@@ -24,6 +24,9 @@ export default function AdminFinance() {
   const [resolvingReturnId, setResolvingReturnId] = useState(null);
   const [returnNotes, setReturnNotes] = useState({});
 
+  const [vendorInvoices, setVendorInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+
   const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem("admin_token");
@@ -130,6 +133,23 @@ export default function AdminFinance() {
       alert("結算失敗，請稍後再試");
     } finally {
       setSettlingId(null);
+    }
+  };
+
+  const fetchVendorInvoices = async () => {
+    setLoadingInvoices(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/invoices?Admin_id=${adminId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.invoices)) {
+        setVendorInvoices(data.invoices);
+      }
+    } catch (err) {
+      console.error("發票紀錄載入失敗", err);
+    } finally {
+      setLoadingInvoices(false);
     }
   };
 
