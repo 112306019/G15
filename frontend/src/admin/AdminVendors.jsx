@@ -9,6 +9,9 @@ export default function AdminVendors() {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // 新增搜尋關鍵字狀態
+  const [keyword, setKeyword] = useState('');
 
   useEffect(() => {
     const fetchVendors = async () => {
@@ -46,6 +49,16 @@ export default function AdminVendors() {
     fetchVendors();
   }, []);
 
+  // 實作搜尋過濾邏輯
+  const filteredVendors = vendors.filter((vendor) => {
+    if (!keyword.trim()) return true;
+    const kw = keyword.trim().toLowerCase();
+    return (
+      vendor.companyName?.toLowerCase().includes(kw) ||
+      vendor.taxId?.toLowerCase().includes(kw)
+    );
+  });
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
       
@@ -53,8 +66,8 @@ export default function AdminVendors() {
         <div>
           <h1 className="text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-3">
             合作廠商管理
-            <span className="text-xs font-bold bg-[#F8F9FA] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
-              共 {vendors.length} 家
+            <span className="text-xs font-bold bg-[#F5F0E8] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
+              共 {filteredVendors.length} 家
             </span>
           </h1>
           <p className="text-[#8C8880] mt-2 font-medium">檢視平台所有合作廠商的資料與帳號狀態。</p>
@@ -65,6 +78,8 @@ export default function AdminVendors() {
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C8880]" />
             <input 
               type="text" 
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
               placeholder="搜尋公司名稱、統編..." 
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-sm outline-none focus:border-[#C8522A] focus:ring-2 focus:ring-[#C8522A]/10 transition-all shadow-sm"
             />
@@ -88,7 +103,32 @@ export default function AdminVendors() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2DDD4]">
-              {vendors.map((vendor) => (
+              {/* 加上載入與錯誤狀態 */}
+              {loading && (
+                <tr>
+                  <td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">
+                    載入中...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && error && (
+                <tr>
+                  <td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-red-500">
+                    {error}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && filteredVendors.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">
+                    目前沒有符合條件的廠商
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && filteredVendors.map((vendor) => (
                 <tr key={vendor.id} className="hover:bg-[#F5F0E8]/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">

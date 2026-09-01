@@ -55,7 +55,7 @@ export default function AdminInfluencers() {
         <div>
           <h1 className="text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-3">
             KOC 帳號管理
-            <span className="text-xs font-bold bg-[#FDF0ED] text-[#C8522A] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#C8522A]/20">
+            <span className="text-xs font-bold bg-[#F5F0E8] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
               共 {filteredInfluencers.length} 筆
             </span>
           </h1>

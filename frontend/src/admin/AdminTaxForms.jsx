@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, ExternalLink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ExternalLink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { getAdminTaxForms, reviewAdminTaxForm } from '../api/platform';
 
 const STATUS_TABS = [
@@ -138,11 +138,8 @@ export default function AdminTaxForms() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center">
-          <FileText size={20} className="text-[#C8522A]" />
-        </div>
-        <h2 className="text-2xl font-black text-[#1A1A18]">勞務報酬單審核</h2>
+      <div className="mb-8">
+        <h2 className="text-3xl font-serif font-black text-[#1A1A18]">勞務報酬單審核</h2>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -166,7 +163,7 @@ export default function AdminTaxForms() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">網紅姓名</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">KOC 姓名</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">專案名稱</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">金額</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">提交時間</th>

@@ -5,7 +5,10 @@ import {
   ClipboardList, CreditCard, LogOut, History, ShieldAlert, Headset, FileText
 } from 'lucide-react';
 
-// 🌟 引入切好的各個頁面元件
+import LogoIcon from './assets/logo.jpg';
+import LogoText from './assets/ShareBuy.png';
+
+// 引入切好的各個頁面元件
 import AdminOverview from './admin/AdminOverview';
 import AdminInfluencers from './admin/AdminInfluencers';
 import AdminKocDetail from './admin/AdminKOCDetail';
@@ -26,7 +29,7 @@ export default function AdminApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
 
-  // 🌟 管理員身分狀態
+  // 管理員身分狀態
   const [adminRole, setAdminRole] = useState('super_admin');
 
   useEffect(() => {
@@ -53,12 +56,7 @@ export default function AdminApp() {
 
   if (!isAuthenticated) return null;
 
-  // 🌟 根據角色定義左側選單與允許的路由
-  //
-  // 角色字串一律用後端 Admins.role 實際存的 snake_case 格式
-  // （'super_admin' / 'finance' / 'reviewer'），不要用 'Super Admin' 這種
-  // 大寫+空格的寫法——這裡沒有像 AdminFinance.jsx 那樣做大小寫正規化，
-  // 用錯格式會讓 includes() 永遠比對不到，選單項目/路由直接對所有角色隱藏。
+  // 根據角色定義左側選單與允許的路由
   const allMenuItems = [
     { id: 'overview', label: '平台總覽', icon: <LayoutDashboard size={20} />, path: '/admin', roles: ['super_admin', 'finance', 'reviewer'] },
     { id: 'vendors', label: '廠商管理', icon: <Store size={20} />, path: '/admin/vendors', roles: ['super_admin', 'reviewer', 'finance'] },
@@ -73,7 +71,7 @@ export default function AdminApp() {
 
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
 
-  // 🌟 新增路由保護元件 (Protected Route)
+  // 新增路由保護元件 (Protected Route)
   const ProtectedRoute = ({ allowedRoles, children }) => {
     if (!allowedRoles.includes(adminRole)) {
       return (
@@ -98,14 +96,26 @@ export default function AdminApp() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800">
 
-      
       <aside className="w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-10">
-        <div className="h-20 flex items-center px-8 border-b border-[#E2DDD4]">
-          <h1 className="text-xl font-black text-[#1A1A18] tracking-tight flex items-center gap-2">
-            <span className="w-2 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-            KOC Platform
-            <span className="text-[10px] bg-[#1A1A18] text-white px-2 py-0.5 rounded-md ml-1 align-top">ADMIN</span>
-          </h1>
+        <div className="h-20 flex items-center px-4 border-b border-[#E2DDD4] cursor-pointer" onClick={() => navigate('/admin')}>
+          
+          <div className="bg-[#F5F0E8] w-full px-3 py-2 rounded-full flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm">
+            <img 
+              src={LogoIcon} 
+              alt="ShareBuy Logo" 
+              className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0" 
+            />
+            <img 
+              src={LogoText} 
+              alt="ShareBuy Text" 
+              className="h-6 w-auto object-contain mix-blend-multiply translate-y-[1px]" 
+            />
+            {/* ADMIN 標籤靠右對齊 */}
+            <span className="text-[9px] bg-[#1A1A18] text-white px-1.5 py-0.5 rounded-md font-bold tracking-wider ml-auto">
+              ADMIN
+            </span>
+          </div>
+
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -138,7 +148,6 @@ export default function AdminApp() {
         </div>
       </aside>
 
-    
       <main className="flex-1 ml-64 flex flex-col min-h-screen">
 
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-end px-10">
@@ -166,7 +175,7 @@ export default function AdminApp() {
               </ProtectedRoute>
             } />
 
-            {/* 🌟 廠商管理模組 */}
+            {/* 廠商管理模組 */}
             <Route path="/vendors" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminVendors />
@@ -182,8 +191,7 @@ export default function AdminApp() {
               }
             />     
 
-
-            {/* 🌟 KOC 管理模組 */}
+            {/* KOC 管理模組 */}
             <Route path="/influencers" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminInfluencers />
@@ -216,7 +224,7 @@ export default function AdminApp() {
               </ProtectedRoute>
             } />
 
-            {/* 🌟 一般使用者模組 */}
+            {/* 一般使用者模組 */}
             <Route path="/consumers" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminConsumers />
@@ -228,35 +236,35 @@ export default function AdminApp() {
               </ProtectedRoute>
             } />
 
-            {/* 🌟 任務與活動追蹤模組 */}
+            {/* 任務與活動追蹤模組 */}
             <Route path="/missions" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminMissions />
               </ProtectedRoute>
             } />
 
-            {/* 🌟 訂單與財務金流模組 */}
+            {/* 訂單與財務金流模組 */}
             <Route path="/finance" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminFinance />
               </ProtectedRoute>
             } />
 
-            {/* 🌟 勞報單審核模組 */}
+            {/* 勞報單審核模組 */}
             <Route path="/tax-forms" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminTaxForms />
               </ProtectedRoute>
             } />
 
-            {/* 🌟 客服聊天室模組 */}
+            {/* 客服聊天室模組 */}
             <Route path="/support" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminSupport />
               </ProtectedRoute>
             } />
 
-            {/* 🌟 系統操作紀錄模組 */}
+            {/* 系統操作紀錄模組 */}
             <Route path="/logs" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminLogs />

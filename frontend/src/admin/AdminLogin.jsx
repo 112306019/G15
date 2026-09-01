@@ -1,7 +1,10 @@
 import { API_BASE_URL } from '../config';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowRight, Fingerprint } from 'lucide-react';
+// 🌟 移除了 Fingerprint，保留需要的 Icon
+import { ShieldCheck, ArrowRight } from 'lucide-react';
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 function InputField({ label, hint, ...props }) {
   return (
@@ -44,14 +47,6 @@ export default function AdminLogin() {
         return;
       }
 
-      // 後端目前只用帳密驗證身分，沒有簽發真正的 JWT/session token
-      // （對照 auth.py 的 user_login，一般使用者登入是有回傳 SimpleJWT
-      // 的 access token 的，admin_login 目前沒有）。這裡先用
-      // admin_id 拼一個佔位字串塞進 admin_token，讓既有畫面「有沒有
-      // token」的判斷還能正常運作，但這不是真正的身分驗證機制——
-      // 後端目前每支 admin API 都是 AllowAny，只靠請求裡帶的 Admin_id
-      // 去查角色，沒有驗證這個 token 本身。之後如果要做真正的權限
-      // 控管，後端要幫 admin_login 簽發 JWT，這裡再換成存那個。
       localStorage.setItem('admin_token', `admin-session-${data.Admin_id}`);
       localStorage.setItem('admin_email', data.Email);
       localStorage.setItem('admin_id', String(data.Admin_id));
@@ -69,19 +64,27 @@ export default function AdminLogin() {
     <div className="flex min-h-screen font-sans animate-in fade-in duration-700">
       
       {/* =========================================
-          🟢 左側：高級品牌形象區 (深色主題 + 光暈)
+          左側品牌形象區
       ========================================== */}
       <div className="hidden md:flex md:w-1/2 lg:w-[55%] bg-[#1A1A18] relative overflow-hidden flex-col justify-between p-12 lg:p-20">
         
-        {/* 背景氛圍光暈 (Glassmorphism 裝飾) */}
+        {/* 背景光暈*/}
         <div className="absolute top-[-10%] left-[-10%] w-[30rem] h-[30rem] bg-[#C8522A] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[30rem] h-[30rem] bg-[#B89B6A] rounded-full mix-blend-screen filter blur-[120px] opacity-20"></div>
 
         {/* 頂部 Logo 與徽章 */}
-        <div className="relative z-10 flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#C8522A] rounded-full inline-block shadow-[0_0_15px_rgba(200,82,42,0.5)]"></span>
-          <h1 className="text-2xl font-black text-[#F5F0E8] tracking-[0.2em] uppercase">KOC Platform</h1>
-          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[10px] px-3 py-1 rounded-full tracking-widest font-bold">
+        <div className="relative z-10 flex items-center gap-3">
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-full object-cover shadow-[0_0_15px_rgba(200,82,42,0.5)]" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain translate-y-1 contrast-125 brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" 
+          />
+          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[10px] px-3 py-1 rounded-full tracking-widest font-bold mt-1 ml-1">
             ADMIN PORTAL
           </span>
         </div>
@@ -107,21 +110,27 @@ export default function AdminLogin() {
       </div>
 
       {/* =========================================
-          🟢 右側：登入操作區 (溫暖色系 #F5F0E8)
+          右側：登入操作區
       ========================================== */}
       <div className="w-full md:w-1/2 lg:w-[45%] bg-[#F5F0E8] flex items-center justify-center p-8 sm:p-12 lg:p-20 relative">
         
         {/* 手機版才會出現的小 Logo */}
         <div className="absolute top-8 left-8 flex md:hidden items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          <h1 className="text-lg font-black text-[#1A1A18] tracking-widest uppercase">KOC</h1>
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-lg object-cover shadow-sm" 
+          />
         </div>
 
         <div className="w-full max-w-md">
-          {/* 登入區標題 */}
           <div className="mb-10">
-            <div className="w-14 h-14 bg-white shadow-sm border border-[#E2DDD4] rounded-2xl flex items-center justify-center mb-8">
-              <Fingerprint size={28} className="text-[#1A1A18]" />
+            <div className="flex items-center gap-3 mb-8">
+              <img 
+                src={LogoIcon} 
+                alt="ShareBuy Logo" 
+                className="h-14 w-14 object-cover rounded-2xl shadow-sm" 
+              />
             </div>
             <h2 className="text-3xl font-serif font-black text-[#1A1A18] mb-3">系統授權登入</h2>
             <p className="text-[#8C8880] font-bold text-sm tracking-wide">請輸入您的管理員專屬憑證以繼續</p>
@@ -139,7 +148,7 @@ export default function AdminLogin() {
             />
 
             <InputField
-              label="專屬密碼"
+              label="密碼"
               type="password"
               placeholder="••••••••"
               value={password}
