@@ -15,6 +15,7 @@ const titles = {
   '/vendor/review': { title: '審核管理', sub: '審核 KOC 的合作申請及提交的貼文文案' },
   '/vendor/chat': { title: '聊天室', sub: '與 KOC 即時溝通' },
   '/vendor/settings': { title: '設定', sub: '管理帳號資訊與通知偏好' },
+  '/vendor/support': { title: '客服諮詢', sub: '有任何問題都可以在這裡詢問客服' },
 };
 
 export default function VendorLayout() {

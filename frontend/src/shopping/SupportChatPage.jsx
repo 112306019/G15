@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Headset, Loader2, Send } from 'lucide-react';
+import { Headset, Loader2, Send } from 'lucide-react';
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -100,19 +100,11 @@ export default function SupportChatPage({ onBack }) {
   }
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-3xl mx-auto">
-      <button
-        onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
-      >
-        <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
-        返回
-      </button>
-
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center">
-          <Headset size={20} className="text-[#C8522A]" />
-        </div>
+    // 🟢 移除了 mx-auto 與 pt-2，並改為 max-w-4xl 對齊個人資訊頁
+    <div className="animate-in fade-in duration-500 max-w-4xl">
+      
+      {/* 🟢 將 mb-6 改為 mb-8 讓標題與下方卡片的距離一致 */}
+      <div className="mb-8 flex items-center justify-between">
         <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">客服諮詢</h2>
       </div>
 

@@ -107,14 +107,7 @@ export default function Support() {
   }
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-3xl mx-auto pb-10">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center">
-          <Headset size={20} className="text-[#C8522A]" />
-        </div>
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">客服諮詢</h2>
-      </div>
-
+    <div className="animate-in fade-in duration-500 max-w-3xl mx-auto pb-10 pt-2">
       <div className="flex flex-col h-[65vh] rounded-[1.5rem] border border-[#E2DDD4] bg-white shadow-sm overflow-hidden">
         {loadError && (
           <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
