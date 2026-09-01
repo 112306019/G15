@@ -42,23 +42,23 @@ export default function VendorHeader() {
     <header className="bg-white border-b border-[#E2DDD4] px-12 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
       <div className="flex items-center gap-12">
         
-        <div 
-          className="flex items-center gap-3 cursor-pointer transition-all hover:scale-[1.02] hover:opacity-80" 
+        <div
+          className="bg-[#F5F0E8] px-4 py-1.5 rounded-full flex items-center gap-2.5 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
           onClick={() => navigate('/vendor')}
         >
           <img 
             src={LogoIcon} 
             alt="ShareBuy Logo" 
-            className="h-9 w-9 object-cover rounded-full shadow-sm" 
+            className="h-8 w-8 object-cover rounded-full shadow-sm" 
           />
           <img 
             src={LogoText} 
             alt="ShareBuy Text" 
-            className="h-6 w-auto object-contain mix-blend-multiply translate-y-0.5" 
+            className="h-7 w-auto object-contain mix-blend-multiply translate-y-0.5" 
           />
         </div>
         
-        {/* 上方選單 (套用焦糖橘與拿鐵色系) */}
+        {/* 上方選單 */}
         <nav className="flex items-center gap-8">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
