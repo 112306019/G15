@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import {
   Search, Filter, CreditCard, DollarSign, Wallet,
-  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download
+  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download, FileText
 } from 'lucide-react';
 
 export default function AdminFinance() {
@@ -467,6 +467,7 @@ export default function AdminFinance() {
         await fetchEarningsData();
         await fetchVendorFinanceData();
         await fetchReturnDisputes();
+        await fetchVendorInvoices();
       } catch (err) {
         console.error("財務資料載入失敗", err);
       } finally {
@@ -574,6 +575,18 @@ export default function AdminFinance() {
               {returnDisputes.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('invoices');
+            fetchVendorInvoices();
+          }}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'invoices' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+          }`}
+        >
+          <FileText size={18} /> 發票紀錄
         </button>
       </div>
 
@@ -1008,6 +1021,157 @@ export default function AdminFinance() {
               </div>
             )}
 
+          </div>
+        )}
+
+        {/* TAB 5: 發票紀錄 */}
+        {activeTab === 'invoices' && (
+          <div>
+            <div className="px-6 py-5 border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-serif font-black text-[#1A1A18]">
+                  廠商發票紀錄
+                </h2>
+                <p className="text-xs text-[#8C8880] mt-1">
+                  檢視平台開立給廠商的 B2B 服務費發票。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={fetchVendorInvoices}
+                disabled={loadingInvoices}
+                className="px-5 py-2.5 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
+              >
+                {loadingInvoices ? '重新整理中...' : '重新整理'}
+              </button>
+            </div>
+
+            {loadingInvoices ? (
+              <div className="py-20 text-center text-[#8C8880] font-bold">
+                發票紀錄載入中...
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        廠商 / 紀錄編號
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        結算金額
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        服務費
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        稅額
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        發票總額
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        發票號碼
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        狀態
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
+                        建立時間
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {vendorInvoices.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-16 text-center text-[#8C8880]"
+                        >
+                          目前沒有發票紀錄
+                        </td>
+                      </tr>
+                    ) : (
+                      vendorInvoices.map((invoice) => (
+                        <tr
+                          key={invoice.invoice_id}
+                          className="hover:bg-[#FDF0ED]/30 transition-colors"
+                        >
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-[#1A1A18] text-sm">
+                              {invoice.vendor_name || '—'}
+                            </div>
+                            <div className="text-xs text-[#8C8880] mt-1">
+                              #{invoice.invoice_id}
+                            </div>
+                            <div className="text-[10px] text-[#8C8880] mt-1 font-mono">
+                              {invoice.relate_number || '—'}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4 text-sm font-bold text-[#1A1A18] whitespace-nowrap">
+                            NT$ {Number(invoice.settlement_amount || 0).toLocaleString()}
+                          </td>
+
+                          <td className="px-6 py-4 text-sm font-bold text-[#C8522A] whitespace-nowrap">
+                            NT$ {Number(invoice.service_fee || 0).toLocaleString()}
+                          </td>
+
+                          <td className="px-6 py-4 text-sm text-[#8C8880] whitespace-nowrap">
+                            NT$ {Number(invoice.tax_amount || 0).toLocaleString()}
+                          </td>
+
+                          <td className="px-6 py-4 text-sm font-black text-[#1A1A18] whitespace-nowrap">
+                            NT$ {Number(invoice.total_amount || 0).toLocaleString()}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-mono font-bold text-[#1A1A18] whitespace-nowrap">
+                              {invoice.invoice_number || '尚未取得'}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
+                                invoice.status === 'issued'
+                                  ? 'bg-green-50 text-green-700'
+                                  : invoice.status === 'failed'
+                                  ? 'bg-red-50 text-red-700'
+                                  : 'bg-[#F5F0E8] text-[#8C8880]'
+                              }`}
+                            >
+                              {invoice.status === 'issued'
+                                ? '已開立'
+                                : invoice.status === 'failed'
+                                ? '開立失敗'
+                                : invoice.status || '處理中'}
+                            </span>
+
+                            {invoice.error_message && (
+                              <div
+                                className="text-[10px] text-red-600 mt-2 max-w-[220px]"
+                                title={invoice.error_message}
+                              >
+                                {invoice.error_message}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-6 py-4 text-sm text-[#8C8880] whitespace-nowrap">
+                            {invoice.created_at
+                              ? new Date(invoice.created_at).toLocaleString('zh-TW')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
