@@ -852,6 +852,49 @@ def admin_settle_vendor_earnings(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def admin_list_vendor_invoices(request):
+    """
+    平台開給廠商的 B2B 服務費發票紀錄列表，給後台財務頁面顯示用。
+    GET /platform/vendor/invoices
+    """
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    from api.models import VendorInvoice
+
+    vendor_id = request.query_params.get('vendor_id')
+
+    invoices_qs = VendorInvoice.objects.select_related('vendor').order_by('-created_at')
+    if vendor_id:
+        invoices_qs = invoices_qs.filter(vendor_id=vendor_id)
+
+    result = []
+    for inv in invoices_qs[:200]:
+        result.append({
+            'invoice_id': inv.invoice_id,
+            'vendor_id': inv.vendor_id,
+            'vendor_name': inv.vendor.company_name if inv.vendor else None,
+            'relate_number': inv.relate_number,
+            'settlement_amount': str(inv.settlement_amount),
+            'service_fee': str(inv.service_fee),
+            'tax_amount': str(inv.tax_amount),
+            'total_amount': str(inv.total_amount),
+            'status': inv.status,
+            'invoice_number': inv.invoice_number,
+            'error_message': inv.error_message,
+            'created_at': inv.created_at,
+        })
+
+    return Response({
+        'success': True,
+        'err': '',
+        'invoices': result,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def admin_list_settleable_vendors(request):
     _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
     if err:
