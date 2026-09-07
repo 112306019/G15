@@ -278,9 +278,4 @@ urlpatterns = [
 
     # Shipping API
     path('shipping/ecpay/map/', shipping.ecpay_store_map, name='ecpay_store_map'),
-    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_map_callback'),
-    path("shipping/ecpay/status/callback/", shipping.ecpay_logistics_status_callback,),
-    path("vendor/order/createLogistics", vendor.vendor_order_create_logistics,),
-    path("vendor/order/queryLogistics", vendor.vendor_order_query_logistics,)
-
-]
+    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_m
