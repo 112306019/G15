@@ -296,10 +296,10 @@ class KOCMissionNew(models.Model):
 
 class RemunerationForm(models.Model):
     """
-    勞務報酬單（勞報單）：案件完成推廣後，KOC 下載固定範本簽署，上傳到自己的雲端硬碟，
-    把「公開檢視連結」貼回來給平台審核。平台不接收檔案直接上傳，只收連結。
-    一個 KOCMissionNew 只會有一張勞報單，還沒送出過連結之前不會有這筆紀錄
-    （用 get_or_create 在第一次提交時才建立，見 koc_submit_tax_form_link）。
+    勞務報酬單（勞報單）：不再綁定單一案件，而是 KOC 每次申報時，把「目前所有還沒
+    申報過的分潤」加總成一筆金額，開一張勞報單。KOC 下載固定範本簽署，上傳到自己的
+    雲端硬碟，把「公開檢視連結」貼回來給平台審核。平台不接收檔案直接上傳，只收連結。
+    這筆申報實際涵蓋了哪幾筆分潤，記在 Earnings.remuneration_form（見該欄位註解）。
     """
     STATUS_CHOICES = [
         ('pending_review', '待審核'),
@@ -308,12 +308,15 @@ class RemunerationForm(models.Model):
     ]
 
     form_id = models.AutoField(primary_key=True)
-    kocmission = models.OneToOneField(
-        KOCMissionNew,
+    koc = models.ForeignKey(
+        KOC,
         on_delete=models.CASCADE,
-        related_name='remuneration_form',
-        db_column='kocmission_id'
+        related_name='remuneration_forms',
+        db_column='koc_id'
     )
+    # 這張勞報單涵蓋的分潤加總金額（= 建立當下所有 Earnings.remuneration_form 剛好
+    # 被指到這張單的加總，之後不會因為新的分潤產生而變動）
+    amount = models.IntegerField(db_column='amount')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_review', db_column='status')
     cloud_link_url = models.URLField(max_length=500, db_column='cloud_link_url')
     submitted_at = models.DateTimeField(db_column='submitted_at')
@@ -328,7 +331,7 @@ class RemunerationForm(models.Model):
         db_table = 'RemunerationForm'
 
     def __str__(self):
-        return f"RemunerationForm {self.form_id} for Mission {self.kocmission_id} ({self.status})"
+        return f"RemunerationForm {self.form_id} for KOC {self.koc_id} ({self.status})"
 
 
 class Submissions(models.Model):
@@ -826,6 +829,16 @@ class Earnings(models.Model):
     )
     amount = models.IntegerField()
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    # 這筆分潤有沒有被納入某一張已申報的勞務報酬單。KOC 每次申報時會把當下所有還是
+    # null 的分潤一次加總開單，開單後這裡就會指到那張單，之後不會再被算進下一張。
+    remuneration_form = models.ForeignKey(
+        RemunerationForm,
+        on_delete=models.SET_NULL,
+        db_column='remuneration_form_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -970,6 +983,53 @@ class SupportMessage(models.Model):
 
     class Meta:
         db_table = 'SupportMessage'
+        ordering = ['created_at']
+
+
+class OrderChatRoom(models.Model):
+    """
+    消費者針對某張訂單跟廠商溝通的聊天室，跟 SupportChatRoom（找平台客服）是分開的兩件事：
+    這裡是買家跟賣家兩邊直接對話，一張訂單固定一間聊天室。
+    """
+    room_id = models.AutoField(primary_key=True)
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='chat_room',
+        db_column='order_id'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'OrderChatRoom'
+
+    def __str__(self):
+        return f"OrderChatRoom {self.room_id} for Order {self.order_id}"
+
+
+class OrderMessage(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('user', '消費者'),
+        ('vendor', '廠商'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(
+        OrderChatRoom,
+        on_delete=models.CASCADE,
+        related_name='messages',
+        db_column='room_id'
+    )
+    sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
+    # 對應 User.user_id 或 Vendor.vendor_id，依 sender_role 而定，不是外鍵
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    # 對方是否已讀（user 發的訊息看廠商有沒有讀；vendor 發的訊息看消費者有沒有讀）
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'OrderMessage'
         ordering = ['created_at']
 
 

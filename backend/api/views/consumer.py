@@ -1144,31 +1144,36 @@ def view_order(request):
             continue
         order_list.append(order)
 
+    order_ids = [order.order_id for order in order_list]
+
+    # 商品明細一次撈出所有訂單的份，再用 order_id 分組，避免對每張訂單各發一次查詢（N+1）
     items_by_order = {}
     vendor_ids = set()
 
-    for order in order_list:
-        items = list(
-            OrderItem.objects
-            .filter(order=order)
-            .select_related('product')
-        )
-        items_by_order[order.order_id] = items
-
-        for item in items:
-            if item.product and item.product.vendor_id:
-                vendor_ids.add(item.product.vendor_id)
+    for item in (
+        OrderItem.objects
+        .filter(order_id__in=order_ids)
+        .select_related('product')
+    ):
+        items_by_order.setdefault(item.order_id, []).append(item)
+        if item.product and item.product.vendor_id:
+            vendor_ids.add(item.product.vendor_id)
 
     vendor_name_by_id = {
         v.vendor_id: v.company_name
         for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
     }
 
-    order_ids = [order.order_id for order in order_list]
-
     shipment_by_order = {
         shipment.order_id: shipment
         for shipment in ShipmentInfo.objects.filter(order_id__in=order_ids)
+    }
+
+    # 收件地址同樣一次撈出所有訂單用到的份，不要逐筆訂單各查一次
+    address_ids = [order.address_id for order in order_list if order.address_id]
+    address_by_id = {
+        address.pk: address
+        for address in Address.objects.filter(pk__in=address_ids)
     }
 
     result = []
@@ -1185,9 +1190,7 @@ def view_order(request):
         recipient_data = None
 
         if order.address_id:
-            address = Address.objects.filter(
-                pk=order.address_id
-            ).first()
+            address = address_by_id.get(order.address_id)
 
             if address:
                 recipient_data = {
@@ -1231,6 +1234,7 @@ def view_order(request):
             'cancel_reason': order.cancel_reason,
             'Address_id': order.address_id,
             'created_at': order.created_at,
+            'vendor_id': first_vendor_id,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
             'recipient': recipient_data,
             'shipment': shipment_data,

@@ -41,7 +41,7 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, sync_expired_promoting_missions
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
 from payments.services import pick_relevant_payment
 
@@ -248,15 +248,24 @@ def calculate_order_commission(order):
         kocmission=mission,
         order=order,
         amount=commission_amount,
-        status=EARNINGS_STATUS_CHOICES_MAP["pending"]
+        status=EARNINGS_STATUS_CHOICES_MAP["withdrawable"]
     )
 
-    # 分潤剛算出來時，錢還不能直接動用：先記錄在 KOC 錢包的
-    # 凍結餘額（balance_frozen），等活動正式結算（見
-    # admin_settle_campaign_earnings）才會轉成可提領餘額。
+    # 訂單完成當下就直接把分潤記入可提領餘額，不用等整個案件結束才結算
+    # （原本會先進 balance_frozen，等 admin_settle_campaign_earnings 手動結算才轉
+    # balance_available；admin_settle_campaign_earnings 仍保留，作為補算舊資料或
+    # 例外情況用的工具，正常流程不會再用到）。
     wallet, _ = KocWallet.objects.get_or_create(koc=mission.koc)
-    wallet.balance_frozen = wallet.balance_frozen + commission_amount
-    wallet.save(update_fields=["balance_frozen", "updated_at"])
+    wallet.balance_available = wallet.balance_available + commission_amount
+    wallet.save(update_fields=["balance_available", "updated_at"])
+
+    Transactions.objects.create(
+        koc_wallet=wallet,
+        type="reward",
+        amount=commission_amount,
+        reference_type="earning",
+        reference_id=str(earning.earnings_id)
+    )
 
     coupon.usage_count = (
         coupon.usage_count or 0
@@ -919,6 +928,10 @@ def admin_get_earnings(request):
 
 # 列出「有可提領分潤」的活動，並標出是否已經過了 end_date + promo_days，
 # 可以讓前端知道要顯示可結算還是要等待。
+#
+# 注意：calculate_order_commission 現在建立 Earnings 時就直接是 withdrawable，
+# 正常流程不會再產生 pending 分潤，這支 API（以及下面的 admin_settle_campaign_earnings）
+# 只當作補算舊資料或例外情況的手動工具保留，不是主要結算路徑。
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_list_settleable_campaigns(request):
@@ -2441,36 +2454,21 @@ def admin_get_tax_forms(request):
             'err': f"status 必須是 {', '.join(sorted(valid_statuses))} 其中之一"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    forms = RemunerationForm.objects.select_related(
-        'kocmission__koc__user',
-        'kocmission__application__campaign',
-    ).order_by('-submitted_at')
+    forms = RemunerationForm.objects.select_related('koc__user').order_by('-submitted_at')
 
     if status_filter:
         forms = forms.filter(status=status_filter)
 
-    mission_ids = [form.kocmission_id for form in forms]
-    earnings_totals = (
-        Earnings.objects.filter(kocmission_id__in=mission_ids)
-        .values('kocmission_id')
-        .annotate(total=Sum('amount'))
-    )
-    earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
-
     result = []
     for form in forms:
-        mission = form.kocmission
-        campaign = mission.application.campaign
-        koc_user = mission.koc.user if mission.koc else None
+        koc_user = form.koc.user if form.koc else None
 
         result.append({
             'form_id': form.form_id,
-            'kocmission_id': mission.kocmission_id,
-            'koc_id': mission.koc_id,
+            'koc_id': form.koc_id,
             'koc_name': (koc_user.display_name or koc_user.name) if koc_user else '',
-            'campaign_name': campaign.name,
-            'vendor_name': campaign.vendor.company_name,
-            'amount': earnings_map.get(mission.kocmission_id, 0),
+            'service_content': REMUNERATION_SERVICE_CONTENT,
+            'amount': form.amount,
             'status': form.status,
             'cloud_link_url': form.cloud_link_url,
             'submitted_at': form.submitted_at,
@@ -2515,10 +2513,7 @@ def admin_review_tax_form(request):
         return Response({'success': False, 'err': '退回時必須填寫原因'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        form = RemunerationForm.objects.select_related(
-            'kocmission__koc__user',
-            'kocmission__application__campaign',
-        ).get(form_id=form_id)
+        form = RemunerationForm.objects.select_related('koc__user').get(form_id=form_id)
     except RemunerationForm.DoesNotExist:
         return Response({'success': False, 'err': '找不到對應的勞報單'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2532,12 +2527,10 @@ def admin_review_tax_form(request):
     form.save(update_fields=['status', 'reviewed_at', 'reviewed_by_admin_id', 'reject_reason'])
 
     if action == 'reject':
-        koc_user = form.kocmission.koc.user if form.kocmission.koc else None
+        koc_user = form.koc.user if form.koc else None
         if koc_user and koc_user.email:
             try:
-                send_tax_form_rejected_email(
-                    koc_user, form.kocmission.application.campaign.name, reject_reason,
-                )
+                send_tax_form_rejected_email(koc_user, form.amount, reject_reason)
             except Exception:
                 logger.exception('勞報單退回通知信寄送失敗：form_id=%s', form.form_id)
 

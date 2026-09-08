@@ -26,6 +26,7 @@ import CheckoutPage from './shopping/CheckoutPage';
 import PaymentResultPage from './shopping/PaymentResultPage';
 import ECPayStoreResult from './shopping/ECPayStoreResult';
 import OrdersPage from './shopping/OrdersPage';
+import OrderChatPage from './shopping/OrderChatPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
 import SupportChatPage from './shopping/SupportChatPage';
@@ -74,6 +75,7 @@ const VIEW_TO_PATH = {
 // 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
 function getViewKeyFromPath(pathname) {
   if (pathname.startsWith('/product/')) return 'product_detail';
+  if (pathname.endsWith('/chat') && pathname.startsWith('/orders/')) return 'order_chat';
   if (pathname.startsWith('/orders/') && pathname !== '/orders') return 'order_detail';
   for (const [key, path] of Object.entries(VIEW_TO_PATH)) {
     if (pathname === path) return key;
@@ -220,6 +222,13 @@ function OrderDetailRoute() {
   return <OrderDetailPage onBack={() => navigate('/orders')} orderId={id} />;
 }
 
+// 訂單聊天頁（消費者跟廠商溝通）：id 直接來自網址
+function OrderChatRoute() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  return <OrderChatPage onBack={() => navigate('/orders')} orderId={id} />;
+}
+
 // 需要「整包資料」才能顯示、且沒有簡單 fetch-by-id API 的頁面（任務詳情、業績分析），
 // 一律靠路由 state 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
 function TaskDetailRoute({ onJumpHome }) {
@@ -359,7 +368,7 @@ function MainSystem() {
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
-      'profile', 'security', 'coupons', 'points', 'orders', 'order_detail',
+      'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
       'home', 'earnings', 'earnings_detail', 'pending_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support'
     ];
     const effectiveRole = roleOverride ?? userRole;
@@ -385,6 +394,12 @@ function MainSystem() {
       return;
     }
 
+    // 訂單聊天頁（跟廠商溝通）：id 直接進網址
+    if (targetView === 'order_chat') {
+      navigate(`/orders/${data}/chat`);
+      return;
+    }
+
     // 任務詳情 / 業績分析：資料整包用路由 state 帶過去
     if (targetView === 'task_detail' && data) {
       navigate('/task', { state: { task: data } });
@@ -402,14 +417,14 @@ function MainSystem() {
 
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
-    'security', 'orders', 'order_detail', 'applyKoc',
+    'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
     'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
     if (['earnings', 'earnings_detail', 'pending_detail', 'tax_form_records'].includes(view)) return 'earnings';
-    if (['orders', 'order_detail'].includes(view)) return 'orders';
+    if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
 
@@ -462,7 +477,7 @@ function MainSystem() {
     );
   }
 
-  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print/');
+  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print');
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
@@ -573,7 +588,8 @@ function MainSystem() {
 
         <Route path="/chat" element={<ChatPage />} />
 
-        <Route path="/tax-form-print/:kocmissionId" element={<TaxFormPrintView />} />
+        <Route path="/tax-form-print" element={<TaxFormPrintView />} />
+        <Route path="/tax-form-print/:formId" element={<TaxFormPrintView />} />
 
         {/* 下面這些頁面共用左側 Sidebar 的殼 */}
         <Route path="/home" element={
@@ -621,6 +637,7 @@ function MainSystem() {
             <OrdersPage
               onTrackOrder={(id) => handleNavigate('order_detail', id)}
               onOpenOrderDetail={(id) => handleNavigate('order_detail', id)}
+              onOpenChat={(id) => handleNavigate('order_chat', id)}
             />
           </ShellLayout>
         } />
@@ -628,6 +645,12 @@ function MainSystem() {
         <Route path="/orders/:id" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <OrderDetailRoute />
+          </ShellLayout>
+        } />
+
+        <Route path="/orders/:id/chat" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <OrderChatRoute />
           </ShellLayout>
         } />
 

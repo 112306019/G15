@@ -65,6 +65,7 @@ from .views import koc, vendor
 from .views.vendor import vendor_upload_image
 from .views import shipping
 from .views import support
+from .views import order_chat
 
 urlpatterns = [
     # koc
@@ -84,6 +85,8 @@ urlpatterns = [
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
     path('koc/revenue/getPendingDetail', views.get_pending_earnings_detail, name='koc-revenue-get-pending-detail'),
+    path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
+    path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
     path('koc/analytics/getList', views.get_analytics_list, name='koc-analytics-get-list'),
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
@@ -238,6 +241,12 @@ urlpatterns = [
     path('platform/support/getMessages', support.admin_support_get_messages, name='admin-support-get-messages'),
     path('platform/support/sendMessage', support.admin_support_send_message, name='admin-support-send-message'),
     path('platform/support/markRead', support.admin_support_mark_read, name='admin-support-mark-read'),
+
+    # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
+    path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),
+    path('user/orderChat/sendMessage', order_chat.user_order_chat_send_message, name='user-order-chat-send-message'),
+    path('vendor/orderChat/getMessages', order_chat.vendor_order_chat_get_messages, name='vendor-order-chat-get-messages'),
+    path('vendor/orderChat/sendMessage', order_chat.vendor_order_chat_send_message, name='vendor-order-chat-send-message'),
 
     # Admin API
     # Platform Admin 平台端 API

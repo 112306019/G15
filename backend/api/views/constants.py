@@ -15,6 +15,16 @@ STAGE_CODE_MAP = {
     'completed': 4,
 }
 
+# 勞務報酬單「勞務內容」統一寫法：一張單現在可能同時涵蓋好幾個不同案件、甚至不同
+# 廠商的分潤加總，不會再逐筆寫案件/廠商名稱。
+REMUNERATION_SERVICE_CONTENT = '社群行銷推廣服務酬勞'
+
+# KOC 提領：跨行轉帳銀行會收取的手續費，這筆錢不是平台賺的，只是告知用（實際扣款
+# 是銀行端處理，平台這邊的錢包/撥款金額不會扣掉這 15 元）。
+CROSS_BANK_TRANSFER_FEE = 15
+# 最低提領金額：至少要比手續費多 1 元，確保扣完手續費後 KOC 還會實際收到錢。
+MIN_PAYOUT_AMOUNT = CROSS_BANK_TRANSFER_FEE + 1
+
 
 def sync_expired_promoting_missions():
     """

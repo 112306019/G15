@@ -51,7 +51,7 @@ function SectionLabel({ children }) {
 }
 
 export default function TaxFormPrintView() {
-  const { kocmissionId } = useParams();
+  const { formId } = useParams();
   const navigate = useNavigate();
   const userId = localStorage.getItem('userId');
 
@@ -76,7 +76,7 @@ export default function TaxFormPrintView() {
         setError('');
 
         const res = await api.get('/koc/mission/taxFormData', {
-          params: { User_id: userId, kocmission_id: kocmissionId },
+          params: { User_id: userId, form_id: formId || undefined },
         });
 
         if (!res.data.success) {
@@ -99,7 +99,7 @@ export default function TaxFormPrintView() {
     }
 
     load();
-  }, [userId, kocmissionId]);
+  }, [userId, formId]);
 
   if (loading) {
     return (
@@ -122,11 +122,6 @@ export default function TaxFormPrintView() {
       </div>
     );
   }
-
-  const period =
-    data.campaign_start_date && data.campaign_end_date
-      ? `${data.campaign_start_date} ~ ${data.campaign_end_date}`
-      : '';
 
   const amount = data.amount || 0;
   const { withholdingTax, nhiSupplement, netAmount } = computeTaxes(amount, residency);
@@ -190,8 +185,8 @@ export default function TaxFormPrintView() {
             <Field label="執行業務類別" value="第90項 其他" className="flex-1 border-b-0 border-l" />
             <Field label="費用率" value="0%" className="flex-1 border-b-0 border-l" />
           </div>
-          <Field label="勞務內容" value={data.campaign_name} />
-          <Field label="勞務期間" value={period} className="border-b-0" />
+          <Field label="勞務內容" value={data.service_content} />
+          <Field label="申報日期" value={data.submitted_at} className="border-b-0" />
         </div>
 
         {/* 試算與簽章區 */}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, FileText } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send } from 'lucide-react';
 import api from '../api/index';
-import TaxFormModal from './TaxFormModal';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
@@ -46,7 +45,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
-  const [taxFormTask, setTaxFormTask] = useState(null);
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
@@ -205,9 +203,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               promoCode: null,
               earningsTotal: m.earnings_total,
               isExpired: m.is_expired || false,
-              taxFormStatus: m.tax_form_status || 'not_submitted',
-              taxFormUrl: m.tax_form_url || null,
-              taxFormRejectReason: m.tax_form_reject_reason || null,
             })));
           }
         }
@@ -376,33 +371,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
               <span className="text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
             </div>
-
-            {task.taxFormStatus === 'not_submitted' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
-              >
-                <FileText size={16}/> 上傳勞報單連結
-              </button>
-            )}
-
-            {task.taxFormStatus === 'pending_review' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2"
-              >
-                <FileText size={16}/> 檢視/修改連結
-              </button>
-            )}
-
-            {task.taxFormStatus === 'rejected' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
-              >
-                <FileText size={16}/> 重新上傳連結
-              </button>
-            )}
 
             <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
               <Search size={16}/> 查看詳情
@@ -650,24 +618,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         </div>
-      )}
-
-      {/* 上傳勞務報酬單連結彈出視窗 */}
-      {taxFormTask && (
-        <TaxFormModal
-          task={taxFormTask}
-          userId={user_id}
-          onClose={() => setTaxFormTask(null)}
-          onSubmitted={(newStatus, newUrl) => {
-            setTasks(previous =>
-              previous.map(t =>
-                t.id === taxFormTask.id
-                  ? { ...t, taxFormStatus: newStatus, taxFormUrl: newUrl, taxFormRejectReason: null }
-                  : t
-              )
-            );
-          }}
-        />
       )}
 
       {/* 申請成功彈出視窗 */}

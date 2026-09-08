@@ -10,8 +10,11 @@ import {
   ChevronRight,
   AlertTriangle,
   MapPin,
-  Store
+  Store,
+  MessageCircle
 } from 'lucide-react'
+
+import OrderChatModal from './OrderChatModal'
 
 import {
   getVendorOrders,
@@ -991,6 +994,9 @@ export default function Orders() {
 
   const [bulkUpdating, setBulkUpdating] =
     useState(false)
+
+  const [chatOrder, setChatOrder] =
+    useState(null)
 
 
   useEffect(() => {
@@ -2206,10 +2212,24 @@ export default function Orders() {
                         </td>
 
                         <td className="p-5">
-                          <ChevronRight
-                            size={17}
-                            className="text-[#8C8880] group-hover:text-[#C8522A]"
-                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              title="聯絡買家"
+                              onClick={event => {
+                                event.stopPropagation()
+                                setChatOrder(order)
+                              }}
+                              className="p-2 rounded-full text-[#8C8880] hover:bg-[#FDF0ED] hover:text-[#C8522A] transition-colors"
+                            >
+                              <MessageCircle size={16} />
+                            </button>
+
+                            <ChevronRight
+                              size={17}
+                              className="text-[#8C8880] group-hover:text-[#C8522A]"
+                            />
+                          </div>
                         </td>
                       </tr>
                     )
@@ -2254,6 +2274,15 @@ export default function Orders() {
           handleUploadInvoice
         }
         vendorId={vendorId}
+      />
+
+      <OrderChatModal
+        open={Boolean(chatOrder)}
+        orderId={chatOrder?.orderId}
+        vendorId={vendorId}
+        items={chatOrder?.items}
+        totalAmount={chatOrder?.totalAmount}
+        onClose={() => setChatOrder(null)}
       />
     </div>
   )

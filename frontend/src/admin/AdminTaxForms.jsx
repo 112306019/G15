@@ -167,7 +167,7 @@ export default function AdminTaxForms() {
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">網紅姓名</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">專案名稱</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">勞務內容</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">金額</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">提交時間</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">狀態</th>
@@ -204,8 +204,7 @@ export default function AdminTaxForms() {
                 <tr key={form.form_id} className="hover:bg-[#F8F9FA] transition-colors">
                   <td className="px-6 py-4 text-sm font-bold text-[#1A1A18]">{form.koc_name || '-'}</td>
                   <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-[#1A1A18]">{form.campaign_name}</div>
-                    <div className="text-xs text-[#8C8880] mt-0.5">{form.vendor_name}</div>
+                    <div className="text-sm font-bold text-[#1A1A18]">{form.service_content}</div>
                   </td>
                   <td className="px-6 py-4 text-sm font-black text-[#C8522A]">
                     NT$ {(form.amount || 0).toLocaleString()}
@@ -277,7 +276,7 @@ export default function AdminTaxForms() {
           >
             <h3 className="text-lg font-bold text-[#1A1A18] mb-1">退回勞報單</h3>
             <p className="text-xs font-bold text-[#8C8880] mb-5">
-              {rejectingForm.koc_name}・{rejectingForm.campaign_name}
+              {rejectingForm.koc_name}・NT$ {(rejectingForm.amount || 0).toLocaleString()}
             </p>
 
             <div className="flex flex-wrap gap-2 mb-4">

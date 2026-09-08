@@ -267,6 +267,21 @@ export const getVendorSupportUnreadCount = vendorId => {
   })
 }
 
+// 取得某張訂單跟消費者的聊天室訊息
+export const getVendorOrderChatMessages = (orderId, vendorId) => {
+  return api.get('/vendor/orderChat/getMessages', {
+    params: {
+      order_id: orderId,
+      vendor_id: vendorId
+    }
+  })
+}
+
+// 廠商在訂單聊天室發送訊息給消費者
+export const sendVendorOrderChatMessage = data => {
+  return api.post('/vendor/orderChat/sendMessage', data)
+}
+
 // 廠商成效總覽
 export const getVendorAnalyticsOverview = (vendorId) => {
   return api.get('/vendor/analytics/overview', {

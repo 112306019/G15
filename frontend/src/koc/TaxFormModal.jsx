@@ -11,12 +11,12 @@ function isValidUrl(value) {
   }
 }
 
-export default function TaxFormModal({ task, userId, onClose, onSubmitted }) {
-  const [url, setUrl] = useState(task?.taxFormUrl || '');
+// isResubmit：true 代表在修正一張被退回的單，金額是固定的（退回當時的金額，
+// 不會因為重新提交而改變）；false 代表要開一張全新的單，金額是目前所有還沒申報過的分潤加總。
+export default function TaxFormModal({ amount, isResubmit, rejectReason, userId, onClose, onSubmitted }) {
+  const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const isResubmit = task?.taxFormStatus === 'rejected';
 
   const handleSubmit = async () => {
     const trimmed = url.trim();
@@ -36,7 +36,6 @@ export default function TaxFormModal({ task, userId, onClose, onSubmitted }) {
 
       const res = await api.post('/koc/mission/submitTaxFormLink', {
         User_id: userId,
-        kocmission_id: task.id,
         url: trimmed,
       });
 
@@ -44,7 +43,7 @@ export default function TaxFormModal({ task, userId, onClose, onSubmitted }) {
         throw new Error(res.data.err || '送出失敗');
       }
 
-      onSubmitted?.(res.data.tax_form_status, res.data.tax_form_url);
+      onSubmitted?.(res.data);
       onClose?.();
     } catch (err) {
       const apiError = err.response?.data?.err;
@@ -71,42 +70,40 @@ export default function TaxFormModal({ task, userId, onClose, onSubmitted }) {
       >
         <div className="flex items-start justify-between mb-1">
           <h3 className="text-lg font-bold text-[#1A1A18]">
-            {isResubmit ? '重新上傳勞報單連結' : '上傳勞務報酬單連結'}
+            {isResubmit ? '重新上傳勞報單連結' : '申報勞務報酬單'}
           </h3>
           <button onClick={onClose} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors">
             <X size={20} />
           </button>
         </div>
-        <p className="text-xs font-bold text-[#8C8880] mb-6">{task?.productName}</p>
+        <p className="text-xs font-bold text-[#8C8880] mb-6">
+          {isResubmit ? '修正連結後重新送審，金額維持不變' : '本次申報將涵蓋目前所有還沒申報過的分潤'}
+        </p>
 
-        {isResubmit && task?.taxFormRejectReason && (
+        {isResubmit && rejectReason && (
           <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-4 mb-5 text-xs text-[#C8522A] leading-relaxed">
             <span className="font-bold">上次退回原因：</span>
-            {task.taxFormRejectReason}
+            {rejectReason}
           </div>
         )}
 
-        {/* 案件資訊 */}
+        {/* 金額資訊 */}
         <div className="bg-[#F8F9FA] rounded-2xl p-5 mb-5 space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-[#8C8880] font-bold">專案名稱</span>
-            <span className="text-[#1A1A18] font-bold">{task?.productName || '-'}</span>
+            <span className="text-[#8C8880] font-bold">勞務內容</span>
+            <span className="text-[#1A1A18] font-bold">社群行銷推廣服務酬勞</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[#8C8880] font-bold">廠商</span>
-            <span className="text-[#1A1A18] font-bold">{task?.vendor || '-'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#8C8880] font-bold">分潤金額</span>
+            <span className="text-[#8C8880] font-bold">申報金額</span>
             <span className="text-[#C8522A] font-black">
-              NT$ {(task?.earningsTotal || 0).toLocaleString()}
+              NT$ {(amount || 0).toLocaleString()}
             </span>
           </div>
         </div>
 
         {/* 開啟勞報單列印頁面：瀏覽器直接渲染表單，用「列印/儲存為 PDF」輸出 */}
         <a
-          href={`/tax-form-print/${task?.id}`}
+          href="/tax-form-print"
           target="_blank"
           rel="noreferrer"
           className="w-full mb-5 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"

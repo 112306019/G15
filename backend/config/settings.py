@@ -80,6 +80,11 @@ DATABASES = {
         'OPTIONS': {
             'ssl': {'ssl-mode': 'REQUIRED'},
         },
+        # 資料庫是遠端連線（含 TLS 握手），預設值 0 會讓 Django 每個 request 結束就斷線、
+        # 下個 request 又要重新握手一次，實測光是重新建立連線就要花將近 2 秒。
+        # 設成正數讓連線在多個 request 之間保留重複使用，大幅降低每次請求的延遲。
+        'CONN_MAX_AGE': 600,
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
