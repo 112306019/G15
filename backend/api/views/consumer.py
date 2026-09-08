@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
 from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
@@ -1928,4 +1929,190 @@ def create_return_request(request):
 
     return Response({
         'success': True,
-        'err': 
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'status': return_request.status,
+        'refund_scope': refund_scope,
+        'requested_amount': str(return_request.requested_amount),
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_return_packing_proof(request):
+    """
+    消費者在寄出退貨商品前，上傳打包過程的照片/影片證明
+    （外觀完好、配件齊全、緩衝材包好），1~5 張。
+
+    只有申請還在 requested 或 approved 階段（商品還沒真的寄出、
+    廠商也還沒收到）能補打包證明；一旦進入 returning 之後的狀態
+    就不再開放上傳，避免爭議發生後回頭補造證據。
+    """
+    return_id = request.data.get('Return_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    photo_urls = request.data.get('photo_urls', [])
+
+    if not return_id:
+        return Response(
+            {'success': False, 'err': 'Return_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not isinstance(photo_urls, list) or not (1 <= len(photo_urls) <= 5):
+        return Response(
+            {'success': False, 'err': 'photo_urls 需為 1~5 張照片/影片的網址陣列'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到此退貨申請'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(return_request.order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if return_request.status not in ('requested', 'approved'):
+        return Response(
+            {'success': False, 'err': f'此退貨申請目前狀態是「{return_request.status}」，無法再上傳打包證明'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.packing_proof_urls = photo_urls
+    return_request.packing_proof_uploaded_at = timezone.now()
+    return_request.save(update_fields=['packing_proof_urls', 'packing_proof_uploaded_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'packing_proof_urls': return_request.packing_proof_urls,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_return_requests(request):
+    order_id = request.query_params.get('Order_id')
+    user_id = request.query_params.get('User_id')
+    guest_id = request.query_params.get('Guest_id')
+
+    if not user_id and not guest_id:
+        return Response(
+            {'success': False, 'err': 'User_id 或 Guest_id 至少需要一個'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    returns = ReturnRequest.objects.select_related('order').order_by('-requested_at')
+
+    if order_id:
+        returns = returns.filter(order_id=order_id)
+    if user_id:
+        returns = returns.filter(order__user_id=user_id)
+    if guest_id:
+        returns = returns.filter(order__guest_id=guest_id)
+
+    result = []
+    for r in returns:
+        result.append({
+            'return_id': str(r.return_id),
+            'order_id': str(r.order_id),
+            'reason': r.reason,
+            'description': r.description,
+            'status': r.status,
+            'requested_amount': str(r.requested_amount),
+            'refunded_amount': str(r.refunded_amount) if r.refunded_amount is not None else None,
+            'vendor_note': r.vendor_note,
+            'admin_note': r.admin_note,
+            'requested_at': r.requested_at,
+            'approved_at': r.approved_at,
+            'rejected_at': r.rejected_at,
+            'returned_at': r.returned_at,
+            'refunded_at': r.refunded_at,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def dispute_return_request(request):
+    """
+    廠商拒絕退貨後，消費者不服，提出爭議，交給 Admin 判定
+    （見 platform.py 的 admin_list_return_disputes / admin_resolve_return_dispute）。
+    只有 status='rejected' 的申請能提爭議——已經同意、已經在退款中、
+    或已經是爭議中的，都不能重複觸發。
+    """
+    return_id = request.data.get('Return_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    description = request.data.get('description', '')
+
+    if not return_id:
+        return Response(
+            {'success': False, 'err': 'Return_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到此退貨申請'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(return_request.order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if return_request.status != 'rejected':
+        return Response(
+            {'success': False, 'err': f'此退貨申請目前狀態是「{return_request.status}」，只有被拒絕的申請能提出爭議'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.status = 'disputed'
+    if description:
+        return_request.description = (return_request.description or '') + f"\n[消費者爭議補充] {description}"
+    return_request.save(update_fields=['status', 'description'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'status': return_request.status,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def consumer_upload_image(request):
+    """
+    消費者上傳圖片（目前用於退貨打包證明），存到 R2，回傳圖片網址。
+    URL: /consumer/upload-image
+    """
+    file_obj = request.FILES.get('image')
+
+    if not file_obj:
+        return Response({
+            "success": False,
+            "err": "請提供圖片檔案（欄位名稱：image）"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        image_url = upload_image_to_r2(file_obj, file_obj.name)
+        return Response({
+            "success": True,
+            "image_url": image_url
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

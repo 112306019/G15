@@ -1822,4 +1822,8 @@ export default function CheckoutPage({
 
         </aside>
 
-  
+      </div>
+
+    </div>
+  );
+}

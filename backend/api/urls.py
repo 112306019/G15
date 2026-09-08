@@ -67,6 +67,7 @@ from .views.consumer import (
     dispute_return_request,
     upload_return_packing_proof,
     cancel_order,
+    consumer_upload_image,
 )
 
 from .views import koc, vendor
@@ -179,6 +180,7 @@ urlpatterns = [
     path('consumer/order/return/list', get_return_requests, name='get-return-requests'),
     path('consumer/order/return/dispute', dispute_return_request, name='dispute-return-request'),
     path('consumer/order/return/uploadPackingProof', upload_return_packing_proof, name='upload-return-packing-proof'),
+    path('consumer/upload-image', consumer_upload_image, name='consumer-upload-image'),
     
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
@@ -278,4 +280,9 @@ urlpatterns = [
 
     # Shipping API
     path('shipping/ecpay/map/', shipping.ecpay_store_map, name='ecpay_store_map'),
-    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_m
+    path('shipping/ecpay/map/callback/', shipping.ecpay_store_map_callback, name='ecpay_store_map_callback'),
+    path("shipping/ecpay/status/callback/", shipping.ecpay_logistics_status_callback,),
+    path("vendor/order/createLogistics", vendor.vendor_order_create_logistics,),
+    path("vendor/order/queryLogistics", vendor.vendor_order_query_logistics,)
+
+]

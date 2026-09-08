@@ -1200,4 +1200,33 @@ class ReturnRequest(models.Model):
     refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     vendor_note = models.TextField(blank=True, null=True)
-    admin_note = models.T
+    admin_note = models.TextField(blank=True, null=True)
+
+    # 只有走到 Admin 爭議判定（status='disputed' 之後）才會有值
+    admin = models.ForeignKey(
+        'Admins',
+        on_delete=models.SET_NULL,
+        db_column='admin_id',
+        null=True,
+        blank=True,
+        related_name='return_disputes'
+    )
+
+    # 綠界退款/退貨 API 回傳的交易編號，財務對帳用；退款是否真的透過金流商
+    # 退成功，要看這個欄位有沒有值，不能只看 status='refunded'
+    ecpay_refund_trade_no = models.CharField(max_length=50, blank=True, null=True)
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    returned_at = models.DateTimeField(null=True, blank=True)   # 廠商確認收到退回商品
+    refunded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'Return_Request'
+        indexes = [
+            models.Index(fields=['order', 'status']),
+        ]
+
+    def __str__(self):
+        return f"ReturnRequest {self.return_id} for Order {self.order_id} ({self.status})"
