@@ -2485,6 +2485,8 @@ def vendor_return_getlist(request):
             "refunded_amount": str(r.refunded_amount) if r.refunded_amount is not None else None,
             "requested_at": r.requested_at,
             'vendor_note': r.vendor_note,
+            'vendor_dispute_deadline': r.vendor_dispute_deadline,
+            'packing_proof_urls': r.packing_proof_urls,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -2633,15 +2635,20 @@ def vendor_return_confirm_received(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    now = timezone.now()
     return_request.status = "received"
-    return_request.returned_at = timezone.now()
-    return_request.save(update_fields=["status", "returned_at"])
+    return_request.returned_at = now
+    # 廠商從現在起 48 小時內，如果認為商品有問題，要提出爭議佐證；逾期視為放棄，
+    # 交由平台端（或排程）依原流程走退款。
+    return_request.vendor_dispute_deadline = now + timedelta(hours=48)
+    return_request.save(update_fields=["status", "returned_at", "vendor_dispute_deadline"])
 
     return Response({
         "success": True,
         "err": "",
         "return_id": str(return_request.return_id),
         "status": return_request.status,
+        "vendor_dispute_deadline": return_request.vendor_dispute_deadline,
     }, status=status.HTTP_200_OK)
 
 
@@ -2852,6 +2859,69 @@ def vendor_return_process_refund(request):
             {"success": False, "err": f"退款帳務處理失敗：{error}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_return_raise_dispute(request):
+    """
+    廠商確認收到退貨商品後，如果認為商品有問題（故意寄壞的、缺配件等），
+    要在 vendor_dispute_deadline（收貨後 48 小時）之前提出爭議，
+    附上照片佐證（1~5 張）和文字描述，交由平台端判定。
+    """
+    vendor_id = request.data.get("vendor_id")
+    return_id = request.data.get("return_id")
+    photo_urls = request.data.get("photo_urls", [])
+    description = request.data.get("description", "")
+
+    if not vendor_id or not return_id:
+        return Response(
+            {"success": False, "err": "vendor_id、return_id 為必填"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not description or not description.strip():
+        return Response(
+            {"success": False, "err": "description 為必填，請說明商品問題"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not isinstance(photo_urls, list) or not (1 <= len(photo_urls) <= 5):
+        return Response(
+            {"success": False, "err": "photo_urls 需為 1~5 張照片的網址陣列"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request, err = _get_return_request_for_vendor(return_id, vendor_id)
+    if err:
+        return err
+
+    if return_request.status != "received":
+        return Response(
+            {"success": False, "err": f"此退貨申請目前狀態是「{return_request.status}」，只有已收貨的申請能提出爭議"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not return_request.vendor_dispute_deadline or timezone.now() > return_request.vendor_dispute_deadline:
+        return Response(
+            {"success": False, "err": "爭議提出期限（收貨後 48 小時）已過，無法再提出爭議"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.status = "disputed"
+    return_request.vendor_dispute_photo_urls = photo_urls
+    return_request.vendor_dispute_description = description.strip()
+    return_request.save(update_fields=[
+        "status", "vendor_dispute_photo_urls", "vendor_dispute_description"
+    ])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "return_id": str(return_request.return_id),
+        "status": return_request.status,
+    }, status=status.HTTP_200_OK)
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])

@@ -65,7 +65,9 @@ from .views.consumer import (
     create_return_request,
     get_return_requests,
     dispute_return_request,
+    upload_return_packing_proof,
     cancel_order,
+    consumer_upload_image,
 )
 
 from .views import koc, vendor
@@ -177,6 +179,8 @@ urlpatterns = [
     path('consumer/order/return/create', create_return_request, name='create-return-request'),
     path('consumer/order/return/list', get_return_requests, name='get-return-requests'),
     path('consumer/order/return/dispute', dispute_return_request, name='dispute-return-request'),
+    path('consumer/order/return/uploadPackingProof', upload_return_packing_proof, name='upload-return-packing-proof'),
+    path('consumer/upload-image', consumer_upload_image, name='consumer-upload-image'),
     
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
@@ -221,6 +225,7 @@ urlpatterns = [
     path('vendor/return/review', vendor.vendor_return_review, name='vendor-return-review'),
     path('vendor/return/confirmReceived', vendor.vendor_return_confirm_received, name='vendor-return-confirm-received'),
     path('vendor/return/processRefund', vendor.vendor_return_process_refund, name='vendor-return-process-refund'),
+    path('vendor/return/raiseDispute', vendor.vendor_return_raise_dispute, name='vendor-return-raise-dispute'),
 
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),

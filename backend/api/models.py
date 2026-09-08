@@ -1173,10 +1173,25 @@ class ReturnRequest(models.Model):
         related_name='return_requests'
     )
 
+    # 退貨數量：只有單品項退貨（order_item 有值）時才有意義；
+    # 整張訂單退貨（order_item 為 null）時這個欄位不使用，保持 null。
+    quantity = models.IntegerField(null=True, blank=True, db_column='quantity')
+
     reason = models.CharField(max_length=50, choices=REASON_CHOICES)
     description = models.TextField(blank=True, null=True)
 
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='requested')
+
+    # 消費者端：寄出退貨商品前，上傳打包過程的照片/影片證明（外觀完好、配件齊全），
+    # 1~5 張，存 URL 陣列。
+    packing_proof_urls = models.JSONField(default=list, blank=True, db_column='packing_proof_urls')
+    packing_proof_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='packing_proof_uploaded_at')
+
+    # 廠商端：確認收到退回商品後，如果認為商品有問題（例如故意寄壞的、缺配件），
+    # 要在 vendor_dispute_deadline 之前提出爭議佐證，逾期視為放棄爭議。
+    vendor_dispute_photo_urls = models.JSONField(default=list, blank=True, db_column='vendor_dispute_photo_urls')
+    vendor_dispute_description = models.TextField(blank=True, null=True, db_column='vendor_dispute_description')
+    vendor_dispute_deadline = models.DateTimeField(null=True, blank=True, db_column='vendor_dispute_deadline')
 
     # 消費者申請當下要求退的金額（前端算好帶進來，或後端依 order/order_item
     # 的 subtotal 算）。refunded_amount 才是實際退款完成的金額，兩者可能因為
