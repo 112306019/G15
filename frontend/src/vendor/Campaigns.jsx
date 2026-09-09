@@ -905,7 +905,8 @@ export default function Campaigns() {
           followers: '—',
           orders: 0,
           gmv: 0,
-          avatar: '👤'
+          avatar: '👤',
+          violationCount: application.koc_violation_count || 0
         }))
       )
     } catch (error) {
@@ -1432,8 +1433,21 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '帶來訂單', '創造 GMV', '審核'].map(h => (
-                    <th key={h} className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">{h}</th>
+                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '帶來訂單', '創造 GMV', '審核'].map(h => (
+                    <th
+                      key={h}
+                      className={cn(
+                        'p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap',
+                        h === '歷史違規' && 'relative group cursor-help'
+                      )}
+                    >
+                      {h}
+                      {h === '歷史違規' && (
+                        <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-[#1A1A18] text-white text-[11px] font-medium normal-case whitespace-normal tracking-normal leading-relaxed rounded-xl px-3 py-2 shadow-lg z-20">
+                          包含此 KOC 自行取消任務、以及任務逾期未完成（沒交文案或作品連結）的累計次數
+                        </div>
+                      )}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -1441,7 +1455,7 @@ export default function Campaigns() {
                 {kocLoading ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-16 text-center text-sm font-bold text-[#8C8880]"
                     >
                       KOC 報名名單載入中...
@@ -1450,7 +1464,7 @@ export default function Campaigns() {
                 ) : kocError ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-16 text-center text-sm font-bold text-red-600"
                     >
                       {kocError}
@@ -1459,7 +1473,7 @@ export default function Campaigns() {
                 ) : kocList.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-16 text-center text-sm font-bold text-[#8C8880]"
                     >
                       目前尚無 KOC 報名
@@ -1515,6 +1529,19 @@ export default function Campaigns() {
                             approved: '已通過',
                             rejected: '已拒絕'
                           }[koc.status] || koc.status}
+                        </span>
+                      </td>
+
+                      <td className="p-5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold',
+                            koc.violationCount > 0
+                              ? 'bg-[#FDF0ED] text-[#C8522A]'
+                              : 'bg-[#F5F0E8] text-[#8C8880]'
+                          )}
+                        >
+                          {koc.violationCount} 次
                         </span>
                       </td>
 

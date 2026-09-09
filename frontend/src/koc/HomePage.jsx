@@ -7,7 +7,7 @@ const STAGES = [
   { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
   { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 5, label: '已結案', icon: CheckCircle2, desc: '案件完成' },
+  { id: 5, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
@@ -21,14 +21,6 @@ const STAGE_MAP = {
   3: 2,           // 上傳作品：stage=2(publishing)
   4: 3,           // 推廣中：stage=3(promoting)
   5: 4,           // 已結案：stage=4(completed)
-};
-
-// 勞務報酬單（勞報單）狀態徽章對照
-const TAX_FORM_BADGE = {
-  not_submitted: { label: '待上傳勞報單', cls: 'bg-[#F5F0E8] text-[#8C8880]' },
-  pending_review: { label: '勞報單審核中', cls: 'bg-[#FDF0ED] text-[#C8522A]' },
-  rejected: { label: '勞報單退回', cls: 'bg-red-50 text-red-600' },
-  approved: { label: '審核通過 (待撥款)', cls: 'bg-green-50 text-green-700' },
 };
 
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
@@ -48,6 +40,9 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
+
+  // 已結束分頁（stage 5）子狀態：已結案（正常跑完）/ 已取消（過期或 KOC 自己取消）
+  const [endedSubTab, setEndedSubTab] = useState('completed');
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
   const [kocId, setKocId] = useState(null);
   const [appliedCampaign, setAppliedCampaign] = useState(null);
@@ -203,6 +198,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               promoCode: null,
               earningsTotal: m.earnings_total,
               isExpired: m.is_expired || false,
+              endReason: m.end_reason || null,
             })));
           }
         }
@@ -272,6 +268,14 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   };
 
   const renderCardAction = (task) => {
+    if (task.isExpired) {
+      return (
+        <button disabled className="w-full bg-[#F5F0E8] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2">
+          案件已過截止日期
+        </button>
+      );
+    }
+
     switch(task.stage) {
       case 1:
         if (task.isRejected) {
@@ -393,6 +397,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     }
   };
 
+  // 已結束分頁要再依「已結案／已取消」子分頁篩選一次，其餘分頁照舊全部顯示
+  const visibleTasks = activeStage === 5
+    ? tasks.filter(t => (endedSubTab === 'completed' ? !t.endReason : !!t.endReason))
+    : tasks;
+
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
 
@@ -450,7 +459,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       <div className="flex items-end mb-6 px-2 gap-4">
-        {activeStage !== 1 && (
+        {activeStage !== 1 && activeStage !== 5 && (
           <h3 className="text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
@@ -477,6 +486,31 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               }`}
             >
               已申請
+            </button>
+          </div>
+        )}
+
+        {activeStage === 5 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEndedSubTab('completed')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                endedSubTab === 'completed'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              已結案（{tasks.filter(t => !t.endReason).length}）
+            </button>
+            <button
+              onClick={() => setEndedSubTab('cancelled')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                endedSubTab === 'cancelled'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              已取消（{tasks.filter(t => t.endReason).length}）
             </button>
           </div>
         )}
@@ -531,7 +565,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 xl:grid-cols-3 gap-6">
-          {tasks.map((task) => (
+          {visibleTasks.map((task) => (
             <div key={task.id} className={`bg-white rounded-[2rem] p-6 border ${task.isRejected ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
               <div className="flex justify-between items-start mb-6">
                 <div>
@@ -549,9 +583,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   <span className="text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
                     已過期
                   </span>
-                ) : task.stage === 5 ? (
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${TAX_FORM_BADGE[task.taxFormStatus]?.cls || TAX_FORM_BADGE.not_submitted.cls}`}>
-                    {TAX_FORM_BADGE[task.taxFormStatus]?.label || TAX_FORM_BADGE.not_submitted.label}
+                ) : task.stage === 5 && task.endReason ? (
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${
+                    task.endReason === 'expired' ? 'bg-[#F5F0E8] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A]'
+                  }`}>
+                    {task.endReason === 'expired' ? '已過期' : '自行取消'}
                   </span>
                 ) : task.stage === 2 && (
                   <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
@@ -579,7 +615,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </div>
           ))}
 
-          {tasks.length === 0 && (
+          {visibleTasks.length === 0 && (
             <div className="col-span-full py-20 text-center flex flex-col items-center justify-center bg-white rounded-[2rem] border border-[#E2DDD4] border-dashed">
               <div className="w-16 h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4">
                 <CheckCircle2 size={24} className="text-[#8C8880]" />

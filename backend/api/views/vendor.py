@@ -14,6 +14,7 @@ from api.r2_storage import upload_image_to_r2
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from api.vendor_serializers import (
     VendorRegisterSerializer,
@@ -1226,10 +1227,13 @@ def vendor_application_getlist(request):
                 or ""
             )
 
+        koc_violation_count = application.koc.total_violation_count if application.koc else 0
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
             "koc_name": koc_name,
+            "koc_violation_count": koc_violation_count,
             "campaign_id": str(
                 application.campaign.campaign_id
             ),
@@ -1489,6 +1493,19 @@ def vendor_application_review(request):
             "success": False,
             "err": str(error)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    if application.koc:
+        create_notification(
+            user=application.koc.user,
+            category="koc",
+            title="接案申請已通過" if review_result == "approved" else "接案申請被拒絕",
+            body=(
+                f"您申請的案件「{application.campaign.name}」已通過審核，可以開始接案囉！"
+                if review_result == "approved"
+                else f"您申請的案件「{application.campaign.name}」很可惜未通過審核。"
+            ),
+            reference_type="koc_home",
+        )
 
     return Response({
         "success": True,
@@ -1762,6 +1779,20 @@ def vendor_mission_review_submission(request):
     if should_activate_coupon:
         coupon.status = "active"
         coupon.save(update_fields=["status"])
+
+    submission_type_label = "文案" if submission.submission_type == "text" else "作品連結"
+    if mission.koc:
+        create_notification(
+            user=mission.koc.user,
+            category="koc",
+            title=f"{submission_type_label}審核通過" if review_result == "approved" else f"{submission_type_label}被退回",
+            body=(
+                f"您提交的{submission_type_label}已通過審核。"
+                if review_result == "approved"
+                else f"您提交的{submission_type_label}被退回，請依廠商意見修改後重新提交。"
+            ),
+            reference_type="koc_home",
+        )
 
     return Response({
         "success": True,
@@ -2386,6 +2417,21 @@ def vendor_order_update_shipping(request):
                 ]
             )
 
+    shipping_status_labels = {
+        "preparing": "備貨中",
+        "shipped": "已出貨",
+        "delivered": "已送達",
+    }
+    if shipping_status in shipping_status_labels:
+        create_notification(
+            user=order.user,
+            category="order",
+            title=f"訂單{shipping_status_labels[shipping_status]}",
+            body=f"您的訂單出貨狀態已更新為「{shipping_status_labels[shipping_status]}」。",
+            reference_type="order",
+            reference_id=order.order_id,
+        )
+
     return Response({
         "success": True,
         "err": "",
@@ -2472,6 +2518,19 @@ def vendor_order_respond_cancel_request(request):
             order.cancel_rejected_at = timezone.now()
             order.save(update_fields=["order_status", "cancel_rejected_at"])
 
+    create_notification(
+        user=order.user,
+        category="order",
+        title="取消申請已核准" if approve else "取消申請被拒絕",
+        body=(
+            "您的取消訂單申請已核准，訂單已取消。"
+            if approve
+            else "您的取消訂單申請已被廠商拒絕，訂單將繼續處理。"
+        ),
+        reference_type="order",
+        reference_id=order.order_id,
+    )
+
     return Response({
         "success": True,
         "err": "",
@@ -2518,6 +2577,15 @@ def vendor_order_upload_invoice(request):
         send_invoice_notification_email(order)
     except Exception as e:
         print(f"發票通知信寄送失敗（order_id={order_id}）: {e}")
+
+    create_notification(
+        user=order.user,
+        category="order",
+        title="發票已開立",
+        body=f"您的訂單發票號碼為 {invoice_number}。",
+        reference_type="order",
+        reference_id=order.order_id,
+    )
 
     return Response({
         "success": True,

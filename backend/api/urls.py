@@ -66,6 +66,7 @@ from .views.vendor import vendor_upload_image
 from .views import shipping
 from .views import support
 from .views import order_chat
+from .views import notifications as notification_views
 
 urlpatterns = [
     # koc
@@ -78,6 +79,7 @@ urlpatterns = [
     path('koc/application/getlist', views.get_application_list, name='get-application-list'),
     path('koc/mission/getDetail', views.mission_get_detail, name='koc-mission-get-detail'),
     path('koc/mission/getlist', views.get_mission_list, name='koc-mission-get-list'),
+    path('koc/mission/cancel', views.cancel_mission, name='koc-mission-cancel'),
     path('koc/mission/getStageCounts', views.get_mission_stage_counts, name='koc-mission-get-stage-counts'),
     path('koc/mission/submitTaxFormLink', views.submit_tax_form_link, name='koc-mission-submit-tax-form-link'),
     path('koc/mission/taxFormData', views.get_tax_form_data, name='koc-mission-tax-form-data'),
@@ -241,6 +243,10 @@ urlpatterns = [
     path('platform/support/getMessages', support.admin_support_get_messages, name='admin-support-get-messages'),
     path('platform/support/sendMessage', support.admin_support_send_message, name='admin-support-send-message'),
     path('platform/support/markRead', support.admin_support_mark_read, name='admin-support-mark-read'),
+
+    # 站內通知
+    path('notifications/list', notification_views.list_notifications, name='notifications-list'),
+    path('notifications/markRead', notification_views.mark_notification_read, name='notifications-mark-read'),
 
     # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
     path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),

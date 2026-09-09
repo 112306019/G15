@@ -40,7 +40,10 @@ from .constants import (
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
-    sync_expired_promoting_missions
+    MAX_VIOLATION_COUNT,
+    sync_expired_promoting_missions,
+    sync_expired_koc_suspensions,
+    record_koc_violation,
 )
 # 獲取koc個人資料
 @api_view(['GET'])
@@ -316,18 +319,20 @@ def get_applied_campaign_list(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def apply_mission(request):
+    sync_expired_koc_suspensions()
+
     koc_id = request.data.get('koc_id')
     order_id = request.data.get('order_id')
     campaign_id = request.data.get('campaign_id')
-    
+
     if not all([koc_id, order_id, campaign_id]):
         return Response({
             "success": False,
             "err": "缺少必要參數: koc_id, order_id 或 campaign_id",
             "application_id": "",
-            "status": "pending" 
+            "status": "pending"
         }, status=400)
-        
+
     try:
         koc_profile = KOC.objects.filter(koc_id=koc_id).first()
         if not koc_profile:
@@ -337,7 +342,17 @@ def apply_mission(request):
                 "application_id": "",
                 "status": "pending"
             }, status=400)
-            
+
+        if koc_profile.is_suspended:
+            until_text = koc_profile.suspended_until.strftime('%Y-%m-%d') if koc_profile.suspended_until else ''
+            return Response({
+                "success": False,
+                "err": f"您的接案權限已被凍結{f'至 {until_text}' if until_text else ''}，暫時無法申請新案件",
+                "application_id": "",
+                "status": "pending"
+            }, status=403)
+
+
         order_items = OrderItem.objects.filter(order_id=order_id).select_related('product')
         if not order_items.exists():
             return Response({
@@ -827,12 +842,68 @@ def get_mission_list(request):
             "is_revising": vendor_feedback is not None,
             "vendor_feedback": vendor_feedback,
             "is_expired": is_expired,
+            "end_reason": mission.end_reason,
         })
 
     return Response({
         "success": True,
         "err": "",
         "missions": result
+    }, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def cancel_mission(request):
+    """
+    KOC 自行取消尚未結束的任務（撰寫文案/上傳作品/推廣中都可以取消）。
+    URL: /koc/mission/cancel
+
+    取消後任務直接進入「已結束」（stage='completed'），end_reason 標記為
+    'cancelled'，歸類在前端的「已取消」分類（跟過期自動結案的任務同一組，
+    但原因不同）。順便停用優惠碼，避免取消後消費者還撿得到連結繼續使用。
+
+    這也算一次 KOC 違規（見 record_koc_violation），跟任務放到過期沒完成
+    是同一套計數、同一個停權門檻，不分開算。
+    """
+    user_id = request.data.get('User_id')
+    kocmission_id = request.data.get('kocmission_id')
+
+    if not user_id:
+        return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+    if not kocmission_id:
+        return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        mission = KOCMissionNew.objects.select_related('koc').get(kocmission_id=kocmission_id)
+    except KOCMissionNew.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if not mission.koc or str(mission.koc.user_id) != str(user_id):
+        return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
+
+    if mission.stage == 'completed':
+        return Response({'success': False, 'err': '此任務已經結束，無法取消'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    mission.stage = 'completed'
+    mission.end_reason = 'cancelled'
+    mission.save(update_fields=['stage', 'end_reason'])
+
+    CouponNew.objects.filter(kocmission=mission).exclude(status__in=['expired', 'disabled']).update(status='disabled')
+
+    koc = mission.koc
+    suspended, suspended_until = record_koc_violation(koc)
+
+    return Response({
+        'success': True,
+        'err': '',
+        'kocmission_id': mission.kocmission_id,
+        'stage': STAGE_CODE_MAP[mission.stage],
+        'end_reason': mission.end_reason,
+        'total_violation_count': koc.total_violation_count,
+        'max_violation_count': MAX_VIOLATION_COUNT,
+        'suspended': suspended,
+        'suspended_until': suspended_until,
     }, status=http_status.HTTP_200_OK)
 
 

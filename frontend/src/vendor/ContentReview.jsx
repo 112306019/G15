@@ -432,7 +432,10 @@ export default function ContentReview() {
               item.coupon_status || '',
 
             kocMissionId:
-              item.kocmission_id || null
+              item.kocmission_id || null,
+
+            violationCount:
+              item.koc_violation_count || 0
           }))
         )
       } catch (error) {
@@ -1318,7 +1321,7 @@ export default function ContentReview() {
                         size="lg"
                       />
 
-                      <div>
+                      <div className="flex-1">
                         <div className="font-bold text-lg text-[#1A1A18]">
                           {selectedApplication.kocName}
                         </div>
@@ -1327,6 +1330,19 @@ export default function ContentReview() {
                           {selectedApplication.kocId}
                         </div>
                       </div>
+
+                      <span
+                        className={`relative group px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-help ${
+                          selectedApplication.violationCount > 0
+                            ? 'bg-[#FDF0ED] text-[#C8522A]'
+                            : 'bg-[#F5F0E8] text-[#8C8880]'
+                        }`}
+                      >
+                        過往違規次數：{selectedApplication.violationCount}
+                        <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 bg-[#1A1A18] text-white text-[11px] font-medium normal-case whitespace-normal tracking-normal leading-relaxed rounded-xl px-3 py-2 shadow-lg z-20">
+                          包含此 KOC 自行取消任務、以及任務逾期未完成（沒交文案或作品連結）的累計次數
+                        </div>
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

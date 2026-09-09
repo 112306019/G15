@@ -43,6 +43,7 @@ from api.models import (
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
@@ -2533,6 +2534,19 @@ def admin_review_tax_form(request):
                 send_tax_form_rejected_email(koc_user, form.amount, reject_reason)
             except Exception:
                 logger.exception('勞報單退回通知信寄送失敗：form_id=%s', form.form_id)
+
+    if form.koc:
+        create_notification(
+            user=form.koc.user,
+            category='koc',
+            title='勞務報酬單審核通過' if action == 'approve' else '勞務報酬單被退回',
+            body=(
+                f'您申報的 NT$ {form.amount:,} 勞務報酬單已審核通過。'
+                if action == 'approve'
+                else f'您申報的 NT$ {form.amount:,} 勞務報酬單被退回：{reject_reason}'
+            ),
+            reference_type='tax_form_records',
+        )
 
     return Response({
         'success': True,

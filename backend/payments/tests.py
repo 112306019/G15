@@ -562,14 +562,14 @@ class EcpayClientBackViewTests(PaymentsTestCase):
         resp = self.client.get(f"/api/payments/ecpay/client-back/?merchant_trade_no={payment.merchant_trade_no}")
 
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp["Location"], "https://frontend.example.com/cart")
+        self.assertEqual(resp["Location"], "https://frontend.example.com/cart?payment_cancelled=1")
         payment.refresh_from_db()
         self.assertEqual(payment.status, PaymentTransaction.STATUS_FAILED)
 
     def test_missing_merchant_trade_no_still_redirects(self):
         resp = self.client.get("/api/payments/ecpay/client-back/")
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp["Location"], "https://frontend.example.com/cart")
+        self.assertEqual(resp["Location"], "https://frontend.example.com/cart?payment_cancelled=1")
 
     def test_post_request_returns_405(self):
         resp = self.client.post("/api/payments/ecpay/client-back/")

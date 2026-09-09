@@ -378,7 +378,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   {/* 🌟 只有這裡使用 font-serif */}
                   {userRole === "koc" ? (
                     <>
-                      <h2 className="font-serif text-3xl md:text-4xl font-black mb-4 leading-tight">歡迎回來！<br />前往專屬任務大廳</h2>
+                      <h2 className="font-serif text-3xl md:text-4xl font-black mb-4 leading-tight">歡迎回來！<br />前往專屬接案大廳</h2>
                       <p className="text-gray-400 text-sm leading-relaxed mb-8 font-medium">查看最新的代言商品、追蹤您的專屬優惠碼成效，並管理您的收益。</p>
                     </>
                   ) : (
@@ -388,7 +388,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     </>
                   )}
                   <button onClick={handleKocClick} className="bg-[#C8522A] text-white px-8 py-3.5 rounded-full font-bold tracking-wide hover:bg-[#A64220] transition-all shadow-md pointer-events-auto">
-                    {userRole === "koc" ? "進入任務大廳" : "了解 KOC 計畫"}
+                    {userRole === "koc" ? "進入接案大廳" : "了解 KOC 計畫"}
                   </button>
                 </div>
                 

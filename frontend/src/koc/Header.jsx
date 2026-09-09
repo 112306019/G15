@@ -1,12 +1,21 @@
 import React, { useState } from 'react';
-import { ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut } from 'lucide-react';
+import { ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut, Bell, Package, Briefcase } from 'lucide-react';
 
 // 引入 Logo 圖片
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
 
 // 🟢 接收 cartCount
-export default function Header({ activeTab, onNavigate, userRole, cartCount = 0, supportUnreadCount = 0, onLogout }) {
+export default function Header({
+  activeTab,
+  onNavigate,
+  userRole,
+  cartCount = 0,
+  supportUnreadCount = 0,
+  onLogout,
+  notifications = { unreadCount: 0, orderUnreadCount: 0, kocUnreadCount: 0 },
+  onRefreshNotifications,
+}) {
 
   const allNavItems = [
     { label: '購物頁面', key: 'shop', isKocOnly: false },
@@ -14,6 +23,7 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
   ];
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const navItems = allNavItems.filter(item => {
     if (item.isKocOnly && userRole !== 'koc') return false;
@@ -38,17 +48,17 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
           onClick={() => onNavigate?.('shop')}
         >
           {/* 左側：圓形 Icon */}
-          <img 
-            src={LogoIcon} 
-            alt="ShareBuy Icon" 
-            className="h-8 w-8 object-cover rounded-full shadow-sm" 
+          <img
+            src={LogoIcon}
+            alt="ShareBuy Icon"
+            className="h-8 w-8 object-cover rounded-full shadow-sm"
           />
-          
+
           {/* 右側：文字 Logo */}
-          <img 
-            src={LogoText} 
-            alt="ShareBuy Text" 
-            className="h-7 w-auto object-contain mix-blend-multiply" 
+          <img
+            src={LogoText}
+            alt="ShareBuy Text"
+            className="h-7 w-auto object-contain mix-blend-multiply"
           />
         </div>
 
@@ -68,7 +78,7 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
                 }`}
               >
                 {item.label}
-                
+
                 {/* 🌟 橘色底線：只有在 active 時才會出現 */}
                 {isActive && (
                   <span className="absolute -bottom-1.5 left-1/2 h-[3px] w-3/4 -translate-x-1/2 rounded-full bg-[#C8522A]" />
@@ -86,7 +96,7 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
         >
           <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
         </div>
-        
+
         <div
           className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
           onClick={() => onNavigate?.('cart')}
@@ -111,15 +121,56 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
         )}
 
         <div
-          className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-          onClick={() => onNavigate?.('support')}
+          className="relative"
+          onMouseEnter={() => { setNotifOpen(true); onRefreshNotifications?.(); }}
+          onMouseLeave={() => setNotifOpen(false)}
         >
-          <Headset size={22} strokeWidth={2.5} className={activeTab === 'support' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+          <div className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors">
+            <Bell size={22} strokeWidth={2.5} className={notifOpen ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
-          {supportUnreadCount > 0 && (
-            <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-              {supportUnreadCount}
-            </span>
+            {notifications.unreadCount > 0 && (
+              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+                {notifications.unreadCount}
+              </span>
+            )}
+          </div>
+
+          {/* 通知下拉選單：只看類型跟則數，實際內容要點進通知頁面才看得到 */}
+          {notifOpen && (
+            <div className="absolute right-0 top-full pt-2 w-56 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
+                <button
+                  onClick={() => { setNotifOpen(false); onNavigate?.('notifications', 'order'); }}
+                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <Package size={16} strokeWidth={2.5} />
+                    訂單通知
+                  </span>
+                  {notifications.orderUnreadCount > 0 && (
+                    <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                      {notifications.orderUnreadCount}
+                    </span>
+                  )}
+                </button>
+                {userRole === 'koc' && (
+                  <button
+                    onClick={() => { setNotifOpen(false); onNavigate?.('notifications', 'koc'); }}
+                    className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                  >
+                    <span className="flex items-center gap-3">
+                      <Briefcase size={16} strokeWidth={2.5} />
+                      接案通知
+                    </span>
+                    {notifications.kocUnreadCount > 0 && (
+                      <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                        {notifications.kocUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
@@ -129,15 +180,21 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
           onMouseLeave={() => setProfileMenuOpen(false)}
         >
           <div
-            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
             onClick={() => onNavigate?.('profile')}
           >
             <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+
+            {supportUnreadCount > 0 && (
+              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+                {supportUnreadCount}
+              </span>
+            )}
           </div>
 
           {/* 右上角個人選單 */}
           {profileMenuOpen && (
-            <div className="absolute right-0 top-full pt-2 w-44 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute right-0 top-full pt-2 w-48 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
                 <button
                   onClick={() => { setProfileMenuOpen(false); onNavigate?.('profile'); }}
@@ -145,6 +202,20 @@ export default function Header({ activeTab, onNavigate, userRole, cartCount = 0,
                 >
                   <Settings size={16} strokeWidth={2.5} />
                   個人設定
+                </button>
+                <button
+                  onClick={() => { setProfileMenuOpen(false); onNavigate?.('support'); }}
+                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <Headset size={16} strokeWidth={2.5} />
+                    客服諮詢
+                  </span>
+                  {supportUnreadCount > 0 && (
+                    <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                      {supportUnreadCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}

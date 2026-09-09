@@ -96,6 +96,16 @@ class KOC(models.Model):
     )
     reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
     is_suspended = models.BooleanField(default=False, db_column='is_suspended')  # 新增
+    # 停權到期時間：只有 is_suspended=True 時才有意義。到期後由
+    # sync_expired_koc_suspensions() 自動解除（lazy-write，不用排程）。
+    suspended_until = models.DateTimeField(null=True, blank=True, db_column='suspended_until')
+    # 終身累計違規次數（自己取消任務 + 任務放到過期沒完成，兩種都算），只會增加
+    # 不會歸零，給廠商審核接案申請時參考這個 KOC 過去的紀錄，跟下面「距離上次
+    # 停權以來的次數」是分開的兩件事。
+    total_violation_count = models.IntegerField(default=0, db_column='total_violation_count')
+    # 距離「上一次觸發停權」以來的違規次數：每次觸發停權就會歸零重新算，
+    # 決定下一次要再違規幾次才會又被停權（見 record_koc_violation）。
+    violation_count_since_suspension = models.IntegerField(default=0, db_column='violation_count_since_suspension')
 
     class Meta:
         db_table = 'Koc'
@@ -278,17 +288,29 @@ class Application(models.Model):
 
 class KOCMissionNew(models.Model):
     """KOC 任務表（優化版：全面小寫規範 + 減少 JOIN 效能優化）"""
+
+    END_REASON_CHOICES = [
+        ('expired', '已過期'),
+        ('cancelled', 'KOC取消'),
+    ]
+
     kocmission_id = models.AutoField(primary_key=True, db_column='kocmission_id')
-    
+
     # 1. 依然保留與申請表的關聯（為了追蹤當初是哪一次申請通過的）
     application = models.ForeignKey('Application',  on_delete=models.CASCADE, db_column='application_id')
-    
+
     # 🌟 2. 冗餘欄位：直接綁定 KOC（對應 KOC 表），方便網紅打開 App 看任務清單時，不需要 JOIN Application 表！
     koc = models.ForeignKey('KOC', on_delete=models.CASCADE, db_column='koc_id', db_index=True, null=True, blank=True)
     stage = models.CharField(max_length=50, db_column='stage')
+    # 只有 stage='completed' 時才有意義：null/blank 代表案件正常跑完（已結案）；
+    # 'expired' 代表推廣期滿前沒完成該做的事就被系統自動結案（已取消）；
+    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）。
+    end_reason = models.CharField(
+        max_length=20, choices=END_REASON_CHOICES, blank=True, null=True, db_column='end_reason'
+    )
 
     class Meta:
-        db_table = 'Koc_Mission'  
+        db_table = 'Koc_Mission'
 
     def __str__(self):
         return f"Mission {self.kocmission_id} for KOC {self.koc_id} (Stage: {self.stage})"
@@ -1139,3 +1161,40 @@ class ShipmentInfo(models.Model):
 
     def __str__(self):
         return f"Shipment {self.shipment_id} - Order {self.order_id}"
+
+
+class Notification(models.Model):
+    """
+    站內通知：系統/廠商/平台做了某件跟這個使用者有關的事，推播一則訊息給他看，
+    跟 ChatRoom/SupportChatRoom/OrderChatRoom 那種「雙方對話」的 Message 不是同一件事
+    （通知是單向的、沒有回覆）。
+    """
+    CATEGORY_CHOICES = [
+        ('order', '訂單'),
+        ('koc', 'KOC接案'),
+    ]
+
+    notification_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_column='user_id'
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_column='category')
+    title = models.CharField(max_length=200, db_column='title')
+    body = models.TextField(blank=True, default='', db_column='body')
+    # 點擊這則通知要導去哪裡：reference_type 決定前端怎麼解讀 reference_id，
+    # 例如 'order'（訂單詳情）、'order_chat'（訂單聊天室）、'koc_home'（接案管理）、
+    # 'tax_form_records'（勞報單紀錄）。不是外鍵，純粹給前端導頁用。
+    reference_type = models.CharField(max_length=50, blank=True, null=True, db_column='reference_type')
+    reference_id = models.CharField(max_length=100, blank=True, null=True, db_column='reference_id')
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Notification'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notification {self.notification_id} ({self.category}) for {self.user_id}"

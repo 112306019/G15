@@ -9,6 +9,7 @@ from .koc import (
     get_application_list,
     mission_get_detail,
     get_mission_list,
+    cancel_mission,
     get_mission_stage_counts,
     remove_application,
     get_revenue_total,

@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 
 function ImgIcon() {
   return (
@@ -62,11 +63,24 @@ export default function CartPage({
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponMsg, setCouponMsg] = useState({ show: false, text: "", ok: false });
   const [pointsApplied, setPointsApplied] = useState(false);
+  const [paymentCancelledNotice, setPaymentCancelledNotice] = useState(false);
 
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
 
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("payment_cancelled") !== "1") return;
+
+    setPaymentCancelledNotice(true);
+
+    // 顯示過一次就把網址上的標記清掉，避免重新整理又跳出同一則提示
+    const next = new URLSearchParams(searchParams);
+    next.delete("payment_cancelled");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const fetchCart = async () => {
@@ -233,6 +247,20 @@ export default function CartPage({
   return (
     <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans">
       <div className="mx-auto max-w-[860px] px-6 pb-20 pt-12 animate-in fade-in duration-500">
+
+        {paymentCancelledNotice && (
+          <div className="mb-8 flex items-start justify-between gap-4 rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-sm font-bold text-red-600">
+            <span>付款未完成，請確認資料後重新結帳。</span>
+            <button
+              type="button"
+              onClick={() => setPaymentCancelledNotice(false)}
+              className="shrink-0 text-red-400 transition-colors hover:text-red-600"
+              aria-label="關閉提示"
+            >
+              <XIcon />
+            </button>
+          </div>
+        )}
 
         {/* 🌟 統一風格的大標題 (移除橘色底線) */}
         <div className="mb-10">

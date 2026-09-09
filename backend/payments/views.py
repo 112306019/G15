@@ -136,7 +136,9 @@ def ecpay_client_back(request):
     else:
         logger.error("ECPay ClientBackURL 沒有帶 merchant_trade_no，無法辨識是哪一筆交易")
 
-    return redirect(f"{settings.FRONTEND_BASE_URL}/cart")
+    # 帶個標記給前端購物車頁，讓它知道要跳「付款未完成」的提示，
+    # 不然使用者只會發現自己「被丟回購物車」，看不出剛剛那筆交易已經失敗。
+    return redirect(f"{settings.FRONTEND_BASE_URL}/cart?payment_cancelled=1")
 
 
 @api_view(["GET"])

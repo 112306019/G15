@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from api.models import Order, OrderChatRoom, OrderMessage, OrderItem
+from api.notifications import create_notification
 
 
 def _serialize_message(message):
@@ -223,6 +224,15 @@ def vendor_order_chat_send_message(request):
         sender_role="vendor",
         sender_id=str(vendor_id),
         content=content,
+    )
+
+    create_notification(
+        user=order.user,
+        category="order",
+        title="廠商回覆了您的訂單訊息",
+        body=content,
+        reference_type="order_chat",
+        reference_id=order.order_id,
     )
 
     return Response({
