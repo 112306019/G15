@@ -8,7 +8,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Min
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -38,14 +38,15 @@ from api.models import (
     RemunerationForm,
     VendorPayouts,
     Payouts,
-    ReturnRequest
+    ReturnRequest,
+    Submissions
 
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.emails import send_koc_approval_email, send_vendor_approval_email
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
-from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
@@ -3066,4 +3067,132 @@ def admin_review_tax_form(request):
         'err': '',
         'form_id': form.form_id,
         'status': form.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 廠商審核逾期列表：後台用，列出「底下有待審文案、且最早一筆已超過 5 天未審完」
+# 的廠商，給後台一個總覽 + 一顆手動重寄提醒信按鈕。
+# GET /platform/vendor/review-overdue
+# ==============================================================================
+
+VENDOR_REVIEW_DEADLINE_DAYS = 5
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_vendor_review_overdue(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    now = timezone.now()
+
+    earliest_by_vendor = (
+        Submissions.objects
+        .filter(status="pending", submitted_time__isnull=False)
+        .values("kocmission__application__campaign__vendor_id")
+        .annotate(earliest_submitted=Min("submitted_time"))
+    )
+
+    result = []
+    for row in earliest_by_vendor:
+        vendor_id = row["kocmission__application__campaign__vendor_id"]
+        earliest_submitted = row["earliest_submitted"]
+        deadline = earliest_submitted + timedelta(days=VENDOR_REVIEW_DEADLINE_DAYS)
+
+        if now < deadline:
+            continue
+
+        vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+        if not vendor:
+            continue
+
+        pending_count = Submissions.objects.filter(
+            status="pending",
+            kocmission__application__campaign__vendor_id=vendor_id,
+        ).count()
+
+        result.append({
+            'vendor_id': vendor.vendor_id,
+            'vendor_name': vendor.company_name,
+            'pending_count': pending_count,
+            'earliest_submitted_at': earliest_submitted,
+            'deadline': deadline,
+            'overdue_days': (now - deadline).days,
+        })
+
+    result.sort(key=lambda r: r['earliest_submitted_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'vendors': result,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 手動重新寄送廠商審核逾期提醒信：後台用，不受排程指令的「同一批只提醒一次」限制，
+# 管理員可以隨時手動再寄一次。
+# POST /platform/vendor/review-overdue/notify
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_notify_vendor_review_overdue(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    vendor_id = request.data.get('vendor_id')
+    if not vendor_id:
+        return Response({
+            'success': False,
+            'err': 'vendor_id 為必填',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到此廠商',
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    pending_submissions = Submissions.objects.filter(
+        status="pending",
+        kocmission__application__campaign__vendor_id=vendor_id,
+    )
+    pending_count = pending_submissions.count()
+
+    if pending_count == 0:
+        return Response({
+            'success': False,
+            'err': '此廠商目前沒有待審核文案',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    earliest_submitted = pending_submissions.filter(submitted_time__isnull=False).order_by('submitted_time').first().submitted_time
+
+    try:
+        send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'err': f'提醒信寄送失敗：{e}',
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    # 手動重寄後，也更新記錄，避免排程指令緊接著又寄一次重複的信
+    vendor.last_review_reminder_batch_time = earliest_submitted
+    vendor.save(update_fields=['last_review_reminder_batch_time'])
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='notify_vendor_review_overdue',
+        vendor=vendor,
+        action_reason=f'手動重新寄送審核逾期提醒信，待審文案 {pending_count} 筆',
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
     }, status=status.HTTP_200_OK)

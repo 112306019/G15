@@ -197,6 +197,12 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         default="commission"
     )
 
+    recruit_limit = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1
+    )
+
     discount_type = serializers.ChoiceField(
         choices=["percentage", "fixed"]
     )
@@ -321,6 +327,12 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
         choices=["commission", "fixed", "product"],
         required=False,
         default="commission"
+    )
+
+    recruit_limit = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1
     )
 
     discount_type = serializers.ChoiceField(

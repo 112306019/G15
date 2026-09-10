@@ -44,6 +44,9 @@ export default function ApplyPage() {
             order_id: c.order_id,
             name: c.campaign_name,
             apply_status: c.apply_status,
+            recruitLimit: c.recruit_limit,
+            approvedCount: c.approved_count,
+            isFull: c.is_full,
           })));
         }
 
@@ -180,19 +183,32 @@ export default function ApplyPage() {
                   <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
                     <ImageIcon className="text-[#8C8880]/50" size={24} />
                   </div>
-                  <div className="font-bold text-[#1A1A18] leading-snug">
-                    {product.name}
+                  <div>
+                    <div className="font-bold text-[#1A1A18] leading-snug">
+                      {product.name}
+                    </div>
+                    {activeTab === 'pending' && product.recruitLimit != null && (
+                      <div className="mt-1 text-xs font-bold text-[#8C8880]">
+                        招募進度 {product.approvedCount}/{product.recruitLimit} 人
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex-shrink-0 w-[120px] text-right">
                   {activeTab === 'pending' ? (
-                    <button
-                      onClick={() => handleApply(product)}
-                      className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
-                    >
-                      申請任務
-                    </button>
+                    product.isFull ? (
+                      <span className="text-sm font-bold text-[#8C8880] bg-[#E2DDD4] px-6 py-2 rounded-xl">
+                        已額滿
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleApply(product)}
+                        className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                      >
+                        申請任務
+                      </button>
+                    )
                   ) : (
                     <span className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] px-6 py-2 rounded-xl">
                       已申請
