@@ -341,7 +341,13 @@ def view_cart(request):
         return Response({'Cart_id': None, 'items': []}, status=status.HTTP_200_OK)
 
     cart = carts.first()
-    items = CartItem.objects.filter(cart=cart)
+    items = CartItem.objects.filter(cart=cart).select_related('product')
+
+    vendor_ids = {item.product.vendor_id for item in items if item.product}
+    vendor_name_by_id = {
+        v.vendor_id: v.company_name
+        for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
+    }
 
     result_items = []
     for item in items:
@@ -352,6 +358,9 @@ def view_cart(request):
             'Unit_price': item.unit_price,
             'Quantity': item.quantity,
             'subtotal': item.subtotal,
+            'Vendor_id': item.product.vendor_id,
+            'Vendor_name': vendor_name_by_id.get(item.product.vendor_id, item.product.vendor_id),
+            'product_status': item.product.status,
         })
 
     return Response({

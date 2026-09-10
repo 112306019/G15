@@ -128,6 +128,10 @@ class Campaigns(models.Model):
     end_date = models.DateTimeField()
     status = models.CharField(max_length=50, default='active')
 
+    # 招募人數上限：null 代表不限制人數。KOC 申請通過（Application.status='approved'）
+    # 累計人數達到上限時，前台要顯示「已額滿」，不能再申請。
+    recruit_limit = models.IntegerField(null=True, blank=True, db_column='recruit_limit')
+
     class Meta:
         db_table = 'Campaigns'
 
@@ -367,6 +371,11 @@ class Submissions(models.Model):
     vendor_feedback = models.TextField(blank=True, null=True, db_column='vendor_feedback')
     submitted_time = models.DateTimeField(blank=True, null=True, db_column='submitted_time')
     reviewed_time = models.DateTimeField(blank=True, null=True, db_column='reviewed_time')
+
+    # 文案被廠商退回（status='revising'）時，記錄修改期限（退回時間 + 3天），
+    # 到期時若還沒重新提交，寄第二封提醒信；revising_reminder_sent 避免重複寄信。
+    revising_deadline = models.DateTimeField(blank=True, null=True, db_column='revising_deadline')
+    revising_reminder_sent = models.BooleanField(default=False, db_column='revising_reminder_sent')
 
     class Meta:
         db_table = 'Submissions'
@@ -684,6 +693,13 @@ class Vendor(models.Model):
     platform_fee_rate = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal('0.00'),
         db_column='platform_fee_rate'
+    )
+
+    # 廠商審核逾期提醒：記錄上次寄提醒信時，對應那批待審文案「最早提交時間」是哪一筆，
+    # 避免同一批文案在還沒審完之前被每天重複提醒；換了新的一批（最早提交時間不同了）
+    # 才會再寄一次。
+    last_review_reminder_batch_time = models.DateTimeField(
+        null=True, blank=True, db_column='last_review_reminder_batch_time'
     )
 
     class Meta:

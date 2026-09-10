@@ -13,7 +13,7 @@ from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
 
@@ -782,7 +782,8 @@ def vendor_campaign_create(request):
                 promo_days=data["promo_days"],
                 start_date=start_datetime,
                 end_date=end_datetime,
-                status=data["status"]
+                status=data["status"],
+                recruit_limit=data.get("recruit_limit")
             )
 
             CampaignProduct.objects.create(
@@ -1157,6 +1158,10 @@ def vendor_campaign_getlist(request):
             "status": campaign.status,
             "coupon_used": coupon_used,
             "products": products,
+            "recruit_limit": campaign.recruit_limit,
+            "approved_count": Application.objects.filter(
+                campaign=campaign, status="approved"
+            ).count(),
         })
 
     return Response({
@@ -1390,6 +1395,18 @@ def vendor_application_review(request):
             "success": False,
             "err": "This application does not have a KOC"
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 招募人數已達上限就不能再通過新申請
+    if review_result == "approved" and application.campaign.recruit_limit is not None:
+        approved_count = Application.objects.filter(
+            campaign=application.campaign,
+            status="approved"
+        ).exclude(application_id=application.application_id).count()
+        if approved_count >= application.campaign.recruit_limit:
+            return Response({
+                "success": False,
+                "err": "此活動招募人數已達上限，無法再通過新的申請"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     created_mission = None
     created_coupon = None
@@ -1759,6 +1776,15 @@ def vendor_mission_review_submission(request):
             "writing"
         )
         mission.save(update_fields=["stage"])
+
+        # 設定 3 天修改期限，並寄信通知 KOC；寄信失敗不影響審核本身成功與否。
+        submission.revising_deadline = timezone.now() + timedelta(days=3)
+        submission.revising_reminder_sent = False
+        submission.save(update_fields=["revising_deadline", "revising_reminder_sent"])
+        try:
+            send_submission_revising_email(submission)
+        except Exception as e:
+            print(f"文案退回通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
 
     # 只有文案審核通過才啟用優惠碼
     if should_activate_coupon:
