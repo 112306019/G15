@@ -283,3 +283,28 @@ def send_submission_approved_email(submission):
         recipient_list=[koc_user.email],
         fail_silently=False,
     )
+
+
+def send_application_auto_rejected_email(application):
+    """
+    廠商超過 7 天未審核 KOC 的代言活動申請，系統自動取消後寄信通知 KOC。
+    """
+    koc_user = application.koc.user
+    campaign_name = application.campaign.name
+
+    subject = "您的代言活動申請已自動取消"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        f"您申請的代言活動「{campaign_name}」，因超過平台規定的 7 天審核期限，"
+        "廠商尚未完成審核，系統已自動將此申請取消。\n\n"
+        "歡迎您重新尋找其他合作機會。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
