@@ -262,6 +262,23 @@ export const processVendorReturnRefund = (
   )
 }
 
+// 廠商收貨後 48 小時內，若認為退回商品有問題，提出爭議佐證
+export const raiseVendorReturnDispute = (
+  data
+) => {
+  return api.post(
+    '/vendor/return/raiseDispute',
+    data
+  )
+}
+
+// 上傳圖片到 R2，回傳圖片網址（退貨爭議佐證用）
+export const uploadVendorImage = (formData) => {
+  return api.post('/vendor/product/upload-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 // ======================================================
 // 優惠碼
 // ======================================================

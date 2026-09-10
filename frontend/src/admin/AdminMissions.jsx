@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ClipboardList, TrendingUp, Clock, Edit } from 'lucide-react';
-import { getAllMissions, updateKOCMissionStage, getEarningsTracking } from '../api/platform';
+import { getAllMissions, updateKOCMissionStage, getEarningsTracking, getVendorReviewOverdue, notifyVendorReviewOverdue } from '../api/platform';
 
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
@@ -32,6 +32,42 @@ export default function AdminMissions() {
   const [error, setError] = useState(null);
   const [keyword, setKeyword] = useState('');
 
+  const [overdueVendors, setOverdueVendors] = useState([]);
+  const [loadingOverdue, setLoadingOverdue] = useState(false);
+  const [notifyingVendorId, setNotifyingVendorId] = useState(null);
+
+  const fetchOverdueVendors = async () => {
+    setLoadingOverdue(true);
+    try {
+      const adminId = localStorage.getItem('admin_id');
+      const res = await getVendorReviewOverdue({ Admin_id: adminId });
+      if (res.data.success) {
+        setOverdueVendors(res.data.vendors || []);
+      }
+    } catch (err) {
+      console.error('載入廠商審核逾期列表失敗', err);
+    } finally {
+      setLoadingOverdue(false);
+    }
+  };
+
+  const handleNotifyVendor = async (vendorId) => {
+    setNotifyingVendorId(vendorId);
+    try {
+      const adminId = localStorage.getItem('admin_id');
+      const res = await notifyVendorReviewOverdue({ vendor_id: vendorId, Admin_id: adminId });
+      if (res.data.success) {
+        alert('已重新寄送提醒信');
+      } else {
+        alert(res.data.err || '寄送失敗');
+      }
+    } catch (err) {
+      alert(err.response?.data?.err || '寄送失敗，請稍後再試');
+    } finally {
+      setNotifyingVendorId(null);
+    }
+  };
+
   const fetchMissions = async () => {
     setLoading(true);
     setError(null);
@@ -53,6 +89,12 @@ export default function AdminMissions() {
   useEffect(() => {
     fetchMissions();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'reviewOverdue') {
+      fetchOverdueVendors();
+    }
+  }, [activeTab]);
 
   const filteredMissions = missions.filter((mission) => {
     if (!keyword.trim()) return true;
@@ -180,6 +222,14 @@ export default function AdminMissions() {
           }`}
         >
           <TrendingUp size={18} /> 成效與分潤追蹤
+        </button>
+        <button
+          onClick={() => setActiveTab('reviewOverdue')}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all ${
+            activeTab === 'reviewOverdue' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+          }`}
+        >
+          <Clock size={18} /> 廠商審核逾期
         </button>
       </div>
 
@@ -327,6 +377,53 @@ export default function AdminMissions() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* 🟢 廠商審核逾期 */}
+      {activeTab === 'reviewOverdue' && (
+        <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+          <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA]">
+            <h2 className="text-lg font-serif font-black text-[#1A1A18]">廠商審核逾期案件</h2>
+            <p className="text-xs text-[#8C8880] mt-1">
+              顯示底下有待審文案、且最早一筆已超過 5 天未審完的廠商，可手動重新寄送提醒信。
+            </p>
+          </div>
+
+          {loadingOverdue ? (
+            <div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div>
+          ) : overdueVendors.length === 0 ? (
+            <div className="py-20 text-center text-[#8C8880] font-bold">目前沒有審核逾期的廠商</div>
+          ) : (
+            <div className="divide-y divide-[#E2DDD4]">
+              {overdueVendors.map((v) => (
+                <div key={v.vendor_id} className="px-7 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-black text-[#1A1A18]">{v.vendor_name}</span>
+                      <span className="text-[11px] font-bold rounded-full bg-[#FDF0ED] text-[#C8522A] px-3 py-1">
+                        逾期 {v.overdue_days} 天
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-[#8C8880] space-y-1">
+                      <div>待審文案：{v.pending_count} 筆</div>
+                      <div>最早提交：{new Date(v.earliest_submitted_at).toLocaleString('zh-TW')}</div>
+                      <div>審核期限：{new Date(v.deadline).toLocaleString('zh-TW')}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={notifyingVendorId === v.vendor_id}
+                    onClick={() => handleNotifyVendor(v.vendor_id)}
+                    className="shrink-0 rounded-full bg-[#1A1A18] text-white px-6 py-2.5 text-sm font-bold hover:bg-[#C8522A] transition-all disabled:opacity-50"
+                  >
+                    {notifyingVendorId === v.vendor_id ? '寄送中...' : '重新寄送提醒信'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -13,7 +13,7 @@ from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
 
@@ -782,7 +782,8 @@ def vendor_campaign_create(request):
                 promo_days=data["promo_days"],
                 start_date=start_datetime,
                 end_date=end_datetime,
-                status=data["status"]
+                status=data["status"],
+                recruit_limit=data.get("recruit_limit")
             )
 
             CampaignProduct.objects.create(
@@ -1157,6 +1158,10 @@ def vendor_campaign_getlist(request):
             "status": campaign.status,
             "coupon_used": coupon_used,
             "products": products,
+            "recruit_limit": campaign.recruit_limit,
+            "approved_count": Application.objects.filter(
+                campaign=campaign, status="approved"
+            ).count(),
         })
 
     return Response({
@@ -1390,6 +1395,18 @@ def vendor_application_review(request):
             "success": False,
             "err": "This application does not have a KOC"
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 招募人數已達上限就不能再通過新申請
+    if review_result == "approved" and application.campaign.recruit_limit is not None:
+        approved_count = Application.objects.filter(
+            campaign=application.campaign,
+            status="approved"
+        ).exclude(application_id=application.application_id).count()
+        if approved_count >= application.campaign.recruit_limit:
+            return Response({
+                "success": False,
+                "err": "此活動招募人數已達上限，無法再通過新的申請"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     created_mission = None
     created_coupon = None
@@ -1746,6 +1763,11 @@ def vendor_mission_review_submission(request):
             # 文案審核通過：進入待發佈
             mission.stage = "publishing"
             mission.save(update_fields=["stage"])
+            # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
+            try:
+                send_submission_approved_email(submission)
+            except Exception as e:
+                print(f"文案審核通過通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
         # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
         # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
         # "reviewing"，會被上面的檢查擋掉。
@@ -1759,6 +1781,15 @@ def vendor_mission_review_submission(request):
             "writing"
         )
         mission.save(update_fields=["stage"])
+
+        # 設定 3 天修改期限，並寄信通知 KOC；寄信失敗不影響審核本身成功與否。
+        submission.revising_deadline = timezone.now() + timedelta(days=3)
+        submission.revising_reminder_sent = False
+        submission.save(update_fields=["revising_deadline", "revising_reminder_sent"])
+        try:
+            send_submission_revising_email(submission)
+        except Exception as e:
+            print(f"文案退回通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
 
     # 只有文案審核通過才啟用優惠碼
     if should_activate_coupon:
@@ -2485,6 +2516,8 @@ def vendor_return_getlist(request):
             "refunded_amount": str(r.refunded_amount) if r.refunded_amount is not None else None,
             "requested_at": r.requested_at,
             'vendor_note': r.vendor_note,
+            'vendor_dispute_deadline': r.vendor_dispute_deadline,
+            'packing_proof_urls': r.packing_proof_urls,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -2633,15 +2666,20 @@ def vendor_return_confirm_received(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    now = timezone.now()
     return_request.status = "received"
-    return_request.returned_at = timezone.now()
-    return_request.save(update_fields=["status", "returned_at"])
+    return_request.returned_at = now
+    # 廠商從現在起 48 小時內，如果認為商品有問題，要提出爭議佐證；逾期視為放棄，
+    # 交由平台端（或排程）依原流程走退款。
+    return_request.vendor_dispute_deadline = now + timedelta(hours=48)
+    return_request.save(update_fields=["status", "returned_at", "vendor_dispute_deadline"])
 
     return Response({
         "success": True,
         "err": "",
         "return_id": str(return_request.return_id),
         "status": return_request.status,
+        "vendor_dispute_deadline": return_request.vendor_dispute_deadline,
     }, status=status.HTTP_200_OK)
 
 
@@ -2852,6 +2890,69 @@ def vendor_return_process_refund(request):
             {"success": False, "err": f"退款帳務處理失敗：{error}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_return_raise_dispute(request):
+    """
+    廠商確認收到退貨商品後，如果認為商品有問題（故意寄壞的、缺配件等），
+    要在 vendor_dispute_deadline（收貨後 48 小時）之前提出爭議，
+    附上照片佐證（1~5 張）和文字描述，交由平台端判定。
+    """
+    vendor_id = request.data.get("vendor_id")
+    return_id = request.data.get("return_id")
+    photo_urls = request.data.get("photo_urls", [])
+    description = request.data.get("description", "")
+
+    if not vendor_id or not return_id:
+        return Response(
+            {"success": False, "err": "vendor_id、return_id 為必填"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not description or not description.strip():
+        return Response(
+            {"success": False, "err": "description 為必填，請說明商品問題"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not isinstance(photo_urls, list) or not (1 <= len(photo_urls) <= 5):
+        return Response(
+            {"success": False, "err": "photo_urls 需為 1~5 張照片的網址陣列"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request, err = _get_return_request_for_vendor(return_id, vendor_id)
+    if err:
+        return err
+
+    if return_request.status != "received":
+        return Response(
+            {"success": False, "err": f"此退貨申請目前狀態是「{return_request.status}」，只有已收貨的申請能提出爭議"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not return_request.vendor_dispute_deadline or timezone.now() > return_request.vendor_dispute_deadline:
+        return Response(
+            {"success": False, "err": "爭議提出期限（收貨後 48 小時）已過，無法再提出爭議"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.status = "disputed"
+    return_request.vendor_dispute_photo_urls = photo_urls
+    return_request.vendor_dispute_description = description.strip()
+    return_request.save(update_fields=[
+        "status", "vendor_dispute_photo_urls", "vendor_dispute_description"
+    ])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "return_id": str(return_request.return_id),
+        "status": return_request.status,
+    }, status=status.HTTP_200_OK)
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])

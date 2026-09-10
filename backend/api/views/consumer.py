@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
 from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
@@ -340,7 +341,13 @@ def view_cart(request):
         return Response({'Cart_id': None, 'items': []}, status=status.HTTP_200_OK)
 
     cart = carts.first()
-    items = CartItem.objects.filter(cart=cart)
+    items = CartItem.objects.filter(cart=cart).select_related('product')
+
+    vendor_ids = {item.product.vendor_id for item in items if item.product}
+    vendor_name_by_id = {
+        v.vendor_id: v.company_name
+        for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
+    }
 
     result_items = []
     for item in items:
@@ -351,6 +358,9 @@ def view_cart(request):
             'Unit_price': item.unit_price,
             'Quantity': item.quantity,
             'subtotal': item.subtotal,
+            'Vendor_id': item.product.vendor_id,
+            'Vendor_name': vendor_name_by_id.get(item.product.vendor_id, item.product.vendor_id),
+            'product_status': item.product.status,
         })
 
     return Response({
@@ -546,6 +556,7 @@ def delete_wishlist(request):
 @permission_classes([AllowAny])
 def verify_coupon(request):
     promotion_code = request.data.get('Promotion_code')
+    user_id = request.data.get('User_id')
 
     if not promotion_code:
         return Response(
@@ -566,6 +577,19 @@ def verify_coupon(request):
             {'success': False, 'err': '優惠碼未啟用或已失效'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    # 同一個消費者、同一組優惠碼，只能使用一次（跨訂單累計）；
+    # 用 Order.promotion_code 直接查歷史訂單，不用另外開一張使用紀錄表。
+    if user_id:
+        already_used = Order.objects.filter(
+            user_id=user_id,
+            promotion_code=promotion_code
+        ).exclude(order_status='cancelled').exists()
+        if already_used:
+            return Response(
+                {'success': False, 'err': '您已經使用過此優惠碼，每組優惠碼限用一次'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     try:
         campaign = coupon.kocmission.application.campaign
@@ -1754,10 +1778,18 @@ def create_return_request(request):
     guest_id = request.data.get('Guest_id')
     reason = request.data.get('reason')
     description = request.data.get('description', '')
+    order_item_id = request.data.get('Order_item_id')  # 選填：有帶代表是單品項部分退貨
+    return_quantity = request.data.get('quantity')  # 只在有帶 Order_item_id 時使用
 
     if not order_id or not reason:
         return Response(
             {'success': False, 'err': 'Order_id 和 reason 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order_item_id and not return_quantity:
+        return Response(
+            {'success': False, 'err': '指定 Order_item_id 時，quantity 為必填'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -1792,19 +1824,20 @@ def create_return_request(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 第一版只支援單一廠商的整張訂單退款。
-    vendor_ids = set(
-        OrderItem.objects.filter(order=order)
-        .values_list('product__vendor_id', flat=True)
-    )
-    if len(vendor_ids) != 1:
-        return Response(
-            {
-                'success': False,
-                'err': '目前整張訂單退貨退款僅支援單一廠商訂單；此訂單包含多個廠商商品，暫無法線上申請'
-            },
-            status=status.HTTP_400_BAD_REQUEST
+    # 單一廠商限制只適用整張訂單退款；單品項部分退貨不受此限（本來就只針對一個品項）。
+    if not order_item_id:
+        vendor_ids = set(
+            OrderItem.objects.filter(order=order)
+            .values_list('product__vendor_id', flat=True)
         )
+        if len(vendor_ids) != 1:
+            return Response(
+                {
+                    'success': False,
+                    'err': '目前整張訂單退貨退款僅支援單一廠商訂單；此訂單包含多個廠商商品，暫無法線上申請'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     # 退貨期限用 delivered_at 起算，不看消費者有沒有點過「確認收貨」。
     if not order.delivered_at:
@@ -1826,9 +1859,67 @@ def create_return_request(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 只支援整張訂單全額退款，退款申請金額完全由後端決定。
-    final_amount = Decimal(str(order.total_amount))
-    if final_amount <= 0:
+    # 退款金額完全由後端計算，不接受前端指定，避免竄改。
+    refund_scope = 'full_order'
+    order_item_obj = None
+    final_quantity = None
+
+    if order_item_id:
+        # 單品項部分退貨：退款金額 = 該品項單價 × 退貨數量，
+        # 再扣掉這張訂單優惠碼折扣依比例分攤到這幾件商品的部分。
+        refund_scope = 'partial_item'
+
+        try:
+            order_item_obj = OrderItem.objects.get(order_item_id=order_item_id, order=order)
+        except OrderItem.DoesNotExist:
+            return Response(
+                {'success': False, 'err': '找不到對應的訂單品項'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            final_quantity = int(return_quantity)
+        except (TypeError, ValueError):
+            return Response(
+                {'success': False, 'err': 'quantity 必須是正整數'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if final_quantity <= 0 or final_quantity > order_item_obj.quantity:
+            return Response(
+                {'success': False, 'err': f'退貨數量必須介於 1 到 {order_item_obj.quantity} 之間'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        all_items = OrderItem.objects.filter(order=order)
+        order_original_total = sum(Decimal(str(item.subtotal)) for item in all_items)
+        order_coupon_discount = order_original_total - Decimal(str(order.total_amount))
+
+        if order_original_total <= 0:
+            return Response(
+                {'success': False, 'err': '訂單金額異常，無法申請退款'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 這個品項分攤到的優惠碼折扣總額，依「此品項原價小計 / 訂單原價總額」的比例計算
+        item_discount_share = (
+            order_coupon_discount * Decimal(str(order_item_obj.subtotal)) / order_original_total
+        )
+        # 平均分攤到每一件，再乘上這次要退的件數
+        discount_per_unit = item_discount_share / order_item_obj.quantity
+        refund_discount = (discount_per_unit * final_quantity).quantize(Decimal('0.01'))
+
+        final_amount = (
+            Decimal(str(order_item_obj.unit_price)) * final_quantity - refund_discount
+        ).quantize(Decimal('0.01'))
+
+        if final_amount < 0:
+            final_amount = Decimal('0.00')
+    else:
+        # 整張訂單全額退款
+        final_amount = Decimal(str(order.total_amount))
+
+    if final_amount <= 0 and refund_scope == 'full_order':
         return Response(
             {'success': False, 'err': '訂單總金額異常，無法申請退款'},
             status=status.HTTP_400_BAD_REQUEST
@@ -1837,7 +1928,8 @@ def create_return_request(request):
     return_request = ReturnRequest.objects.create(
         order=order,
         user_id=order.user_id,
-        order_item=None,
+        order_item=order_item_obj,
+        quantity=final_quantity,
         reason=reason,
         description=description,
         requested_amount=final_amount,
@@ -1849,9 +1941,67 @@ def create_return_request(request):
         'err': '',
         'return_id': str(return_request.return_id),
         'status': return_request.status,
-        'refund_scope': 'full_order',
+        'refund_scope': refund_scope,
         'requested_amount': str(return_request.requested_amount),
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_return_packing_proof(request):
+    """
+    消費者在寄出退貨商品前，上傳打包過程的照片/影片證明
+    （外觀完好、配件齊全、緩衝材包好），1~5 張。
+
+    只有申請還在 requested 或 approved 階段（商品還沒真的寄出、
+    廠商也還沒收到）能補打包證明；一旦進入 returning 之後的狀態
+    就不再開放上傳，避免爭議發生後回頭補造證據。
+    """
+    return_id = request.data.get('Return_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    photo_urls = request.data.get('photo_urls', [])
+
+    if not return_id:
+        return Response(
+            {'success': False, 'err': 'Return_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not isinstance(photo_urls, list) or not (1 <= len(photo_urls) <= 5):
+        return Response(
+            {'success': False, 'err': 'photo_urls 需為 1~5 張照片/影片的網址陣列'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到此退貨申請'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(return_request.order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if return_request.status not in ('requested', 'approved'):
+        return Response(
+            {'success': False, 'err': f'此退貨申請目前狀態是「{return_request.status}」，無法再上傳打包證明'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.packing_proof_urls = photo_urls
+    return_request.packing_proof_uploaded_at = timezone.now()
+    return_request.save(update_fields=['packing_proof_urls', 'packing_proof_uploaded_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'packing_proof_urls': return_request.packing_proof_urls,
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -1947,3 +2097,31 @@ def dispute_return_request(request):
         'return_id': str(return_request.return_id),
         'status': return_request.status,
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def consumer_upload_image(request):
+    """
+    消費者上傳圖片（目前用於退貨打包證明），存到 R2，回傳圖片網址。
+    URL: /consumer/upload-image
+    """
+    file_obj = request.FILES.get('image')
+
+    if not file_obj:
+        return Response({
+            "success": False,
+            "err": "請提供圖片檔案（欄位名稱：image）"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        image_url = upload_image_to_r2(file_obj, file_obj.name)
+        return Response({
+            "success": True,
+            "image_url": image_url
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
