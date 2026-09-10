@@ -13,7 +13,7 @@ from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
 
@@ -1763,6 +1763,11 @@ def vendor_mission_review_submission(request):
             # 文案審核通過：進入待發佈
             mission.stage = "publishing"
             mission.save(update_fields=["stage"])
+            # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
+            try:
+                send_submission_approved_email(submission)
+            except Exception as e:
+                print(f"文案審核通過通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
         # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
         # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
         # "reviewing"，會被上面的檢查擋掉。
