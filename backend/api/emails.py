@@ -256,3 +256,30 @@ def send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted_a
         recipient_list=[vendor.email],
         fail_silently=False,
     )
+
+
+def send_submission_approved_email(submission):
+    """
+    廠商審核通過文案（status='approved'）後，寄信通知 KOC
+    可以去提交貼文連結了（任務進入 publishing 階段）。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    koc_user = submission.kocmission.koc.user
+
+    subject = "您的文案已審核通過，請提交貼文連結"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        "恭喜！您提交的文案已通過廠商審核。\n"
+        "請將文案發布到您的社群帳號後，回到平台提交貼文連結，即可開始推廣任務。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
