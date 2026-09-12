@@ -564,6 +564,7 @@ export default function CheckoutPage({
           body: JSON.stringify({
             Promotion_code:
               couponCode.trim(),
+            User_id: userId,
           }),
         }
       );

@@ -29,11 +29,14 @@ from .views.platform import (
     get_earnings_tracking,
     admin_settle_campaign_earnings,
     admin_settle_vendor_earnings,
+    admin_list_vendor_review_overdue,
+    admin_notify_vendor_review_overdue,
     admin_list_vendor_invoices,
     admin_list_settleable_vendors,
     admin_list_vendor_payouts,
     admin_confirm_vendor_payout,
     admin_export_payout_transfers,
+    admin_run_monthly_vendor_payouts,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
@@ -65,7 +68,9 @@ from .views.consumer import (
     create_return_request,
     get_return_requests,
     dispute_return_request,
+    upload_return_packing_proof,
     cancel_order,
+    consumer_upload_image,
 )
 
 from .views import koc, vendor
@@ -117,10 +122,13 @@ urlpatterns = [
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
     path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
     path('platform/vendor/settle-earnings', admin_settle_vendor_earnings, name='platform-vendor-settle-earnings'),
+    path('platform/vendor/review-overdue', admin_list_vendor_review_overdue, name='platform-vendor-review-overdue'),
+    path('platform/vendor/review-overdue/notify', admin_notify_vendor_review_overdue, name='platform-vendor-review-overdue-notify'),
     path('platform/vendor/invoices', admin_list_vendor_invoices, name='platform-vendor-invoices'),
     path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
     path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
     path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
+    path('platform/vendor/run-monthly-payouts', admin_run_monthly_vendor_payouts, name='platform-vendor-run-monthly-payouts'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
@@ -177,6 +185,8 @@ urlpatterns = [
     path('consumer/order/return/create', create_return_request, name='create-return-request'),
     path('consumer/order/return/list', get_return_requests, name='get-return-requests'),
     path('consumer/order/return/dispute', dispute_return_request, name='dispute-return-request'),
+    path('consumer/order/return/uploadPackingProof', upload_return_packing_proof, name='upload-return-packing-proof'),
+    path('consumer/upload-image', consumer_upload_image, name='consumer-upload-image'),
     
     # Vendor 帳號 API
     path('vendor/auth/register', vendor.vendor_register, name='vendor-register'),
@@ -221,6 +231,7 @@ urlpatterns = [
     path('vendor/return/review', vendor.vendor_return_review, name='vendor-return-review'),
     path('vendor/return/confirmReceived', vendor.vendor_return_confirm_received, name='vendor-return-confirm-received'),
     path('vendor/return/processRefund', vendor.vendor_return_process_refund, name='vendor-return-process-refund'),
+    path('vendor/return/raiseDispute', vendor.vendor_return_raise_dispute, name='vendor-return-raise-dispute'),
 
     # Vendor 優惠碼 API
     path('vendor/coupon/getUsageList', vendor.vendor_coupon_get_usage_list, name='vendor-coupon-get-usage-list'),

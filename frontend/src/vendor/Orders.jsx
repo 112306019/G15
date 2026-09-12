@@ -24,6 +24,8 @@ import {
   reviewVendorReturn,
   confirmVendorReturnReceived,
   processVendorReturnRefund,
+  raiseVendorReturnDispute,
+  uploadVendorImage,
   uploadVendorInvoice,
 } from '../api/vendor'
 
@@ -775,6 +777,13 @@ function ReturnManagementPanel({ vendorId }) {
   const [returns, setReturns] = useState([])
   const [loadingReturns, setLoadingReturns] = useState(true)
   const [actingId, setActingId] = useState(null)
+
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false)
+  const [disputeTarget, setDisputeTarget] = useState(null)
+  const [disputeDescription, setDisputeDescription] = useState('')
+  const [disputePhotoUrls, setDisputePhotoUrls] = useState([])
+  const [disputePhotoUploading, setDisputePhotoUploading] = useState(false)
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false)
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectTarget, setRejectTarget] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -973,6 +982,80 @@ function ReturnManagementPanel({ vendorId }) {
     }
   }
 
+  const openDisputeModal = (item) => {
+    setDisputeTarget(item)
+    setDisputeDescription('')
+    setDisputePhotoUrls([])
+    setDisputeModalOpen(true)
+  }
+
+  const closeDisputeModal = () => {
+    if (disputeSubmitting) return
+    setDisputeModalOpen(false)
+    setDisputeTarget(null)
+  }
+
+  const handleDisputePhotoFiles = async (files) => {
+    const remaining = 5 - disputePhotoUrls.length
+    const filesToUpload = Array.from(files).slice(0, remaining)
+    if (filesToUpload.length === 0) return
+
+    setDisputePhotoUploading(true)
+    try {
+      const uploaded = []
+      for (const file of filesToUpload) {
+        const formData = new FormData()
+        formData.append('image', file)
+        const response = await uploadVendorImage(formData)
+        if (response.data?.success && response.data?.image_url) {
+          uploaded.push(response.data.image_url)
+        }
+      }
+      setDisputePhotoUrls((prev) => [...prev, ...uploaded])
+    } catch (error) {
+      toast.error('圖片上傳失敗，請再試一次')
+    } finally {
+      setDisputePhotoUploading(false)
+    }
+  }
+
+  const removeDisputePhotoUrl = (url) => {
+    setDisputePhotoUrls((prev) => prev.filter((u) => u !== url))
+  }
+
+  const submitDispute = async () => {
+    if (!disputeTarget) return
+    if (!disputeDescription.trim()) {
+      toast.error('請說明商品的問題')
+      return
+    }
+    if (disputePhotoUrls.length === 0) {
+      toast.error('請至少上傳一張佐證照片')
+      return
+    }
+
+    try {
+      setDisputeSubmitting(true)
+      const response = await raiseVendorReturnDispute({
+        vendor_id: vendorId,
+        return_id: disputeTarget.return_id,
+        description: disputeDescription.trim(),
+        photo_urls: disputePhotoUrls,
+      })
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '提出爭議失敗')
+      }
+      toast.success('已提出爭議，交由平台判定')
+      setDisputeModalOpen(false)
+      setDisputeTarget(null)
+      await loadReturns()
+    } catch (error) {
+      toast.error(error.response?.data?.err || error.message || '提出爭議失敗')
+    } finally {
+      setDisputeSubmitting(false)
+    }
+  }
+
   const activeReturns = returns.filter(item => item.status !== 'cancelled')
 
   return (
@@ -1075,14 +1158,27 @@ function ReturnManagementPanel({ vendorId }) {
                   )}
 
                   {item.status === 'received' && (
-                    <Button
-                      variant="brand"
-                      disabled={actingId === item.return_id}
-                      onClick={() => processRefund(item)}
-                      className="w-full sm:w-auto"
-                    >
-                      執行全額退款
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={actingId === item.return_id}
+                        onClick={() => openDisputeModal(item)}
+                      >
+                        提出爭議
+                      </Button>
+                      <Button
+                        variant="brand"
+                        disabled={actingId === item.return_id}
+                        onClick={() => processRefund(item)}
+                      >
+                        執行全額退款
+                      </Button>
+                      {item.vendor_dispute_deadline && (
+                        <div className="w-full text-[11px] font-bold text-[#8C8880] mt-1">
+                          可提出爭議期限：{new Date(item.vendor_dispute_deadline).toLocaleString('zh-TW')}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {item.status === 'disputed' && (
@@ -2118,6 +2214,100 @@ export default function Orders() {
         onUploadInvoice={handleUploadInvoice}
         vendorId={vendorId}
       />
+
+      {disputeModalOpen && disputeTarget && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 overflow-y-auto py-8">
+          <div
+            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+            onClick={closeDisputeModal}
+          />
+
+          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">提出退貨爭議</h3>
+            <p className="text-xs font-bold text-[#8C8880] mb-4">
+              請說明收到的退回商品有什麼問題，並附上照片佐證，交由平台判定。
+            </p>
+
+            {disputeTarget.packing_proof_urls?.length > 0 && (
+              <div className="mb-5">
+                <div className="text-xs font-bold text-[#8C8880] mb-2">消費者提供的打包證明</div>
+                <div className="flex flex-wrap gap-2">
+                  {disputeTarget.packing_proof_urls.map((url) => (
+                    <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                      <img src={url} alt="消費者打包證明" className="h-16 w-16 rounded-xl border border-[#E2DDD4] object-cover" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <label className="block text-sm font-bold text-[#1A1A18] mb-2">商品問題說明</label>
+            <textarea
+              rows={4}
+              value={disputeDescription}
+              onChange={(e) => setDisputeDescription(e.target.value)}
+              placeholder="請描述收到的商品有什麼問題（例如：外觀損壞、缺配件、非原商品等）"
+              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-4"
+            />
+
+            <label className="block text-sm font-bold text-[#1A1A18] mb-2">
+              佐證照片（1~5 張，必填）
+            </label>
+            <div className="flex flex-wrap gap-3 mb-6">
+              {disputePhotoUrls.map((url) => (
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
+                  <img src={url} alt="爭議佐證" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeDisputePhotoUrl(url)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {disputePhotoUrls.length < 5 && (
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
+                  {disputePhotoUploading ? "上傳中..." : "＋ 新增"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={disputePhotoUploading}
+                    onChange={(e) => {
+                      if (e.target.files?.length) {
+                        handleDisputePhotoFiles(e.target.files)
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={closeDisputeModal}
+                disabled={disputeSubmitting}
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                variant="brand"
+                onClick={submitDispute}
+                disabled={disputeSubmitting || disputePhotoUploading}
+                className="flex-[2]"
+              >
+                {disputeSubmitting ? '送出中...' : '提出爭議'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

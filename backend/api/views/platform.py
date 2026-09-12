@@ -1,6 +1,7 @@
 import logging
 import csv
 import io
+from django.conf import settings
 from django.http import HttpResponse
 from django.contrib.auth.hashers import check_password
 from decimal import Decimal, ROUND_HALF_UP
@@ -8,7 +9,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Min
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -38,14 +39,15 @@ from api.models import (
     RemunerationForm,
     VendorPayouts,
     Payouts,
-    ReturnRequest
+    ReturnRequest,
+    Submissions
 
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.emails import send_koc_approval_email, send_vendor_approval_email
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
-from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
@@ -631,16 +633,37 @@ def reverse_earning_and_vendor_income_for_return(return_request):
 # POST /platform_admin/vendor/settle-earnings
 #
 # 用途：出貨後鑑賞期過了，才能把「已入帳但還在凍結」的款項轉為可提領。
-# 這支可以由排程（cron / celery beat）定期呼叫，也可以在後台放一顆手動按鈕呼叫。
-# 鑑賞期天數定義在 constants.py 的 VENDOR_SETTLEMENT_HOLD_DAYS。
+# 這支由排程（cron / celery beat）定期呼叫，會自動把「已經過鑑賞期」的
+# 全部廠商一起結算；也可以在後台放一顆手動按鈕呼叫（帶 vendor_id 只結算
+# 單一廠商）。鑑賞期天數定義在 constants.py 的 VENDOR_SETTLEMENT_HOLD_DAYS。
+#
+# 權限：跟 admin_run_monthly_vendor_payouts 一樣是雙軌——帶 Admin_id 走
+# 原本的角色檢查（後台手動按鈕用），沒帶就比對 X-Cron-Token 這個 header
+# 是否等於 settings.VENDOR_PAYOUT_CRON_TOKEN（這個 token 是共用的，不是
+# 只給撥款用，任何排程觸發的財務批次工作都比對同一個值）。
 # ==============================================================================
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_settle_vendor_earnings(request):
-    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
-    if err:
-        return err
+    admin_obj = None
+    admin_id = request.data.get('Admin_id')
+
+    if admin_id:
+        # 後台手動點「結算」按鈕：走原本的角色檢查
+        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        if err:
+            return err
+    else:
+        # 排程系統呼叫：沒有登入中的管理員，改比對 cron token
+        cron_token = request.headers.get('X-Cron-Token')
+        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+
+        if not expected_token or cron_token != expected_token:
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
 
     vendor_id = request.data.get('vendor_id')  # 選填：只結算單一廠商；不帶則全廠商一起跑
 
@@ -1164,6 +1187,132 @@ def admin_confirm_vendor_payout(request):
         'err': '',
         'payout_id': payout.payout_id,
         'status': payout.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 廠商撥款改月結：原本 vendor_request_payout 是廠商自己隨時申請撥款，
+# 現在改成「月結」——廠商不用也不能再自行申請，改由這支在每月固定日期
+# 被排程呼叫，自動幫每一個「有可提領餘額」的廠商各自建立一張撥款單，
+# 把 balance_available 歸零、轉成一筆 pending 的 VendorPayouts + withdraw
+# 交易。之後的後台流程（列表 admin_list_vendor_payouts、匯出
+# admin_export_payout_transfers、標記完成/失敗 admin_confirm_vendor_payout）
+# 完全沿用既有的，不用另外改，因為它們都是照 VendorPayouts 的紀錄在跑，
+# 不管這筆紀錄當初是廠商自己申請的還是月結批次產生的。
+#
+# 這支本身「不管日期」，只要被打就會立刻對所有符合條件的廠商跑一次；
+# 實際「每月幾號跑」由外部排程系統設定（例如 Render 的 Cron Job，或
+# celery beat 的 crontab schedule），之後日期定案了再去那邊設定
+# cron expression 即可，不用改這支程式。
+#
+# 權限：這支預期主要是被排程系統打，不是登入中的管理員操作，所以除了
+# 原本「帶 Admin_id」的手動觸發路徑（後台可以放一顆「手動月結」按鈕，
+# 給忘記排程或需要補跑時用），也接受帶 X-Cron-Token 這個 header，
+# 比對 settings.VENDOR_PAYOUT_CRON_TOKEN（要記得在 settings.py /
+# 環境變數加這個值，排程系統呼叫時把它放進 header 帶過來）。
+#
+# 注意：AdminAuditLogs.admin_id 這個欄位如果在 models.py 裡不是
+# nullable，排程觸發（沒有 admin_obj）這條路徑寫入稽核紀錄時會炸掉，
+# 要嘛把欄位改成可以是 null，要嘛另外準備一個代表「系統排程」的
+# Admins 帳號在這裡帶入——這部分我沒看到 models.py，麻煩確認一下。
+#
+# POST /platform_admin/vendor/run-monthly-payouts
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_run_monthly_vendor_payouts(request):
+    admin_obj = None
+    admin_id = request.data.get('Admin_id')
+
+    if admin_id:
+        # 後台手動觸發（例如補跑、或還沒設排程前先手動點）：走原本的角色檢查
+        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        if err:
+            return err
+    else:
+        # 排程系統呼叫：沒有登入中的管理員，改比對 cron token
+        cron_token = request.headers.get('X-Cron-Token')
+        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+
+        if not expected_token or cron_token != expected_token:
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    wallets = (
+        VendorWallet.objects
+        .select_related('vendor')
+        .filter(balance_available__gt=0)
+    )
+
+    payouts_created = []
+    skipped = []
+
+    for wallet in wallets:
+        vendor = wallet.vendor
+
+        # 沒綁銀行帳戶的廠商沒辦法自動撥款，先略過，列在 skipped 裡
+        # 讓後台知道要請廠商去補資料，錢還是留在 balance_available 裡
+        # 等下個月結算週期再試一次。
+        if not vendor.bank_account:
+            skipped.append({
+                'vendor_id': vendor.vendor_id,
+                'reason': '尚未綁定銀行帳戶，無法自動撥款'
+            })
+            continue
+
+        with transaction.atomic():
+            locked_wallet = VendorWallet.objects.select_for_update().get(pk=wallet.pk)
+            payout_amount = locked_wallet.balance_available
+
+            # select_for_update 之後重新確認一次金額，避免跟同時間其他
+            # 請求（例如退貨扣款）之間有 race condition
+            if payout_amount <= 0:
+                continue
+
+            locked_wallet.balance_available = 0
+            locked_wallet.save(update_fields=['balance_available', 'updated_at'])
+
+            payout = VendorPayouts.objects.create(
+                vendor=vendor,
+                amount=payout_amount,
+                payout_date=timezone.localdate(),
+                status='pending'
+            )
+
+            Transactions.objects.create(
+                vendor_wallet=locked_wallet,
+                type='withdraw',
+                amount=payout_amount,
+                reference_type='payout',
+                reference_id=str(payout.payout_id)
+            )
+
+        payouts_created.append({
+            'vendor_id': vendor.vendor_id,
+            'payout_id': payout.payout_id,
+            'amount': payout_amount,
+        })
+
+    total_amount = sum(p['amount'] for p in payouts_created)
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='run_monthly_vendor_payouts',
+        action_reason=(
+            f'月結批次撥款，共產生 {len(payouts_created)} 筆撥款單，'
+            f'總金額 NT$ {total_amount}，{len(skipped)} 個廠商因故略過'
+        ),
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'payouts_created': payouts_created,
+        'total_amount': total_amount,
+        'skipped': skipped,
     }, status=status.HTTP_200_OK)
 
 
@@ -3066,4 +3215,132 @@ def admin_review_tax_form(request):
         'err': '',
         'form_id': form.form_id,
         'status': form.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 廠商審核逾期列表：後台用，列出「底下有待審文案、且最早一筆已超過 5 天未審完」
+# 的廠商，給後台一個總覽 + 一顆手動重寄提醒信按鈕。
+# GET /platform/vendor/review-overdue
+# ==============================================================================
+
+VENDOR_REVIEW_DEADLINE_DAYS = 5
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_vendor_review_overdue(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    now = timezone.now()
+
+    earliest_by_vendor = (
+        Submissions.objects
+        .filter(status="pending", submitted_time__isnull=False)
+        .values("kocmission__application__campaign__vendor_id")
+        .annotate(earliest_submitted=Min("submitted_time"))
+    )
+
+    result = []
+    for row in earliest_by_vendor:
+        vendor_id = row["kocmission__application__campaign__vendor_id"]
+        earliest_submitted = row["earliest_submitted"]
+        deadline = earliest_submitted + timedelta(days=VENDOR_REVIEW_DEADLINE_DAYS)
+
+        if now < deadline:
+            continue
+
+        vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+        if not vendor:
+            continue
+
+        pending_count = Submissions.objects.filter(
+            status="pending",
+            kocmission__application__campaign__vendor_id=vendor_id,
+        ).count()
+
+        result.append({
+            'vendor_id': vendor.vendor_id,
+            'vendor_name': vendor.company_name,
+            'pending_count': pending_count,
+            'earliest_submitted_at': earliest_submitted,
+            'deadline': deadline,
+            'overdue_days': (now - deadline).days,
+        })
+
+    result.sort(key=lambda r: r['earliest_submitted_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'vendors': result,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 手動重新寄送廠商審核逾期提醒信：後台用，不受排程指令的「同一批只提醒一次」限制，
+# 管理員可以隨時手動再寄一次。
+# POST /platform/vendor/review-overdue/notify
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_notify_vendor_review_overdue(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    vendor_id = request.data.get('vendor_id')
+    if not vendor_id:
+        return Response({
+            'success': False,
+            'err': 'vendor_id 為必填',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到此廠商',
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    pending_submissions = Submissions.objects.filter(
+        status="pending",
+        kocmission__application__campaign__vendor_id=vendor_id,
+    )
+    pending_count = pending_submissions.count()
+
+    if pending_count == 0:
+        return Response({
+            'success': False,
+            'err': '此廠商目前沒有待審核文案',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    earliest_submitted = pending_submissions.filter(submitted_time__isnull=False).order_by('submitted_time').first().submitted_time
+
+    try:
+        send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'err': f'提醒信寄送失敗：{e}',
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    # 手動重寄後，也更新記錄，避免排程指令緊接著又寄一次重複的信
+    vendor.last_review_reminder_batch_time = earliest_submitted
+    vendor.save(update_fields=['last_review_reminder_batch_time'])
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='notify_vendor_review_overdue',
+        vendor=vendor,
+        action_reason=f'手動重新寄送審核逾期提醒信，待審文案 {pending_count} 筆',
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
     }, status=status.HTTP_200_OK)

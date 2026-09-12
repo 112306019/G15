@@ -87,6 +87,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnReason, setReturnReason] = useState("defective");
   const [returnDescription, setReturnDescription] = useState("");
+  const [returnItemId, setReturnItemId] = useState("");
+  const [returnQuantity, setReturnQuantity] = useState(1);
+  const [packingProofUrls, setPackingProofUrls] = useState([]);
+  const [packingProofUploading, setPackingProofUploading] = useState(false);
   const [completingOrder, setCompletingOrder] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -164,8 +168,48 @@ export default function OrderDetailPage({ onBack, orderId }) {
     !hasOpenReturn &&
     !latestReturn;
 
+  const handleUploadPackingProofFiles = async (files) => {
+    const remaining = 5 - packingProofUrls.length;
+    const filesToUpload = Array.from(files).slice(0, remaining);
+    if (filesToUpload.length === 0) return;
+
+    setPackingProofUploading(true);
+    try {
+      const uploaded = [];
+      for (const file of filesToUpload) {
+        const formData = new FormData();
+        formData.append("image", file);
+        const res = await fetch(`${API_BASE_URL}/api/consumer/upload-image`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.success && data.image_url) {
+          uploaded.push(data.image_url);
+        }
+      }
+      setPackingProofUrls((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      alert("圖片上傳失敗，請再試一次");
+    } finally {
+      setPackingProofUploading(false);
+    }
+  };
+
+  const handleRemovePackingProofUrl = (url) => {
+    setPackingProofUrls((prev) => prev.filter((u) => u !== url));
+  };
+
   const handleCreateReturn = async () => {
     if (!userId || !orderId || returnSubmitting) return;
+    if (!returnItemId) {
+      alert("請選擇要退貨的商品");
+      return;
+    }
+    if (packingProofUrls.length === 0) {
+      alert("請至少上傳一張打包證明照片");
+      return;
+    }
     try {
       setReturnSubmitting(true);
       const res = await fetch(`${API_BASE_URL}/api/consumer/order/return/create`, {
@@ -176,14 +220,31 @@ export default function OrderDetailPage({ onBack, orderId }) {
           User_id: userId,
           reason: returnReason,
           description: returnDescription.trim(),
+          Order_item_id: returnItemId,
+          quantity: returnQuantity,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.err || "申請退貨退款失敗");
       }
+
+      // 申請成功後，馬上把已經上傳好的打包證明照片綁定到這筆退貨申請
+      await fetch(`${API_BASE_URL}/api/consumer/order/return/uploadPackingProof`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Return_id: data.return_id,
+          User_id: userId,
+          photo_urls: packingProofUrls,
+        }),
+      });
+
       setShowReturnModal(false);
       setReturnDescription("");
+      setReturnItemId("");
+      setReturnQuantity(1);
+      setPackingProofUrls([]);
       await fetchReturnRequests();
     } catch (err) {
       alert(err.message || "申請退貨退款失敗");
@@ -967,14 +1028,42 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
       {/* 退貨申請彈窗 */}
       {showReturnModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl md:rounded-[2rem] bg-white p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg md:text-xl font-serif font-black text-[#1A1A18]">申請整張訂單退貨退款</h3>
-            <p className="mt-1.5 md:mt-2 text-xs md:text-sm text-[#8C8880]">
-              此版本僅支援整張訂單全額退款，退款金額由後端依訂單總額計算。
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm overflow-y-auto py-8">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
+            <h3 className="text-xl font-serif font-black text-[#1A1A18]">申請退貨退款</h3>
+            <p className="mt-2 text-sm text-[#8C8880]">
+              請選擇要退貨的商品與數量，退款金額（含優惠碼折扣平分）由後端自動計算。
             </p>
 
-            <label className="mt-5 md:mt-6 block text-xs md:text-sm font-bold text-[#1A1A18]">退貨原因</label>
+            <label className="mt-6 block text-sm font-bold text-[#1A1A18]">退貨商品</label>
+            <select
+              value={returnItemId}
+              onChange={(e) => { setReturnItemId(e.target.value); setReturnQuantity(1); }}
+              className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+            >
+              <option value="">請選擇商品</option>
+              {(orderData.items || []).map((item) => (
+                <option key={item.Order_item_id} value={item.Order_item_id}>
+                  {item.product_name}（已購買 {item.quantity} 件）
+                </option>
+              ))}
+            </select>
+
+            {returnItemId && (
+              <>
+                <label className="mt-5 block text-sm font-bold text-[#1A1A18]">退貨數量</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={(orderData.items || []).find((i) => i.Order_item_id === returnItemId)?.quantity || 1}
+                  value={returnQuantity}
+                  onChange={(e) => setReturnQuantity(Number(e.target.value))}
+                  className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+                />
+              </>
+            )}
+
+            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">退貨原因</label>
             <select
               value={returnReason}
               onChange={(e) => setReturnReason(e.target.value)}
@@ -994,7 +1083,48 @@ export default function OrderDetailPage({ onBack, orderId }) {
               className="mt-1.5 md:mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3.5 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:border-[#C8522A]"
             />
 
-            <div className="mt-6 md:mt-7 flex gap-2.5 md:gap-3">
+            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">
+              打包證明照片（1~5 張，必填）
+            </label>
+            <p className="mt-1 text-xs text-[#8C8880]">
+              寄出退貨商品前，請拍下裝箱時商品外觀完好、配件齊全、緩衝材包好的照片，作為爭議發生時的舉證。
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-3">
+              {packingProofUrls.map((url) => (
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
+                  <img src={url} alt="打包證明" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePackingProofUrl(url)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {packingProofUrls.length < 5 && (
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
+                  {packingProofUploading ? "上傳中..." : "＋ 新增"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={packingProofUploading}
+                    onChange={(e) => {
+                      if (e.target.files?.length) {
+                        handleUploadPackingProofFiles(e.target.files);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="mt-7 flex gap-3">
               <button
                 type="button"
                 onClick={() => setShowReturnModal(false)}
@@ -1006,10 +1136,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
               <button
                 type="button"
                 onClick={handleCreateReturn}
-                disabled={returnSubmitting}
-                className="flex-[2] rounded-xl bg-[#1A1A18] py-2.5 md:py-3 text-xs md:text-sm font-bold text-white hover:bg-[#C8522A] disabled:opacity-50"
+                disabled={returnSubmitting || packingProofUploading}
+                className="flex-[2] rounded-xl bg-[#1A1A18] py-3 text-sm font-bold text-white hover:bg-[#C8522A] disabled:opacity-50"
               >
-                {returnSubmitting ? "送出中..." : `確認申請 ${formatNTD(orderData.total_amount)}`}
+                {returnSubmitting ? "送出中..." : "確認申請退貨"}
               </button>
             </div>
           </div>

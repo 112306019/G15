@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import {
   Search, Filter, CreditCard, DollarSign, Wallet,
-  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download, FileText
+  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download, FileText, PlayCircle
 } from 'lucide-react';
 
 export default function AdminFinance() {
@@ -18,6 +18,7 @@ export default function AdminFinance() {
   const [vendorPayouts, setVendorPayouts] = useState([]);
   const [confirmingPayoutId, setConfirmingPayoutId] = useState(null);
   const [exportingPayouts, setExportingPayouts] = useState(null); // null | 'vendor' | 'koc'
+  const [runningMonthlyPayouts, setRunningMonthlyPayouts] = useState(false);
 
   const [returnDisputes, setReturnDisputes] = useState([]);
   const [loadingDisputes, setLoadingDisputes] = useState(false);
@@ -279,6 +280,55 @@ export default function AdminFinance() {
       alert("處理失敗，請稍後再試");
     } finally {
       setConfirmingPayoutId(null);
+    }
+  };
+
+  // 廠商撥款已改月結：正常情況下會由後端排程（cron / celery beat）
+  // 在每月固定日期自動打 admin_run_monthly_vendor_payouts，這顆按鈕是
+  // 給忘記設排程、或需要補跑（例如某廠商當時銀行帳戶沒綁好，補齊後
+  // 想馬上讓他這期就撥款）時用的手動觸發入口。
+  const handleRunMonthlyPayouts = async () => {
+    if (!adminId) {
+      alert("找不到管理員登入資訊，請重新登入後再試一次");
+      return;
+    }
+
+    if (!window.confirm("確定要立即執行月結撥款嗎？會幫所有有可提領餘額的廠商建立撥款單。")) {
+      return;
+    }
+
+    setRunningMonthlyPayouts(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/run-monthly-payouts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ Admin_id: adminId }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        alert(data.err || "月結撥款執行失敗，請稍後再試");
+        return;
+      }
+
+      const skippedCount = data.skipped?.length || 0;
+      alert(
+        `已產生 ${data.payouts_created?.length ?? 0} 筆撥款單，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`
+        + (skippedCount > 0 ? `，另有 ${skippedCount} 個廠商因故略過（詳見主控台）` : '')
+      );
+      if (skippedCount > 0) {
+        console.warn("月結撥款略過的廠商", data.skipped);
+      }
+
+      await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
+    } catch (err) {
+      console.error("月結撥款執行失敗", err);
+      alert("月結撥款執行失敗，請稍後再試");
+    } finally {
+      setRunningMonthlyPayouts(false);
     }
   };
 
@@ -748,10 +798,29 @@ export default function AdminFinance() {
                   </div>
                 )}
 
+                <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
+                      <PlayCircle size={16} /> 月結撥款
+                    </div>
+                    <p className="text-xs font-medium text-[#8C8880] mt-1">
+                      正常由排程自動於每月固定日期執行；這顆按鈕給忘記設排程或需要補跑時手動觸發。
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleRunMonthlyPayouts}
+                    disabled={runningMonthlyPayouts}
+                    className="shrink-0 flex items-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <PlayCircle size={16} />
+                    {runningMonthlyPayouts ? '執行中...' : '立即執行月結撥款'}
+                  </button>
+                </div>
+
                 {vendorPayouts.length > 0 && (
                   <div className="p-6 border-b border-[#E2DDD4] bg-[#FDF0ED]/40 space-y-3">
                     <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-1">
-                      <Wallet size={16} /> 待處理撥款申請
+                      <Wallet size={16} /> 待處理撥款（本期月結批次）
                     </div>
                     {vendorPayouts.map((p) => (
                       <div
@@ -763,7 +832,7 @@ export default function AdminFinance() {
                             {p.vendorName} ・ NT$ {p.amount?.toLocaleString?.() ?? p.amount}
                           </div>
                           <div className="text-xs font-medium text-[#8C8880] mt-1">
-                            匯款帳戶：{p.bankDisplay} ・ 申請日 {p.payoutDate}
+                            匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
                           </div>
                         </div>
                         <div className="flex gap-2 shrink-0">

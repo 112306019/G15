@@ -1,16 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
-import {
-  X,
-  CheckCircle2,
-  Coins,
-  AlertCircle,
-  Loader2
-} from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { X, AlertCircle, Loader2, CalendarClock } from 'lucide-react'
 import { useToast } from './components/ui/Toast'
 import {
   getVendorFinanceOverview,
-  getVendorFinanceTransactions,
-  requestVendorPayout
+  getVendorFinanceTransactions
 } from '../api/vendor'
 
 const getStatusBadge = (text, type) => {
@@ -51,6 +44,7 @@ const mapTxn = t => ({
   netAmount: fmt(t.amount),
   netAmountRaw: Number(t.amount || 0),
   date: t.date,
+  dateLabel: t.dateLabel || '日期',
   statusText: t.statusText,
   statusType: t.statusType,
   account: t.account
@@ -60,9 +54,8 @@ export default function Finance() {
   const { toast } = useToast()
   const vendorId = localStorage.getItem('vendor_id')
 
-  const [txData, setTxData] = useState([])
-  const [selectedIds, setSelectedIds] = useState([])
-  const [selectedTx, setSelectedTx] = useState(null)
+  const [txData, setTxData] = useState([]) // 整個表格的資料狀態
+  const [selectedTx, setSelectedTx] = useState(null) // 查看單筆明細用
 
   const [loading, setLoading] = useState(true)
   const [overview, setOverview] = useState({
@@ -70,10 +63,6 @@ export default function Finance() {
     pending_amount: 0,
     hasBankAccount: false
   })
-
-  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false)
-  const [payoutSuccess, setPayoutSuccess] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!vendorId) return
@@ -104,92 +93,6 @@ export default function Finance() {
     loadData()
   }, [loadData])
 
-  const handleSelectRow = id => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    )
-  }
-
-  const handleSelectAll = e => {
-    if (e.target.checked) {
-      setSelectedIds(txData.map(tx => tx.id))
-    } else {
-      setSelectedIds([])
-    }
-  }
-
-  const handleOpenPayout = () => {
-    if (!overview.hasBankAccount) {
-      toast.error('請先至「設定」頁面綁定撥款銀行帳戶')
-      return
-    }
-
-    if (selectedIds.length === 0) {
-      toast.error('請先勾選您想要申請撥款的項目')
-      return
-    }
-
-    const selectedTxs = txData.filter(tx => selectedIds.includes(tx.id))
-    const hasInvalidTx = selectedTxs.some(
-      tx => tx.statusType !== 'pending'
-    )
-
-    if (hasInvalidTx) {
-      toast.error(
-        '勾選的項目中包含「鑑賞期中」或非「待撥款」的款項，請僅勾選狀態為「待撥款」的項目'
-      )
-      return
-    }
-
-    setIsPayoutModalOpen(true)
-  }
-
-  const handleConfirmPayout = async () => {
-    setSubmitting(true)
-    try {
-      const res = await requestVendorPayout({
-        vendor_id: vendorId,
-        amount: stats.totalNetAmount
-      })
-
-      if (!res.data?.success) {
-        toast.error(res.data?.err || '申請撥款失敗')
-        setSubmitting(false)
-        return
-      }
-
-      setPayoutSuccess(true)
-
-      await loadData()
-
-      setTimeout(() => {
-        setSelectedIds([])
-        setIsPayoutModalOpen(false)
-        setPayoutSuccess(false)
-        setSubmitting(false)
-      }, 1200)
-    } catch (err) {
-      toast.error('申請撥款失敗，請稍後再試')
-      setSubmitting(false)
-    }
-  }
-
-  const stats = useMemo(() => {
-    const selectedPendingTxs = txData.filter(tx =>
-      selectedIds.includes(tx.id)
-    )
-    const totalNetAmountRaw = selectedPendingTxs.reduce(
-      (sum, tx) => sum + tx.netAmountRaw,
-      0
-    )
-
-    return {
-      count: selectedPendingTxs.length,
-      totalNetAmount: totalNetAmountRaw,
-      totalNetAmountDisplay: fmt(totalNetAmountRaw)
-    }
-  }, [selectedIds, txData])
-
   if (!vendorId) {
     return (
       <div className="flex items-center gap-2 text-sm font-bold text-[#D93025] bg-[#FFF0F0] rounded-2xl p-4 sm:p-5 border border-[#FFD7D2]">
@@ -206,14 +109,6 @@ export default function Finance() {
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
           金流明細
         </h2>
-        <button
-          onClick={handleOpenPayout}
-          className="bg-[#1A1A18] text-[#F5F0E8] px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Coins size={16} />
-          申請撥款{' '}
-          {selectedIds.length > 0 ? `(${selectedIds.length})` : ''}
-        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
@@ -235,10 +130,17 @@ export default function Finance() {
         </div>
       </div>
 
+      {/* 撥款已改為月結：不再有「申請撥款」按鈕，可提領餘額會由平台
+          於每月固定日期自動撥入，這裡只做狀態說明，不需要廠商操作。 */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold text-[#8C8880] bg-[#F8F9FA] rounded-2xl p-4 border border-[#E2DDD4] mb-6">
+        <CalendarClock size={18} className="text-[#C8522A] shrink-0 mt-0.5 sm:mt-0" />
+        撥款為每月自動結算，可提領餘額將於每月結算日自動撥入您綁定的銀行帳戶，無需自行申請。
+      </div>
+
       {!overview.hasBankAccount && (
-        <div className="flex items-start sm:items-center gap-2 text-xs sm:text-sm font-bold text-[#C8522A] bg-[#FDF0ED] rounded-2xl p-4 border border-[#F5D5C8] mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm font-bold text-[#C8522A] bg-[#FDF0ED] rounded-2xl p-4 border border-[#F5D5C8] mb-6">
           <AlertCircle size={18} className="shrink-0 mt-0.5 sm:mt-0" />
-          尚未綁定撥款銀行帳戶，請至「設定」頁面完成綁定後才能申請撥款。
+          尚未綁定撥款銀行帳戶，請至「設定」頁面完成綁定，才能收到每月自動撥款。
         </div>
       )}
 
@@ -249,38 +151,28 @@ export default function Finance() {
         </div>
       ) : (
         <>
+          {/* 明細列表卡片 */}
           <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
             <div className="overflow-x-auto w-full">
               <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
                   <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                    <th className="p-4 sm:p-5 pl-6 sm:pl-8 w-12">
-                      <input
-                        type="checkbox"
-                        onChange={handleSelectAll}
-                        checked={
-                          selectedIds.length === txData.length &&
-                          txData.length > 0
-                        }
-                        className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
-                      />
-                    </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
+                    <th className="p-4 sm:p-5 pl-6 sm:pl-8 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
                       金流編號
                     </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
+                    <th className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
                       訂單編號
                     </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
+                    <th className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
                       訂單金額
                     </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
+                    <th className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
                       日期
                     </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
+                    <th className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">
                       撥款狀態
                     </th>
-                    <th className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap text-center">
+                    <th className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap text-center">
                       詳細資料
                     </th>
                   </tr>
@@ -290,35 +182,22 @@ export default function Finance() {
                   {txData.map(row => (
                     <tr
                       key={row.id}
-                      className={`transition-colors group cursor-pointer ${
-                        selectedIds.includes(row.id)
-                          ? 'bg-[#FDF0ED]/50'
-                          : 'hover:bg-[#F8F9FA]'
-                      }`}
-                      onClick={() => handleSelectRow(row.id)}
+                      className="transition-colors group hover:bg-[#F8F9FA]"
                     >
-                      <td
-                        className="p-4 sm:p-5 pl-6 sm:pl-8"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(row.id)}
-                          onChange={() => handleSelectRow(row.id)}
-                          className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
-                        />
-                      </td>
-                      <td className="p-4 sm:p-5 text-[13px] sm:text-sm font-bold text-[#1A1A18] font-mono">
+                      <td className="p-4 sm:p-5 pl-6 sm:pl-8 text-[13px] sm:text-sm font-bold text-[#1A1A18] font-mono">
                         {row.id}
                       </td>
                       <td className="p-4 sm:p-5 text-[13px] sm:text-sm font-medium text-[#8C8880] font-mono">
                         {row.orderId}
                       </td>
-                      <td className="p-4 sm:p-5 text-[13px] sm:text-sm font-black text-[#C8522A] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-[13px] sm:text-sm font-black text-[#C8522A]">
                         {row.amount}
                       </td>
-                      <td className="p-4 sm:p-5 text-[13px] sm:text-sm font-medium text-[#8C8880] whitespace-nowrap">
-                        {row.date}
+                      <td className="p-4 sm:p-5 text-[13px] sm:text-sm text-[#8C8880]">
+                        <div className="font-medium whitespace-nowrap">{row.date}</div>
+                        <div className="text-[9px] sm:text-[10px] font-bold text-[#B8B4AC] tracking-wider mt-0.5">
+                          {row.dateLabel}
+                        </div>
                       </td>
                       <td className="p-4 sm:p-5">
                         {getStatusBadge(row.statusText, row.statusType)}
@@ -339,8 +218,8 @@ export default function Finance() {
                   {txData.length === 0 && (
                     <tr>
                       <td
-                        colSpan={7}
-                        className="p-10 text-center text-sm font-bold text-[#8C8880]"
+                        colSpan={6}
+                        className="p-10 text-center text-xs sm:text-sm font-bold text-[#8C8880]"
                       >
                         目前沒有任何金流紀錄
                       </td>
@@ -368,7 +247,7 @@ export default function Finance() {
               </h3>
               {getStatusBadge(selectedTx.statusText, selectedTx.statusType)}
             </div>
-            <div className="bg-[#F8F9FA] rounded-2xl p-5 sm:p-6 mb-6 sm:mb-8 border border-[#E2DDD4]">
+            <div className="bg-[#F8F9FA] rounded-xl sm:rounded-2xl p-5 sm:p-6 mb-6 sm:mb-8 border border-[#E2DDD4]">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
                   訂單總額
@@ -405,6 +284,14 @@ export default function Finance() {
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] sm:text-[11px] font-bold tracking-widest text-[#8C8880] uppercase">
+                  {selectedTx.dateLabel}
+                </span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">
+                  {selectedTx.date}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] sm:text-[11px] font-bold tracking-widest text-[#8C8880] uppercase">
                   撥款帳戶
                 </span>
                 <span className="text-xs sm:text-sm font-bold text-[#1A1A18] break-all">
@@ -412,87 +299,6 @@ export default function Finance() {
                 </span>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {isPayoutModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-md p-6 sm:p-8 shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-300 relative text-center">
-            {!payoutSuccess ? (
-              <>
-                <button
-                  onClick={() => setIsPayoutModalOpen(false)}
-                  className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 text-[#8C8880] hover:text-[#1A1A18] rounded-full transition-colors bg-white hover:bg-[#F8F9FA]"
-                >
-                  <X size={18} className="sm:w-5 sm:h-5" />
-                </button>
-
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5 shadow-inner">
-                  <Coins size={24} className="sm:w-7 sm:h-7" />
-                </div>
-
-                <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#1A1A18] mb-2 sm:mb-3">
-                  確認申請撥款？
-                </h3>
-                <p className="text-xs sm:text-sm font-medium text-[#8C8880] mb-5 sm:mb-6 px-2 sm:px-4">
-                  即將為您申請所選的{' '}
-                  <span className="text-[#1A1A18] font-bold">
-                    {stats.count}
-                  </span>{' '}
-                  筆待撥款項目。
-                </p>
-
-                <div className="bg-[#F8F9FA] rounded-2xl p-4 sm:p-5 border border-[#E2DDD4] text-left space-y-3 mb-5 sm:mb-6">
-                  <div className="flex justify-between text-[11px] sm:text-xs font-bold text-[#8C8880]">
-                    <span>待撥款單數</span>
-                    <span className="text-[#1A1A18] font-black">
-                      {stats.count} 筆
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-end pt-3 border-t border-[#E2DDD4] border-dashed">
-                    <span className="text-[11px] sm:text-xs font-bold text-[#1A1A18]">
-                      預計撥款總額
-                    </span>
-                    <span className="text-lg sm:text-xl font-black text-[#C8522A]">
-                      {stats.totalNetAmountDisplay}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 sm:gap-3">
-                  <button
-                    onClick={() => setIsPayoutModalOpen(false)}
-                    disabled={submitting}
-                    className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] font-bold text-xs sm:text-sm py-2.5 sm:py-3 rounded-full hover:text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleConfirmPayout}
-                    disabled={submitting}
-                    className="flex-1 bg-[#1A1A18] text-[#F5F0E8] font-bold text-xs sm:text-sm py-2.5 sm:py-3 rounded-full hover:bg-[#C8522A] transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {submitting && (
-                      <Loader2 size={14} className="animate-spin" />
-                    )}
-                    確認送出
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="py-6 sm:py-8 space-y-3 sm:space-y-4 animate-in zoom-in-95 duration-300">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#F5F0E8] text-[#1A1A18] rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
-                  <CheckCircle2 size={32} className="sm:w-9 sm:h-9" />
-                </div>
-                <h3 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18]">
-                  撥款申請已提交
-                </h3>
-                <p className="text-[11px] sm:text-xs font-bold text-[#8C8880]">
-                  狀態已更新，正在與第三方金流銀行連線中...
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}

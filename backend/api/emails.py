@@ -179,3 +179,107 @@ def send_tax_form_rejected_email(user, campaign_name, reject_reason):
         recipient_list=[user.email],
         fail_silently=False,
     )
+
+
+def send_submission_revising_email(submission):
+    """
+    廠商退回文案（Submissions.status='revising'）當下，寄信通知 KOC
+    需要在期限內修改後重新提交。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    koc_user = submission.kocmission.koc.user
+    deadline_str = submission.revising_deadline.strftime("%Y-%m-%d %H:%M") if submission.revising_deadline else ""
+
+    subject = "您的文案已被退回，請於期限內修改"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        "您提交的文案已被廠商退回，需要修改後重新提交。\n"
+        f"廠商回饋：{submission.vendor_feedback or '（無附加說明）'}\n\n"
+        f"請於 {deadline_str} 前完成修改並重新提交，逾期未修改將會再收到一封提醒信。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
+
+
+def send_submission_revising_reminder_email(submission):
+    """
+    文案退回已滿 3 天、KOC 仍未重新提交（status 仍是 'revising'）時，
+    寄送第二封提醒信。
+    """
+    koc_user = submission.kocmission.koc.user
+
+    subject = "提醒：您有一份文案尚未完成修改"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        "您有一份被退回的文案已超過 3 天尚未重新提交，請儘快完成修改，"
+        "以免影響任務進度與合作時效。\n\n"
+        f"廠商回饋：{submission.vendor_feedback or '（無附加說明）'}\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
+
+
+def send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted_at):
+    """
+    廠商待審核文案已經超過 5 天未審完時，寄信提醒廠商。
+    """
+    subject = "提醒：您有待審核文案已超過 5 天"
+    message = (
+        f"{vendor.company_name} 您好，\n\n"
+        f"您目前有 {pending_count} 筆 KOC 提交的文案尚待審核，"
+        f"其中最早一筆已於 {earliest_submitted_at.strftime('%Y-%m-%d %H:%M')} 提交，"
+        "已超過平台規定的 5 天審核期限。\n\n"
+        "請儘快登入後台完成審核，以免影響 KOC 合作進度。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[vendor.email],
+        fail_silently=False,
+    )
+
+
+def send_submission_approved_email(submission):
+    """
+    廠商審核通過文案（status='approved'）後，寄信通知 KOC
+    可以去提交貼文連結了（任務進入 publishing 階段）。
+
+    寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    koc_user = submission.kocmission.koc.user
+
+    subject = "您的文案已審核通過，請提交貼文連結"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        "恭喜！您提交的文案已通過廠商審核。\n"
+        "請將文案發布到您的社群帳號後，回到平台提交貼文連結，即可開始推廣任務。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )

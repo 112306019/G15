@@ -132,6 +132,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
     startDate: getTodayString(),
     recruitEndDate: '',
+    recruitLimit: '',
     promoDays: '7',
 
     prodId: '',
@@ -383,6 +384,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
       end_date: form.recruitEndDate,
+      recruit_limit: form.recruitLimit ? Number(form.recruitLimit) : null,
       status: campaignStatus
     }
 
@@ -443,6 +445,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         {step === 0 && <>
           <Input label="任務名稱 *" value={form.name} onChange={set('name')} placeholder="例：夏季防曬大作戰" />
           <Input label="總預算 (NT$) *" type="number" value={form.budget} onChange={set('budget')} placeholder="50000" />
+          <Input label="招募人數上限（留空代表不限制）" type="number" min="1" value={form.recruitLimit} onChange={set('recruitLimit')} placeholder="例：10" />
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input 
@@ -943,6 +946,8 @@ export default function Campaigns() {
       startDate: campaign.start_date || '',
       recruitEndDate: campaign.end_date || '',
       endDate: campaign.end_date || '',
+      recruitLimit: campaign.recruit_limit != null ? String(campaign.recruit_limit) : '',
+      approvedCount: campaign.approved_count || 0,
 
       promoDays: String(campaign.promo_days || 7),
       discountType:

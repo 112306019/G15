@@ -223,12 +223,23 @@ def get_available_campaign_list(request):
 
             seen_campaign_ids.add(campaign_id_str)
 
+            approved_count = Application.objects.filter(
+                campaign=campaign, status="approved"
+            ).count()
+            is_full = (
+                campaign.recruit_limit is not None
+                and approved_count >= campaign.recruit_limit
+            )
+
             campaigns_data.append({
                 "order_id": product_order_map.get(cp.product_id, ""),
                 "campaign_id": campaign_id_str,
                 "campaign_name": campaign.name,
                 "campaign_image": cp.product.image_url if cp.product else None,
-                "apply_status": 0
+                "apply_status": 0,
+                "recruit_limit": campaign.recruit_limit,
+                "approved_count": approved_count,
+                "is_full": is_full,
             })
 
         return Response({
@@ -373,7 +384,22 @@ def apply_mission(request):
                 "application_id": str(existing_app.application_id),
                 "status": str(existing_app.status)  
             })
-            
+
+        # 招募人數已達上限，直接擋掉新申請（前端「已額滿」提示只是體驗層，
+        # 這裡才是真正的防線，避免使用者繞過前端直接打 API）
+        campaign_obj = Campaigns.objects.filter(campaign_id=campaign_id).first()
+        if campaign_obj and campaign_obj.recruit_limit is not None:
+            approved_count = Application.objects.filter(
+                campaign_id=campaign_id, status="approved"
+            ).count()
+            if approved_count >= campaign_obj.recruit_limit:
+                return Response({
+                    "success": False,
+                    "err": "此活動招募人數已額滿，無法再申請",
+                    "application_id": "",
+                    "status": "pending"
+                }, status=400)
+
         # 確保 create 後面也加上 _id
         new_application = Application.objects.create(
             koc_id=koc_id,          
