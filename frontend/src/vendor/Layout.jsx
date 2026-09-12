@@ -10,8 +10,8 @@ const titles = {
   '/vendor/campaigns': { title: '合作活動管理', sub: '建立與管理 KOC 行銷活動' },
   '/vendor/products': { title: '商品管理', sub: '管理上架商品、設定 KOC 優惠及庫存' },
   '/vendor/koc': { title: 'KOC 合作管理', sub: '追蹤 KOC 推廣成效與優惠碼使用情況' },
-  '/vendor/orders': { title: '訂單追蹤', sub: '透過優惠碼追蹤每筆 KOC 帶入訂單' },
-  '/vendor/analytics': { title: '數據分析', sub: '深入了解行銷活動成效' },
+  '/vendor/orders': { title: '訂單管理', sub: '透過優惠碼追蹤每筆 KOC 帶入訂單' },
+  '/vendor/analytics': { title: '成效分析', sub: '查看活動、訂單、商品與優惠碼帶來的實際成效' },
   '/vendor/review': { title: '審核管理', sub: '審核 KOC 的合作申請及提交的貼文文案' },
   '/vendor/chat': { title: '聊天室', sub: '與 KOC 即時溝通' },
   '/vendor/settings': { title: '設定', sub: '管理帳號資訊與通知偏好' },
@@ -65,20 +65,19 @@ export default function VendorLayout() {
           {/* 主要內容區 */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-            {/* 🟢 全域頁面標題區塊 (套用高級襯線字體與拿鐵色系) */}
             {!isChat && (
-              <div className="px-12 pt-10 pb-6 shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
-                <h1 className="text-[32px] font-serif font-bold text-[#1A1A18] tracking-wide mb-2 flex items-center gap-3">
-                  <span className="w-2 h-8 bg-[#C8522A] rounded-full inline-block"></span>
+              <div className="px-4 md:px-8 lg:px-12 pt-6 md:pt-10 pb-4 md:pb-6 shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
+                <h1 className="text-2xl md:text-[32px] font-serif font-bold text-[#1A1A18] tracking-wide mb-1.5 md:mb-2 flex items-center gap-2.5 md:gap-3">
+                  <span className="w-1.5 md:w-2 h-6 md:h-8 bg-[#C8522A] rounded-full inline-block"></span>
                   {title}
                 </h1>
-                <p className="text-sm font-bold text-[#8C8880] tracking-wider ml-5">
+                <p className="text-[11px] md:text-sm font-bold text-[#8C8880] tracking-wider ml-4 md:ml-5">
                   {sub}
                 </p>
               </div>
             )}
 
-            <main className={`flex-1 overflow-y-auto ${isChat ? '' : 'px-12 pb-12'}`}>
+            <main className={`flex-1 overflow-y-auto custom-scrollbar ${isChat ? '' : 'px-4 md:px-8 lg:px-12 pb-6 md:pb-12'}`}>
               <Outlet />
             </main>
           </div>

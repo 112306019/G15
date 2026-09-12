@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, X } from 'lucide-react';
 import api from '../api/index';
 import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
 
@@ -164,7 +164,7 @@ export default function TaskDetailPage({ task, onBack }) {
 
   if (!task) return null;
   if (loading || !detail) return (
-    <div className="flex items-center justify-center h-64 text-[#8C8880] font-bold">
+    <div className="flex items-center justify-center h-64 text-[#8C8880] font-bold text-sm md:text-base">
       載入中...
     </div>
   );
@@ -265,51 +265,51 @@ export default function TaskDetailPage({ task, onBack }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-80px)] max-w-[1400px] mx-auto animate-in fade-in duration-300 gap-8 pb-8">
+    <div className="flex flex-col xl:flex-row min-h-screen xl:h-[calc(100vh-80px)] max-w-[1400px] mx-auto animate-in fade-in duration-300 gap-6 xl:gap-8 p-4 xl:p-0 pb-12 xl:pb-8">
       
       {/* 左側：主要內容區 */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        <button onClick={() => onBack(task.stage)} className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit">
-          <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
+        <button onClick={() => onBack(task.stage)} className="mb-4 xl:mb-6 flex items-center gap-1.5 xl:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs xl:text-sm group w-fit bg-white xl:bg-transparent px-3 xl:px-0 py-1.5 xl:py-0 rounded-full border border-[#E2DDD4] xl:border-transparent shadow-sm xl:shadow-none">
+          <ArrowLeft size={16} className="xl:w-4 xl:h-4 transition-transform group-hover:-translate-x-1" />
           返回接案中心
         </button>
 
         <div className="mb-6">
-          <div className="flex justify-between items-end mb-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-4 gap-3 sm:gap-0">
             <div>
-              <span className="text-xs font-black text-[#8C8880] tracking-widest uppercase mb-2 block">{task.vendor}</span>
-              <h2 className="text-[32px] font-serif font-black text-[#1A1A18] tracking-tight leading-tight">
+              <span className="text-[10px] xl:text-xs font-black text-[#8C8880] tracking-widest uppercase mb-1.5 xl:mb-2 block">{task.vendor}</span>
+              <h2 className="text-2xl xl:text-[32px] font-serif font-black text-[#1A1A18] tracking-tight leading-tight">
                 {task.productName}
               </h2>
             </div>
-            <div className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2 ${
+            <div className={`w-fit px-3 xl:px-4 py-1 xl:py-1.5 rounded-full text-xs xl:text-sm font-bold border flex items-center gap-1.5 xl:gap-2 ${
               isCompleted
                 ? 'bg-[#F5F0E8] text-[#8C8880] border-[#E2DDD4]'
                 : 'bg-green-50 text-green-600 border-green-100'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${isCompleted ? 'bg-[#8C8880]' : 'bg-green-600 animate-pulse'}`}></span>
+              <span className={`w-1.5 h-1.5 xl:w-2 xl:h-2 rounded-full ${isCompleted ? 'bg-[#8C8880]' : 'bg-green-600 animate-pulse'}`}></span>
               {isCompleted ? '已完成' : '執行中'}
             </div>
           </div>
 
-          <div className="bg-[#1A1A18] rounded-3xl p-6 flex justify-between items-center shadow-lg border border-[#E2DDD4]/20">
-            <div className="flex items-center gap-8 text-[#F5F0E8]">
+          <div className="bg-[#1A1A18] rounded-2xl xl:rounded-3xl p-5 xl:p-6 shadow-lg border border-[#E2DDD4]/20">
+            <div className="grid grid-cols-2 md:flex md:items-center gap-4 xl:gap-8 text-[#F5F0E8]">
               <div>
-                <p className="text-[#8C8880] text-xs font-bold mb-1">任務截止日</p>
-                <p className="font-mono font-bold flex items-center gap-2">
-                  <Calendar size={14}/> {deadline || '未設定'}
+                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">任務截止日</p>
+                <p className="font-mono text-sm xl:text-base font-bold flex items-center gap-1.5 xl:gap-2">
+                  <Calendar size={14} className="xl:w-4 xl:h-4"/> {deadline || '未設定'}
                 </p>
               </div>
-              <div className="w-px h-8 bg-[#8C8880]/30"></div>
+              <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
               <div>
-                <p className="text-[#8C8880] text-xs font-bold mb-1">專屬優惠碼</p>
-                <p className="font-mono font-black text-[#C8522A] tracking-wider">{promoCode || '無'}</p>
+                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">專屬優惠碼</p>
+                <p className="font-mono text-sm xl:text-base font-black text-[#C8522A] tracking-wider">{promoCode || '無'}</p>
               </div>
-              <div className="w-px h-8 bg-[#8C8880]/30"></div>
-              <div>
-                <p className="text-[#8C8880] text-xs font-bold mb-1">{isPromoting ? '目前累積分潤' : '預估分潤收益'}</p>
-                <p className="font-bold">
+              <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
+              <div className="col-span-2 md:col-span-1 border-t border-[#8C8880]/30 md:border-0 pt-3 md:pt-0">
+                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">{isPromoting ? '目前累積分潤' : '預估分潤收益'}</p>
+                <p className="font-bold text-sm xl:text-base">
                   {isPromoting ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
                 </p>
               </div>
@@ -317,40 +317,40 @@ export default function TaskDetailPage({ task, onBack }) {
           </div>
         </div>
         
-        <div className="flex-1 bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm p-10 flex flex-col overflow-y-auto">
+        <div className="flex-1 bg-white rounded-2xl xl:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-6 xl:p-10 flex flex-col overflow-y-auto custom-scrollbar min-h-[400px]">
           
           {/* 情境 1：可以填寫/修改文案 */}
           {isEditable && (
-            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-4">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center text-[#1A1A18]">
-                  <Edit3 size={18} />
+            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
+              <div className="flex items-center gap-2 xl:gap-3 mb-4 xl:mb-6">
+                <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center text-[#1A1A18]">
+                  <Edit3 size={16} className="xl:w-[18px] xl:h-[18px]" />
                 </div>
-                <h3 className="text-2xl font-bold text-[#1A1A18]">撰寫文案草稿</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">撰寫文案草稿</h3>
               </div>
 
               {vendorFeedback && (
-                <div className="mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-2xl px-6 py-5 flex gap-3 shadow-sm">
-                  <AlertCircle size={20} className="text-[#C8522A] shrink-0 mt-0.5" />
+                <div className="mb-4 xl:mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-xl xl:rounded-2xl px-4 xl:px-6 py-4 xl:py-5 flex gap-2.5 xl:gap-3 shadow-sm">
+                  <AlertCircle size={18} className="text-[#C8522A] shrink-0 mt-0.5 xl:w-5 xl:h-5" />
                   <div>
-                    <span className="text-[#C8522A] font-black text-xs uppercase tracking-wider mb-1 block">廠商要求修改</span>
-                    <span className="text-sm text-[#1A1A18] font-bold leading-relaxed">{vendorFeedback}</span>
+                    <span className="text-[#C8522A] font-black text-[10px] xl:text-xs uppercase tracking-wider mb-1 block">廠商要求修改</span>
+                    <span className="text-xs xl:text-sm text-[#1A1A18] font-bold leading-relaxed">{vendorFeedback}</span>
                   </div>
                 </div>
               )}
               
               <div
                 onClick={() => setShowModal(true)}
-                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-6 min-h-[160px] cursor-pointer hover:border-[#C8522A] hover:bg-white transition-all group flex flex-col justify-center items-center gap-3 shadow-sm"
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl xl:rounded-2xl p-5 xl:p-6 min-h-[140px] xl:min-h-[160px] cursor-pointer hover:border-[#C8522A] hover:bg-white transition-all group flex flex-col justify-center items-center gap-2.5 xl:gap-3 shadow-sm text-center"
               >
-                <Edit3 size={24} className="text-[#8C8880] group-hover:text-[#C8522A] transition-colors" />
-                <span className="text-[#8C8880] font-bold group-hover:text-[#1A1A18] transition-colors">
+                <Edit3 size={20} className="text-[#8C8880] group-hover:text-[#C8522A] transition-colors xl:w-6 xl:h-6" />
+                <span className="text-sm xl:text-base text-[#8C8880] font-bold group-hover:text-[#1A1A18] transition-colors">
                   {draftContent
                     ? '偵測到您有儲存的草稿，點此繼續編輯...'
                     : (vendorFeedback ? '點此修改您的文案草稿...' : '點擊開始撰寫您的文案草稿...')}
                 </span>
                 {draftContent && (
-                  <span className="text-xs text-[#8C8880] bg-[#F5F0E8] px-3 py-1 rounded-md line-clamp-1 max-w-md">
+                  <span className="text-[10px] xl:text-xs text-[#8C8880] bg-[#F5F0E8] px-2.5 py-1 rounded-md line-clamp-2 xl:line-clamp-1 max-w-md">
                     目前內容：{draftContent}
                   </span>
                 )}
@@ -361,11 +361,11 @@ export default function TaskDetailPage({ task, onBack }) {
           {/* 情境 2：廠商審核中 */}
           {isReviewing && (
             <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
-              <div className="w-24 h-24 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#C8522A]/20">
-                <CheckCircle2 size={48} className="text-[#C8522A]" />
+              <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#C8522A]/20">
+                <CheckCircle2 size={32} className="text-[#C8522A] xl:w-12 xl:h-12" />
               </div>
-              <h3 className="text-2xl font-bold text-[#1A1A18] mb-3">文案已送出審核</h3>
-              <p className="text-[#8C8880] font-medium leading-relaxed">
+              <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">文案已送出審核</h3>
+              <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed">
                 廠商正在確認您的文案內容。<br/>審核通過後，任務將會自動移至「作品上傳」階段。
               </p>
             </div>
@@ -373,30 +373,30 @@ export default function TaskDetailPage({ task, onBack }) {
 
           {/* 情境 3：上傳作品 */}
           {isWaitUpload && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-4">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 bg-[#FDF0ED] rounded-full flex items-center justify-center text-[#C8522A]">
-                  <CheckCircle2 size={18} />
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
+              <div className="flex items-center gap-2 xl:gap-3 mb-6 xl:mb-8">
+                <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#FDF0ED] rounded-full flex items-center justify-center text-[#C8522A]">
+                  <CheckCircle2 size={16} className="xl:w-[18px] xl:h-[18px]" />
                 </div>
-                <h3 className="text-2xl font-bold text-[#1A1A18]">文案審核已通過！</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">文案審核已通過！</h3>
               </div>
 
-              <div className="bg-[#F8F9FA] rounded-2xl p-8 border border-[#E2DDD4]">
-                <p className="text-[#1A1A18] font-bold mb-6 flex items-center gap-2">
-                  <Info size={16} className="text-[#C8522A]" /> 優惠碼已生效！請將完成的貼文發佈至社群，並上傳作品連結。
+              <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-5 xl:p-8 border border-[#E2DDD4]">
+                <p className="text-[#1A1A18] font-bold text-xs xl:text-sm mb-4 xl:mb-6 flex items-start gap-1.5 xl:gap-2 leading-relaxed">
+                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" /> 優惠碼已生效！請將完成的貼文發佈至社群，並上傳作品連結。
                 </p>
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 xl:gap-4">
                   <input
                     type="text"
                     value={linkText}
                     onChange={(e) => setLinkText(e.target.value)}
                     placeholder="請上傳貼文連結 (例如: https://instagram.com/...)"
-                    className="w-full bg-white border border-[#E2DDD4] rounded-xl px-5 py-4 text-sm text-[#1A1A18] placeholder:text-[#8C8880] font-medium outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
+                    className="w-full bg-white border border-[#E2DDD4] rounded-xl px-4 py-3 xl:px-5 xl:py-4 text-xs xl:text-sm text-[#1A1A18] placeholder:text-[#8C8880] font-medium outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
                   />
                   <button
                     onClick={handleSubmitLink}
                     disabled={isSubmitting}
-                    className="w-full bg-[#1A1A18] text-[#F5F0E8] py-4 rounded-xl font-bold transition-all hover:bg-[#C8522A] shadow-md text-sm tracking-widest disabled:opacity-50"
+                    className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 xl:py-4 rounded-xl font-bold transition-all hover:bg-[#C8522A] shadow-md text-xs xl:text-sm tracking-widest disabled:opacity-50"
                   >
                     確認上傳作品連結
                   </button>
@@ -407,21 +407,21 @@ export default function TaskDetailPage({ task, onBack }) {
 
           {/* 情境 4：推廣中 */}
           {isPromoting && (
-            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-4">
-              <h3 className="text-2xl font-bold text-[#1A1A18] mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
-              <p className="text-[#8C8880] font-medium leading-relaxed mb-8 text-center">
+            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
+              <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
+              <p className="text-[11px] xl:text-sm text-[#8C8880] font-medium leading-relaxed mb-6 xl:mb-8 text-center">
                 活動截止日後，任務將自動結案並計算最終分潤
               </p>
 
-              <div className="flex items-center justify-between mb-6">
-                <p className="text-[#1A1A18] font-black text-lg flex items-center gap-3">
-                  <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-4 xl:mb-6 gap-3 sm:gap-0">
+                <p className="text-[#1A1A18] font-black text-base xl:text-lg flex items-center gap-2 xl:gap-3">
+                  <span className="hidden sm:block w-1.5 h-6 xl:w-2 xl:h-8 bg-[#1A1A18] rounded-full"></span>
                   優惠碼使用次數：<span className="text-[#C8522A]">{usageCount}</span>
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => setChartPeriod('week')}
-                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                    className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
                       chartPeriod === 'week'
                         ? 'bg-[#1A1A18] text-white'
                         : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -431,7 +431,7 @@ export default function TaskDetailPage({ task, onBack }) {
                   </button>
                   <button
                     onClick={() => setChartPeriod('month')}
-                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
+                    className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
                       chartPeriod === 'month'
                         ? 'bg-[#1A1A18] text-white'
                         : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -442,28 +442,27 @@ export default function TaskDetailPage({ task, onBack }) {
                 </div>
               </div>
 
-              <div className="bg-[#F8F9FA] rounded-2xl p-8 border border-[#E2DDD4]">
+              <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-4 xl:p-8 border border-[#E2DDD4] flex-1 min-h-[240px]">
                 {chartLoading ? (
-                  <div className="h-56 flex items-center justify-center text-[#8C8880] font-bold">
+                  <div className="h-full flex items-center justify-center text-[#8C8880] font-bold text-sm">
                     載入中...
                   </div>
                 ) : (
-                  <div className="h-56 w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-10 overflow-x-auto">
+                  <div className="h-full w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-8 overflow-x-auto hide-scrollbar">
                     <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-1 text-[10px] text-[#8C8880] font-bold">
                       <span>{chartMaxValue}</span>
                       <span>
                         {(() => {
                           const mid = Math.round(chartMaxValue * 0.5);
-                          // 使用次數是整數，最大值太小時中間刻度會跟最大值或 0 重複，這種情況就不顯示
                           return mid > 0 && mid < chartMaxValue ? mid : '';
                         })()}
                       </span>
                       <span className="translate-y-2">0</span>
                     </div>
                     {chartData.map((item, idx) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px]">
+                      <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px] md:min-w-[30px]">
                         <div
-                          className="w-2.5 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
+                          className="w-2.5 md:w-3 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
                           style={{ height: `${chartMaxValue > 0 ? (item.y_value / chartMaxValue) * 100 : 0}%` }}
                         />
                         <span className="text-[9px] text-[#8C8880] mt-3 font-bold rotate-45 origin-left whitespace-nowrap">
@@ -480,16 +479,16 @@ export default function TaskDetailPage({ task, onBack }) {
           {/* 情境 5：已完成 */}
           {isCompleted && (
             <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
-              <div className="w-24 h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#E2DDD4]">
-                <CheckCircle2 size={48} className="text-[#8C8880]" />
+              <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#E2DDD4]">
+                <CheckCircle2 size={32} className="text-[#8C8880] xl:w-12 xl:h-12" />
               </div>
-              <h3 className="text-2xl font-bold text-[#1A1A18] mb-3">任務已完成</h3>
-              <p className="text-[#8C8880] font-medium leading-relaxed mb-8">
+              <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">任務已完成</h3>
+              <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed mb-6 xl:mb-8">
                 感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
               </p>
               <button
                 onClick={() => onBack(task.stage)}
-                className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
+                className="bg-[#1A1A18] text-[#F5F0E8] px-6 xl:px-8 py-3 xl:py-3.5 rounded-xl xl:rounded-2xl font-bold text-xs xl:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md w-full sm:w-auto"
               >
                 返回接案中心
               </button>
@@ -499,19 +498,19 @@ export default function TaskDetailPage({ task, onBack }) {
       </div>
 
       {/* 右側：聊天室 */}
-      <div className="w-[380px] bg-[#F5F0E8] rounded-[2rem] p-4 flex flex-col relative shrink-0 shadow-sm border border-[#E2DDD4]">
-        <div className="bg-white rounded-t-[1.5rem] p-5 border-b border-[#E2DDD4] flex items-center gap-4 shadow-sm z-10">
-          <div className="w-10 h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center border border-[#E2DDD4]">
-            <User size={20} className="text-[#8C8880]" />
+      <div className="w-full xl:w-[380px] h-[500px] xl:h-auto bg-[#F5F0E8] rounded-[2rem] p-3 xl:p-4 flex flex-col relative shrink-0 shadow-sm border border-[#E2DDD4]">
+        <div className="bg-white rounded-t-[1.5rem] p-4 xl:p-5 border-b border-[#E2DDD4] flex items-center gap-3 xl:gap-4 shadow-sm z-10 shrink-0">
+          <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center border border-[#E2DDD4]">
+            <User size={16} className="text-[#8C8880] xl:w-5 xl:h-5" />
           </div>
           <div>
-            <span className="font-bold text-[#1A1A18] block">{task.vendor || '廠商'}</span>
+            <span className="font-bold text-[#1A1A18] block text-sm xl:text-base">{task.vendor || '廠商'}</span>
             <span className="text-[10px] text-[#8C8880] font-bold">線上客服</span>
           </div>
         </div>
-        <div className="flex-1 bg-white p-6 overflow-y-auto flex flex-col gap-3">
+        <div className="flex-1 bg-white p-4 xl:p-6 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
           {messages.length === 0 && (
-            <div className="text-center text-xs text-[#8C8880] my-4 font-bold">您已加入聊天室，可隨時與廠商聯繫</div>
+            <div className="text-center text-[11px] xl:text-xs text-[#8C8880] my-4 font-bold">您已加入聊天室，可隨時與廠商聯繫</div>
           )}
           {messages.map((msg) => (
             <div
@@ -519,7 +518,7 @@ export default function TaskDetailPage({ task, onBack }) {
               className={`flex flex-col ${msg.sender_role === 'koc' ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+                className={`max-w-[85%] xl:max-w-[80%] rounded-2xl px-3.5 py-2 xl:px-4 xl:py-2.5 text-[13px] xl:text-sm leading-relaxed break-words ${
                   msg.sender_role === 'koc'
                     ? 'bg-[#1A1A18] text-[#F5F0E8] rounded-br-md'
                     : 'bg-[#F5F0E8] text-[#1A1A18] rounded-bl-md'
@@ -527,15 +526,15 @@ export default function TaskDetailPage({ task, onBack }) {
               >
                 {msg.content}
               </div>
-              <span className="text-[10px] text-[#8C8880] font-bold mt-1 px-1">
+              <span className="text-[9px] xl:text-[10px] text-[#8C8880] font-bold mt-1 px-1">
                 {formatMessageTime(msg.created_at)}
               </span>
             </div>
           ))}
           <div ref={messagesEndRef} />
         </div>
-        <div className="bg-[#F5F0E8] p-4 rounded-b-[1.5rem]">
-          <div className="bg-white rounded-full flex items-center px-4 py-2 gap-3 shadow-sm border border-[#E2DDD4] focus-within:border-[#1A1A18] transition-colors">
+        <div className="bg-[#F5F0E8] p-3 xl:p-4 rounded-b-[1.5rem] shrink-0">
+          <div className="bg-white rounded-full flex items-center px-3 xl:px-4 py-1.5 xl:py-2 gap-2 xl:gap-3 shadow-sm border border-[#E2DDD4] focus-within:border-[#1A1A18] transition-colors">
             <input
               type="text"
               value={chatInput}
@@ -543,15 +542,15 @@ export default function TaskDetailPage({ task, onBack }) {
               onKeyDown={handleChatKeyDown}
               placeholder="傳送訊息..."
               disabled={!roomId}
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-[#8C8880] disabled:opacity-50"
+              className="flex-1 bg-transparent outline-none text-[13px] xl:text-sm placeholder:text-[#8C8880] disabled:opacity-50 min-w-0"
             />
-            <Smile size={20} className="text-[#8C8880] cursor-pointer hover:text-[#1A1A18]" />
+            <Smile size={18} className="text-[#8C8880] cursor-pointer hover:text-[#1A1A18] shrink-0" />
             <button
               onClick={handleSendMessage}
               disabled={!roomId || !chatInput.trim() || sendingMessage}
-              className="bg-[#1A1A18] text-[#F5F0E8] p-2 rounded-full hover:bg-[#C8522A] shadow-md disabled:opacity-50"
+              className="bg-[#1A1A18] text-[#F5F0E8] p-1.5 xl:p-2 rounded-full hover:bg-[#C8522A] shadow-md disabled:opacity-50 shrink-0"
             >
-              <Send size={16} />
+              <Send size={14} className="xl:w-4 xl:h-4 ml-0.5" />
             </button>
           </div>
         </div>
@@ -559,50 +558,48 @@ export default function TaskDetailPage({ task, onBack }) {
 
       {/* 文案撰寫彈出視窗 */}
       {showModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2rem] p-10 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-[#1A1A18]">編輯文案草稿</h3>
-            </div>
-
-            {vendorFeedback && (
-              <div className="mb-6 bg-[#FDF0ED] text-[#C8522A] px-6 py-4 rounded-2xl text-sm font-bold border border-[#FDF0ED] leading-relaxed shadow-sm">
-                <span className="text-xs uppercase tracking-tighter block mb-1 opacity-80">廠商要求修改：</span>
-                {vendorFeedback}
-              </div>
-            )}
-
-            <textarea
-              value={copyText}
-              onChange={(e) => setCopyText(e.target.value)}
-              placeholder="請輸入欲發佈的圖文內容草稿...."
-              className="w-full h-64 bg-[#F8F9FA] border border-[#E2DDD4] rounded-[1.5rem] p-6 outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none mb-6 text-[#1A1A18] leading-relaxed transition-all placeholder:text-[#8C8880] font-medium shadow-inner"
-            />
-
-            <div className="flex justify-between items-end mb-8 bg-[#F5F0E8] p-4 rounded-xl border border-[#E2DDD4]">
-              <div className="text-xs font-bold text-[#8C8880] space-y-1.5 ml-2">
-                <p className="text-[#1A1A18] mb-1">發佈規範：</p>
-                <p>• 文案長度建議大於 50 字</p>
-                <p>• 請務必包含專屬優惠碼：
-                  <span className="text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4] ml-1">
-                    {promoCode || '無'}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowModal(false)}
-                disabled={isSaving || isSubmitting}
-                className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-xl font-bold hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all text-sm disabled:opacity-50"
-              >
-                取消
+        <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
+          <div className="bg-white rounded-[1.5rem] xl:rounded-[2rem] p-6 xl:p-10 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
+            <div className="flex justify-between items-center mb-4 xl:mb-6 shrink-0">
+              <h3 className="text-lg xl:text-xl font-bold text-[#1A1A18]">編輯文案草稿</h3>
+              <button onClick={() => setShowModal(false)} className="xl:hidden p-1 text-[#8C8880] hover:text-[#1A1A18]">
+                <X size={20} />
               </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1">
+              {vendorFeedback && (
+                <div className="mb-4 xl:mb-6 bg-[#FDF0ED] text-[#C8522A] px-4 xl:px-6 py-3 xl:py-4 rounded-xl xl:rounded-2xl text-[13px] xl:text-sm font-bold border border-[#FDF0ED] leading-relaxed shadow-sm">
+                  <span className="text-[10px] xl:text-xs uppercase tracking-tighter block mb-1 opacity-80">廠商要求修改：</span>
+                  {vendorFeedback}
+                </div>
+              )}
+
+              <textarea
+                value={copyText}
+                onChange={(e) => setCopyText(e.target.value)}
+                placeholder="請輸入欲發佈的圖文內容草稿...."
+                className="w-full min-h-[200px] xl:h-64 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl xl:rounded-[1.5rem] p-4 xl:p-6 outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none mb-4 xl:mb-6 text-[13px] xl:text-sm text-[#1A1A18] leading-relaxed transition-all placeholder:text-[#8C8880] font-medium shadow-inner custom-scrollbar"
+              />
+
+              <div className="flex justify-between items-end mb-6 xl:mb-8 bg-[#F5F0E8] p-3 xl:p-4 rounded-xl border border-[#E2DDD4]">
+                <div className="text-[10px] xl:text-xs font-bold text-[#8C8880] space-y-1 xl:space-y-1.5 ml-1 xl:ml-2">
+                  <p className="text-[#1A1A18] mb-0.5 xl:mb-1">發佈規範：</p>
+                  <p>• 文案長度建議大於 50 字</p>
+                  <p className="flex flex-wrap items-center gap-1">• 請務必包含專屬優惠碼：
+                    <span className="text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4]">
+                      {promoCode || '無'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 xl:gap-4 shrink-0 pt-2">
               <button
                 onClick={handleSaveDraft}
                 disabled={isSaving || isSubmitting}
-                className="flex-1 bg-white border-2 border-[#1A1A18] text-[#1A1A18] py-3.5 rounded-xl font-bold hover:bg-[#1A1A18] hover:text-[#F5F0E8] transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 bg-white border-2 border-[#1A1A18] text-[#1A1A18] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#1A1A18] hover:text-[#F5F0E8] transition-all text-xs xl:text-sm flex items-center justify-center gap-2 disabled:opacity-50 order-2 sm:order-1"
               >
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
                 {isSaving ? '儲存中...' : '儲存草稿'}
@@ -610,7 +607,7 @@ export default function TaskDetailPage({ task, onBack }) {
               <button
                 onClick={handleSubmitCopy}
                 disabled={isSaving || isSubmitting}
-                className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-sm tracking-widest disabled:opacity-50"
+                className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs xl:text-sm tracking-widest disabled:opacity-50 order-1 sm:order-2"
               >
                 {isSubmitting ? '送出中...' : '確認送出審核'}
               </button>

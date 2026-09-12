@@ -103,12 +103,12 @@ export default function AdminApp() {
             <img 
               src={LogoIcon} 
               alt="ShareBuy Logo" 
-              className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0" 
+              className="h-8 w-8 object-cover rounded-full shadow-sm" 
             />
             <img 
               src={LogoText} 
               alt="ShareBuy Text" 
-              className="h-6 w-auto object-contain mix-blend-multiply translate-y-[1px]" 
+              className="h-7 w-auto object-contain mix-blend-multiply translate-y-0.5"
             />
             {/* ADMIN 標籤靠右對齊 */}
             <span className="text-[9px] bg-[#1A1A18] text-white px-1.5 py-0.5 rounded-md font-bold tracking-wider ml-auto">

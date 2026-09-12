@@ -131,9 +131,6 @@ function isValidReceiverName(name) {
   return false;
 }
 
-// 綠界 AIO 金流：後端 /api/payments/create/ 回傳 {action, method, fields}，
-// 這裡動態建立一個看不見的 <form>、把 fields 逐一塞成 hidden input，再自動 submit，
-// 瀏覽器會離開 SPA、整頁導向綠界的刷卡頁（這不是 fetch/AJAX 能做到的，ECPay 要求真正的表單 POST）。
 function submitEcpayForm({ action, method, fields }) {
   const form = document.createElement("form");
   form.method = method || "POST";
@@ -157,15 +154,6 @@ export default function CheckoutPage({
   onBack,
   onGoToLogin,
   cartItems = [],
-  initialSummary = {
-    items: "NT$20 × 2",
-    itemsAmount: 40,
-    shippingAmount: 0,
-    couponDiscount: 0,
-    pointsDiscount: 0,
-    currency: "TWD",
-    total: 68.94,
-  },
 }) {
   const userId = localStorage.getItem("userId");
   const isLoggedIn = Boolean(userId);
@@ -214,8 +202,6 @@ export default function CheckoutPage({
 
   // ============================
   // 配送方式
-  // home = 宅配
-  // cvs = 超商取貨
   // ============================
   const [shippingMethod, setShippingMethod] = useState("home");
 
@@ -259,10 +245,6 @@ export default function CheckoutPage({
       storeWindowRef.current = null;
     };
 
-
-    // =========================
-    // localStorage 備援
-    // =========================
     const readSelectedStore = () => {
       const raw = localStorage.getItem(
         "ecpaySelectedStore"
@@ -286,10 +268,6 @@ export default function CheckoutPage({
       }
     };
 
-
-    // =========================
-    // storage event
-    // =========================
     const handleStorage = (event) => {
       if (
         event.key ===
@@ -299,10 +277,6 @@ export default function CheckoutPage({
       }
     };
 
-
-    // =========================
-    // popup postMessage
-    // =========================
     const handleMessage = (event) => {
       if (
         event.origin !==
@@ -323,15 +297,9 @@ export default function CheckoutPage({
       );
     };
 
-
-    // =========================
-    // popup 關閉後重新 focus
-    // 再讀一次 localStorage
-    // =========================
     const handleFocus = () => {
       readSelectedStore();
     };
-
 
     window.addEventListener(
       "storage",
@@ -348,15 +316,6 @@ export default function CheckoutPage({
       handleFocus
     );
 
-    // =========================
-    // 輪詢備援
-    // postMessage 可能因為綠界頁面
-    // 設定 COOP 而讓 window.opener 失效，
-    // storage 事件在部分瀏覽器/情境下
-    // 也可能沒有即時觸發，
-    // 所以只要 popup 還開著，
-    // 就定期主動檢查一次 localStorage
-    // =========================
     const pollTimer = setInterval(() => {
       if (
         storeWindowRef.current &&
@@ -365,7 +324,6 @@ export default function CheckoutPage({
         readSelectedStore();
       }
     }, 400);
-
 
     return () => {
       window.removeEventListener(
@@ -517,15 +475,12 @@ export default function CheckoutPage({
         : Boolean(selectedStore?.store_id)
     );
 
-  // 信用卡（method === "card"）走綠界 AIO：實際刷卡資訊是在綠界的頁面上輸入，
-  // 這裡不再要求任何本地卡號/到期日/CVC 欄位，那些欄位從未被送到任何 API。
   const canPay = isLoggedIn && shippingValid;
 
   // ============================
   // 開啟綠界選店 popup
   // ============================
   const handleSelectStore = () => {
-    // 清除上一筆選店資料
     localStorage.removeItem(
       "ecpaySelectedStore"
     );
@@ -536,8 +491,6 @@ export default function CheckoutPage({
 
     const url =
       `${API_BASE_URL}/api/shipping/ecpay/map/`;
-
-    
 
     const width = 700;
     const height = 700;
@@ -692,13 +645,9 @@ export default function CheckoutPage({
       show: false,
     });
   };
-  
 
   // ============================
   // 建立訂單 + 付款
-  //
-  // 目前先保留原流程。
-  // ShipmentInfo 下一步再接。
   // ============================
   const handlePay = async () => {
     if (!isLoggedIn) {
@@ -753,15 +702,7 @@ export default function CheckoutPage({
         })
       );
 
-    console.log("===== 下單前物流資料 =====");
-    console.log("shippingMethod:", shippingMethod);
-    console.log("selectedStore:", selectedStore);
-    console.log("=========================");
-
     try {
-      // ============================
-      // 建立訂單
-      // ============================
       const orderRes = await fetch(
         `${API_BASE_URL}/api/consumer/order/create`,
         {
@@ -810,9 +751,6 @@ export default function CheckoutPage({
                 ? recipientDistrict.trim()
                 : "",
 
-            // =========================
-            // 配送資料
-            // =========================
             shipping_method:
               shippingMethod,
 
@@ -863,11 +801,6 @@ export default function CheckoutPage({
         orderData.Order_id ||
         orderData.orderId;
 
-      // 信用卡走真正的綠界 AIO 金流：後端 /api/payments/create/ 針對這筆 Order
-      // 建立 PaymentTransaction、算好 CheckMacValue，回傳可直接 auto-submit 的表單資料。
-      // 金額、商品名稱都是後端從 Order/OrderItem 組出來的，前端不會也不能自己帶金額。
-      // 送出表單後瀏覽器會離開這個頁面，訂單狀態改成「已付款」是綠界打 ReturnURL 回後端才會發生，
-      // 不是這裡能立即決定的，所以信用卡這條路徑先不跑下面清購物車/顯示成功動畫那段舊的模擬邏輯。
       if (method === "card") {
         const paymentRes = await fetch(`${API_BASE_URL}/api/payments/create/`, {
           method: "POST",
@@ -883,12 +816,9 @@ export default function CheckoutPage({
         }
 
         submitEcpayForm(paymentData);
-        return; // 頁面即將被導向綠界，不需要再更新任何 local state
+        return; 
       }
 
-      // ============================
-      // 建立 Transaction
-      // ============================
       const txRes = await fetch(
         `${API_BASE_URL}/api/consumer/transaction/create`,
         {
@@ -923,9 +853,6 @@ export default function CheckoutPage({
           .json()
           .catch(() => ({}));
 
-      // ============================
-      // 更新 Payment
-      // ============================
       await fetch(
         `${API_BASE_URL}/api/consumer/payment/update`,
         {
@@ -955,9 +882,6 @@ export default function CheckoutPage({
         }
       );
 
-      // ============================
-      // 更新付款結果
-      // ============================
       await fetch(
         `${API_BASE_URL}/api/consumer/payments/result`,
         {
@@ -981,9 +905,6 @@ export default function CheckoutPage({
         }
       );
 
-      // ============================
-      // 清除購物車
-      // ============================
       for (
         const item
         of normalizedCartItems
@@ -1050,776 +971,753 @@ export default function CheckoutPage({
   return (
     <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-serif">
 
-      <div className="mx-auto max-w-[1000px] px-6 pb-20 pt-12 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-10 lg:gap-14 items-start">
-
-        {/* ================= LEFT ================= */}
-        <div>
-
-          {/* 返回購物車 */}
-          <button
-            type="button"
-            onClick={() => onBack?.()}
-            className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm group w-fit"
+      <div className="mx-auto max-w-[1000px] px-4 md:px-6 pb-12 md:pb-20 pt-6 md:pt-12">
+        
+        {/* 🌟 獨立抽出來的返回按鈕，永遠在最上方 */}
+        <button
+          type="button"
+          onClick={() => onBack?.()}
+          className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-xs md:text-sm group w-fit"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5 md:h-4 md:w-4 transition-transform group-hover:-translate-x-1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4 transition-transform group-hover:-translate-x-1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 5l-7 7 7 7" />
-            </svg>
+            <path d="M19 12H5" />
+            <path d="M12 5l-7 7 7 7" />
+          </svg>
+          返回購物車
+        </button>
 
-            返回購物車
-          </button>
+        {/* 網格區塊 */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 md:gap-10 lg:gap-14 items-start">
+          
+          {/* ================= RIGHT (手機版改放上方) ================= */}
+          <aside className="lg:sticky lg:top-20 order-1 lg:order-2">
 
-          <h1 className="font-['DM_Serif_Display'] text-[40px] leading-none mb-7">
-            結帳
-          </h1>
+            <div className="rounded-[1.25rem] md:rounded-[16px] border border-[#E2DDD4] bg-white p-5 md:p-7 shadow-sm">
 
-          {!isLoggedIn && (
-            <div className="mb-7 flex items-center justify-between gap-4 rounded-[14px] border-[1.5px] border-[#C8522A] bg-[#FBEAE3] px-5 py-4">
+              <div className="relative inline-block font-['DM_Serif_Display'] text-xl md:text-[22px] mb-4 md:mb-6">
 
-              <span className="text-[14px] text-[#1A1A18]">
-                需要登入會員才能結帳，目前不提供訪客結帳。
-              </span>
+                付款詳情
 
-              <button
-                type="button"
-                onClick={() =>
-                  onGoToLogin?.()
-                }
-                className="whitespace-nowrap rounded-full bg-[#1A1A18] px-5 py-2 text-[13px] font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
-              >
-                前往登入
-              </button>
-
-            </div>
-          )}
-
-          <div className="h-px bg-[#E2DDD4] mb-7" />
-
-          {/* ================= 配送資訊 ================= */}
-          <div className="mb-7">
-
-            <div className="text-[18px] font-bold mb-5">
-              配送資訊
-            </div>
-
-            {/* 配送方式 */}
-            <div className="mb-5">
-
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                配送方式
-              </label>
-
-              <div className="flex gap-3">
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShippingMethod(
-                      "home"
-                    )
-                  }
-                  className={`rounded-full border-[1.5px] px-5 py-2.5 text-[13px] transition-all ${
-                    shippingMethod === "home"
-                      ? "border-[#1A1A18] bg-[#1A1A18] text-white"
-                      : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
-                  }`}
-                >
-                  宅配
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShippingMethod(
-                      "cvs"
-                    )
-                  }
-                  className={`rounded-full border-[1.5px] px-5 py-2.5 text-[13px] transition-all ${
-                    shippingMethod === "cvs"
-                      ? "border-[#1A1A18] bg-[#1A1A18] text-white"
-                      : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
-                  }`}
-                >
-                  超商取貨
-                </button>
+                <span className="absolute left-0 -bottom-1 h-[2px] w-7 rounded bg-[#B89B6A]" />
 
               </div>
 
-            </div>
+              <div className="text-[13px] text-[#8C8880]">
 
-            {/* 收件人姓名 */}
-            <div className="mb-4">
+                {normalizedCartItems.map(
+                  (item, idx) => {
 
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                收件人姓名
-              </label>
+                    const baseSubtotal =
+                      item.price *
+                      item.qty;
 
-              <input
-                value={recipient}
-                onChange={(e) =>
-                  setRecipient(
-                    e.target.value.slice(0, 10)
-                  )
-                }
-                maxLength={10}
-                placeholder="中文 2～5 字，英文 4～10 字元"
-                className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                  recipient.trim() && receiverNameValid
-                    ? "border-[#6BBF6B] bg-white"
-                    : recipient.trim() && !receiverNameValid
-                    ? "border-[#C8522A] bg-white"
-                    : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                }`}
-              />
+                    const discountedSubtotal =
+                      getItemDiscountedSubtotal(
+                        item
+                      );
 
-              <p
-                className={`mt-2 text-[11px] ${
-                  recipient.trim() && !receiverNameValid
-                    ? "font-bold text-[#C8522A]"
-                    : "text-[#8C8880]"
-                }`}
-              >
-                收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。
-              </p>
+                    const hasDiscount =
+                      discountedSubtotal <
+                      baseSubtotal;
 
-            </div>
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-start justify-between py-2 md:py-2.5 gap-2"
+                      >
 
-            {/* 收件人電話 */}
-            <div className="mb-4">
+                        <span className="leading-snug">
+                          {item.name} <span className="whitespace-nowrap">× {item.qty}</span>
+                        </span>
 
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                收件人電話
-              </label>
+                        <span className="font-mono text-[#1A1A18] whitespace-nowrap">
 
-              <input
-                value={
-                  recipientPhone
-                }
-                onChange={(e) =>
-                  setRecipientPhone(
-                    e.target.value
-                      .replace(/\D/g, "")
-                      .slice(0, 10)
-                  )
-                }
-                inputMode="tel"
-                maxLength={10}
-                placeholder="請輸入 09 開頭的 10 碼手機號碼"
-                className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                  recipientPhoneValid
-                    ? "border-[#6BBF6B] bg-white"
-                    : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                }`}
-              />
+                          {hasDiscount && (
+                            <span className="line-through text-[#8C8880] mr-2">
 
-            </div>
+                              {formatNTD(
+                                baseSubtotal
+                              )}
 
-            {/* ================= 宅配 ================= */}
-            {shippingMethod === "home" ? (
+                            </span>
+                          )}
 
-              <div className="mb-4 space-y-4">
+                          {formatNTD(
+                            discountedSubtotal
+                          )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        </span>
 
-                  <div>
-                    <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                      縣市
-                    </label>
+                      </div>
+                    );
+                  }
+                )}
 
-                    <select
-                      value={recipientCity}
-                      onChange={handleRecipientCityChange}
-                      className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                        recipientCity
-                          ? "border-[#6BBF6B] bg-white"
-                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                      }`}
-                    >
-                      <option value="">請選擇縣市</option>
+                <div className="flex items-center justify-between border-b border-t border-[#E2DDD4] py-2 md:py-2.5 mt-2">
 
-                      {TAIWAN_CITIES.map(city => (
-                        <option key={city} value={city}>
-                          {city}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <span>
+                    運費
+                  </span>
 
-                  <div>
-                    <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                      鄉鎮市區
-                    </label>
+                  <span className="font-mono text-[#1A1A18]">
 
-                    <select
-                      value={recipientDistrict}
-                      onChange={handleRecipientDistrictChange}
-                      disabled={!recipientCity}
-                      className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                        recipientDistrict
-                          ? "border-[#6BBF6B] bg-white"
-                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                      }`}
-                    >
-                      <option value="">
-                        {recipientCity
-                          ? "請選擇鄉鎮市區"
-                          : "請先選擇縣市"}
-                      </option>
+                    {formatNTD(
+                      shippingAmount
+                    )}
 
-                      {recipientDistrictOptions.map(item => (
-                        <option
-                          key={`${item.district}-${item.postalCode}`}
-                          value={item.district}
-                        >
-                          {item.district}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  </span>
 
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                    郵遞區號
-                  </label>
+                <div className="flex items-center justify-between py-2 md:py-2.5">
 
-                  <input
-                    value={recipientPostalCode}
-                    readOnly
-                    placeholder="選擇鄉鎮市區後自動帶入"
-                    className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none ${
-                      recipientPostalCode
-                        ? "border-[#6BBF6B] bg-[#F8F9FA]"
-                        : "border-[#E2DDD4] bg-slate-100"
+                  <span>
+                    優惠碼折扣
+                  </span>
+
+                  <span
+                    className={`font-mono ${
+                      couponDiscount > 0
+                        ? "text-[#6BBF6B]"
+                        : "text-[#8C8880]"
                     }`}
-                  />
-
-                  <p className="mt-2 text-[11px] text-[#8C8880]">
-                    郵遞區號會依縣市與鄉鎮市區自動填入。
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                    詳細地址
-                  </label>
-
-                  <input
-                    value={recipientAddress}
-                    onChange={(e) =>
-                      setRecipientAddress(
-                        e.target.value
-                      )
-                    }
-                    placeholder="例如 光復路二段100號"
-                    className={`w-full rounded-[10px] border-[1.5px] px-4 py-[13px] text-sm outline-none transition-colors ${
-                      recipientAddress.trim()
-                        ? "border-[#6BBF6B] bg-white"
-                        : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
-                    }`}
-                  />
-                </div>
-
-              </div>
-
-            ) : (
-
-              /* ================= 超商取貨 ================= */
-              <div className="mb-4">
-
-                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                  取貨門市
-                </label>
-
-                {!selectedStore ? (
-
-                  <button
-                    type="button"
-                    onClick={
-                      handleSelectStore
-                    }
-                    className="w-full rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-4 py-[13px] text-left text-sm transition-colors hover:border-[#1A1A18]"
                   >
 
-                    <div className="font-bold text-[#1A1A18]">
-                      選擇 7-ELEVEN 取貨門市
-                    </div>
+                    {couponDiscount > 0
+                      ? `−${formatNTD(
+                          couponDiscount
+                        )}`
+                      : "NT$0"}
 
-                    <div className="mt-1 text-[12px] text-[#8C8880]">
-                      點擊後將開啟綠界超商選店
-                    </div>
+                  </span>
 
-                  </button>
+                </div>
 
-                ) : (
+              </div>
 
-                  <div className="rounded-[12px] border-[1.5px] border-[#6BBF6B] bg-white p-4">
+              {/* 優惠碼 */}
+              <div className="mt-4 border-t border-[#E2DDD4] pt-4">
 
-                    <div className="flex items-start justify-between gap-4">
+                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                  輸入優惠碼
+                </label>
 
-                      <div>
+                {appliedCoupon ? (
 
-                        <div className="mb-1 flex items-center gap-2 text-[14px] font-bold text-[#1A1A18]">
+                  <div className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-2.5">
 
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#6BBF6B] text-white">
-                            <CheckIcon className="h-3 w-3" />
-                          </span>
+                    <div>
 
-                          7-ELEVEN{" "}
-                          {selectedStore.store_name}
+                      <div className="font-mono text-[13px] font-bold text-[#6BBF6B]">
+                        {appliedCoupon.code}
+                      </div>
 
-                        </div>
+                      <div className="text-[11px] text-[#8C8880]">
 
-                        <div className="mt-2 text-[12px] text-[#8C8880]">
-                          門市代號：
-                          {selectedStore.store_id}
-                        </div>
+                        適用於：
 
-                        <div className="mt-1 text-[12px] leading-5 text-[#8C8880]">
-                          {selectedStore.store_address}
-                        </div>
+                        {appliedCoupon.matchedItemNames.join(
+                          "、"
+                        )}
 
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={
-                          handleSelectStore
-                        }
-                        className="whitespace-nowrap text-[12px] font-bold text-[#C8522A] hover:underline"
-                      >
-                        更換門市
-                      </button>
-
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={
+                        handleRemoveCoupon
+                      }
+                      className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
+                    >
+                      移除
+                    </button>
+
+                  </div>
+
+                ) : (
+
+                  <div className="flex gap-2">
+
+                    <input
+                      value={
+                        couponCode
+                      }
+                      onChange={(e) =>
+                        setCouponCode(
+                          e.target.value.toUpperCase()
+                        )
+                      }
+                      placeholder="輸入優惠碼"
+                      className="flex-1 w-full rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-3 md:px-4 py-2 md:py-2.5 font-mono text-[13px] outline-none focus:border-[#1A1A18] tracking-[0.08em]"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={
+                        handleApplyCoupon
+                      }
+                      disabled={
+                        couponLoading ||
+                        !couponCode.trim()
+                      }
+                      className="rounded-[10px] bg-[#1A1A18] px-4 md:px-2.5 py-2 md:py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+
+                      {couponLoading
+                        ? "驗證中"
+                        : "套用"}
+
+                    </button>
 
                   </div>
                 )}
 
-              </div>
-            )}
+                {couponMsg.show && (
 
-          </div>
-
-          <div className="h-px bg-[#E2DDD4] mb-7" />
-
-          {/* ================= 支付方式 ================= */}
-          <div className="flex items-center justify-between mb-5">
-
-            <div className="text-[18px] font-bold">
-              支付方式
-            </div>
-
-            <span className="rounded-full bg-[#1A1A18] px-3.5 py-1 text-[12px] tracking-[0.06em] text-[#F5F0E8] font-mono">
-              {badgeText}
-            </span>
-
-          </div>
-
-          <div className="flex flex-wrap gap-2.5 mb-7">
-
-            {METHODS.map(
-              ({
-                key,
-                label,
-                Icon,
-              }) => {
-
-                const active =
-                  method === key;
-
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() =>
-                      setMethod(key)
-                    }
-                    className={`inline-flex items-center gap-2 rounded-full border-[1.5px] px-4 py-[9px] text-[13px] transition-all ${
-                      active
-                        ? "border-[#1A1A18] bg-[#F5F0E8] text-[#1A1A18]"
-                        : "border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18]"
+                  <p
+                    className={`mt-2 text-[12px] font-bold ${
+                      couponMsg.ok
+                        ? "text-[#6BBF6B]"
+                        : "text-[#C8522A]"
                     }`}
                   >
-                    <Icon />
-                    {label}
-                  </button>
-                );
-              }
-            )}
 
-          </div>
+                    {couponMsg.text}
 
-          <p className="text-[12px] tracking-[0.06em] uppercase text-[#8C8880] mb-3">
-            已儲存資訊
-          </p>
+                  </p>
 
-          <button
-            type="button"
-            className="mb-7 inline-flex items-center gap-2 rounded-full bg-[#8C8880] px-5 py-2.5 text-[13px] text-[#F5F0E8] transition-colors hover:bg-[#1A1A18]"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-[14px] w-[14px]"
-              fill="currentColor"
-            >
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-
-            查看全部
-          </button>
-
-          <div className="h-px bg-[#E2DDD4] mb-7" />
-
-          {method === "card" && (
-            <div className="mb-7 flex items-start gap-3 rounded-[14px] border-[1.5px] border-[#E2DDD4] bg-[#F5F0E8] px-5 py-4">
-              <span className="mt-0.5 shrink-0 text-[#6BBF6B]">
-                <ShieldIcon />
-              </span>
-              <p className="text-[13px] text-[#8C8880]">
-                按下「確認並支付」後會導向綠界金流的安全刷卡頁面填寫卡片資訊，本頁不會收集您的卡號。
-              </p>
-            </div>
-          )}
-
-          {/* ================= Submit ================= */}
-          <button
-            type="button"
-            onClick={
-              handlePay
-            }
-            disabled={
-              !canPay ||
-              submitState ===
-                "success" ||
-              submitState ===
-                "loading"
-            }
-            className={`inline-flex items-center gap-2 rounded-full px-9 py-[15px] text-[16px] tracking-[0.05em] transition-all
-              ${
-                !canPay ||
-                submitState ===
-                  "success" ||
-                submitState ===
-                  "loading"
-                  ? "opacity-80"
-                  : "hover:-translate-y-[1px]"
-              }
-              ${
-                submitState ===
-                "success"
-                  ? "bg-[#6BBF6B] text-[#F5F0E8]"
-                  : submitState ===
-                    "error"
-                  ? "bg-[#C8522A] text-[#F5F0E8]"
-                  : "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A]"
-              }`}
-          >
-
-            {submitState ===
-            "success" ? (
-
-              <>
-                <CheckIcon className="h-[18px] w-[18px]" />
-                付款成功！
-              </>
-
-            ) : submitState ===
-              "loading" ? (
-
-              <>
-                處理中...
-              </>
-
-            ) : submitState ===
-              "error" ? (
-
-              <>
-                {payError ||
-                  "付款失敗，請再試一次"}
-              </>
-
-            ) : (
-
-              <>
-                確認並支付
-
-                <ArrowRightIcon className="h-[18px] w-[18px]" />
-              </>
-
-            )}
-
-          </button>
-
-          {!isLoggedIn ? (
-
-            <p className="mt-3 text-[12px] text-[#C8522A] font-bold">
-              請先登入會員才能結帳。
-            </p>
-
-          ) : !shippingValid ? (
-
-            <p className="mt-3 text-[12px] text-[#8C8880]">
-
-              {!receiverNameValid
-                ? "收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。"
-                : shippingMethod === "home"
-                ? "請填寫 09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
-                : "請填寫 09 開頭手機號碼，並選擇取貨門市。"}
-
-            </p>
-
-          ) : null}
-
-        </div>
-
-        {/* ================= RIGHT ================= */}
-        <aside className="sticky top-20">
-
-          <div className="rounded-[16px] border border-[#E2DDD4] bg-white p-7">
-
-            <div className="relative inline-block font-['DM_Serif_Display'] text-[22px] mb-6">
-
-              付款詳情
-
-              <span className="absolute left-0 -bottom-1 h-[2px] w-7 rounded bg-[#B89B6A]" />
-
-            </div>
-
-            <div className="text-[13px] text-[#8C8880]">
-
-              {normalizedCartItems.map(
-                (item, idx) => {
-
-                  const baseSubtotal =
-                    item.price *
-                    item.qty;
-
-                  const discountedSubtotal =
-                    getItemDiscountedSubtotal(
-                      item
-                    );
-
-                  const hasDiscount =
-                    discountedSubtotal <
-                    baseSubtotal;
-
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between py-2.5"
-                    >
-
-                      <span>
-                        {item.name} ×{" "}
-                        {item.qty}
-                      </span>
-
-                      <span className="font-mono text-[#1A1A18]">
-
-                        {hasDiscount && (
-                          <span className="line-through text-[#8C8880] mr-2">
-
-                            {formatNTD(
-                              baseSubtotal
-                            )}
-
-                          </span>
-                        )}
-
-                        {formatNTD(
-                          discountedSubtotal
-                        )}
-
-                      </span>
-
-                    </div>
-                  );
-                }
-              )}
-
-              <div className="flex items-center justify-between border-b border-t border-[#E2DDD4] py-2.5">
-
-                <span>
-                  運費
-                </span>
-
-                <span className="font-mono text-[#1A1A18]">
-
-                  {formatNTD(
-                    shippingAmount
-                  )}
-
-                </span>
+                )}
 
               </div>
 
-              <div className="flex items-center justify-between py-2.5">
+              {/* 總額 */}
+              <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F0E8] px-4 py-3 md:py-3.5">
 
-                <span>
-                  優惠碼折扣
+                <div className="text-xs md:text-[13px] font-bold text-[#1A1A18]">
+
+                  總付款金額{" "}
+
+                  <span className="ml-1 text-[10px] md:text-[11px] font-normal text-[#8C8880]">
+                    (TWD)
+                  </span>
+
+                </div>
+
+                <div className="font-mono text-base md:text-[18px] font-bold text-[#1A1A18]">
+
+                  {formatNTD(
+                    grandTotal
+                  )}
+
+                </div>
+
+              </div>
+
+              <div className="mt-4 md:mt-5 border-t border-[#E2DDD4] pt-3 md:pt-4 flex items-center gap-1.5 md:gap-2 text-[10px] md:text-[11px] tracking-[0.05em] text-[#8C8880]">
+
+                <span className="text-[#6BBF6B]">
+                  <ShieldIcon />
                 </span>
 
-                <span
-                  className={`font-mono ${
-                    couponDiscount > 0
-                      ? "text-[#6BBF6B]"
+                SSL 加密安全付款保障
+
+              </div>
+
+            </div>
+
+          </aside>
+
+
+          {/* ================= LEFT (手機版改放下方) ================= */}
+          <div className="order-2 lg:order-1">
+
+            <h1 className="font-['DM_Serif_Display'] text-3xl md:text-[40px] leading-none mb-5 md:mb-7">
+              結帳
+            </h1>
+
+            {!isLoggedIn && (
+              <div className="mb-5 md:mb-7 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 rounded-[14px] border-[1.5px] border-[#C8522A] bg-[#FBEAE3] px-4 md:px-5 py-3 md:py-4">
+
+                <span className="text-xs md:text-[14px] text-[#1A1A18]">
+                  需要登入會員才能結帳，目前不提供訪客結帳。
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onGoToLogin?.()
+                  }
+                  className="w-full md:w-auto whitespace-nowrap rounded-lg md:rounded-full bg-[#1A1A18] px-5 py-2.5 md:py-2 text-xs md:text-[13px] font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
+                >
+                  前往登入
+                </button>
+
+              </div>
+            )}
+
+            <div className="h-px bg-[#E2DDD4] mb-5 md:mb-7" />
+
+            {/* ================= 配送資訊 ================= */}
+            <div className="mb-5 md:mb-7">
+
+              <div className="text-base md:text-[18px] font-bold mb-4 md:mb-5">
+                配送資訊
+              </div>
+
+              {/* 配送方式 */}
+              <div className="mb-4 md:mb-5">
+
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                  配送方式
+                </label>
+
+                <div className="flex gap-2.5 md:gap-3">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShippingMethod(
+                        "home"
+                      )
+                    }
+                    className={`flex-1 md:flex-none rounded-xl md:rounded-full border-[1.5px] px-4 py-2.5 md:px-5 md:py-2.5 text-xs md:text-[13px] transition-all ${
+                      shippingMethod === "home"
+                        ? "border-[#1A1A18] bg-[#1A1A18] text-white"
+                        : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
+                    }`}
+                  >
+                    宅配
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShippingMethod(
+                        "cvs"
+                      )
+                    }
+                    className={`flex-1 md:flex-none rounded-xl md:rounded-full border-[1.5px] px-4 py-2.5 md:px-5 md:py-2.5 text-xs md:text-[13px] transition-all ${
+                      shippingMethod === "cvs"
+                        ? "border-[#1A1A18] bg-[#1A1A18] text-white"
+                        : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
+                    }`}
+                  >
+                    超商取貨
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* 收件人姓名 */}
+              <div className="mb-4">
+
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                  收件人姓名
+                </label>
+
+                <input
+                  value={recipient}
+                  onChange={(e) =>
+                    setRecipient(
+                      e.target.value.slice(0, 10)
+                    )
+                  }
+                  maxLength={10}
+                  placeholder="中文 2～5 字，英文 4～10 字元"
+                  className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors ${
+                    recipient.trim() && receiverNameValid
+                      ? "border-[#6BBF6B] bg-white"
+                      : recipient.trim() && !receiverNameValid
+                      ? "border-[#C8522A] bg-white"
+                      : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                  }`}
+                />
+
+                <p
+                  className={`mt-1.5 md:mt-2 text-[10px] md:text-[11px] ${
+                    recipient.trim() && !receiverNameValid
+                      ? "font-bold text-[#C8522A]"
                       : "text-[#8C8880]"
                   }`}
                 >
-
-                  {couponDiscount > 0
-                    ? `−${formatNTD(
-                        couponDiscount
-                      )}`
-                    : "NT$0"}
-
-                </span>
+                  收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。
+                </p>
 
               </div>
 
-            </div>
+              {/* 收件人電話 */}
+              <div className="mb-4">
 
-            {/* 優惠碼 */}
-            <div className="mt-4 border-t border-[#E2DDD4] pt-4">
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                  收件人電話
+                </label>
 
-              <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
-                輸入優惠碼
-              </label>
+                <input
+                  value={
+                    recipientPhone
+                  }
+                  onChange={(e) =>
+                    setRecipientPhone(
+                      e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 10)
+                    )
+                  }
+                  inputMode="tel"
+                  maxLength={10}
+                  placeholder="請輸入 09 開頭的 10 碼手機號碼"
+                  className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors ${
+                    recipientPhoneValid
+                      ? "border-[#6BBF6B] bg-white"
+                      : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                  }`}
+                />
 
-              {appliedCoupon ? (
+              </div>
 
-                <div className="flex items-center justify-between rounded-[10px] border border-[#6BBF6B] bg-[#F0FBF0] px-4 py-2.5">
+              {/* ================= 宅配 ================= */}
+              {shippingMethod === "home" ? (
 
-                  <div>
+                <div className="mb-4 space-y-4">
 
-                    <div className="font-mono text-[13px] font-bold text-[#6BBF6B]">
-                      {appliedCoupon.code}
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 md:gap-4">
+
+                    <div>
+                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                        縣市
+                      </label>
+
+                      <select
+                        value={recipientCity}
+                        onChange={handleRecipientCityChange}
+                        className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors appearance-none ${
+                          recipientCity
+                            ? "border-[#6BBF6B] bg-white"
+                            : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                        }`}
+                      >
+                        <option value="">請選擇縣市</option>
+
+                        {TAIWAN_CITIES.map(city => (
+                          <option key={city} value={city}>
+                            {city}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="text-[11px] text-[#8C8880]">
+                    <div>
+                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                        鄉鎮市區
+                      </label>
 
-                      適用於：
+                      <select
+                        value={recipientDistrict}
+                        onChange={handleRecipientDistrictChange}
+                        disabled={!recipientCity}
+                        className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 appearance-none ${
+                          recipientDistrict
+                            ? "border-[#6BBF6B] bg-white"
+                            : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                        }`}
+                      >
+                        <option value="">
+                          {recipientCity
+                            ? "請選擇"
+                            : "請先選擇縣市"}
+                        </option>
 
-                      {appliedCoupon.matchedItemNames.join(
-                        "、"
-                      )}
-
+                        {recipientDistrictOptions.map(item => (
+                          <option
+                            key={`${item.district}-${item.postalCode}`}
+                            value={item.district}
+                          >
+                            {item.district}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={
-                      handleRemoveCoupon
-                    }
-                    className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
-                  >
-                    移除
-                  </button>
+                  <div>
+                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      郵遞區號
+                    </label>
+
+                    <input
+                      value={recipientPostalCode}
+                      readOnly
+                      placeholder="選擇鄉鎮市區後帶入"
+                      className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none ${
+                        recipientPostalCode
+                          ? "border-[#6BBF6B] bg-[#F8F9FA]"
+                          : "border-[#E2DDD4] bg-slate-100"
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      詳細地址
+                    </label>
+
+                    <input
+                      value={recipientAddress}
+                      onChange={(e) =>
+                        setRecipientAddress(
+                          e.target.value
+                        )
+                      }
+                      placeholder="例如 光復路二段100號"
+                      className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors ${
+                        recipientAddress.trim()
+                          ? "border-[#6BBF6B] bg-white"
+                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                      }`}
+                    />
+                  </div>
 
                 </div>
 
               ) : (
 
-                <div className="flex gap-2">
+                /* ================= 超商取貨 ================= */
+                <div className="mb-4">
 
-                  <input
-                    value={
-                      couponCode
-                    }
-                    onChange={(e) =>
-                      setCouponCode(
-                        e.target.value.toUpperCase()
-                      )
-                    }
-                    placeholder="輸入優惠碼"
-                    className="flex-1 rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-4 py-2.5 font-mono text-[13px] outline-none focus:border-[#1A1A18] tracking-[0.08em]"
-                  />
+                  <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                    取貨門市
+                  </label>
 
-                  <button
-                    type="button"
-                    onClick={
-                      handleApplyCoupon
-                    }
-                    disabled={
-                      couponLoading ||
-                      !couponCode.trim()
-                    }
-                    className="rounded-[10px] bg-[#1A1A18] px-2.5 py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
+                  {!selectedStore ? (
 
-                    {couponLoading
-                      ? "驗證中"
-                      : "套用"}
+                    <button
+                      type="button"
+                      onClick={
+                        handleSelectStore
+                      }
+                      className="w-full rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-3.5 md:px-4 py-3 md:py-[13px] text-left text-xs md:text-sm transition-colors hover:border-[#1A1A18]"
+                    >
 
-                  </button>
+                      <div className="font-bold text-[#1A1A18]">
+                        選擇 7-ELEVEN 取貨門市
+                      </div>
+
+                      <div className="mt-1 text-[11px] md:text-[12px] text-[#8C8880]">
+                        點擊後將開啟綠界超商選店
+                      </div>
+
+                    </button>
+
+                  ) : (
+
+                    <div className="rounded-[12px] border-[1.5px] border-[#6BBF6B] bg-white p-3.5 md:p-4">
+
+                      <div className="flex items-start justify-between gap-3 md:gap-4">
+
+                        <div>
+
+                          <div className="mb-1 flex items-center gap-1.5 md:gap-2 text-sm md:text-[14px] font-bold text-[#1A1A18]">
+
+                            <span className="flex h-4 w-4 md:h-5 md:w-5 items-center justify-center rounded-full bg-[#6BBF6B] text-white">
+                              <CheckIcon className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                            </span>
+
+                            7-ELEVEN{" "}
+                            {selectedStore.store_name}
+
+                          </div>
+
+                          <div className="mt-2 text-[11px] md:text-[12px] text-[#8C8880]">
+                            門市代號：
+                            {selectedStore.store_id}
+                          </div>
+
+                          <div className="mt-1 text-[11px] md:text-[12px] leading-5 text-[#8C8880] pr-2">
+                            {selectedStore.store_address}
+                          </div>
+
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={
+                            handleSelectStore
+                          }
+                          className="whitespace-nowrap text-[11px] md:text-[12px] font-bold text-[#C8522A] hover:underline shrink-0"
+                        >
+                          更換門市
+                        </button>
+
+                      </div>
+
+                    </div>
+                  )}
 
                 </div>
               )}
 
-              {couponMsg.show && (
+            </div>
 
-                <p
-                  className={`mt-2 text-[12px] font-bold ${
-                    couponMsg.ok
-                      ? "text-[#6BBF6B]"
-                      : "text-[#C8522A]"
-                  }`}
-                >
+            <div className="h-px bg-[#E2DDD4] mb-5 md:mb-7" />
 
-                  {couponMsg.text}
+            {/* ================= 支付方式 ================= */}
+            <div className="flex items-center justify-between mb-4 md:mb-5">
 
-                </p>
+              <div className="text-base md:text-[18px] font-bold">
+                支付方式
+              </div>
 
+              <span className="rounded-full bg-[#1A1A18] px-3 py-1 text-[10px] md:text-[12px] tracking-[0.06em] text-[#F5F0E8] font-mono">
+                {badgeText}
+              </span>
+
+            </div>
+
+            <div className="flex flex-wrap gap-2 md:gap-2.5 mb-5 md:mb-7">
+
+              {METHODS.map(
+                ({
+                  key,
+                  label,
+                  Icon,
+                }) => {
+
+                  const active =
+                    method === key;
+
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setMethod(key)
+                      }
+                      className={`flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1.5 md:gap-2 rounded-xl md:rounded-full border-[1.5px] px-3 md:px-4 py-2 md:py-[9px] text-[12px] md:text-[13px] transition-all ${
+                        active
+                          ? "border-[#1A1A18] bg-[#F5F0E8] text-[#1A1A18]"
+                          : "border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18]"
+                      }`}
+                    >
+                      <Icon />
+                      <span className="whitespace-nowrap">{label}</span>
+                    </button>
+                  );
+                }
               )}
 
             </div>
 
-            {/* 總額 */}
-            <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F0E8] px-4 py-3.5">
-
-              <div className="text-[13px] font-bold text-[#1A1A18]">
-
-                總付款金額{" "}
-
-                <span className="ml-1 text-[11px] font-normal text-[#8C8880]">
-                  (TWD)
+            {method === "card" && (
+              <div className="mb-6 md:mb-7 flex items-start gap-2.5 md:gap-3 rounded-[12px] md:rounded-[14px] border-[1.5px] border-[#E2DDD4] bg-[#F5F0E8] px-4 md:px-5 py-3 md:py-4">
+                <span className="mt-0.5 shrink-0 text-[#6BBF6B]">
+                  <ShieldIcon />
                 </span>
-
+                <p className="text-[11px] md:text-[13px] text-[#8C8880] leading-relaxed">
+                  按下「確認並支付」後會導向綠界金流的安全刷卡頁面填寫卡片資訊，本頁不會收集您的卡號。
+                </p>
               </div>
+            )}
 
-              <div className="font-mono text-[18px] font-bold text-[#1A1A18]">
+            {/* ================= Submit ================= */}
+            <button
+              type="button"
+              onClick={
+                handlePay
+              }
+              disabled={
+                !canPay ||
+                submitState ===
+                  "success" ||
+                submitState ===
+                  "loading"
+              }
+              className={`w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl md:rounded-full px-6 md:px-9 py-3.5 md:py-[15px] text-sm md:text-[16px] tracking-[0.05em] transition-all mt-4 md:mt-0
+                ${
+                  !canPay ||
+                  submitState ===
+                    "success" ||
+                  submitState ===
+                    "loading"
+                    ? "opacity-80"
+                    : "hover:-translate-y-[1px]"
+                }
+                ${
+                  submitState ===
+                  "success"
+                    ? "bg-[#6BBF6B] text-[#F5F0E8]"
+                    : submitState ===
+                      "error"
+                    ? "bg-[#C8522A] text-[#F5F0E8]"
+                    : "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A]"
+                }`}
+            >
 
-                {formatNTD(
-                  grandTotal
-                )}
+              {submitState ===
+              "success" ? (
 
-              </div>
+                <>
+                  <CheckIcon className="h-4 w-4 md:h-[18px] md:w-[18px]" />
+                  付款成功！
+                </>
 
-            </div>
+              ) : submitState ===
+                "loading" ? (
 
-            <div className="mt-5 border-t border-[#E2DDD4] pt-4 flex items-center gap-2 text-[11px] tracking-[0.05em] text-[#8C8880]">
+                <>
+                  處理中...
+                </>
 
-              <span className="text-[#6BBF6B]">
-                <ShieldIcon />
-              </span>
+              ) : submitState ===
+                "error" ? (
 
-              SSL 加密安全付款保障
+                <>
+                  {payError ||
+                    "付款失敗，請再試一次"}
+                </>
 
-            </div>
+              ) : (
+
+                <>
+                  確認並支付
+                  <ArrowRightIcon className="h-4 w-4 md:h-[18px] md:w-[18px]" />
+                </>
+
+              )}
+
+            </button>
+
+            {!isLoggedIn ? (
+
+              <p className="mt-3 text-[11px] md:text-[12px] text-[#C8522A] font-bold text-center md:text-left">
+                請先登入會員才能結帳。
+              </p>
+
+            ) : !shippingValid ? (
+
+              <p className="mt-3 text-[11px] md:text-[12px] text-[#8C8880] text-center md:text-left">
+
+                {!receiverNameValid
+                  ? "收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。"
+                  : shippingMethod === "home"
+                  ? "請填寫 09 開頭手機號碼，選擇縣市與鄉鎮市區，並填寫詳細地址。"
+                  : "請填寫 09 開頭手機號碼，並選擇取貨門市。"}
+
+              </p>
+
+            ) : null}
 
           </div>
-
-        </aside>
+        </div>
 
       </div>
 

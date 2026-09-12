@@ -12,7 +12,8 @@ import {
   Loader2,
   MessageCircle,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft
 } from 'lucide-react'
 
 import {
@@ -25,7 +26,6 @@ import {
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
 
-
 const stageLabels = {
   pending: '等待開始',
   writing: '撰寫文案',
@@ -35,45 +35,28 @@ const stageLabels = {
   completed: '任務完成'
 }
 
-
 function getTimeValue(value) {
   if (!value) return 0
-
   const timestamp = new Date(value).getTime()
-
-  return Number.isNaN(timestamp)
-    ? 0
-    : timestamp
+  return Number.isNaN(timestamp) ? 0 : timestamp
 }
-
 
 function formatTime(value) {
   if (!value) return ''
-
   const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
+  if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleTimeString('zh-TW', {
     hour: '2-digit',
     minute: '2-digit'
   })
 }
 
-
 function formatMessageDate(value) {
   if (!value) return ''
-
   const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
+  if (Number.isNaN(date.getTime())) return ''
 
   const today = new Date()
-
   const isToday =
     date.getFullYear() === today.getFullYear() &&
     date.getMonth() === today.getMonth() &&
@@ -89,199 +72,98 @@ function formatMessageDate(value) {
   })
 }
 
-
 function groupRoomsByKoc(rooms) {
   const map = {}
-
   rooms.forEach(room => {
-    const kocId =
-      room.kocId ||
-      `unknown-${room.roomId}`
-
+    const kocId = room.kocId || `unknown-${room.roomId}`
     if (!map[kocId]) {
       map[kocId] = {
         kocId,
-        kocName:
-          room.kocName ||
-          room.kocId ||
-          '未命名 KOC',
-
+        kocName: room.kocName || room.kocId || '未命名 KOC',
         rooms: []
       }
     }
-
     map[kocId].rooms.push(room)
   })
 
   return Object.values(map)
     .map(group => ({
       ...group,
-
       rooms: [...group.rooms].sort(
         (left, right) =>
-          getTimeValue(
-            right.lastMessageTime ||
-            right.createdAt
-          ) -
-          getTimeValue(
-            left.lastMessageTime ||
-            left.createdAt
-          )
+          getTimeValue(right.lastMessageTime || right.createdAt) -
+          getTimeValue(left.lastMessageTime || left.createdAt)
       )
     }))
     .sort((left, right) => {
       const leftLatest =
-        left.rooms[0]?.lastMessageTime ||
-        left.rooms[0]?.createdAt
-
+        left.rooms[0]?.lastMessageTime || left.rooms[0]?.createdAt
       const rightLatest =
-        right.rooms[0]?.lastMessageTime ||
-        right.rooms[0]?.createdAt
-
-      return (
-        getTimeValue(rightLatest) -
-        getTimeValue(leftLatest)
-      )
+        right.rooms[0]?.lastMessageTime || right.rooms[0]?.createdAt
+      return getTimeValue(rightLatest) - getTimeValue(leftLatest)
     })
 }
 
-
 export default function Chat() {
-  const vendorId =
-    localStorage.getItem('vendor_id')
-
+  const vendorId = localStorage.getItem('vendor_id')
   const bottomRef = useRef(null)
 
-  const [rooms, setRooms] =
-    useState([])
+  const [rooms, setRooms] = useState([])
+  const [activeKocId, setActiveKocId] = useState(null)
+  const [activeRoomId, setActiveRoomId] = useState(null)
+  const [messagesByRoom, setMessagesByRoom] = useState({})
+  const [input, setInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [roomLoading, setRoomLoading] = useState(true)
+  const [messageLoading, setMessageLoading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [messageError, setMessageError] = useState('')
 
-  const [
-    activeKocId,
-    setActiveKocId
-  ] = useState(null)
+  const groupedKocs = useMemo(() => groupRoomsByKoc(rooms), [rooms])
 
-  const [
-    activeRoomId,
-    setActiveRoomId
-  ] = useState(null)
+  const filteredKocs = useMemo(() => {
+    const keyword = search.trim().toLowerCase()
+    if (!keyword) return groupedKocs
 
-  const [
-    messagesByRoom,
-    setMessagesByRoom
-  ] = useState({})
-
-  const [input, setInput] =
-    useState('')
-
-  const [search, setSearch] =
-    useState('')
-
-  const [
-    roomLoading,
-    setRoomLoading
-  ] = useState(true)
-
-  const [
-    messageLoading,
-    setMessageLoading
-  ] = useState(false)
-
-  const [sending, setSending] =
-    useState(false)
-
-  const [error, setError] =
-    useState('')
-
-  const [
-    messageError,
-    setMessageError
-  ] = useState('')
-
-
-  const groupedKocs =
-    useMemo(
-      () => groupRoomsByKoc(rooms),
-      [rooms]
-    )
-
-
-  const filteredKocs =
-    useMemo(() => {
-      const keyword =
-        search.trim().toLowerCase()
-
-      if (!keyword) {
-        return groupedKocs
-      }
-
-      return groupedKocs.filter(group => {
-        const matchesKoc =
-          group.kocId
-            .toLowerCase()
-            .includes(keyword) ||
-          group.kocName
-            .toLowerCase()
-            .includes(keyword)
-
-        const matchesRoom =
-          group.rooms.some(room =>
-            room.campaignName
-              ?.toLowerCase()
-              .includes(keyword)
-          )
-
-        return matchesKoc || matchesRoom
-      })
-    }, [groupedKocs, search])
-
+    return groupedKocs.filter(group => {
+      const matchesKoc =
+        group.kocId.toLowerCase().includes(keyword) ||
+        group.kocName.toLowerCase().includes(keyword)
+      const matchesRoom = group.rooms.some(room =>
+        room.campaignName?.toLowerCase().includes(keyword)
+      )
+      return matchesKoc || matchesRoom
+    })
+  }, [groupedKocs, search])
 
   const activeGroup =
-    groupedKocs.find(
-      group =>
-        group.kocId === activeKocId
-    ) || null
-
+    groupedKocs.find(group => group.kocId === activeKocId) || null
 
   const activeRoom =
-    rooms.find(
-      room =>
-        room.roomId === activeRoomId
-    ) || null
+    rooms.find(room => room.roomId === activeRoomId) || null
 
+  const messages = activeRoomId ? messagesByRoom[activeRoomId] || [] : []
 
-  const messages =
-    activeRoomId
-      ? messagesByRoom[activeRoomId] || []
-      : []
-
-
-  const totalUnread =
-    rooms.reduce(
-      (sum, room) =>
-        sum +
-        Number(room.unreadCount || 0),
-      0
-    )
-
+  const totalUnread = rooms.reduce(
+    (sum, room) => sum + Number(room.unreadCount || 0),
+    0
+  )
 
   useEffect(() => {
     loadChatrooms()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId])
-
 
   useEffect(() => {
     if (!activeRoomId) return
-
     loadMessages(activeRoomId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoomId])
 
-
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: 'smooth'
-    })
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeRoomId])
-
 
   async function loadChatrooms() {
     if (!vendorId) {
@@ -294,91 +176,39 @@ export default function Chat() {
       setRoomLoading(true)
       setError('')
 
-      const response =
-        await getVendorChatrooms(
-          vendorId
-        )
+      const response = await getVendorChatrooms(vendorId)
 
-      if (
-        response.data?.success === false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '聊天室清單載入失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '聊天室清單載入失敗')
       }
 
-      const roomData =
-        response.data?.chatrooms || []
-
-      const mappedRooms =
-        roomData.map(room => ({
-          roomId:
-            room.room_id,
-
-          kocMissionId:
-            room.kocmission_id,
-
-          kocId:
-            room.koc_id || '',
-
-          kocName:
-            room.koc_name ||
-            room.koc_id ||
-            '未命名 KOC',
-
-          campaignId:
-            room.campaign_id || '',
-
-          campaignName:
-            room.campaign_name ||
-            '未命名活動',
-
-          missionStage:
-            room.mission_stage || '',
-
-          lastMessage:
-            room.last_message || '',
-
-          lastMessageTime:
-            room.last_message_time ||
-            room.created_at,
-
-          lastSenderRole:
-            room.last_sender_role,
-
-          unreadCount:
-            Number(
-              room.unread_count || 0
-            ),
-
-          createdAt:
-            room.created_at
-        }))
+      const roomData = response.data?.chatrooms || []
+      const mappedRooms = roomData.map(room => ({
+        roomId: room.room_id,
+        kocMissionId: room.kocmission_id,
+        kocId: room.koc_id || '',
+        kocName: room.koc_name || room.koc_id || '未命名 KOC',
+        campaignId: room.campaign_id || '',
+        campaignName: room.campaign_name || '未命名活動',
+        missionStage: room.mission_stage || '',
+        lastMessage: room.last_message || '',
+        lastMessageTime: room.last_message_time || room.created_at,
+        lastSenderRole: room.last_sender_role,
+        unreadCount: Number(room.unread_count || 0),
+        createdAt: room.created_at
+      }))
 
       setRooms(mappedRooms)
 
-      const selectedRoomStillExists =
-        mappedRooms.some(
-          room =>
-            room.roomId ===
-            activeRoomId
-        )
+      const selectedRoomStillExists = mappedRooms.some(
+        room => room.roomId === activeRoomId
+      )
 
-      if (
-        !selectedRoomStillExists &&
-        mappedRooms.length > 0
-      ) {
-        const firstRoom =
-          mappedRooms[0]
-
-        setActiveKocId(
-          firstRoom.kocId
-        )
-
-        setActiveRoomId(
-          firstRoom.roomId
-        )
+      // 如果是在電腦版，預設選取第一個聊天室
+      if (!selectedRoomStillExists && mappedRooms.length > 0 && window.innerWidth >= 768) {
+        const firstRoom = mappedRooms[0]
+        setActiveKocId(firstRoom.kocId)
+        setActiveRoomId(firstRoom.roomId)
       }
 
       if (mappedRooms.length === 0) {
@@ -386,27 +216,19 @@ export default function Chat() {
         setActiveRoomId(null)
       }
     } catch (requestError) {
-      console.error(
-        '聊天室清單載入失敗：',
-        requestError
-      )
-
-      const apiError =
-        requestError.response?.data?.err
-
+      console.error('聊天室清單載入失敗：', requestError)
+      const apiError = requestError.response?.data?.err
       setError(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '聊天室清單載入失敗'
+          ? JSON.stringify(apiError)
+          : requestError.message || '聊天室清單載入失敗'
       )
     } finally {
       setRoomLoading(false)
     }
   }
-
 
   async function loadMessages(roomId) {
     if (!vendorId || !roomId) return
@@ -415,55 +237,29 @@ export default function Chat() {
       setMessageLoading(true)
       setMessageError('')
 
-      const response =
-        await getVendorChatMessages(
-          vendorId,
-          roomId
-        )
+      const response = await getVendorChatMessages(vendorId, roomId)
 
-      if (
-        response.data?.success === false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '聊天室訊息載入失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '聊天室訊息載入失敗')
       }
 
-      const messageData =
-        response.data?.messages || []
-
-      const mappedMessages =
-        messageData.map(message => ({
-          messageId:
-            message.message_id,
-
-          roomId:
-            message.room_id,
-
-          senderRole:
-            message.sender_role,
-
-          senderId:
-            message.sender_id,
-
-          content:
-            message.content,
-
-          isRead:
-            Boolean(message.is_read),
-
-          createdAt:
-            message.created_at
-        }))
+      const messageData = response.data?.messages || []
+      const mappedMessages = messageData.map(message => ({
+        messageId: message.message_id,
+        roomId: message.room_id,
+        senderRole: message.sender_role,
+        senderId: message.sender_id,
+        content: message.content,
+        isRead: Boolean(message.is_read),
+        createdAt: message.created_at
+      }))
 
       setMessagesByRoom(previous => ({
         ...previous,
         [roomId]: mappedMessages
       }))
 
-      const chatroom =
-        response.data?.chatroom
+      const chatroom = response.data?.chatroom
 
       if (chatroom) {
         setRooms(previous =>
@@ -471,30 +267,13 @@ export default function Chat() {
             room.roomId === roomId
               ? {
                   ...room,
-
                   kocMissionId:
-                    chatroom.kocmission_id ??
-                    room.kocMissionId,
-
-                  kocId:
-                    chatroom.koc_id ||
-                    room.kocId,
-
-                  kocName:
-                    chatroom.koc_name ||
-                    room.kocName,
-
-                  campaignId:
-                    chatroom.campaign_id ||
-                    room.campaignId,
-
-                  campaignName:
-                    chatroom.campaign_name ||
-                    room.campaignName,
-
-                  missionStage:
-                    chatroom.mission_stage ||
-                    room.missionStage
+                    chatroom.kocmission_id ?? room.kocMissionId,
+                  kocId: chatroom.koc_id || room.kocId,
+                  kocName: chatroom.koc_name || room.kocName,
+                  campaignId: chatroom.campaign_id || room.campaignId,
+                  campaignName: chatroom.campaign_name || room.campaignName,
+                  missionStage: chatroom.mission_stage || room.missionStage
                 }
               : room
           )
@@ -503,27 +282,19 @@ export default function Chat() {
 
       await markRoomRead(roomId)
     } catch (requestError) {
-      console.error(
-        '聊天室訊息載入失敗：',
-        requestError
-      )
-
-      const apiError =
-        requestError.response?.data?.err
-
+      console.error('聊天室訊息載入失敗：', requestError)
+      const apiError = requestError.response?.data?.err
       setMessageError(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '聊天室訊息載入失敗'
+          ? JSON.stringify(apiError)
+          : requestError.message || '聊天室訊息載入失敗'
       )
     } finally {
       setMessageLoading(false)
     }
   }
-
 
   async function markRoomRead(roomId) {
     try {
@@ -535,125 +306,66 @@ export default function Chat() {
       setRooms(previous =>
         previous.map(room =>
           room.roomId === roomId
-            ? {
-                ...room,
-                unreadCount: 0
-              }
+            ? { ...room, unreadCount: 0 }
             : room
         )
       )
     } catch (requestError) {
-      console.error(
-        '標記聊天室已讀失敗：',
-        requestError
-      )
+      console.error('標記聊天室已讀失敗：', requestError)
     }
   }
 
-
   function selectKoc(kocId) {
-    const group =
-      groupedKocs.find(
-        item =>
-          item.kocId === kocId
-      )
-
+    const group = groupedKocs.find(item => item.kocId === kocId)
     if (!group) return
 
-    const firstRoom =
-      group.rooms[0]
-
+    const firstRoom = group.rooms[0]
     setActiveKocId(kocId)
 
     if (firstRoom) {
-      setActiveRoomId(
-        firstRoom.roomId
-      )
+      setActiveRoomId(firstRoom.roomId)
     }
   }
-
 
   function selectRoom(room) {
     setActiveKocId(room.kocId)
     setActiveRoomId(room.roomId)
   }
 
-
   async function sendMessage() {
-    const content =
-      input.trim()
-
-    if (
-      !content ||
-      !activeRoomId ||
-      sending
-    ) {
-      return
-    }
+    const content = input.trim()
+    if (!content || !activeRoomId || sending) return
 
     try {
       setSending(true)
       setMessageError('')
 
-      const response =
-        await sendVendorChatMessage({
-          vendor_id: vendorId,
-          room_id: activeRoomId,
-          content
-        })
+      const response = await sendVendorChatMessage({
+        vendor_id: vendorId,
+        room_id: activeRoomId,
+        content
+      })
 
-      if (
-        response.data?.success === false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '訊息發送失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '訊息發送失敗')
       }
 
-      const message =
-        response.data?.message
-
-      if (!message) {
-        throw new Error(
-          '後端未回傳訊息資料'
-        )
-      }
+      const message = response.data?.message
+      if (!message) throw new Error('後端未回傳訊息資料')
 
       const newMessage = {
-        messageId:
-          message.message_id,
-
-        roomId:
-          message.room_id,
-
-        senderRole:
-          message.sender_role,
-
-        senderId:
-          message.sender_id,
-
-        content:
-          message.content,
-
-        isRead:
-          Boolean(message.is_read),
-
-        createdAt:
-          message.created_at
+        messageId: message.message_id,
+        roomId: message.room_id,
+        senderRole: message.sender_role,
+        senderId: message.sender_id,
+        content: message.content,
+        isRead: Boolean(message.is_read),
+        createdAt: message.created_at
       }
 
       setMessagesByRoom(previous => ({
         ...previous,
-
-        [activeRoomId]: [
-          ...(
-            previous[
-              activeRoomId
-            ] || []
-          ),
-          newMessage
-        ]
+        [activeRoomId]: [...(previous[activeRoomId] || []), newMessage]
       }))
 
       setRooms(previous =>
@@ -661,14 +373,9 @@ export default function Chat() {
           room.roomId === activeRoomId
             ? {
                 ...room,
-                lastMessage:
-                  newMessage.content,
-
-                lastMessageTime:
-                  newMessage.createdAt,
-
-                lastSenderRole:
-                  newMessage.senderRole
+                lastMessage: newMessage.content,
+                lastMessageTime: newMessage.createdAt,
+                lastSenderRole: newMessage.senderRole
               }
             : room
         )
@@ -676,44 +383,37 @@ export default function Chat() {
 
       setInput('')
     } catch (requestError) {
-      console.error(
-        '訊息發送失敗：',
-        requestError
-      )
-
-      const apiError =
-        requestError.response?.data?.err
-
+      console.error('訊息發送失敗：', requestError)
+      const apiError = requestError.response?.data?.err
       setMessageError(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '訊息發送失敗'
+          ? JSON.stringify(apiError)
+          : requestError.message || '訊息發送失敗'
       )
     } finally {
       setSending(false)
     }
   }
 
-
   function handleInputKeyDown(event) {
-    if (
-      event.key === 'Enter' &&
-      !event.shiftKey
-    ) {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       sendMessage()
     }
   }
 
-
   return (
-    <div className="flex h-[calc(100vh-65px)] bg-white">
+    <div className="flex h-[calc(100vh-100px)] sm:h-[calc(100vh-65px)] bg-white relative overflow-hidden">
 
       {/* 左側：KOC 聊天室清單 */}
-      <div className="w-72 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0">
+      <div
+        className={cn(
+          "w-full sm:w-80 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0 absolute sm:relative inset-0 z-10 sm:z-0 transition-transform duration-300",
+          activeRoomId ? "-translate-x-full sm:translate-x-0" : "translate-x-0"
+        )}
+      >
         <div className="px-4 py-4 border-b border-[#E2DDD4]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-[#1A1A18] text-sm">
@@ -882,10 +582,10 @@ export default function Chat() {
 
 
       {/* 右側：對話內容 */}
-      <div className="flex-1 flex flex-col bg-[#F8F9FA] min-w-0">
+      <div className="flex-1 flex flex-col bg-[#F8F9FA] min-w-0 w-full h-full">
 
         {!activeRoom ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880]">
+          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880] hidden sm:flex">
             <MessageCircle
               size={42}
               className="mb-4 text-[#E2DDD4]"
@@ -902,22 +602,33 @@ export default function Chat() {
         ) : (
           <>
             {/* KOC 資訊 */}
-            <div className="bg-white border-b border-[#E2DDD4] px-6 py-4 flex items-center gap-4 shrink-0">
+            <div className="bg-white border-b border-[#E2DDD4] px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveRoomId(null)
+                  setActiveKocId(null)
+                }}
+                className="sm:hidden p-1.5 -ml-1.5 text-[#8C8880] hover:bg-[#F5F0E8] rounded-full"
+              >
+                <ChevronLeft size={20} />
+              </button>
+
               <Avatar
                 name={
                   activeRoom.kocName ||
                   activeGroup?.kocName ||
                   '?'
                 }
-                size="lg"
+                size="sm"
               />
 
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-[#1A1A18]">
+                <div className="font-bold text-sm sm:text-base text-[#1A1A18] truncate">
                   {activeRoom.kocName}
                 </div>
 
-                <div className="text-xs text-[#8C8880] mt-1">
+                <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1 truncate">
                   {activeRoom.kocId}
                   {' · '}
                   {activeRoom.campaignName}
@@ -948,7 +659,7 @@ export default function Chat() {
 
 
             {/* 任務聊天室 Tabs */}
-            <div className="bg-white border-b border-[#E2DDD4] px-6 flex gap-1 shrink-0 overflow-x-auto">
+            <div className="bg-white border-b border-[#E2DDD4] px-4 sm:px-6 flex gap-1 shrink-0 overflow-x-auto scrollbar-hide">
               {(activeGroup?.rooms || []).map(
                 room => (
                   <button
@@ -960,7 +671,7 @@ export default function Chat() {
                     className={cn(
                       `
                         flex items-center gap-2
-                        px-4 py-3 text-xs
+                        px-3 sm:px-4 py-2 sm:py-3 text-[11px] sm:text-xs
                         font-semibold border-b-2
                         transition-all
                         whitespace-nowrap
@@ -971,13 +682,13 @@ export default function Chat() {
                         : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
                     )}
                   >
-                    <Tag size={11} />
+                    <Tag size={11} className="hidden sm:block" />
 
                     <span className="font-bold">
                       {room.campaignName}
                     </span>
 
-                    <span className="font-mono text-[10px]">
+                    <span className="font-mono text-[9px] sm:text-[10px]">
                       #{room.kocMissionId}
                     </span>
 
@@ -993,7 +704,7 @@ export default function Chat() {
 
 
             {/* 任務資訊 */}
-            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-6 py-2.5 flex items-center gap-3 text-xs text-[#C8522A] shrink-0">
+            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-[#C8522A] shrink-0">
               <span className="font-bold">
                 {activeRoom.campaignName}
               </span>
@@ -1019,14 +730,14 @@ export default function Chat() {
 
             {/* 錯誤訊息 */}
             {messageError && (
-              <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
+              <div className="mx-4 sm:mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
                 {messageError}
               </div>
             )}
 
 
             {/* 訊息區 */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-3 sm:space-y-4">
               {messageLoading &&
               messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center">
@@ -1058,11 +769,12 @@ export default function Chat() {
                       <div
                         className={cn(
                           `
-                            max-w-[75%]
+                            max-w-[85%]
                             sm:max-w-md
-                            px-4 py-2.5
-                            rounded-2xl
-                            text-sm
+                            px-3.5 sm:px-4
+                            py-2 sm:py-2.5
+                            rounded-[1.25rem] sm:rounded-2xl
+                            text-[13px] sm:text-sm
                             leading-relaxed
                             whitespace-pre-wrap
                             break-words
@@ -1076,7 +788,7 @@ export default function Chat() {
 
                         <div
                           className={cn(
-                            'text-[10px] mt-1',
+                            'text-[9px] sm:text-[10px] mt-1',
                             isVendor
                               ? 'text-white/50 text-right'
                               : 'text-[#8C8880]'
@@ -1112,8 +824,8 @@ export default function Chat() {
 
 
             {/* 輸入區 */}
-            <div className="bg-white border-t border-[#E2DDD4] px-6 py-4 shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="bg-white border-t border-[#E2DDD4] px-4 sm:px-6 py-3 sm:py-4 shrink-0">
+              <div className="flex items-end sm:items-center gap-2 sm:gap-3">
                 <textarea
                   rows={1}
                   value={input}
@@ -1127,7 +839,7 @@ export default function Chat() {
                   }
                   disabled={sending}
                   placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
-                  className="flex-1 max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+                  className="flex-1 max-h-24 sm:max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-[1.2rem] sm:rounded-xl px-4 py-3 text-[13px] sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
                 />
 
                 <button
@@ -1137,17 +849,21 @@ export default function Chat() {
                     !input.trim() ||
                     sending
                   }
-                  className="bg-[#1A1A18] text-white p-3 rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="bg-[#1A1A18] text-white p-3 rounded-[1.2rem] sm:rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 h-[46px] w-[46px] flex items-center justify-center"
                 >
                   {sending ? (
                     <Loader2
-                      size={17}
+                      size={16}
                       className="animate-spin"
                     />
                   ) : (
-                    <Send size={17} />
+                    <Send size={16} className="-ml-0.5" />
                   )}
                 </button>
+              </div>
+
+              <div className="hidden sm:block text-[10px] text-[#8C8880] mt-2 font-bold text-right pr-14">
+                Enter 送出，Shift + Enter 換行
               </div>
             </div>
           </>

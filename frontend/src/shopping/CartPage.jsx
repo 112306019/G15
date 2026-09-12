@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from "react";
 
 function ImgIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg viewBox="0 0 24 24" className="h-5 w-5 md:h-6 md:w-6" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <polyline points="21 15 16 10 5 21" />
@@ -140,7 +140,6 @@ export default function CartPage({
   };
 
   const toggleWish = async (id) => {
-    console.log("toggleWish called", id);
     const item = items.find((it) => it.id === id);
     if (!item) return;
 
@@ -231,35 +230,32 @@ export default function CartPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans">
-      <div className="mx-auto max-w-[860px] px-6 pb-20 pt-12 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans pb-32 md:pb-24">
+      <div className="mx-auto max-w-[860px] px-4 md:px-6 pt-6 md:pt-12 animate-in fade-in duration-500">
 
-        {/* 🌟 統一風格的大標題 (移除橘色底線) */}
-        <div className="mb-10">
-          <div className="flex items-baseline gap-4">
-            <h1 className="font-serif text-3xl md:text-4xl font-bold text-[#1A1A18]">購物車</h1>
-            <span className="text-sm font-bold text-[#8C8880] tracking-wide">
-              {count > 0 ? `共 ${count} 件商品` : ''}
-            </span>
-          </div>
+        <div className="mb-6 md:mb-10 flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4">
+          <h1 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold text-[#1A1A18]">購物車</h1>
+          <span className="text-xs md:text-sm font-bold text-[#8C8880] tracking-wide">
+            {count > 0 ? `共 ${count} 件商品` : ''}
+          </span>
         </div>
 
         {items.length === 0 ? (
-          <div className="py-24 text-center text-[#8C8880]">
-            <p className="text-lg font-bold mb-4 text-[#1A1A18]">購物車是空的</p>
-            <p className="text-sm font-medium mb-8">看起來您還沒有挑選任何商品。</p>
+          <div className="py-20 md:py-24 text-center text-[#8C8880] bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4]">
+            <p className="text-base md:text-lg font-bold mb-3 md:mb-4 text-[#1A1A18]">購物車是空的</p>
+            <p className="text-xs md:text-sm font-medium mb-6 md:mb-8 px-4">看起來您還沒有挑選任何商品。</p>
             <button 
               onClick={onContinueShopping} 
-              className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 shadow-md"
+              className="rounded-full bg-[#1A1A18] px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 shadow-md"
             >
               前往購物
             </button>
           </div>
         ) : (
           <>
-            {/* Table */}
-            <div className="mb-8 overflow-hidden rounded-[2rem] border border-[#E2DDD4] bg-white shadow-sm">
-              <div className="grid grid-cols-[1fr_100px_140px_100px_56px] gap-0 border-b border-[#E2DDD4] bg-[#FDFAF6] px-8 py-4">
+            {/* Table / 購物車清單 */}
+            <div className="mb-6 md:mb-8 overflow-hidden rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white shadow-sm">
+              <div className="hidden md:grid grid-cols-[1fr_100px_140px_100px_56px] gap-0 border-b border-[#E2DDD4] bg-[#FDFAF6] px-8 py-4">
                 <div className="text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">項目</div>
                 <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">價格</div>
                 <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">數量</div>
@@ -273,37 +269,74 @@ export default function CartPage({
                   <div
                     key={it.id}
                     className={[
-                      "grid grid-cols-[1fr_100px_140px_100px_56px] items-center px-8 py-6 border-b border-[#E2DDD4] transition-colors",
+                      "flex flex-col md:grid md:grid-cols-[1fr_100px_140px_100px_56px] md:items-center px-4 py-5 md:px-8 md:py-6 border-b border-[#E2DDD4] transition-colors gap-4 md:gap-0",
                       "hover:bg-[#FDFAF6]",
-                      it.removing ? "opacity-0 translate-x-5 transition-all duration-300 ease-out" : "",
+                      it.removing ? "opacity-0 translate-x-5 md:translate-x-10 transition-all duration-300 ease-out" : "",
                     ].join(" ")}
                   >
-                    <div className="flex items-center gap-5">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(it.id)}
-                        onChange={() => toggleSelect(it.id)}
-                        className="h-4 w-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer"
-                      />
-                      <div className={`h-16 w-16 shrink-0 rounded-2xl bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60 shadow-inner`}>
+                    {/* 商品圖文 (Checkbox + 圖 + 名稱) */}
+                    <div className="flex items-start md:items-center gap-3 md:gap-5 w-full">
+                      <div className="mt-1 md:mt-0 flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(it.id)}
+                          onChange={() => toggleSelect(it.id)}
+                          className="h-4 w-4 md:h-5 md:w-5 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer"
+                        />
+                      </div>
+                      <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60 shadow-inner`}>
                         <ImgIcon />
                       </div>
-                      <span className="text-sm font-bold leading-relaxed">{it.name}</span>
-                    </div>
-
-                    <div className="text-center text-sm font-bold text-[#8C8880] tracking-wide">{fmt(it.price)}</div>
-
-                    <div className="flex justify-center">
-                      <div className="flex items-center overflow-hidden rounded-full border border-[#E2DDD4] bg-[#F5F0E8]">
-                        <button type="button" className="h-8 w-8 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, -1)}>−</button>
-                        <span className="min-w-8 px-1 text-center text-sm font-bold">{it.qty}</span>
-                        <button type="button" className="h-8 w-8 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, 1)}>+</button>
+                      
+                      <div className="flex flex-col gap-1 md:gap-0 min-w-0 flex-1">
+                        <span className="text-sm font-bold leading-snug md:leading-relaxed line-clamp-2 md:line-clamp-none">{it.name}</span>
+                        {/* 手機版價格顯示在名稱下方 */}
+                        <span className="md:hidden text-xs font-bold text-[#8C8880] tracking-wide mt-1">{fmt(it.price)}</span>
                       </div>
                     </div>
 
-                    <div className="text-right text-sm font-black tracking-wide text-[#1A1A18]">{fmt(rowTotal)}</div>
+                    {/* 電腦版價格 (手機隱藏) */}
+                    <div className="hidden md:block text-center text-sm font-bold text-[#8C8880] tracking-wide">{fmt(it.price)}</div>
 
-                    <div className="flex items-center justify-end gap-3">
+                    {/* 下排操作區 (手機版)：數量 + 總價 + 刪除 */}
+                    <div className="flex items-center justify-between pl-8 md:pl-0 w-full md:w-auto mt-1 md:mt-0">
+                      
+                      <div className="flex justify-center md:mx-auto">
+                        <div className="flex items-center overflow-hidden rounded-full border border-[#E2DDD4] bg-[#F5F0E8] h-8 md:h-9">
+                          <button type="button" className="h-full w-8 md:w-9 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, -1)}>−</button>
+                          <span className="min-w-6 md:min-w-8 px-1 text-center text-[13px] md:text-sm font-bold">{it.qty}</span>
+                          <button type="button" className="h-full w-8 md:w-9 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60" onClick={() => changeQty(it.id, 1)}>+</button>
+                        </div>
+                      </div>
+
+                      <div className="md:hidden text-sm font-black tracking-wide text-[#1A1A18] px-2">{fmt(rowTotal)}</div>
+
+                      <div className="md:hidden flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleWish(it.id)}
+                          className={["h-8 w-8 rounded-full transition-all flex items-center justify-center", it.wish ? "text-[#C8522A]" : "text-[#E2DDD4]", "hover:bg-[#F5F0E8] hover:text-[#1A1A18]"].join(" ")}
+                          aria-label="wishlist"
+                        >
+                          <HeartIcon filled={it.wish} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(it.id)}
+                          className="h-8 w-8 rounded-full text-[#E2DDD4] transition-all hover:bg-[#FEF5F3] hover:text-[#C8522A] flex items-center justify-center"
+                          aria-label="remove"
+                        >
+                          <XIcon />
+                        </button>
+                      </div>
+
+                    </div>
+
+                    {/* 電腦版總計 (手機隱藏) */}
+                    <div className="hidden md:block text-right text-sm font-black tracking-wide text-[#1A1A18]">{fmt(rowTotal)}</div>
+
+                    {/* 電腦版操作區 (手機隱藏) */}
+                    <div className="hidden md:flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => toggleWish(it.id)}
@@ -326,26 +359,27 @@ export default function CartPage({
               })}
             </div>
 
-            {/* Footer */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-4">
+            {/* Footer / 結帳列 */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-6 pt-2 md:pt-4 md:relative fixed bottom-0 left-0 right-0 bg-[#F5F0E8]/95 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-4 md:p-0 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] md:shadow-none border-t border-[#E2DDD4] md:border-none">
+              
               <button 
                 type="button" 
                 onClick={onContinueShopping} 
-                className="inline-flex items-center gap-2 text-sm font-bold tracking-wide text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+                className="inline-flex items-center justify-center sm:justify-start w-full sm:w-auto gap-2 text-xs md:text-sm font-bold tracking-wide text-[#8C8880] transition-colors hover:text-[#1A1A18]"
               >
                 <BackIcon />
                 繼續購物
               </button>
               
-              <div className="flex items-center gap-6 bg-white border border-[#E2DDD4] pl-6 pr-2 py-2 rounded-full shadow-sm">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold text-[#8C8880] tracking-widest uppercase">Total</span>
-                  <span className="text-2xl font-black text-[#1A1A18] tracking-tight">{fmt(grandTotal)}</span>
+              <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-6 bg-white border border-[#E2DDD4] pl-5 md:pl-6 pr-1.5 md:pr-2 py-1.5 md:py-2 rounded-[1.25rem] md:rounded-full shadow-sm">
+                <div className="flex items-baseline gap-1.5 md:gap-2">
+                  <span className="text-[10px] md:text-xs font-bold text-[#8C8880] tracking-widest uppercase">Total</span>
+                  <span className="text-xl md:text-2xl font-black text-[#1A1A18] tracking-tight">{fmt(grandTotal)}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => onCheckout?.({ subtotal, couponDiscount, pointsDiscount, grandTotal, items: items.filter(it => selectedIds.has(it.id)) })}
-                  className="rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md whitespace-nowrap"
+                  className="rounded-xl md:rounded-full bg-[#1A1A18] px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md whitespace-nowrap active:scale-95"
                 >
                   去結帳
                 </button>

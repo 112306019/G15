@@ -82,9 +82,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
   // 切換分頁時載入對應資料
   useEffect(() => {
-    // jumpToStage 從 TaskDetailPage 返回時會讓 activeStage 在掛載後馬上再變一次，
-    // 前一個分頁的請求還沒回來就被新分頁的請求追過去也可能後到——
-    // 用 cancelled 避免「舊分頁的回應」蓋掉「新分頁的回應」。
     let cancelled = false;
 
     const fetchTasks = async () => {
@@ -93,7 +90,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       setAvailableCampaigns([]);
       try {
         if (activeStage === 1 && applySubTab === 'unapplied') {
-          // 未申請：撈可申請的活動清單（原「代言申請區」的待申請內容）
+          // 未申請：撈可申請的活動清單
           const [availableRes, profileRes] = await Promise.all([
             api.get('/koc/application/getAvailableList', { params: { user_id } }),
             api.get('/koc/profile/getProfile', { params: { user_id } }),
@@ -153,7 +150,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           setTasks([...pending, ...rejected]);
 
         } else if (activeStage === 2) {
-          // 撰寫文案：合併 writing(0) + reviewing(1)，reviewing 的卡片標成「已繳交」子狀態
+          // 撰寫文案：合併 writing(0) + reviewing(1)
           const [writingRes, reviewingRes] = await Promise.all([
             api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 0 } }),
             api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 1 } }),
@@ -186,7 +183,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           setTasks([...writing, ...reviewing]);
 
         } else {
-          // 上傳作品(3) / 推廣中(4) / 已結案(5)：單一 stage
+          // 上傳作品(3) / 推廣中(4) / 已結案(5)
           const stage = STAGE_MAP[activeStage];
           const res = await api.get('/koc/mission/getlist', {
             params: { User_id: user_id, stage }
@@ -232,7 +229,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         params: { user_id }
       });
       setTasks(prev => prev.filter(t => t.id !== taskId));
-      // 更新徽章數量
       setStageCounts(prev => ({
         ...prev,
         qualification: Math.max(0, prev.qualification - 1)
@@ -247,7 +243,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     onNavigate('task_detail', task);
   };
 
-  // 申請任務（原「代言申請區」的申請動作）
+  // 申請任務
   const handleApply = async (campaign) => {
     if (!kocId) {
       alert('尚未取得 KOC 身份資料，請稍後再試');
@@ -284,9 +280,9 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setViewingReason(task)}
-                className="bg-[#FDF0ED] text-[#C8522A] p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
+                className="bg-[#FDF0ED] text-[#C8522A] p-2.5 md:p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 md:gap-2">
                   <XCircle size={14} className="shrink-0" />
                   抱歉，資格未符
                 </span>
@@ -294,7 +290,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               </button>
               <button
                 onClick={() => dismissTask(task.id)}
-                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5"
+                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 md:py-3 rounded-xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5"
               >
                 <Trash2 size={14}/> 移除紀錄
               </button>
@@ -302,68 +298,65 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           );
         }
         return (
-          <button disabled className="w-full bg-[#F5F0E8] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2">
+          <button disabled className="w-full bg-[#F5F0E8] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm cursor-not-allowed flex items-center justify-center gap-1.5 md:gap-2">
             <Clock size={16}/> 廠商審核中
           </button>
         );
       case 2:
         if (task.isSubmitted) {
-          // 已繳交，等廠商審核
           return (
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2">
               <Search size={16}/> 已繳交，查看審核進度
             </button>
           );
         }
         if (task.isRevising) {
-          // 文案被廠商退回，需修改後重新提交
           return (
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setViewingReason({ type: 'revising', productName: task.productName, rejectReason: task.vendorFeedback })}
-                className="bg-[#FDF0ED] text-[#C8522A] p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
+                className="bg-[#FDF0ED] text-[#C8522A] p-2.5 md:p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-1.5 md:gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 md:gap-2">
                   <XCircle size={14} className="shrink-0" />
                   文案退回，請修改
                 </span>
                 <span className="text-[10px] underline underline-offset-2 shrink-0">查看原因</span>
               </button>
-              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
                 <Edit3 size={16}/> 前往修改文案
               </button>
             </div>
           );
         }
-        // 撰寫中
         return (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2.5 md:gap-3">
             {task.promoCode && (
-              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-[10px] md:text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
                 <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
               </div>
             )}
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
               <Edit3 size={16}/> 前往撰寫文案
             </button>
           </div>
         );
       case 3:
         return (
-          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2">
+          <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
             <Upload size={16}/> 上傳作品連結
           </button>
         );
       case 4:
         return (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-sm font-bold text-[#8C8880]">目前累積分潤</span>
-              <span className="text-xl font-black text-[#C8522A]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
+          <div className="flex flex-col gap-2.5 md:gap-3">
+            <div className="flex items-center justify-between px-1 md:px-2">
+              <span className="text-xs md:text-sm font-bold text-[#8C8880]">目前累積分潤</span>
+              <span className="text-lg md:text-xl font-black text-[#C8522A]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
             </div>
             <button
               onClick={() => handleGoToDetail(task)}
-              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2"
             >
               查看詳情
             </button>
@@ -371,16 +364,16 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         );
       case 5:
         return (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-sm font-bold text-[#8C8880]">獲得分潤</span>
-              <span className="text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
+          <div className="flex flex-col gap-2.5 md:gap-3">
+            <div className="flex items-center justify-between px-1 md:px-2">
+              <span className="text-xs md:text-sm font-bold text-[#8C8880]">獲得分潤</span>
+              <span className="text-lg md:text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
             </div>
 
             {task.taxFormStatus === 'not_submitted' && (
               <button
                 onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2"
               >
                 <FileText size={16}/> 上傳勞報單連結
               </button>
@@ -389,7 +382,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             {task.taxFormStatus === 'pending_review' && (
               <button
                 onClick={() => setTaxFormTask(task)}
-                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2"
+                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2"
               >
                 <FileText size={16}/> 檢視/修改連結
               </button>
@@ -398,13 +391,13 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             {task.taxFormStatus === 'rejected' && (
               <button
                 onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                className="w-full bg-[#C8522A] text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2"
               >
                 <FileText size={16}/> 重新上傳連結
               </button>
             )}
 
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
+            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2">
               <Search size={16}/> 查看詳情
             </button>
           </div>
@@ -413,7 +406,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     }
   };
 
-  // 分頁數量對照
   const getStageCount = (stageId) => {
     switch(stageId) {
       case 1: return stageCounts.qualification;
@@ -426,37 +418,36 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   };
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-20">
+    <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12 md:pb-20">
 
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">接案管理</h2>
-        <button onClick={() => onNavigate('analysis')} className="bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3 rounded-full font-bold text-sm hover:border-[#1A1A18] hover:shadow-md transition-all flex items-center gap-2 group">
-          <div className="w-6 h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
-            <TrendingUp size={14} className="text-[#C8522A] group-hover:text-white transition-colors" />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
+        <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">接案管理</h2>
+        <button onClick={() => onNavigate('analysis')} className="w-full sm:w-auto justify-center bg-white border border-[#E2DDD4] text-[#1A1A18] px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-full font-bold text-xs md:text-sm hover:border-[#1A1A18] hover:shadow-md transition-all flex items-center gap-2 group">
+          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
+            <TrendingUp size={12} className="text-[#C8522A] group-hover:text-white transition-colors md:w-3.5 md:h-3.5" />
           </div>
           查看合作收益總覽
         </button>
       </div>
 
-      <div className="bg-[#1A1A18] rounded-[2rem] p-8 mb-10 flex items-center justify-between shadow-xl relative overflow-hidden border border-[#E2DDD4]">
-        <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
-        <div className="relative z-10">
-          <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+      <div className="bg-[#1A1A18] rounded-2xl md:rounded-[2rem] p-5 md:p-8 mb-6 md:mb-10 flex items-center justify-between shadow-xl relative overflow-hidden border border-[#E2DDD4]">
+        <div className="absolute right-0 top-0 w-32 md:w-64 h-full bg-gradient-to-l from-[#C8522A]/20 to-transparent"></div>
+        <div className="relative z-10 w-full">
+          <h3 className="text-white font-bold text-base md:text-lg mb-3 md:mb-4 flex items-center gap-2">
             <span className="text-[#C8522A]"></span> 賺取分潤超簡單，跟著進度走！
           </h3>
-          <div className="flex items-center gap-4 text-sm font-bold text-[#F5F0E8]/80">
-            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">1</span> 申請接案</span>
-            <ChevronRight size={14} className="text-[#8C8880]" />
-            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-xs">2</span> 撰寫文案</span>
-            <ChevronRight size={14} className="text-[#8C8880]" />
-            <span className="flex items-center gap-1.5"><span className="w-6 h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-xs shadow-md">3</span> 發布貼文賺獎金</span>
+          <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 text-[11px] md:text-sm font-bold text-[#F5F0E8]/80">
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">1</span> 申請接案</span>
+            <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">2</span> 撰寫文案</span>
+            <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-[10px] md:text-xs shadow-md">3</span> 發布貼文賺獎金</span>
           </div>
         </div>
-        
       </div>
 
-      {/* 分頁列 */}
-      <div className="bg-white p-2 rounded-2xl shadow-sm border border-[#E2DDD4] mb-8 flex justify-between overflow-x-auto hide-scrollbar">
+      {/* 分頁列 (Tabs) */}
+      <div className="bg-white p-1.5 md:p-2 rounded-2xl shadow-sm border border-[#E2DDD4] mb-6 md:mb-8 flex justify-start md:justify-between overflow-x-auto hide-scrollbar gap-1 md:gap-0">
         {STAGES.map((stage) => {
           const Icon = stage.icon;
           const isActive = activeStage === stage.id;
@@ -466,33 +457,33 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <button
               key={stage.id}
               onClick={() => setActiveStage(stage.id)}
-              className={`flex-1 min-w-[140px] flex flex-col items-center justify-center py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
+              className={`flex-shrink-0 min-w-[105px] md:flex-1 md:min-w-[140px] flex flex-col items-center justify-center py-3 md:py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
             >
               {count > 0 && (
-                <span className="absolute top-3 right-8 w-5 h-5 bg-[#C8522A] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
+                <span className="absolute top-2 right-4 md:top-3 md:right-8 w-4 h-4 md:w-5 md:h-5 bg-[#C8522A] text-white text-[9px] md:text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
                   {count}
                 </span>
               )}
-              <Icon size={20} className={`mb-2 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
-              <span className={`text-sm font-bold mb-0.5 ${isActive ? 'text-[#1A1A18]' : 'text-[#8C8880]'}`}>{stage.label}</span>
-              <span className="text-[10px] font-bold text-[#8C8880] tracking-wider">{stage.desc}</span>
+              <Icon size={18} className={`mb-1.5 md:mb-2 md:w-5 md:h-5 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
+              <span className={`text-xs md:text-sm font-bold mb-0.5 ${isActive ? 'text-[#1A1A18]' : 'text-[#8C8880]'}`}>{stage.label}</span>
+              <span className="text-[9px] md:text-[10px] font-bold text-[#8C8880] tracking-wider">{stage.desc}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="flex items-end mb-6 px-2 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end mb-4 md:mb-6 px-1 md:px-2 gap-3 md:gap-4">
         {activeStage !== 1 && (
-          <h3 className="text-xl font-bold text-[#1A1A18]">
+          <h3 className="text-lg md:text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
         )}
 
         {activeStage === 1 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setApplySubTab('unapplied')}
-              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+              className={`flex-1 sm:flex-none px-4 md:px-6 py-2 rounded-xl md:rounded-full font-bold text-xs md:text-sm transition-all shadow-sm ${
                 applySubTab === 'unapplied'
                   ? 'bg-[#C8522A] text-white'
                   : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -502,7 +493,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
             <button
               onClick={() => setApplySubTab('applied')}
-              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+              className={`flex-1 sm:flex-none px-4 md:px-6 py-2 rounded-xl md:rounded-full font-bold text-xs md:text-sm transition-all shadow-sm ${
                 applySubTab === 'applied'
                   ? 'bg-[#C8522A] text-white'
                   : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -515,39 +506,39 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div>
+        <div className="py-20 text-center text-[#8C8880] font-bold text-sm md:text-base">載入中...</div>
       ) : activeStage === 1 && applySubTab === 'unapplied' ? (
-        /* 未申請：可瀏覽並申請的活動清單（原「代言申請區」的待申請內容） */
-        <div className="bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-          <div className="flex justify-between items-center bg-[#F8F9FA] border-b border-[#E2DDD4] px-10 py-4 text-sm font-bold text-[#8C8880]">
-            <div>任務</div>
-            <div>動作</div>
+        /* 未申請清單 */
+        <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center bg-[#F8F9FA] border-b border-[#E2DDD4] px-4 md:px-10 py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880]">
+            <div>可申請的任務</div>
+            <div className="hidden sm:block">動作</div>
           </div>
           <div className="flex flex-col">
             {availableCampaigns.length > 0 ? (
               availableCampaigns.map((campaign, i) => (
                 <div
                   key={campaign.id}
-                  className={`flex items-center justify-between px-10 py-6 hover:bg-[#F8F9FA] transition-colors ${
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between px-4 md:px-10 py-4 md:py-6 gap-4 sm:gap-0 hover:bg-[#F8F9FA] transition-colors ${
                     i !== availableCampaigns.length - 1 ? 'border-b border-[#E2DDD4]' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-6 flex-1 pr-8">
-                    <div className="w-[88px] h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+                  <div className="flex items-center gap-3 md:gap-6 flex-1 pr-0 md:pr-8">
+                    <div className="w-[72px] h-[52px] md:w-[88px] md:h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
                       {isValidImageUrl(campaign.image) ? (
                         <img src={campaign.image} alt={campaign.name} className="w-full h-full object-cover" />
                       ) : (
-                        <ImageIcon className="text-[#8C8880]/50" size={24} />
+                        <ImageIcon className="text-[#8C8880]/50" size={20} />
                       )}
                     </div>
-                    <div className="font-bold text-[#1A1A18] leading-snug">
+                    <div className="font-bold text-[#1A1A18] leading-snug text-sm md:text-base">
                       {campaign.name}
                     </div>
                   </div>
-                  <div className="flex-shrink-0 w-[120px] text-right">
+                  <div className="flex-shrink-0 w-full sm:w-[120px] text-center sm:text-right">
                     <button
                       onClick={() => handleApply(campaign)}
-                      className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                      className="w-full sm:w-auto bg-[#1A1A18] text-[#F5F0E8] px-4 md:px-8 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
                     >
                       申請任務
                     </button>
@@ -555,52 +546,53 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                 </div>
               ))
             ) : (
-              <div className="px-10 py-16 text-center text-[#8C8880] font-bold">
+              <div className="px-4 md:px-10 py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">
                 目前沒有可申請的任務
               </div>
             )}
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 xl:grid-cols-3 gap-6">
+        /* 任務卡片 Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
           {tasks.map((task) => (
-            <div key={task.id} className={`bg-white rounded-[2rem] p-6 border ${task.isRejected ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
-              <div className="flex justify-between items-start mb-6">
+            <div key={task.id} className={`bg-white rounded-2xl md:rounded-[2rem] p-5 md:p-6 border ${task.isRejected ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
+              <div className="flex justify-between items-start mb-5 md:mb-6">
                 <div>
-                  <span className="text-[10px] font-black text-[#8C8880] tracking-widest uppercase bg-[#F8F9FA] px-2 py-1 rounded-md mb-2 inline-block">
+                  <span className="text-[9px] md:text-[10px] font-black text-[#8C8880] tracking-widest uppercase bg-[#F8F9FA] px-2 py-1 rounded-md mb-2 inline-block">
                     {task.vendor}
                   </span>
                   {task.deadline && (
-                    <div className="flex items-center gap-1.5 text-[#C8522A] text-xs font-bold mt-1">
-                      <Calendar size={12} />
+                    <div className="flex items-center gap-1 md:gap-1.5 text-[#C8522A] text-[11px] md:text-xs font-bold mt-1">
+                      <Calendar size={12} className="md:w-3.5 md:h-3.5" />
                       <span>截止: {task.deadline}</span>
                     </div>
                   )}
                 </div>
                 {task.isExpired ? (
-                  <span className="text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
+                  <span className="text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
                     已過期
                   </span>
                 ) : task.stage === 5 ? (
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${TAX_FORM_BADGE[task.taxFormStatus]?.cls || TAX_FORM_BADGE.not_submitted.cls}`}>
+                  <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${TAX_FORM_BADGE[task.taxFormStatus]?.cls || TAX_FORM_BADGE.not_submitted.cls}`}>
                     {TAX_FORM_BADGE[task.taxFormStatus]?.label || TAX_FORM_BADGE.not_submitted.label}
                   </span>
                 ) : task.stage === 2 && (
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
+                  <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
                     {task.isSubmitted ? '已繳交・審核中' : task.isRevising ? '文案退回，請修改' : '撰寫中'}
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-[#F5F0E8] rounded-2xl flex items-center justify-center shrink-0 border border-[#E2DDD4]">
+              <div className="flex items-center gap-3 md:gap-4 mb-5 md:mb-6">
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-[#F5F0E8] rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 border border-[#E2DDD4]">
                   {isValidImageUrl(task.campaignImage) ? (
-                    <img src={task.campaignImage} alt={task.productName} className="w-full h-full object-cover rounded-2xl" />
+                    <img src={task.campaignImage} alt={task.productName} className="w-full h-full object-cover rounded-xl md:rounded-2xl" />
                   ) : (
-                    <ImageIcon size={24} className="text-[#8C8880]/50" />
+                    <ImageIcon size={20} className="md:w-6 md:h-6 text-[#8C8880]/50" />
                   )}
                 </div>
-                <h4 className={`text-[15px] font-bold leading-snug line-clamp-2 ${task.isRejected ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'}`}>
+                <h4 className={`text-sm md:text-[15px] font-bold leading-snug line-clamp-2 ${task.isRejected ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'}`}>
                   {task.productName}
                 </h4>
               </div>
@@ -612,11 +604,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           ))}
 
           {tasks.length === 0 && (
-            <div className="col-span-full py-20 text-center flex flex-col items-center justify-center bg-white rounded-[2rem] border border-[#E2DDD4] border-dashed">
-              <div className="w-16 h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4">
-                <CheckCircle2 size={24} className="text-[#8C8880]" />
+            <div className="col-span-full py-16 md:py-20 text-center flex flex-col items-center justify-center bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] border-dashed">
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-3 md:mb-4">
+                <CheckCircle2 size={20} className="md:w-6 md:h-6 text-[#8C8880]" />
               </div>
-              <p className="text-[#1A1A18] font-bold">這個階段目前沒有任務喔！</p>
+              <p className="text-[#1A1A18] font-bold text-sm md:text-base">這個階段目前沒有任務喔！</p>
             </div>
           )}
         </div>
@@ -629,22 +621,22 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           onClick={() => setViewingReason(null)}
         >
           <div
-            className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
+            className="bg-white rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-12 h-12 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 text-[#C8522A]">
-              <XCircle size={24} />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 text-[#C8522A]">
+              <XCircle size={20} className="md:w-6 md:h-6" />
             </div>
-            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">
+            <h3 className="text-base md:text-lg font-bold text-[#1A1A18] mb-1">
               {viewingReason.type === 'revising' ? '文案退回，請修改' : '申請未通過'}
             </h3>
-            <p className="text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
-            <div className="bg-[#F8F9FA] rounded-2xl p-5 text-sm text-[#1A1A18] leading-relaxed mb-6 whitespace-pre-wrap">
+            <p className="text-[10px] md:text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
+            <div className="bg-[#F8F9FA] rounded-xl md:rounded-2xl p-4 md:p-5 text-xs md:text-sm text-[#1A1A18] leading-relaxed mb-5 md:mb-6 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">
               {viewingReason.rejectReason || '廠商未填寫原因'}
             </div>
             <button
               onClick={() => setViewingReason(null)}
-              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 rounded-xl font-bold text-sm hover:bg-[#C8522A] transition-all"
+              className="w-full bg-[#1A1A18] text-[#F5F0E8] py-2.5 md:py-3 rounded-xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all"
             >
               關閉
             </button>
@@ -673,22 +665,22 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       {/* 申請成功彈出視窗 */}
       {appliedCampaign && (
         <div
-          className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300"
+          className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300 p-4"
           onClick={() => setAppliedCampaign(null)}
         >
           <div
-            className="bg-white rounded-[2rem] p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
+            className="bg-white rounded-[1.5rem] md:rounded-[2rem] p-8 md:p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-[#E2DDD4]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-6 flex justify-center">
-              <CheckCircle2 size={64} className="text-[#C8522A]" />
+            <div className="mb-4 md:mb-6 flex justify-center">
+              <CheckCircle2 size={48} className="md:w-16 md:h-16 text-[#C8522A]" />
             </div>
-            <h4 className="text-2xl font-black text-[#1A1A18] mb-8 leading-snug">
+            <h4 className="text-xl md:text-2xl font-black text-[#1A1A18] mb-6 md:mb-8 leading-snug">
               {appliedCampaign.name}<br />已申請成功
             </h4>
             <button
               onClick={() => setAppliedCampaign(null)}
-              className="bg-[#1A1A18] text-[#F5F0E8] w-full py-4 rounded-2xl font-bold text-lg hover:bg-[#C8522A] transition-all active:scale-95 shadow-lg"
+              className="bg-[#1A1A18] text-[#F5F0E8] w-full py-3.5 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:bg-[#C8522A] transition-all active:scale-95 shadow-lg"
             >
               確認
             </button>

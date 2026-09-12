@@ -27,14 +27,9 @@ import {
   uploadVendorInvoice,
 } from '../api/vendor'
 
-import {
-  formatCurrency,
-  cn
-} from './lib/utils'
-
+import { formatCurrency, cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
-
 
 const shippingFilters = [
   'all',
@@ -45,7 +40,6 @@ const shippingFilters = [
   'cancelled'
 ]
 
-
 const shippingLabels = {
   all: '全部',
   unshipped: '待出貨',
@@ -54,7 +48,6 @@ const shippingLabels = {
   delivered: '已送達',
   cancelled: '已取消'
 }
-
 
 const paymentLabels = {
   pending: '待付款',
@@ -66,7 +59,6 @@ const paymentLabels = {
   cancelled: '已取消'
 }
 
-
 const orderLabels = {
   pending: '待處理',
   processing: '處理中',
@@ -76,11 +68,7 @@ const orderLabels = {
   paid: '已付款'
 }
 
-
-function Card({
-  children,
-  className = ''
-}) {
+function Card({ children, className = '' }) {
   return (
     <div
       className={cn(
@@ -93,38 +81,19 @@ function Card({
   )
 }
 
-
-function Button({
-  variant = 'default',
-  className,
-  children,
-  ...props
-}) {
+function Button({ variant = 'default', className, children, ...props }) {
   const variants = {
-    brand:
-      'bg-[#1A1A18] text-white hover:bg-[#C8522A]',
-
-    outline:
-      'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F8F9FA]',
-
-    danger:
-      'border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white',
-
-    default:
-      'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
+    brand: 'bg-[#1A1A18] text-white hover:bg-[#C8522A]',
+    outline: 'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F8F9FA]',
+    danger: 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white',
+    default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
   }
 
   return (
     <button
       type="button"
       className={cn(
-        `
-          inline-flex items-center justify-center
-          px-4 py-2 rounded-full
-          text-sm font-bold transition-all
-          disabled:opacity-50
-          disabled:cursor-not-allowed
-        `,
+        'inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
         variants[variant],
         className
       )}
@@ -135,116 +104,53 @@ function Button({
   )
 }
 
-
-function ShippingBadge({
-  status
-}) {
+function ShippingBadge({ status }) {
   const config = {
-    unshipped: {
-      label: '待出貨',
-      cls:
-        'bg-[#FDF0ED] text-[#C8522A]',
-      dot:
-        'bg-[#C8522A]'
-    },
-
-    preparing: {
-      label: '備貨中',
-      cls:
-        'bg-[#FFF8E7] text-[#9A6700]',
-      dot:
-        'bg-[#9A6700]'
-    },
-
-    shipped: {
-      label: '已出貨',
-      cls:
-        'bg-[#F5F0E8] text-[#1A1A18]',
-      dot:
-        'bg-[#1A1A18]'
-    },
-
-    delivered: {
-      label: '已送達',
-      cls:
-        'bg-green-50 text-green-700',
-      dot:
-        'bg-green-600'
-    },
-
-    cancelled: {
-      label: '已取消',
-      cls:
-        'bg-red-50 text-red-600',
-      dot:
-        'bg-red-500'
-    }
+    unshipped: { label: '待出貨', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
+    preparing: { label: '備貨中', cls: 'bg-[#FFF8E7] text-[#9A6700]', dot: 'bg-[#9A6700]' },
+    shipped: { label: '已出貨', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
+    delivered: { label: '已送達', cls: 'bg-green-50 text-green-700', dot: 'bg-green-600' },
+    cancelled: { label: '已取消', cls: 'bg-red-50 text-red-600', dot: 'bg-red-500' }
   }
 
-  const current =
-    config[status] || {
-      label: status || '未知',
-      cls:
-        'bg-gray-100 text-gray-500',
-      dot:
-        'bg-gray-400'
-    }
+  const current = config[status] || {
+    label: status || '未知',
+    cls: 'bg-gray-100 text-gray-500',
+    dot: 'bg-gray-400'
+  }
 
   return (
     <span
       className={cn(
-        `
-          inline-flex items-center gap-1.5
-          px-3 py-1.5 rounded-full
-          text-[11px] font-bold
-        `,
+        'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap',
         current.cls
       )}
     >
-      <span
-        className={cn(
-          'w-1.5 h-1.5 rounded-full',
-          current.dot
-        )}
-      />
-
+      <span className={cn('w-1.5 h-1.5 rounded-full', current.dot)} />
       {current.label}
     </span>
   )
 }
 
-
-function PaymentBadge({
-  status
-}) {
-  const isPaid =
-    status === 'paid'
-
-  const isRefundPending =
-    status === 'refund_pending'
+function PaymentBadge({ status }) {
+  const isPaid = status === 'paid'
+  const isRefundPending = status === 'refund_pending'
 
   return (
     <span
       className={cn(
-        `
-          inline-flex items-center
-          px-2.5 py-1 rounded-full
-          text-[11px] font-bold
-        `,
+        'inline-flex items-center px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap',
         isPaid
           ? 'bg-green-50 text-green-700'
           : isRefundPending
-            ? 'bg-amber-50 text-amber-700'
-            : 'bg-[#F8F9FA] text-[#8C8880]'
+          ? 'bg-amber-50 text-amber-700'
+          : 'bg-[#F8F9FA] text-[#8C8880]'
       )}
     >
-      {paymentLabels[status] ||
-        status ||
-        '未知'}
+      {paymentLabels[status] || status || '未知'}
     </span>
   )
 }
-
 
 function OrderDetailModal({
   order,
@@ -260,42 +166,33 @@ function OrderDetailModal({
   onUploadInvoice,
   vendorId
 }) {
-  const [
-    nextShippingStatus,
-    setNextShippingStatus
-  ] = useState('')
-
+  const [nextShippingStatus, setNextShippingStatus] = useState('')
   const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
   const [invoiceUploading, setInvoiceUploading] = useState(false)
   const [invoiceUploadMsg, setInvoiceUploadMsg] = useState('')
 
   useEffect(() => {
-    setNextShippingStatus(
-      order?.shippingStatus || ''
-    )
+    setNextShippingStatus(order?.shippingStatus || '')
     setInvoiceNumberInput(order?.invoiceNumber || '')
     setInvoiceUploadMsg('')
   }, [order])
 
-
   if (!open) return null
 
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
       <div
         className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto bg-white rounded-[2rem] shadow-2xl border border-[#E2DDD4]">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-6 bg-[#F8F9FA] border-b border-[#E2DDD4]">
+      <div className="relative w-full max-w-4xl max-h-[95vh] sm:max-h-[92vh] overflow-y-auto bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl border border-[#E2DDD4]">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 bg-[#F8F9FA] border-b border-[#E2DDD4]">
           <div>
-            <h2 className="text-2xl font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1A1A18]">
               訂單詳細資料
             </h2>
-
-            <div className="text-xs font-mono font-bold text-[#8C8880] mt-1">
+            <div className="text-[11px] sm:text-xs font-mono font-bold text-[#8C8880] mt-1">
               {order?.orderId || '讀取中'}
             </div>
           </div>
@@ -303,73 +200,59 @@ function OrderDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18]"
+            className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] -mr-2 sm:mr-0"
           >
             <X size={20} />
           </button>
         </div>
 
-
         {loading ? (
           <div className="py-24 text-center">
             <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
-              <Loader2
-                size={18}
-                className="animate-spin"
-              />
+              <Loader2 size={18} className="animate-spin" />
               訂單詳細資料載入中...
             </div>
           </div>
         ) : order ? (
-          <div className="px-8 py-7 space-y-7">
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="p-5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] mb-3">
+          <div className="px-4 sm:px-8 py-5 sm:py-7 space-y-5 sm:space-y-7">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
                   <User size={15} />
                   顧客
                 </div>
-
                 <div className="text-sm font-bold text-[#1A1A18]">
                   {order.userId
                     ? `會員 ${order.userId}`
                     : order.guestId
-                      ? `訪客 ${order.guestId}`
-                      : '一般顧客'}
+                    ? `訪客 ${order.guestId}`
+                    : '一般顧客'}
                 </div>
               </Card>
 
-
-              <Card className="p-5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] mb-3">
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
                   <CreditCard size={15} />
                   付款狀態
                 </div>
-
-                <PaymentBadge
-                  status={order.paymentStatus}
-                />
+                <PaymentBadge status={order.paymentStatus} />
               </Card>
 
-
-              <Card className="p-5">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] mb-3">
+              <Card className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
                   <Truck size={15} />
                   出貨狀態
                 </div>
-
-                <ShippingBadge
-                  status={order.shippingStatus}
-                />
+                <ShippingBadge status={order.shippingStatus} />
               </Card>
             </div>
 
             {order.orderStatus === 'cancel_requested' && (
-              <div className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-200">
-                <div className="text-xs font-bold text-amber-700 mb-1.5">
+              <div className="p-4 sm:p-5 rounded-[1.5rem] bg-amber-50 border border-amber-200">
+                <div className="text-[11px] sm:text-xs font-bold text-amber-700 mb-1.5">
                   買家申請取消訂單
                 </div>
-                <div className="text-sm text-[#1A1A18]">
+                <div className="text-xs sm:text-sm text-[#1A1A18]">
                   {order.cancelReason
                     ? `取消原因：${order.cancelReason}`
                     : '買家未填寫取消原因'}
@@ -377,9 +260,8 @@ function OrderDetailModal({
               </div>
             )}
 
-
             <Card className="overflow-hidden">
-              <div className="px-6 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4]">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#F8F9FA] border-b border-[#E2DDD4]">
                 <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
                   <Package size={17} />
                   商品明細
@@ -387,161 +269,135 @@ function OrderDetailModal({
               </div>
 
               <div className="divide-y divide-[#E2DDD4]">
-                {(order.items || []).map(
-                  item => (
-                    <div
-                      key={item.orderItemId}
-                      className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-5 items-center"
-                    >
-                      <div>
-                        <div className="text-sm font-bold text-[#1A1A18]">
-                          {item.productName}
-                        </div>
-
-                        <div className="text-xs text-[#8C8880] mt-1">
-                          商品編號：
-                          {item.productId}
-                        </div>
-                      </div>
-
-                      <div className="text-sm text-[#8C8880]">
-                        {formatCurrency(
-                          item.unitPrice
-                        )}
-                      </div>
-
+                {(order.items || []).map(item => (
+                  <div
+                    key={item.orderItemId}
+                    className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 sm:gap-4 px-4 sm:px-6 py-4 sm:py-5 items-start sm:items-center"
+                  >
+                    <div>
                       <div className="text-sm font-bold text-[#1A1A18]">
-                        × {item.quantity}
+                        {item.productName}
                       </div>
-
-                      <div className="text-sm font-black text-[#C8522A]">
-                        {formatCurrency(
-                          item.subtotal
-                        )}
+                      <div className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+                        商品編號：{item.productId}
                       </div>
                     </div>
-                  )
-                )}
+
+                    <div className="text-xs sm:text-sm text-[#8C8880] flex justify-between sm:block mt-1 sm:mt-0">
+                      <span className="sm:hidden font-bold">單價</span>
+                      {formatCurrency(item.unitPrice)}
+                    </div>
+
+                    <div className="text-xs sm:text-sm font-bold text-[#1A1A18] flex justify-between sm:block">
+                      <span className="sm:hidden">數量</span>
+                      × {item.quantity}
+                    </div>
+
+                    <div className="text-sm sm:text-base font-black text-[#C8522A] flex justify-between sm:block border-t sm:border-0 border-[#E2DDD4] pt-2 sm:pt-0 mt-1 sm:mt-0">
+                      <span className="sm:hidden text-xs font-bold text-[#8C8880]">小計</span>
+                      {formatCurrency(item.subtotal)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </Card>
 
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Card className="p-6">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <Card className="p-5 sm:p-6">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
                   <Ticket size={15} />
                   優惠碼
                 </div>
 
                 {order.promotionCode ? (
                   <div>
-                    <div className="inline-flex px-3 py-2 rounded-xl bg-[#FDF0ED] text-[#C8522A] font-mono font-bold text-sm">
+                    <div className="inline-flex px-3 py-2 rounded-xl bg-[#FDF0ED] text-[#C8522A] font-mono font-bold text-xs sm:text-sm">
                       {order.promotionCode}
                     </div>
-
-                    <div className="text-xs text-[#8C8880] mt-3">
-                      此訂單透過 KOC
-                      或活動優惠碼完成
+                    <div className="text-[10px] sm:text-xs text-[#8C8880] mt-3">
+                      此訂單透過 KOC 或活動優惠碼完成
                     </div>
                   </div>
                 ) : (
-                  <div className="text-sm font-bold text-[#8C8880]">
+                  <div className="text-xs sm:text-sm font-bold text-[#8C8880]">
                     未使用優惠碼
                   </div>
                 )}
               </Card>
 
-
-              <Card className="p-6">
-                <div className="text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
+              <Card className="p-5 sm:p-6">
+                <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
                   金額摘要
                 </div>
 
                 <div className="flex items-end justify-between">
-                  <span className="text-sm font-bold text-[#8C8880]">
+                  <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
                     訂單總金額
                   </span>
-
-                  <span className="text-2xl font-black text-[#C8522A]">
-                    {formatCurrency(
-                      order.totalAmount
-                    )}
+                  <span className="text-xl sm:text-2xl font-black text-[#C8522A]">
+                    {formatCurrency(order.totalAmount)}
                   </span>
                 </div>
               </Card>
             </div>
 
-
             {order.payment && (
-              <Card className="p-6">
+              <Card className="p-5 sm:p-6">
                 <div className="text-sm font-bold text-[#1A1A18] mb-4">
                   付款資訊
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs sm:text-sm">
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       付款方式
                     </div>
-
                     <div className="font-bold text-[#1A1A18]">
-                      {order.payment.paymentMethod ||
-                        '—'}
+                      {order.payment.paymentMethod || '—'}
                     </div>
                   </div>
-
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       付款狀態
                     </div>
-
                     <div className="font-bold text-[#1A1A18]">
-                      {paymentLabels[
-                        order.payment.paymentStatus
-                      ] ||
-                        order.payment
-                          .paymentStatus ||
+                      {paymentLabels[order.payment.paymentStatus] ||
+                        order.payment.paymentStatus ||
                         '—'}
                     </div>
                   </div>
-
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       交易編號
                     </div>
-
                     <div className="font-mono font-bold text-[#1A1A18] break-all">
-                      {order.payment
-                        .transactionId || '—'}
+                      {order.payment.transactionId || '—'}
                     </div>
                   </div>
                 </div>
               </Card>
             )}
 
-
-            <Card className="p-6">
-              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-5">
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-4 sm:mb-5">
                 <Truck size={17} />
                 配送與收件資訊
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 text-xs sm:text-sm">
                 <div>
-                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                     收件人
                   </div>
-
                   <div className="font-bold text-[#1A1A18]">
                     {order.shippingInfo?.recipientName || '—'}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                     聯絡電話
                   </div>
-
                   <div className="font-bold text-[#1A1A18]">
                     {order.shippingInfo?.recipientPhone || '—'}
                   </div>
@@ -550,10 +406,9 @@ function OrderDetailModal({
                 {order.shipment?.logisticsType === 'CVS' ? (
                   <>
                     <div>
-                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                         配送方式
                       </div>
-
                       <div className="font-bold text-[#1A1A18] flex items-center gap-2">
                         <Store size={15} className="text-[#C8522A]" />
                         {order.shipment.logisticsSubType === 'UNIMARTC2C'
@@ -563,25 +418,23 @@ function OrderDetailModal({
                     </div>
 
                     <div>
-                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                         取貨門市
                       </div>
-
                       <div className="font-bold text-[#1A1A18]">
                         {order.shipment.storeName || '—'}
                         {order.shipment.storeId && (
-                          <span className="ml-2 text-xs font-mono text-[#8C8880]">
+                          <span className="ml-2 text-[10px] sm:text-xs font-mono text-[#8C8880]">
                             ({order.shipment.storeId})
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="md:col-span-2">
-                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="sm:col-span-2">
+                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                         門市地址
                       </div>
-
                       <div className="font-bold text-[#1A1A18] flex items-start gap-2">
                         <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
                         {order.shipment.storeAddress || '—'}
@@ -589,11 +442,10 @@ function OrderDetailModal({
                     </div>
                   </>
                 ) : (
-                  <div className="md:col-span-2">
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="sm:col-span-2">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       宅配地址
                     </div>
-
                     {order.shippingInfo?.address ? (
                       <div className="font-bold text-[#1A1A18] flex items-start gap-2">
                         <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
@@ -609,7 +461,7 @@ function OrderDetailModal({
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 font-bold">
+                      <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 font-bold text-xs sm:text-sm">
                         此宅配訂單尚未留有配送地址
                       </div>
                     )}
@@ -618,10 +470,9 @@ function OrderDetailModal({
 
                 {order.shipment?.merchantTradeNo && (
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       平台物流交易編號
                     </div>
-
                     <div className="font-mono font-bold text-[#1A1A18] break-all">
                       {order.shipment.merchantTradeNo}
                     </div>
@@ -630,11 +481,10 @@ function OrderDetailModal({
 
                 {order.shipment?.ecpayLogisticsId && (
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       綠界物流編號
                     </div>
-
-                    <div className="font-mono font-bold text-[#1A1A18]">
+                    <div className="font-mono font-bold text-[#1A1A18] break-all">
                       {order.shipment.ecpayLogisticsId}
                     </div>
                   </div>
@@ -642,10 +492,9 @@ function OrderDetailModal({
 
                 {order.shipment?.cvsPaymentNo && (
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       7-ELEVEN 寄貨編號
                     </div>
-
                     <div className="font-mono font-bold text-[#1A1A18]">
                       {order.shipment.cvsPaymentNo}
                     </div>
@@ -654,10 +503,9 @@ function OrderDetailModal({
 
                 {order.shipment?.cvsValidationNo && (
                   <div>
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       7-ELEVEN 驗證碼
                     </div>
-
                     <div className="font-mono font-bold text-[#1A1A18]">
                       {order.shipment.cvsValidationNo}
                     </div>
@@ -666,12 +514,11 @@ function OrderDetailModal({
 
                 {order.shipment?.cvsPaymentNo &&
                   order.shipment?.cvsValidationNo && (
-                    <div className="md:col-span-2">
-                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="sm:col-span-2">
+                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                         7-ELEVEN 交貨便代碼
                       </div>
-
-                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider">
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider break-all">
                         {order.shipment.cvsPaymentNo}
                         {order.shipment.cvsValidationNo}
                       </div>
@@ -680,69 +527,61 @@ function OrderDetailModal({
 
                 {order.shipment?.logisticsType === 'HOME' &&
                   order.shipment?.bookingNote && (
-                    <div className="md:col-span-2">
-                      <div className="text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="sm:col-span-2">
+                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                         黑貓宅配託運單號
                       </div>
-
-                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider">
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider break-all">
                         {order.shipment.bookingNote}
                       </div>
                     </div>
                   )}
 
                 {order.shipment && (
-                  <div className="md:col-span-2">
-                    <div className="text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="sm:col-span-2">
+                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                       物流單狀態
                     </div>
-
                     <div className="font-bold text-[#1A1A18]">
                       {order.shipment.shippingStatus === 'pending'
                         ? '待建立物流單'
                         : order.shipment.shippingStatus === 'created'
-                          ? '物流單已建立'
-                          : order.shipment.shippingStatus === 'preparing'
-                            ? '準備出貨'
-                            : order.shipment.shippingStatus === 'shipped'
-                              ? '已出貨'
-                              : order.shipment.shippingStatus === 'in_transit'
-                                ? '運送中'
-                                : order.shipment.shippingStatus === 'arrived'
-                                  ? '已到店'
-                                  : order.shipment.shippingStatus === 'picked_up'
-                                    ? '已取貨'
-                                    : order.shipment.shippingStatus === 'delivered'
-                                      ? '已送達'
-                                      : order.shipment.shippingStatus === 'cancelled'
-                                        ? '已取消'
-                                        : order.shipment.shippingStatus || '—'}
+                        ? '物流單已建立'
+                        : order.shipment.shippingStatus === 'preparing'
+                        ? '準備出貨'
+                        : order.shipment.shippingStatus === 'shipped'
+                        ? '已出貨'
+                        : order.shipment.shippingStatus === 'in_transit'
+                        ? '運送中'
+                        : order.shipment.shippingStatus === 'arrived'
+                        ? '已到店'
+                        : order.shipment.shippingStatus === 'picked_up'
+                        ? '已取貨'
+                        : order.shipment.shippingStatus === 'delivered'
+                        ? '已送達'
+                        : order.shipment.shippingStatus === 'cancelled'
+                        ? '已取消'
+                        : order.shipment.shippingStatus || '—'}
                     </div>
                   </div>
                 )}
 
                 {order.shipment &&
                   !order.shipment?.ecpayLogisticsId &&
-                  (
-                    order.shipment?.logisticsType === 'CVS' ||
-                    order.shipment?.logisticsType === 'HOME'
-                  ) && (
-                    <div className="md:col-span-2 pt-2">
+                  (order.shipment?.logisticsType === 'CVS' ||
+                    order.shipment?.logisticsType === 'HOME') && (
+                    <div className="sm:col-span-2 pt-2">
                       <Button
                         variant="brand"
                         disabled={
-                          logisticsCreating ||
-                          order.paymentStatus !== 'paid'
+                          logisticsCreating || order.paymentStatus !== 'paid'
                         }
                         onClick={onCreateLogistics}
-                        className="gap-2"
+                        className="gap-2 w-full sm:w-auto"
                       >
                         {logisticsCreating ? (
                           <>
-                            <Loader2
-                              size={15}
-                              className="animate-spin"
-                            />
+                            <Loader2 size={15} className="animate-spin" />
                             建立物流單中...
                           </>
                         ) : (
@@ -756,7 +595,7 @@ function OrderDetailModal({
                       </Button>
 
                       {order.paymentStatus !== 'paid' && (
-                        <div className="text-xs font-bold text-[#C8522A] mt-2">
+                        <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-2">
                           訂單需完成付款後才能建立物流單
                         </div>
                       )}
@@ -769,19 +608,16 @@ function OrderDetailModal({
                     order.shipment?.cvsPaymentNo &&
                     order.shipment?.cvsValidationNo
                   ) && (
-                    <div className="md:col-span-2 pt-2">
+                    <div className="sm:col-span-2 pt-2">
                       <Button
                         variant="outline"
                         disabled={logisticsQuerying}
                         onClick={onQueryLogistics}
-                        className="gap-2"
+                        className="gap-2 w-full sm:w-auto"
                       >
                         {logisticsQuerying ? (
                           <>
-                            <Loader2
-                              size={15}
-                              className="animate-spin"
-                            />
+                            <Loader2 size={15} className="animate-spin" />
                             查詢寄貨編號中...
                           </>
                         ) : (
@@ -796,15 +632,14 @@ function OrderDetailModal({
               </div>
             </Card>
 
-
-            <Card className="p-6">
+            <Card className="p-5 sm:p-6">
               <div className="text-sm font-bold text-[#1A1A18] mb-4">
                 發票管理
               </div>
 
               {order.invoiceNumber ? (
-                <div className="text-sm">
-                  <div className="text-xs font-bold text-[#8C8880] mb-1">
+                <div className="text-xs sm:text-sm">
+                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
                     發票號碼
                   </div>
                   <div className="font-bold text-[#1A1A18]">
@@ -812,11 +647,13 @@ function OrderDetailModal({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col md:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="text"
                     value={invoiceNumberInput}
-                    onChange={event => setInvoiceNumberInput(event.target.value)}
+                    onChange={event =>
+                      setInvoiceNumberInput(event.target.value)
+                    }
                     placeholder="請輸入發票號碼（例如 AB12345678）"
                     className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
                   />
@@ -832,7 +669,7 @@ function OrderDetailModal({
                         setInvoiceUploadMsg
                       )
                     }
-                    className="gap-2"
+                    className="gap-2 w-full sm:w-auto"
                   >
                     {invoiceUploading ? (
                       <>
@@ -847,47 +684,28 @@ function OrderDetailModal({
               )}
 
               {invoiceUploadMsg && (
-                <div className="text-xs font-bold text-[#C8522A] mt-2">
+                <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-2">
                   {invoiceUploadMsg}
                 </div>
               )}
             </Card>
 
-
-            <Card className="p-6">
+            <Card className="p-5 sm:p-6">
               <div className="text-sm font-bold text-[#1A1A18] mb-4">
                 更新出貨狀態
               </div>
 
-              <div className="flex flex-col md:flex-row gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <select
                   value={nextShippingStatus}
-                  onChange={event =>
-                    setNextShippingStatus(
-                      event.target.value
-                    )
-                  }
+                  onChange={event => setNextShippingStatus(event.target.value)}
                   className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
                 >
-                  <option value="unshipped">
-                    待出貨
-                  </option>
-
-                  <option value="preparing">
-                    備貨中
-                  </option>
-
-                  <option value="shipped">
-                    已出貨
-                  </option>
-
-                  <option value="delivered">
-                    已送達
-                  </option>
-
-                  <option value="cancelled">
-                    已取消
-                  </option>
+                  <option value="unshipped">待出貨</option>
+                  <option value="preparing">備貨中</option>
+                  <option value="shipped">已出貨</option>
+                  <option value="delivered">已送達</option>
+                  <option value="cancelled">已取消</option>
                 </select>
 
                 <Button
@@ -895,35 +713,21 @@ function OrderDetailModal({
                   disabled={
                     updating ||
                     !nextShippingStatus ||
-                    nextShippingStatus ===
-                      order.shippingStatus
+                    nextShippingStatus === order.shippingStatus
                   }
-                  onClick={() =>
-                    onUpdateShipping(
-                      nextShippingStatus
-                    )
-                  }
-                  className="px-7 gap-2"
+                  onClick={() => onUpdateShipping(nextShippingStatus)}
+                  className="px-7 gap-2 w-full sm:w-auto"
                 >
-                  {updating && (
-                    <Loader2
-                      size={15}
-                      className="animate-spin"
-                    />
-                  )}
-
+                  {updating && <Loader2 size={15} className="animate-spin" />}
                   儲存出貨狀態
                 </Button>
               </div>
             </Card>
 
-
-            <div className="text-xs text-[#8C8880] text-right">
+            <div className="text-[10px] sm:text-xs text-[#8C8880] text-right">
               建立時間：
               {order.createdAt
-                ? new Date(
-                    order.createdAt
-                  ).toLocaleString('zh-TW')
+                ? new Date(order.createdAt).toLocaleString('zh-TW')
                 : '—'}
             </div>
           </div>
@@ -937,8 +741,6 @@ function OrderDetailModal({
   )
 }
 
-
-
 const RETURN_STATUS_LABELS = {
   requested: '待審核',
   approved: '已同意退貨',
@@ -948,7 +750,7 @@ const RETURN_STATUS_LABELS = {
   received: '已收到退貨',
   refunding: '退款處理中',
   refunded: '退款完成',
-  cancelled: '已取消',
+  cancelled: '已取消'
 }
 
 const RETURN_REASON_LABELS = {
@@ -956,31 +758,15 @@ const RETURN_REASON_LABELS = {
   mismatched: '商品與描述不符',
   wrong_size: '尺寸不合',
   no_longer_needed: '不符合需求',
-  other: '其他',
+  other: '其他'
 }
 
-
 const VENDOR_REJECT_REASON_OPTIONS = [
-  {
-    value: 'exception',
-    label: '商品屬依法排除七日解除權之例外'
-  },
-  {
-    value: 'damaged',
-    label: '商品有非必要檢查造成的毀損或變更'
-  },
-  {
-    value: 'invalid_info',
-    label: '訂單／退貨申請資料不符'
-  },
-  {
-    value: 'expired',
-    label: '已超過平台可申請退貨期限'
-  },
-  {
-    value: 'other',
-    label: '其他'
-  }
+  { value: 'exception', label: '商品屬依法排除七日解除權之例外' },
+  { value: 'damaged', label: '商品有非必要檢查造成的毀損或變更' },
+  { value: 'invalid_info', label: '訂單／退貨申請資料不符' },
+  { value: 'expired', label: '已超過平台可申請退貨期限' },
+  { value: 'other', label: '其他' }
 ]
 
 function ReturnManagementPanel({ vendorId }) {
@@ -1031,36 +817,30 @@ function ReturnManagementPanel({ vendorId }) {
 
     const ok = await confirm({
       title: '同意這筆整單退貨？',
-      description:
-        '同意後，消費者將進入商品退回流程。',
-      confirmText: '同意退貨',
+      description: '同意後，消費者將進入商品退回流程。',
+      confirmText: '同意退貨'
     })
 
     if (!ok) return
 
     try {
       setActingId(item.return_id)
-
       const response = await reviewVendorReturn({
         vendor_id: vendorId,
         return_id: item.return_id,
         action: 'approve',
-        vendor_note: '',
+        vendor_note: ''
       })
 
       if (response.data?.success === false) {
-        throw new Error(
-          response.data.err || '處理失敗'
-        )
+        throw new Error(response.data.err || '處理失敗')
       }
 
       toast.success('已同意退貨申請')
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err ||
-        error.message ||
-        '處理失敗'
+        error.response?.data?.err || error.message || '處理失敗'
       )
     } finally {
       setActingId(null)
@@ -1069,7 +849,6 @@ function ReturnManagementPanel({ vendorId }) {
 
   const closeRejectModal = () => {
     if (actingId) return
-
     setRejectModalOpen(false)
     setRejectTarget(null)
     setRejectReason('')
@@ -1084,51 +863,41 @@ function ReturnManagementPanel({ vendorId }) {
       return
     }
 
-    if (
-      rejectReason === 'other' &&
-      !rejectDescription.trim()
-    ) {
+    if (rejectReason === 'other' && !rejectDescription.trim()) {
       toast.error('選擇「其他」時請填寫補充說明')
       return
     }
 
-    const selectedReason =
-      VENDOR_REJECT_REASON_OPTIONS.find(
-        item => item.value === rejectReason
-      )
+    const selectedReason = VENDOR_REJECT_REASON_OPTIONS.find(
+      item => item.value === rejectReason
+    )
 
     const vendorNote = [
       `拒絕原因：${selectedReason?.label || rejectReason}`,
-      rejectDescription.trim()
-        ? `補充說明：${rejectDescription.trim()}`
-        : ''
+      rejectDescription.trim() ? `補充說明：${rejectDescription.trim()}` : ''
     ]
       .filter(Boolean)
       .join('\n')
 
     const ok = await confirm({
       title: '確認提出拒絕？',
-      description:
-        '拒絕理由會提供給消費者查看；消費者之後仍可提出爭議，由平台管理員判定。',
-      confirmText: '確認提出拒絕',
+      description: '拒絕理由會提供給消費者查看；消費者之後仍可提出爭議，由平台管理員判定。',
+      confirmText: '確認提出拒絕'
     })
 
     if (!ok) return
 
     try {
       setActingId(rejectTarget.return_id)
-
       const response = await reviewVendorReturn({
         vendor_id: vendorId,
         return_id: rejectTarget.return_id,
         action: 'reject',
-        vendor_note: vendorNote,
+        vendor_note: vendorNote
       })
 
       if (response.data?.success === false) {
-        throw new Error(
-          response.data.err || '拒絕退貨失敗'
-        )
+        throw new Error(response.data.err || '拒絕退貨失敗')
       }
 
       toast.success('已提出拒絕')
@@ -1139,20 +908,18 @@ function ReturnManagementPanel({ vendorId }) {
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err ||
-        error.message ||
-        '拒絕退貨失敗'
+        error.response?.data?.err || error.message || '拒絕退貨失敗'
       )
     } finally {
       setActingId(null)
     }
   }
 
-  const confirmReceived = async (item) => {
+  const confirmReceived = async item => {
     const ok = await confirm({
       title: '確認已收到退回商品？',
       description: '確認後此案件會進入可執行退款階段。',
-      confirmText: '確認收到',
+      confirmText: '確認收到'
     })
     if (!ok) return
 
@@ -1160,7 +927,7 @@ function ReturnManagementPanel({ vendorId }) {
       setActingId(item.return_id)
       const response = await confirmVendorReturnReceived({
         vendor_id: vendorId,
-        return_id: item.return_id,
+        return_id: item.return_id
       })
       if (response.data?.success === false) {
         throw new Error(response.data.err || '確認收貨失敗')
@@ -1168,18 +935,21 @@ function ReturnManagementPanel({ vendorId }) {
       toast.success('已確認收到退回商品')
       await loadReturns()
     } catch (error) {
-      toast.error(error.response?.data?.err || error.message || '確認收貨失敗')
+      toast.error(
+        error.response?.data?.err || error.message || '確認收貨失敗'
+      )
     } finally {
       setActingId(null)
     }
   }
 
-  const processRefund = async (item) => {
+  const processRefund = async item => {
     const ok = await confirm({
-      title: `執行整張訂單全額退款 NT$ ${Number(item.requested_amount || 0).toLocaleString()}？`,
-      description:
-        '此版本僅支援整張訂單全額退款。若尚未串接綠界自動退款 API，請先確認外部退款作業，再執行平台內部帳務收回。',
-      confirmText: '執行全額退款',
+      title: `執行整張訂單全額退款 NT$ ${Number(
+        item.requested_amount || 0
+      ).toLocaleString()}？`,
+      description: '此版本僅支援整張訂單全額退款。若尚未串接綠界自動退款 API，請先確認外部退款作業，再執行平台內部帳務收回。',
+      confirmText: '執行全額退款'
     })
     if (!ok) return
 
@@ -1187,7 +957,7 @@ function ReturnManagementPanel({ vendorId }) {
       setActingId(item.return_id)
       const response = await processVendorReturnRefund({
         vendor_id: vendorId,
-        return_id: item.return_id,
+        return_id: item.return_id
       })
       if (response.data?.success === false) {
         throw new Error(response.data.err || '退款處理失敗')
@@ -1195,7 +965,9 @@ function ReturnManagementPanel({ vendorId }) {
       toast.success('退款帳務已完成')
       await loadReturns()
     } catch (error) {
-      toast.error(error.response?.data?.err || error.message || '退款處理失敗')
+      toast.error(
+        error.response?.data?.err || error.message || '退款處理失敗'
+      )
     } finally {
       setActingId(null)
     }
@@ -1204,72 +976,79 @@ function ReturnManagementPanel({ vendorId }) {
   const activeReturns = returns.filter(item => item.status !== 'cancelled')
 
   return (
-    <div className="bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden">
-      <div className="px-7 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] flex items-center justify-between">
+    <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
+      <div className="px-4 sm:px-7 py-4 sm:py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
         <div>
-          <h2 className="text-lg font-serif font-black text-[#1A1A18]">退貨退款管理</h2>
-          <p className="text-xs text-[#8C8880] font-medium mt-1">
+          <h2 className="text-base sm:text-lg font-serif font-black text-[#1A1A18]">
+            退貨退款管理
+          </h2>
+          <p className="text-[11px] sm:text-xs text-[#8C8880] font-medium mt-1">
             第一版僅支援單一廠商訂單的整張訂單全額退貨退款
           </p>
         </div>
-        <span className="text-xs font-bold bg-white border border-[#E2DDD4] rounded-full px-3 py-1.5 text-[#8C8880]">
+        <span className="text-[10px] sm:text-xs font-bold bg-white border border-[#E2DDD4] rounded-full px-3 py-1.5 text-[#8C8880]">
           {activeReturns.length} 筆
         </span>
       </div>
 
       {loadingReturns ? (
-        <div className="py-12 text-center text-sm font-bold text-[#8C8880]">
+        <div className="py-12 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
           <Loader2 size={16} className="inline mr-2 animate-spin" />
           退貨申請載入中...
         </div>
       ) : activeReturns.length === 0 ? (
-        <div className="py-12 text-center text-sm font-bold text-[#8C8880]">
+        <div className="py-12 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
           目前沒有退貨退款申請
         </div>
       ) : (
         <div className="divide-y divide-[#E2DDD4]">
           {activeReturns.map(item => (
-            <div key={item.return_id} className="px-7 py-5">
+            <div key={item.return_id} className="px-4 sm:px-7 py-4 sm:py-5">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-mono font-bold text-[#1A1A18]">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">
                       訂單 {item.order_id}
                     </span>
-                    <span className="text-[11px] font-bold rounded-full bg-[#FDF0ED] text-[#C8522A] px-3 py-1">
+                    <span className="text-[10px] sm:text-[11px] font-bold rounded-full bg-[#FDF0ED] text-[#C8522A] px-2.5 sm:px-3 py-1">
                       {RETURN_STATUS_LABELS[item.status] || item.status}
                     </span>
                   </div>
-                  <div className="mt-2 text-xs text-[#8C8880] space-y-1">
+
+                  <div className="mt-2 text-[11px] sm:text-xs text-[#8C8880] space-y-1">
                     <div>
-                      原因：{RETURN_REASON_LABELS[item.reason] || item.reason}
+                      原因：
+                      {RETURN_REASON_LABELS[item.reason] || item.reason}
                       {item.description ? `｜${item.description}` : ''}
                     </div>
                     <div>
-                      申請退款：NT$ {Number(item.requested_amount || 0).toLocaleString()}
+                      申請退款：NT${' '}
+                      {Number(item.requested_amount || 0).toLocaleString()}
                       {item.refunded_amount != null
-                        ? `｜已退款 NT$ ${Number(item.refunded_amount).toLocaleString()}`
+                        ? `｜已退款 NT$ ${Number(
+                            item.refunded_amount
+                          ).toLocaleString()}`
                         : ''}
                     </div>
                     <div>消費者：{item.user_id || '—'}</div>
 
                     {item.vendor_note && (
-                      <div className="mt-2 rounded-xl bg-[#F8F9FA] border border-[#E2DDD4] px-4 py-3 text-[#1A1A18] whitespace-pre-line">
-                        <span className="font-bold">廠商處理說明：</span>
-                        {' '}
+                      <div className="mt-2 rounded-xl bg-[#F8F9FA] border border-[#E2DDD4] px-3 sm:px-4 py-2.5 sm:py-3 text-[#1A1A18] whitespace-pre-line text-[11px] sm:text-xs">
+                        <span className="font-bold">廠商處理說明：</span>{' '}
                         {item.vendor_note}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 shrink-0">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2 shrink-0 mt-2 lg:mt-0">
                   {item.status === 'requested' && (
                     <>
                       <Button
                         variant="outline"
                         disabled={actingId === item.return_id}
                         onClick={() => reviewReturn(item, 'reject')}
+                        className="flex-1 sm:flex-none"
                       >
                         提出拒絕
                       </Button>
@@ -1277,6 +1056,7 @@ function ReturnManagementPanel({ vendorId }) {
                         variant="brand"
                         disabled={actingId === item.return_id}
                         onClick={() => reviewReturn(item, 'approve')}
+                        className="flex-1 sm:flex-none"
                       >
                         同意退貨
                       </Button>
@@ -1288,6 +1068,7 @@ function ReturnManagementPanel({ vendorId }) {
                       variant="brand"
                       disabled={actingId === item.return_id}
                       onClick={() => confirmReceived(item)}
+                      className="w-full sm:w-auto"
                     >
                       確認收到退貨
                     </Button>
@@ -1298,19 +1079,20 @@ function ReturnManagementPanel({ vendorId }) {
                       variant="brand"
                       disabled={actingId === item.return_id}
                       onClick={() => processRefund(item)}
+                      className="w-full sm:w-auto"
                     >
                       執行全額退款
                     </Button>
                   )}
 
                   {item.status === 'disputed' && (
-                    <span className="text-xs font-bold text-[#C8522A] bg-[#FDF0ED] rounded-xl px-4 py-3">
+                    <span className="text-[11px] sm:text-xs font-bold text-[#C8522A] bg-[#FDF0ED] rounded-xl px-4 py-2 sm:py-3 w-full sm:w-auto text-center">
                       等待平台判定
                     </span>
                   )}
 
                   {item.status === 'refunded' && (
-                    <span className="text-xs font-bold text-green-700 bg-green-50 rounded-xl px-4 py-3">
+                    <span className="text-[11px] sm:text-xs font-bold text-green-700 bg-green-50 rounded-xl px-4 py-2 sm:py-3 w-full sm:w-auto text-center">
                       退款完成
                     </span>
                   )}
@@ -1320,20 +1102,21 @@ function ReturnManagementPanel({ vendorId }) {
           ))}
         </div>
       )}
+
       {rejectModalOpen && rejectTarget && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-2 sm:p-4">
           <div
             className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
             onClick={closeRejectModal}
           />
 
-          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 sm:p-7 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-xl font-serif font-black text-[#1A1A18]">
+                <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18]">
                   提出退貨拒絕
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#8C8880]">
+                <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-sm leading-relaxed text-[#8C8880]">
                   請提供具體拒絕依據。拒絕後，消費者仍可提出爭議並交由平台審核。
                 </p>
               </div>
@@ -1342,43 +1125,35 @@ function ReturnManagementPanel({ vendorId }) {
                 type="button"
                 onClick={closeRejectModal}
                 disabled={Boolean(actingId)}
-                className="shrink-0 rounded-full p-2 text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]"
+                className="shrink-0 rounded-full p-2 text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] -mr-2 sm:mr-0"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="mt-5 rounded-xl bg-[#F8F9FA] px-4 py-3 text-xs font-mono font-bold text-[#8C8880] break-all">
+            <div className="mt-4 sm:mt-5 rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs font-mono font-bold text-[#8C8880] break-all">
               訂單 {rejectTarget.order_id}
             </div>
 
-            <label className="mt-6 block text-sm font-bold text-[#1A1A18]">
+            <label className="mt-4 sm:mt-6 block text-xs sm:text-sm font-bold text-[#1A1A18]">
               拒絕原因
               <span className="ml-1 text-[#C8522A]">*</span>
             </label>
 
             <select
               value={rejectReason}
-              onChange={event =>
-                setRejectReason(event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+              onChange={event => setRejectReason(event.target.value)}
+              className="mt-1.5 sm:mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
             >
               <option value="">請選擇拒絕原因</option>
-
-              {VENDOR_REJECT_REASON_OPTIONS.map(
-                item => (
-                  <option
-                    key={item.value}
-                    value={item.value}
-                  >
-                    {item.label}
-                  </option>
-                )
-              )}
+              {VENDOR_REJECT_REASON_OPTIONS.map(item => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
             </select>
 
-            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">
+            <label className="mt-4 sm:mt-5 block text-xs sm:text-sm font-bold text-[#1A1A18]">
               補充說明
               {rejectReason === 'other' && (
                 <span className="ml-1 text-[#C8522A]">*</span>
@@ -1387,30 +1162,23 @@ function ReturnManagementPanel({ vendorId }) {
 
             <textarea
               value={rejectDescription}
-              onChange={event =>
-                setRejectDescription(
-                  event.target.value
-                )
-              }
+              onChange={event => setRejectDescription(event.target.value)}
               rows={4}
               placeholder="請說明拒絕退貨的具體原因或商品狀況..."
-              className="mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+              className="mt-1.5 sm:mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm outline-none focus:border-[#C8522A]"
             />
 
-            <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#FFF8E7] px-4 py-3 text-xs leading-relaxed text-[#9A6700]">
-              <AlertTriangle
-                size={15}
-                className="mt-0.5 shrink-0"
-              />
+            <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#FFF8E7] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs leading-relaxed text-[#9A6700]">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               廠商不應任意拒絕符合退貨資格的申請；此處的理由將保留供消費者與平台後續爭議審核。
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Button
                 variant="outline"
                 disabled={Boolean(actingId)}
                 onClick={closeRejectModal}
-                className="flex-1"
+                className="flex-1 order-2 sm:order-1"
               >
                 取消
               </Button>
@@ -1420,19 +1188,13 @@ function ReturnManagementPanel({ vendorId }) {
                 disabled={
                   Boolean(actingId) ||
                   !rejectReason ||
-                  (
-                    rejectReason === 'other' &&
-                    !rejectDescription.trim()
-                  )
+                  (rejectReason === 'other' && !rejectDescription.trim())
                 }
                 onClick={submitRejectReturn}
-                className="flex-[2] gap-2"
+                className="flex-[2] gap-2 order-1 sm:order-2"
               >
                 {actingId === rejectTarget.return_id && (
-                  <Loader2
-                    size={15}
-                    className="animate-spin"
-                  />
+                  <Loader2 size={15} className="animate-spin" />
                 )}
                 確認提出拒絕
               </Button>
@@ -1444,65 +1206,27 @@ function ReturnManagementPanel({ vendorId }) {
   )
 }
 
-
 export default function Orders() {
   const { toast } = useToast()
   const confirm = useConfirm()
 
-  const vendorId =
-    localStorage.getItem('vendor_id')
+  const vendorId = localStorage.getItem('vendor_id')
 
-  const [orders, setOrders] =
-    useState([])
+  const [orders, setOrders] = useState([])
+  const [filter, setFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const [filter, setFilter] =
-    useState('all')
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [shippingUpdating, setShippingUpdating] = useState(false)
+  const [cancelRespondingId, setCancelRespondingId] = useState(null)
+  const [logisticsCreating, setLogisticsCreating] = useState(false)
+  const [logisticsQuerying, setLogisticsQuerying] = useState(false)
 
-  const [loading, setLoading] =
-    useState(true)
-
-  const [error, setError] =
-    useState('')
-
-  const [
-    selectedOrder,
-    setSelectedOrder
-  ] = useState(null)
-
-  const [
-    detailLoading,
-    setDetailLoading
-  ] = useState(false)
-
-  const [
-    shippingUpdating,
-    setShippingUpdating
-  ] = useState(false)
-
-  const [
-    cancelRespondingId,
-    setCancelRespondingId
-  ] = useState(null)
-
-  const [
-    logisticsCreating,
-    setLogisticsCreating
-  ] = useState(false)
-
-  const [
-    logisticsQuerying,
-    setLogisticsQuerying
-  ] = useState(false)
-
-  const [selectedOrderIds, setSelectedOrderIds] =
-    useState([])
-
-  const [bulkStatus, setBulkStatus] =
-    useState('preparing')
-
-  const [bulkUpdating, setBulkUpdating] =
-    useState(false)
-
+  const [selectedOrderIds, setSelectedOrderIds] = useState([])
+  const [bulkStatus, setBulkStatus] = useState('preparing')
+  const [bulkUpdating, setBulkUpdating] = useState(false)
 
   useEffect(() => {
     async function loadOrders() {
@@ -1516,128 +1240,53 @@ export default function Orders() {
         setLoading(true)
         setError('')
 
-        const response =
-          await getVendorOrders(
-            vendorId
-          )
+        const response = await getVendorOrders(vendorId)
 
-        if (
-          response.data?.success ===
-          false
-        ) {
-          throw new Error(
-            response.data.err ||
-            '訂單載入失敗'
-          )
+        if (response.data?.success === false) {
+          throw new Error(response.data.err || '訂單載入失敗')
         }
 
-        const orderData =
-          response.data?.orders || []
+        const orderData = response.data?.orders || []
 
         setOrders(
           orderData.map(order => ({
-            orderId:
-              order.order_id,
-
-            userId:
-              order.user_id,
-
-            guestId:
-              order.guest_id,
-
-            promotionCode:
-              order.promotion_code || '',
-
-            totalAmount:
-              Number(
-                order.total_amount || 0
-              ),
-
-            orderStatus:
-              order.order_status,
-
-            cancelReason:
-              order.cancel_reason,
-
-            paymentStatus:
-              order.payment_status,
-
-            shippingStatus:
-              order.shipping_status,
-
-            invoiceNumber:
-              order.invoice_number || '',
-
-            hasAddress:
-              Boolean(order.has_address),
-
-            hasShippingInfo:
-              Boolean(order.has_shipping_info),
-
-            logisticsType:
-              order.logistics_type || '',
-
-            logisticsSubType:
-              order.logistics_sub_type || '',
-
-            storeName:
-              order.store_name || '',
-
-            shipmentStatus:
-              order.shipment_status || '',
-
-            createdAt:
-              order.created_at,
-
-            items:
-              (order.items || []).map(
-                item => ({
-                  orderItemId:
-                    item.order_item_id,
-
-                  productId:
-                    item.product_id,
-
-                  productName:
-                    item.product_name,
-
-                  quantity:
-                    Number(
-                      item.quantity || 0
-                    ),
-
-                  unitPrice:
-                    Number(
-                      item.unit_price || 0
-                    ),
-
-                  subtotal:
-                    Number(
-                      item.subtotal || 0
-                    ),
-
-                  applyStatus:
-                    item.apply_status
-                })
-              )
+            orderId: order.order_id,
+            userId: order.user_id,
+            guestId: order.guest_id,
+            promotionCode: order.promotion_code || '',
+            totalAmount: Number(order.total_amount || 0),
+            orderStatus: order.order_status,
+            cancelReason: order.cancel_reason,
+            paymentStatus: order.payment_status,
+            shippingStatus: order.shipping_status,
+            invoiceNumber: order.invoice_number || '',
+            hasAddress: Boolean(order.has_address),
+            hasShippingInfo: Boolean(order.has_shipping_info),
+            logisticsType: order.logistics_type || '',
+            logisticsSubType: order.logistics_sub_type || '',
+            storeName: order.store_name || '',
+            shipmentStatus: order.shipment_status || '',
+            createdAt: order.created_at,
+            items: (order.items || []).map(item => ({
+              orderItemId: item.order_item_id,
+              productId: item.product_id,
+              productName: item.product_name,
+              quantity: Number(item.quantity || 0),
+              unitPrice: Number(item.unit_price || 0),
+              subtotal: Number(item.subtotal || 0),
+              applyStatus: item.apply_status
+            }))
           }))
         )
       } catch (error) {
-        console.error(
-          '訂單載入失敗：',
-          error
-        )
-
-        const apiError =
-          error.response?.data?.err
-
+        console.error('訂單載入失敗：', error)
+        const apiError = error.response?.data?.err
         setError(
           typeof apiError === 'string'
             ? apiError
             : apiError
-              ? JSON.stringify(apiError)
-              : error.message ||
-                '訂單載入失敗'
+            ? JSON.stringify(apiError)
+            : error.message || '訂單載入失敗'
         )
       } finally {
         setLoading(false)
@@ -1647,269 +1296,129 @@ export default function Orders() {
     loadOrders()
   }, [vendorId])
 
-
   useEffect(() => {
     setSelectedOrderIds([])
   }, [filter])
 
+  const filteredOrders = useMemo(() => {
+    const base =
+      filter === 'all'
+        ? orders
+        : orders.filter(order => order.shippingStatus === filter)
 
-  const filteredOrders =
-    useMemo(() => {
-      const base =
-        filter === 'all'
-          ? orders
-          : orders.filter(
-              order =>
-                order.shippingStatus ===
-                filter
-            )
-
-      return [...base].sort(
-        (a, b) =>
-          new Date(b.createdAt) -
-          new Date(a.createdAt)
-      )
-    }, [orders, filter])
-
-
-  const totalAmount =
-    useMemo(
-      () =>
-        filteredOrders.reduce(
-          (sum, order) =>
-            sum +
-            Number(
-              order.totalAmount || 0
-            ),
-          0
-        ),
-      [filteredOrders]
+    return [...base].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     )
+  }, [orders, filter])
 
+  const totalAmount = useMemo(
+    () =>
+      filteredOrders.reduce(
+        (sum, order) => sum + Number(order.totalAmount || 0),
+        0
+      ),
+    [filteredOrders]
+  )
 
-  async function handleOpenOrder(
-    order
-  ) {
+  async function handleOpenOrder(order) {
     try {
       setSelectedOrder(order)
       setDetailLoading(true)
       setError('')
 
-      const response =
-        await getVendorOrderDetail(
-          vendorId,
-          order.orderId
-        )
+      const response = await getVendorOrderDetail(vendorId, order.orderId)
 
-      if (
-        response.data?.success ===
-        false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '訂單詳細資料載入失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '訂單詳細資料載入失敗')
       }
 
-      const detail =
-        response.data.order
+      const detail = response.data.order
 
       setSelectedOrder({
-        orderId:
-          detail.order_id,
-
-        userId:
-          detail.user_id,
-
-        guestId:
-          detail.guest_id,
-
-        promotionCode:
-          detail.promotion_code || '',
-
-        totalAmount:
-          Number(
-            detail.total_amount || 0
-          ),
-
-        orderStatus:
-          detail.order_status,
-
-        cancelReason:
-          detail.cancel_reason,
-
-        paymentStatus:
-          detail.payment_status,
-
-        shippingStatus:
-          detail.shipping_status,
-
-        invoiceNumber:
-          detail.invoice_number || '',
-
-        addressId:
-          detail.address_id,
-
-        shippingInfo:
-          detail.shipping_info
-            ? {
-                recipientName:
-                  detail.shipping_info.recipient_name || '',
-
-                recipientPhone:
-                  detail.shipping_info.recipient_phone || '',
-
-                address:
-                  detail.shipping_info.address
-                    ? {
-                        city:
-                          detail.shipping_info.address.city || '',
-
-                        district:
-                          detail.shipping_info.address.district || '',
-
-                        detailAddress:
-                          detail.shipping_info.address.detail_address || '',
-
-                        postalCode:
-                          detail.shipping_info.address.postal_code || ''
-                      }
-                    : null
-              }
-            : null,
-
-        shipment:
-          detail.shipment
-            ? {
-                shipmentId:
-                  detail.shipment.shipment_id,
-
-                provider:
-                  detail.shipment.provider || '',
-
-                logisticsType:
-                  detail.shipment.logistics_type || '',
-
-                logisticsSubType:
-                  detail.shipment.logistics_sub_type || '',
-
-                storeId:
-                  detail.shipment.store_id || '',
-
-                storeName:
-                  detail.shipment.store_name || '',
-
-                storeAddress:
-                  detail.shipment.store_address || '',
-
-                merchantTradeNo:
-                  detail.shipment.merchant_trade_no || '',
-
-                ecpayLogisticsId:
-                  detail.shipment.ecpay_logistics_id || '',
-
-                cvsPaymentNo:
-                  detail.shipment.cvs_payment_no || '',
-
-                cvsValidationNo:
-                  detail.shipment.cvs_validation_no || '',
-
-                bookingNote:
-                  detail.shipment.booking_note || '',
-
-                shippingStatus:
-                  detail.shipment.shipping_status || ''
-              }
-            : null,
-
-        createdAt:
-          detail.created_at,
-
-        items:
-          (detail.items || []).map(
-            item => ({
-              orderItemId:
-                item.order_item_id,
-
-              productId:
-                item.product_id,
-
-              productName:
-                item.product_name,
-
-              quantity:
-                Number(
-                  item.quantity || 0
-                ),
-
-              unitPrice:
-                Number(
-                  item.unit_price || 0
-                ),
-
-              subtotal:
-                Number(
-                  item.subtotal || 0
-                ),
-
-              applyStatus:
-                item.apply_status
-            })
-          ),
-
-        payment:
-          detail.payment
-            ? {
-                paymentId:
-                  detail.payment
-                    .payment_id,
-
-                paymentMethod:
-                  detail.payment
-                    .payment_method,
-
-                paymentStatus:
-                  detail.payment
-                    .payment_status,
-
-                transactionId:
-                  detail.payment
-                    .transaction_id,
-
-                promotionCode:
-                  detail.payment
-                    .promotion_code
-              }
-            : null
+        orderId: detail.order_id,
+        userId: detail.user_id,
+        guestId: detail.guest_id,
+        promotionCode: detail.promotion_code || '',
+        totalAmount: Number(detail.total_amount || 0),
+        orderStatus: detail.order_status,
+        cancelReason: detail.cancel_reason,
+        paymentStatus: detail.payment_status,
+        shippingStatus: detail.shipping_status,
+        invoiceNumber: detail.invoice_number || '',
+        addressId: detail.address_id,
+        shippingInfo: detail.shipping_info
+          ? {
+              recipientName: detail.shipping_info.recipient_name || '',
+              recipientPhone: detail.shipping_info.recipient_phone || '',
+              address: detail.shipping_info.address
+                ? {
+                    city: detail.shipping_info.address.city || '',
+                    district: detail.shipping_info.address.district || '',
+                    detailAddress:
+                      detail.shipping_info.address.detail_address || '',
+                    postalCode: detail.shipping_info.address.postal_code || ''
+                  }
+                : null
+            }
+          : null,
+        shipment: detail.shipment
+          ? {
+              shipmentId: detail.shipment.shipment_id,
+              provider: detail.shipment.provider || '',
+              logisticsType: detail.shipment.logistics_type || '',
+              logisticsSubType: detail.shipment.logistics_sub_type || '',
+              storeId: detail.shipment.store_id || '',
+              storeName: detail.shipment.store_name || '',
+              storeAddress: detail.shipment.store_address || '',
+              merchantTradeNo: detail.shipment.merchant_trade_no || '',
+              ecpayLogisticsId: detail.shipment.ecpay_logistics_id || '',
+              cvsPaymentNo: detail.shipment.cvs_payment_no || '',
+              cvsValidationNo: detail.shipment.cvs_validation_no || '',
+              bookingNote: detail.shipment.booking_note || '',
+              shippingStatus: detail.shipment.shipping_status || ''
+            }
+          : null,
+        createdAt: detail.created_at,
+        items: (detail.items || []).map(item => ({
+          orderItemId: item.order_item_id,
+          productId: item.product_id,
+          productName: item.product_name,
+          quantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unit_price || 0),
+          subtotal: Number(item.subtotal || 0),
+          applyStatus: item.apply_status
+        })),
+        payment: detail.payment
+          ? {
+              paymentId: detail.payment.payment_id,
+              paymentMethod: detail.payment.payment_method,
+              paymentStatus: detail.payment.payment_status,
+              transactionId: detail.payment.transaction_id,
+              promotionCode: detail.payment.promotion_code
+            }
+          : null
       })
     } catch (error) {
-      const apiError =
-        error.response?.data?.err
-
+      const apiError = error.response?.data?.err
       setError(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : error.message ||
-              '訂單詳細資料載入失敗'
+          ? JSON.stringify(apiError)
+          : error.message || '訂單詳細資料載入失敗'
       )
-
       setSelectedOrder(null)
     } finally {
       setDetailLoading(false)
     }
   }
 
-
-  async function handleUpdateShipping(
-    shippingStatus
-  ) {
+  async function handleUpdateShipping(shippingStatus) {
     if (!selectedOrder) return
 
     const confirmed = await confirm({
       title: `將出貨狀態改為「${shippingLabels[shippingStatus]}」？`,
-      confirmText: '確認更新',
+      confirmText: '確認更新'
     })
 
     if (!confirmed) return
@@ -1917,42 +1426,22 @@ export default function Orders() {
     try {
       setShippingUpdating(true)
 
-      const response =
-        await updateVendorShipping({
-          vendor_id:
-            vendorId,
+      const response = await updateVendorShipping({
+        vendor_id: vendorId,
+        order_id: selectedOrder.orderId,
+        shipping_status: shippingStatus
+      })
 
-          order_id:
-            selectedOrder.orderId,
-
-          shipping_status:
-            shippingStatus
-        })
-
-      if (
-        response.data?.success ===
-        false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '更新出貨狀態失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '更新出貨狀態失敗')
       }
 
-      const updatedStatus =
-        response.data
-          ?.shipping_status ||
-        shippingStatus
+      const updatedStatus = response.data?.shipping_status || shippingStatus
 
       setOrders(previous =>
         previous.map(order =>
-          order.orderId ===
-          selectedOrder.orderId
-            ? {
-                ...order,
-                shippingStatus:
-                  updatedStatus
-              }
+          order.orderId === selectedOrder.orderId
+            ? { ...order, shippingStatus: updatedStatus }
             : order
         )
       )
@@ -1961,41 +1450,41 @@ export default function Orders() {
         previous
           ? {
               ...previous,
-              shippingStatus:
-                updatedStatus,
-
-              shipment:
-                previous.shipment
-                  ? {
-                      ...previous.shipment,
-                      shippingStatus:
-                        response.data?.shipment_status ||
-                        previous.shipment.shippingStatus
-                    }
-                  : previous.shipment
+              shippingStatus: updatedStatus,
+              shipment: previous.shipment
+                ? {
+                    ...previous.shipment,
+                    shippingStatus:
+                      response.data?.shipment_status ||
+                      previous.shipment.shippingStatus
+                  }
+                : previous.shipment
             }
           : previous
       )
 
       toast.success('出貨狀態已更新')
     } catch (error) {
-      const apiError =
-        error.response?.data?.err
-
+      const apiError = error.response?.data?.err
       toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : error.message ||
-              '更新出貨狀態失敗'
+          ? JSON.stringify(apiError)
+          : error.message || '更新出貨狀態失敗'
       )
     } finally {
       setShippingUpdating(false)
     }
   }
 
-  async function handleUploadInvoice(invoiceNumber, orderId, vendorId, setUploading, setMsg) {
+  async function handleUploadInvoice(
+    invoiceNumber,
+    orderId,
+    vendorId,
+    setUploading,
+    setMsg
+  ) {
     if (!invoiceNumber || !invoiceNumber.trim()) {
       setMsg('請輸入發票號碼')
       return
@@ -2008,7 +1497,7 @@ export default function Orders() {
       const response = await uploadVendorInvoice({
         vendor_id: vendorId,
         order_id: orderId,
-        invoice_number: invoiceNumber.trim(),
+        invoice_number: invoiceNumber.trim()
       })
 
       if (response.data?.success === false) {
@@ -2024,7 +1513,9 @@ export default function Orders() {
       )
 
       setSelectedOrder(previous =>
-        previous ? { ...previous, invoiceNumber: invoiceNumber.trim() } : previous
+        previous
+          ? { ...previous, invoiceNumber: invoiceNumber.trim() }
+          : previous
       )
 
       toast.success('發票號碼已上傳，已通知消費者')
@@ -2040,16 +1531,13 @@ export default function Orders() {
     }
   }
 
-
   async function handleRespondCancelRequest(order, approve) {
     const confirmed = await confirm({
-      title: approve
-        ? '核准這筆訂單的取消申請？'
-        : '拒絕這筆訂單的取消申請？',
+      title: approve ? '核准這筆訂單的取消申請？' : '拒絕這筆訂單的取消申請？',
       description: approve
         ? '核准後訂單將標記為已取消，商品庫存會加回去。'
         : '拒絕後訂單會退回備貨中，繼續原本的出貨流程。',
-      confirmText: approve ? '核准取消' : '拒絕申請',
+      confirmText: approve ? '核准取消' : '拒絕申請'
     })
 
     if (!confirmed) return
@@ -2060,7 +1548,7 @@ export default function Orders() {
       const response = await respondVendorCancelRequest({
         vendor_id: vendorId,
         order_id: order.orderId,
-        approve,
+        approve
       })
 
       if (response.data?.success === false) {
@@ -2076,7 +1564,7 @@ export default function Orders() {
             ? {
                 ...o,
                 orderStatus: updatedOrderStatus,
-                shippingStatus: updatedShippingStatus,
+                shippingStatus: updatedShippingStatus
               }
             : o
         )
@@ -2087,36 +1575,28 @@ export default function Orders() {
       )
     } catch (error) {
       const apiError = error.response?.data?.err
-
       toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '處理取消申請失敗'
+          ? JSON.stringify(apiError)
+          : error.message || '處理取消申請失敗'
       )
     } finally {
       setCancelRespondingId(null)
     }
   }
 
-
-
   async function handleCreateLogistics() {
     if (!selectedOrder) return
 
-    const isHome =
-      selectedOrder.shipment?.logisticsType === 'HOME'
+    const isHome = selectedOrder.shipment?.logisticsType === 'HOME'
 
     const confirmed = await confirm({
-      title: isHome
-        ? '建立黑貓宅配物流單？'
-        : '建立 7-ELEVEN 物流單？',
-
+      title: isHome ? '建立黑貓宅配物流單？' : '建立 7-ELEVEN 物流單？',
       description: isHome
         ? '系統將使用廠商寄件資料與此訂單的收件地址，向綠界建立黑貓宅配物流單。'
         : '系統將使用此訂單的超商門市與收件資料，向綠界建立 7-ELEVEN C2C 物流單。',
-
       confirmText: '建立物流單'
     })
 
@@ -2125,32 +1605,19 @@ export default function Orders() {
     try {
       setLogisticsCreating(true)
 
-      const response =
-        await createVendorLogistics({
-          vendor_id: vendorId,
-          order_id: selectedOrder.orderId
-        })
+      const response = await createVendorLogistics({
+        vendor_id: vendorId,
+        order_id: selectedOrder.orderId
+      })
 
-      if (
-        response.data?.success === false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '建立綠界物流單失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '建立綠界物流單失敗')
       }
 
-      const logisticsId =
-        response.data?.ecpay_logistics_id || ''
-
-      const merchantTradeNo =
-        response.data?.merchant_trade_no || ''
-
-      const shipmentStatus =
-        response.data?.shipment_status || 'created'
-
-      const bookingNote =
-        response.data?.booking_note || ''
+      const logisticsId = response.data?.ecpay_logistics_id || ''
+      const merchantTradeNo = response.data?.merchant_trade_no || ''
+      const shipmentStatus = response.data?.shipment_status || 'created'
+      const bookingNote = response.data?.booking_note || ''
 
       setSelectedOrder(previous =>
         previous
@@ -2159,14 +1626,10 @@ export default function Orders() {
               shipment: previous.shipment
                 ? {
                     ...previous.shipment,
-                    ecpayLogisticsId:
-                      logisticsId,
-                    merchantTradeNo:
-                      merchantTradeNo,
-                    bookingNote:
-                      bookingNote,
-                    shippingStatus:
-                      shipmentStatus
+                    ecpayLogisticsId: logisticsId,
+                    merchantTradeNo: merchantTradeNo,
+                    bookingNote: bookingNote,
+                    shippingStatus: shipmentStatus
                   }
                 : previous.shipment
             }
@@ -2176,11 +1639,7 @@ export default function Orders() {
       setOrders(previous =>
         previous.map(order =>
           order.orderId === selectedOrder.orderId
-            ? {
-                ...order,
-                shipmentStatus:
-                  shipmentStatus
-              }
+            ? { ...order, shipmentStatus: shipmentStatus }
             : order
         )
       )
@@ -2192,8 +1651,8 @@ export default function Orders() {
           bookingNote
             ? `黑貓物流單建立成功，託運單號：${bookingNote}`
             : logisticsId
-              ? `黑貓物流單建立成功，綠界物流編號：${logisticsId}`
-              : '黑貓宅配物流單建立成功'
+            ? `黑貓物流單建立成功，綠界物流編號：${logisticsId}`
+            : '黑貓宅配物流單建立成功'
         )
       } else {
         toast.success(
@@ -2203,23 +1662,18 @@ export default function Orders() {
         )
       }
     } catch (error) {
-      const apiError =
-        error.response?.data?.err
-
+      const apiError = error.response?.data?.err
       toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : error.message ||
-              '建立綠界物流單失敗'
+          ? JSON.stringify(apiError)
+          : error.message || '建立綠界物流單失敗'
       )
     } finally {
       setLogisticsCreating(false)
     }
   }
-
-
 
   async function handleQueryLogistics() {
     if (!selectedOrder) return
@@ -2227,26 +1681,17 @@ export default function Orders() {
     try {
       setLogisticsQuerying(true)
 
-      const response =
-        await queryVendorLogistics({
-          vendor_id: vendorId,
-          order_id: selectedOrder.orderId
-        })
+      const response = await queryVendorLogistics({
+        vendor_id: vendorId,
+        order_id: selectedOrder.orderId
+      })
 
-      if (
-        response.data?.success === false
-      ) {
-        throw new Error(
-          response.data.err ||
-          '查詢 7-ELEVEN 寄貨編號失敗'
-        )
+      if (response.data?.success === false) {
+        throw new Error(response.data.err || '查詢 7-ELEVEN 寄貨編號失敗')
       }
 
-      const cvsPaymentNo =
-        response.data?.cvs_payment_no || ''
-
-      const cvsValidationNo =
-        response.data?.cvs_validation_no || ''
+      const cvsPaymentNo = response.data?.cvs_payment_no || ''
+      const cvsValidationNo = response.data?.cvs_validation_no || ''
 
       setSelectedOrder(previous =>
         previous
@@ -2264,31 +1709,25 @@ export default function Orders() {
       )
 
       if (cvsPaymentNo && cvsValidationNo) {
-        toast.success(
-          `已取得交貨便代碼：${cvsPaymentNo}${cvsValidationNo}`
-        )
+        toast.success(`已取得交貨便代碼：${cvsPaymentNo}${cvsValidationNo}`)
       } else {
         toast.info(
           '物流單已查詢成功，但目前尚未取得完整的 7-ELEVEN 寄貨編號'
         )
       }
     } catch (error) {
-      const apiError =
-        error.response?.data?.err
-
+      const apiError = error.response?.data?.err
       toast.error(
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : error.message ||
-              '查詢 7-ELEVEN 寄貨編號失敗'
+          ? JSON.stringify(apiError)
+          : error.message || '查詢 7-ELEVEN 寄貨編號失敗'
       )
     } finally {
       setLogisticsQuerying(false)
     }
   }
-
 
   function toggleSelectOrder(orderId) {
     setSelectedOrderIds(previous =>
@@ -2300,9 +1739,7 @@ export default function Orders() {
 
   function toggleSelectAll(event) {
     if (event.target.checked) {
-      setSelectedOrderIds(
-        filteredOrders.map(order => order.orderId)
-      )
+      setSelectedOrderIds(filteredOrders.map(order => order.orderId))
     } else {
       setSelectedOrderIds([])
     }
@@ -2314,7 +1751,7 @@ export default function Orders() {
     const confirmed = await confirm({
       title: `批次更新 ${selectedOrderIds.length} 筆訂單？`,
       description: `出貨狀態將改為「${shippingLabels[bulkStatus]}」。`,
-      confirmText: '確認更新',
+      confirmText: '確認更新'
     })
 
     if (!confirmed) return
@@ -2337,7 +1774,6 @@ export default function Orders() {
 
       results.forEach((result, index) => {
         const orderId = selectedOrderIds[index]
-
         if (
           result.status === 'fulfilled' &&
           result.value?.data?.success !== false
@@ -2361,97 +1797,70 @@ export default function Orders() {
       if (failedCount === 0) {
         toast.success(`已更新 ${succeededIds.length} 筆訂單的出貨狀態`)
       } else {
-        toast.error(`已更新 ${succeededIds.length} 筆，${failedCount} 筆更新失敗，請個別確認`)
+        toast.error(
+          `已更新 ${succeededIds.length} 筆，${failedCount} 筆更新失敗，請個別確認`
+        )
       }
     } finally {
       setBulkUpdating(false)
     }
   }
 
-
   if (loading) {
     return (
       <div className="py-24 text-center">
         <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
-          <Loader2
-            size={18}
-            className="animate-spin"
-          />
-
+          <Loader2 size={18} className="animate-spin" />
           訂單載入中...
         </div>
       </div>
     )
   }
 
-
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
       <ReturnManagementPanel vendorId={vendorId} />
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full overflow-x-auto">
-          {shippingFilters.map(
-            status => (
-              <button
-                key={status}
-                type="button"
-                onClick={() =>
-                  setFilter(status)
-                }
-                className={cn(
-                  `
-                    px-5 py-2 rounded-full
-                    text-sm font-bold
-                    whitespace-nowrap
-                    transition-all
-                  `,
-                  filter === status
-                    ? 'bg-[#1A1A18] text-white shadow-sm'
-                    : 'text-[#8C8880] hover:text-[#1A1A18]'
-                )}
-              >
-                {
-                  shippingLabels[
-                    status
-                  ]
-                }
-              </button>
-            )
-          )}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
+        {/* 手機版橫向滾動頁籤 */}
+        <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
+          {shippingFilters.map(status => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setFilter(status)}
+              className={cn(
+                'px-4 sm:px-5 py-2 rounded-full text-[13px] sm:text-sm font-bold whitespace-nowrap transition-all',
+                filter === status
+                  ? 'bg-[#1A1A18] text-white shadow-sm'
+                  : 'text-[#8C8880] hover:text-[#1A1A18]'
+              )}
+            >
+              {shippingLabels[status]}
+            </button>
+          ))}
         </div>
 
-
-        <div className="bg-white border border-[#E2DDD4] px-6 py-2.5 rounded-full shadow-sm text-sm font-bold text-[#8C8880] flex items-center gap-2">
-          共
-          <span className="text-[#1A1A18]">
-            {filteredOrders.length}
-          </span>
-          筆訂單
-
-          <span className="w-1 h-1 bg-[#E2DDD4] rounded-full mx-2" />
-
-          總計
-          <span className="text-[#C8522A] text-lg tracking-tight ml-1">
-            {formatCurrency(
-              totalAmount
-            )}
+        <div className="bg-white border border-[#E2DDD4] px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-sm text-xs sm:text-sm font-bold text-[#8C8880] flex items-center justify-center gap-2 w-full sm:w-auto">
+          共 <span className="text-[#1A1A18]">{filteredOrders.length}</span> 筆訂單
+          <span className="w-1 h-1 bg-[#E2DDD4] rounded-full mx-1 sm:mx-2" />
+          總計{' '}
+          <span className="text-[#C8522A] text-base sm:text-lg tracking-tight ml-1">
+            {formatCurrency(totalAmount)}
           </span>
         </div>
       </div>
 
-
       {selectedOrderIds.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl px-6 py-4">
-          <span className="text-sm font-bold text-[#C8522A]">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl px-4 sm:px-6 py-3 sm:py-4 w-full">
+          <span className="text-sm font-bold text-[#C8522A] shrink-0">
             已選取 {selectedOrderIds.length} 筆訂單
           </span>
 
           <select
             value={bulkStatus}
-            onChange={event => setBulkStatus(event.target.value)}
-            className="bg-white border border-[#E2DDD4] rounded-xl px-4 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+            onChange={e => setBulkStatus(e.target.value)}
+            className="bg-white border border-[#E2DDD4] rounded-xl px-4 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] w-full sm:w-auto"
           >
             {shippingFilters
               .filter(status => status !== 'all')
@@ -2466,24 +1875,21 @@ export default function Orders() {
             variant="brand"
             disabled={bulkUpdating}
             onClick={handleBulkUpdateShipping}
-            className="gap-2"
+            className="gap-2 w-full sm:w-auto"
           >
-            {bulkUpdating && (
-              <Loader2 size={15} className="animate-spin" />
-            )}
+            {bulkUpdating && <Loader2 size={15} className="animate-spin" />}
             套用
           </Button>
 
           <button
             type="button"
             onClick={() => setSelectedOrderIds([])}
-            className="text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] ml-auto"
+            className="text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] sm:ml-auto w-full sm:w-auto text-center mt-2 sm:mt-0"
           >
             取消選取
           </button>
         </div>
       )}
-
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm font-bold text-red-600">
@@ -2491,13 +1897,13 @@ export default function Orders() {
         </div>
       )}
 
-
-      <div className="bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
+        {/* 手機版橫向滾動 Table */}
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                <th className="p-5 pl-6 w-10">
+                <th className="p-4 sm:p-5 pl-5 sm:pl-6 w-10">
                   <input
                     type="checkbox"
                     onChange={toggleSelectAll}
@@ -2508,7 +1914,6 @@ export default function Orders() {
                     className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
                   />
                 </th>
-
                 {[
                   '訂單編號',
                   '顧客',
@@ -2519,220 +1924,176 @@ export default function Orders() {
                   '出貨狀態',
                   '日期',
                   ''
-                ].map(
-                  (header, index) => (
-                    <th
-                      key={`${header}-${index}`}
-                      className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
-                    >
-                      {header}
-                    </th>
-                  )
-                )}
+                ].map((header, index) => (
+                  <th
+                    key={`${header}-${index}`}
+                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
+                  >
+                    {header}
+                  </th>
+                ))}
               </tr>
             </thead>
 
-
             <tbody className="divide-y divide-[#E2DDD4]">
-              {filteredOrders.length >
-              0 ? (
-                filteredOrders.map(
-                  order => {
-                    const productSummary =
-                      order.items
-                        .map(
-                          item =>
-                            item.productName
-                        )
-                        .join('、')
+              {filteredOrders.length > 0 ? (
+                filteredOrders.map(order => {
+                  const productSummary = order.items
+                    .map(item => item.productName)
+                    .join('、')
 
-                    return (
-                      <tr
-                        key={order.orderId}
-                        onClick={() =>
-                          handleOpenOrder(
-                            order
-                          )
-                        }
-                        className="hover:bg-[#F8F9FA] transition-colors cursor-pointer group"
+                  return (
+                    <tr
+                      key={order.orderId}
+                      onClick={() => handleOpenOrder(order)}
+                      className="hover:bg-[#F8F9FA] transition-colors cursor-pointer group"
+                    >
+                      <td
+                        className="p-4 sm:p-5 pl-5 sm:pl-6"
+                        onClick={e => e.stopPropagation()}
                       >
-                        <td
-                          className="p-5 pl-6"
-                          onClick={event => event.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedOrderIds.includes(order.orderId)}
-                            onChange={() => toggleSelectOrder(order.orderId)}
-                            className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
-                          />
-                        </td>
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.includes(order.orderId)}
+                          onChange={() => toggleSelectOrder(order.orderId)}
+                          className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
+                        />
+                      </td>
 
-                        <td className="p-5 text-sm font-mono font-medium text-[#8C8880]">
-                          {order.orderId}
-                        </td>
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-mono font-medium text-[#8C8880]">
+                        {order.orderId}
+                      </td>
 
-                        <td className="p-5 text-sm">
-                          {order.userId ? (
-                            <div>
-                              <div className="font-bold text-[#1A1A18]">
-                                會員
-                              </div>
-
-                              <div className="text-[10px] text-[#8C8880] font-mono mt-1">
-                                {
-                                  order.userId
-                                }
-                              </div>
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm">
+                        {order.userId ? (
+                          <div>
+                            <div className="font-bold text-[#1A1A18]">會員</div>
+                            <div className="text-[10px] text-[#8C8880] font-mono mt-1">
+                              {order.userId}
                             </div>
-                          ) : order.guestId ? (
-                            <div>
-                              <div className="font-bold text-[#1A1A18]">
-                                訪客
-                              </div>
-
-                              <div className="text-[10px] text-[#8C8880] font-mono mt-1">
-                                {
-                                  order.guestId
-                                }
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="font-medium text-[#8C8880] bg-[#F5F0E8] px-2 py-1 rounded-md text-xs">
-                              一般顧客
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="p-5">
-                          {order.promotionCode ? (
-                            <span className="text-xs font-mono font-bold text-[#C8522A] bg-[#FDF0ED] px-3 py-1.5 rounded-lg whitespace-nowrap">
-                              {
-                                order.promotionCode
-                              }
-                            </span>
-                          ) : (
-                            <span className="text-xs font-medium text-[#8C8880]">
-                              無
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="p-5 text-sm font-medium text-[#8C8880] max-w-[220px]">
-                          <div className="line-clamp-2">
-                            {productSummary ||
-                              '—'}
                           </div>
-
-                          {order.items.length >
-                            1 && (
-                            <div className="text-[10px] font-bold text-[#C8522A] mt-1">
-                              共
-                              {
-                                order.items
-                                  .length
-                              }
-                              項商品
+                        ) : order.guestId ? (
+                          <div>
+                            <div className="font-bold text-[#1A1A18]">訪客</div>
+                            <div className="text-[10px] text-[#8C8880] font-mono mt-1">
+                              {order.guestId}
                             </div>
-                          )}
-                        </td>
-
-                        <td className="p-5 text-sm font-black text-[#1A1A18]">
-                          {formatCurrency(
-                            order.totalAmount
-                          )}
-                        </td>
-
-                        <td className="p-5">
-                          <PaymentBadge
-                            status={
-                              order.paymentStatus
-                            }
-                          />
-                        </td>
-
-                        <td className="p-5">
-                          <div className="flex items-center gap-2">
-                            <ShippingBadge
-                              status={
-                                order.shippingStatus
-                              }
-                            />
-
-                            {!order.hasShippingInfo &&
-                              order.shippingStatus !== 'cancelled' && (
-                                <span title="尚無配送資訊">
-                                  <AlertTriangle
-                                    size={14}
-                                    className="text-[#C8522A]"
-                                  />
-                                </span>
-                              )}
                           </div>
+                        ) : (
+                          <span className="font-medium text-[#8C8880] bg-[#F5F0E8] px-2 py-1 rounded-md text-[11px] sm:text-xs whitespace-nowrap">
+                            一般顧客
+                          </span>
+                        )}
+                      </td>
 
-                          {order.orderStatus === 'cancel_requested' && (
-                            <div
-                              className="mt-2 flex flex-col items-start gap-1.5"
-                              onClick={event => event.stopPropagation()}
-                            >
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 whitespace-nowrap">
-                                買家申請取消訂單
+                      <td className="p-4 sm:p-5">
+                        {order.promotionCode ? (
+                          <span className="text-[11px] sm:text-xs font-mono font-bold text-[#C8522A] bg-[#FDF0ED] px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg whitespace-nowrap">
+                            {order.promotionCode}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] sm:text-xs font-medium text-[#8C8880]">
+                            無
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-medium text-[#8C8880] max-w-[200px] sm:max-w-[220px]">
+                        <div className="line-clamp-2">
+                          {productSummary || '—'}
+                        </div>
+                        {order.items.length > 1 && (
+                          <div className="text-[10px] font-bold text-[#C8522A] mt-1">
+                            共{order.items.length}項商品
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
+                        {formatCurrency(order.totalAmount)}
+                      </td>
+
+                      <td className="p-4 sm:p-5">
+                        <PaymentBadge status={order.paymentStatus} />
+                      </td>
+
+                      <td className="p-4 sm:p-5">
+                        <div className="flex items-center gap-2">
+                          <ShippingBadge status={order.shippingStatus} />
+                          {!order.hasShippingInfo &&
+                            order.shippingStatus !== 'cancelled' && (
+                              <span title="尚無配送資訊">
+                                <AlertTriangle
+                                  size={14}
+                                  className="text-[#C8522A] shrink-0"
+                                />
                               </span>
+                            )}
+                        </div>
 
-                              {order.cancelReason && (
-                                <span className="text-[11px] text-[#8C8880] max-w-[200px] leading-snug">
-                                  取消原因：{order.cancelReason}
-                                </span>
-                              )}
-
-                              <div className="flex flex-nowrap items-center gap-1.5">
-                                <Button
-                                  variant="outline"
-                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
-                                  disabled={cancelRespondingId === order.orderId}
-                                  onClick={() => handleRespondCancelRequest(order, true)}
-                                >
-                                  核准
-                                </Button>
-
-                                <Button
-                                  variant="danger"
-                                  className="px-2.5 py-1 text-[11px] whitespace-nowrap"
-                                  disabled={cancelRespondingId === order.orderId}
-                                  onClick={() => handleRespondCancelRequest(order, false)}
-                                >
-                                  拒絕
-                                </Button>
-                              </div>
+                        {order.orderStatus === 'cancel_requested' && (
+                          <div
+                            className="mt-2 flex flex-col items-start gap-1.5"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-amber-50 text-amber-700 whitespace-nowrap">
+                              買家申請取消訂單
+                            </span>
+                            {order.cancelReason && (
+                              <span className="text-[10px] sm:text-[11px] text-[#8C8880] max-w-[150px] sm:max-w-[200px] leading-snug truncate">
+                                取消原因：{order.cancelReason}
+                              </span>
+                            )}
+                            <div className="flex flex-nowrap items-center gap-1.5 mt-1">
+                              <Button
+                                variant="outline"
+                                className="px-2.5 py-1 text-[10px] sm:text-[11px] whitespace-nowrap"
+                                disabled={
+                                  cancelRespondingId === order.orderId
+                                }
+                                onClick={() =>
+                                  handleRespondCancelRequest(order, true)
+                                }
+                              >
+                                核准
+                              </Button>
+                              <Button
+                                variant="danger"
+                                className="px-2.5 py-1 text-[10px] sm:text-[11px] whitespace-nowrap"
+                                disabled={
+                                  cancelRespondingId === order.orderId
+                                }
+                                onClick={() =>
+                                  handleRespondCancelRequest(order, false)
+                                }
+                              >
+                                拒絕
+                              </Button>
                             </div>
-                          )}
-                        </td>
+                          </div>
+                        )}
+                      </td>
 
-                        <td className="p-5 text-sm font-medium text-[#8C8880] whitespace-nowrap">
-                          {order.createdAt
-                            ? new Date(
-                                order.createdAt
-                              ).toLocaleDateString(
-                                'zh-TW'
-                              )
-                            : '—'}
-                        </td>
+                      <td className="p-4 sm:p-5 text-[11px] sm:text-sm font-medium text-[#8C8880] whitespace-nowrap">
+                        {order.createdAt
+                          ? new Date(order.createdAt).toLocaleDateString('zh-TW')
+                          : '—'}
+                      </td>
 
-                        <td className="p-5">
-                          <ChevronRight
-                            size={17}
-                            className="text-[#8C8880] group-hover:text-[#C8522A]"
-                          />
-                        </td>
-                      </tr>
-                    )
-                  }
-                )
+                      <td className="p-4 sm:p-5">
+                        <ChevronRight
+                          size={17}
+                          className="text-[#8C8880] group-hover:text-[#C8522A]"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })
               ) : (
                 <tr>
                   <td
                     colSpan={10}
-                    className="py-20 text-center text-sm font-bold text-[#8C8880]"
+                    className="py-20 text-center text-xs sm:text-sm font-bold text-[#8C8880]"
                   >
                     目前沒有符合狀態的訂單記錄
                   </td>
@@ -2743,7 +2104,6 @@ export default function Orders() {
         </div>
       </div>
 
-
       <OrderDetailModal
         open={Boolean(selectedOrder)}
         order={selectedOrder}
@@ -2751,21 +2111,11 @@ export default function Orders() {
         updating={shippingUpdating}
         logisticsCreating={logisticsCreating}
         logisticsQuerying={logisticsQuerying}
-        onClose={() =>
-          setSelectedOrder(null)
-        }
-        onUpdateShipping={
-          handleUpdateShipping
-        }
-        onCreateLogistics={
-          handleCreateLogistics
-        }
-        onQueryLogistics={
-          handleQueryLogistics
-        }
-        onUploadInvoice={
-          handleUploadInvoice
-        }
+        onClose={() => setSelectedOrder(null)}
+        onUpdateShipping={handleUpdateShipping}
+        onCreateLogistics={handleCreateLogistics}
+        onQueryLogistics={handleQueryLogistics}
+        onUploadInvoice={handleUploadInvoice}
         vendorId={vendorId}
       />
     </div>

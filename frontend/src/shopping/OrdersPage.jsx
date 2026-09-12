@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
+import { ShoppingBag } from 'lucide-react'; // 引入空狀態用的圖示
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -48,7 +49,7 @@ function StatusBadge({ status }) {
   };
   const s = map[status] || { text: "狀態未知", className: "bg-[#F5F0E8] text-[#8C8880]" };
   return (
-    <span className={`rounded-full px-3 py-1 font-mono text-[11px] tracking-[0.07em] font-bold ${s.className}`}>
+    <span className={`rounded-full px-3 py-1 font-mono text-[10px] md:text-[11px] tracking-[0.07em] font-bold ${s.className}`}>
       {s.text}
     </span>
   );
@@ -56,11 +57,11 @@ function StatusBadge({ status }) {
 
 function OrderCard({ vendorName, items = [], onTrack, shippingStatus, orderStatus }) {
   return (
-    <div className="cursor-pointer flex flex-col gap-5 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
+    <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
       <span className="block text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
 
       {shippingStatus === "delivered" && orderStatus !== "completed" && (
-        <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-xs font-bold text-[#9A6700]">
+        <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-[11px] md:text-xs font-bold text-[#9A6700]">
           商品已送達，完成訂單後即可解鎖對應商品的代言任務
         </div>
       )}
@@ -73,19 +74,19 @@ function OrderCard({ vendorName, items = [], onTrack, shippingStatus, orderStatu
                 <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
               )}
             </div>
-            <span className="text-sm font-bold text-[#1A1A18] line-clamp-1">{it.name}</span>
+            <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
           </div>
         ))}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end mt-2 md:mt-0">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onTrack?.();
           }}
-          className="whitespace-nowrap rounded-full bg-[#1A1A18] px-6 py-3 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
+          className="w-full md:w-auto whitespace-nowrap rounded-xl md:rounded-full bg-[#1A1A18] px-6 py-3 md:py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
         >
           追蹤訂單
         </button>
@@ -102,36 +103,38 @@ function HistoryCard({ order, onOpenDetail }) {
   const extraCount = Math.max(0, order.items.length - 2);
 
   return (
-    <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white p-6 transition-shadow hover:shadow-[0_8px_28px_rgba(26,26,24,0.04)]">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-shadow hover:shadow-[0_8px_28px_rgba(26,26,24,0.04)]">
+      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-0">
         <span className="text-sm font-bold text-[#1A1A18] tracking-wide">
           {order.vendorName || order.title || "廠商"}
         </span>
-        {order.status && <StatusBadge status={order.status} />}
+        <div className="self-start md:self-auto">
+          {order.status && <StatusBadge status={order.status} />}
+        </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-center gap-5 text-sm font-medium text-[#8C8880]">
-        <div className="flex items-center gap-2">
-          <IconCalendar className="h-4 w-4" />
+      <div className="mb-5 md:mb-6 flex flex-wrap items-center gap-4 md:gap-5 text-xs md:text-sm font-medium text-[#8C8880]">
+        <div className="flex items-center gap-1.5 md:gap-2">
+          <IconCalendar className="h-3.5 w-3.5 md:h-4 md:w-4" />
           {order.date}
         </div>
-        <div className="flex items-center gap-2">
-          <IconClock className="h-4 w-4" />
+        <div className="flex items-center gap-1.5 md:gap-2">
+          <IconClock className="h-3.5 w-3.5 md:h-4 md:w-4" />
           {order.time}
         </div>
       </div>
 
       {/* items */}
-      <div className="mb-6">
+      <div className="mb-5 md:mb-6">
         {shownItems.map((it, idx) => (
           <div
             key={`${it.name}-${idx}`}
-            className={`flex items-center gap-4 py-3 ${idx !== shownItems.length - 1 ? "border-b border-[#E2DDD4]" : ""}`}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3 ${idx !== shownItems.length - 1 ? "border-b border-[#E2DDD4]" : ""}`}
           >
-            <span className="min-w-6 text-center font-mono text-sm font-bold text-[#1A1A18] bg-[#F5F0E8] rounded-md py-1">
+            <span className="min-w-6 text-center font-mono text-xs md:text-sm font-bold text-[#1A1A18] bg-[#F5F0E8] rounded-md py-1">
               {it.qty}
             </span>
-            <span className="text-sm font-bold text-[#1A1A18]">{it.name}</span>
+            <span className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1">{it.name}</span>
           </div>
         ))}
       </div>
@@ -141,7 +144,7 @@ function HistoryCard({ order, onOpenDetail }) {
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
-          className="mb-6 flex w-full items-center justify-between border-t border-[#E2DDD4] pt-4 text-sm font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]"
+          className="mb-5 md:mb-6 flex w-full items-center justify-between border-t border-[#E2DDD4] pt-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]"
         >
           <span>{extraCount} 更多項目</span>
           <IconChevronDown
@@ -151,21 +154,21 @@ function HistoryCard({ order, onOpenDetail }) {
       )}
 
       {/* actions */}
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
         <button
           type="button"
           onClick={() => {
             onOpenDetail?.(order.id);
             setDetailOpen((v) => !v);
           }}
-          className="rounded-full bg-[#1A1A18] px-6 py-3 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
+          className="w-full md:w-auto rounded-xl md:rounded-full bg-[#1A1A18] px-6 py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
         >
           {detailOpen ? "收起細節" : "訂單細節"}
         </button>
 
         <button
           type="button"
-          className="rounded-full border border-[#E2DDD4] bg-white px-6 py-3 text-sm font-bold text-[#8C8880] transition-all hover:border-[#1A1A18] hover:text-[#1A1A18]"
+          className="w-full md:w-auto rounded-xl md:rounded-full border border-[#E2DDD4] bg-white px-6 py-3 text-xs md:text-sm font-bold text-[#8C8880] transition-all hover:border-[#1A1A18] hover:text-[#1A1A18]"
         >
           幫助
         </button>
@@ -173,25 +176,25 @@ function HistoryCard({ order, onOpenDetail }) {
 
       {/* expandable detail panel */}
       {order.detail && (
-        <div className={`mt-6 border-t border-[#E2DDD4] pt-6 ${detailOpen ? "block" : "hidden"}`}>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 bg-[#F8F9FA] p-6 rounded-2xl">
+        <div className={`mt-5 md:mt-6 border-t border-[#E2DDD4] pt-5 md:pt-6 ${detailOpen ? "block" : "hidden"}`}>
+          <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 bg-[#F8F9FA] p-5 md:p-6 rounded-2xl">
             <div>
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8C8880]">送貨地址</div>
-              <p className="text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.address}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">送貨地址</div>
+              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.address}</p>
             </div>
             <div>
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8C8880]">付款方式</div>
-              <p className="text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.payment}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">付款方式</div>
+              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.payment}</p>
             </div>
             <div>
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8C8880]">訂單金額</div>
-              <p className="text-sm font-bold text-[#C8522A] leading-relaxed">{order.detail.amount}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">訂單金額</div>
+              <p className="text-xs md:text-sm font-bold text-[#C8522A] leading-relaxed">{order.detail.amount}</p>
             </div>
             <div>
-              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-[#8C8880]">
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">
                 {order.detail.reason ? "取消原因" : "配送方式"}
               </div>
-              <p className="text-sm font-bold text-[#1A1A18] leading-relaxed">
+              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">
                 {order.detail.reason || order.detail.shipping}
               </p>
             </div>
@@ -292,48 +295,80 @@ export default function OrdersPage({
 
   if (loading) {
     return (
-      <div className="max-w-5xl animate-in fade-in duration-500 space-y-12">
-        <div className="py-20 text-center text-[#8C8880]">訂單載入中...</div>
+      <div className="max-w-5xl animate-in fade-in duration-500 space-y-12 p-4 md:p-0 mx-auto">
+        <div className="py-20 text-center text-[#8C8880] font-bold">訂單載入中...</div>
       </div>
     );
   }
 
+  // 判斷是否完全沒有訂單紀錄
+  const hasNoOrdersAtAll = activeOrders.length === 0 && historyOrders.length === 0;
+
   return (
-    // 🟢 加上統一大寬度的 max-w-5xl
-    <div className="max-w-5xl animate-in fade-in duration-500 space-y-12">
+    <div className="max-w-5xl animate-in fade-in duration-500 p-4 md:p-0 mx-auto pb-12">
 
-      {/* Active orders */}
-      <section>
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8">購買清單</h2>
+      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">
+        我的訂單
+      </h2>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {activeOrders.map((o) => (
-            <OrderCard
-              key={o.id}
-              vendorName={o.vendorName}
-              items={o.items}
-              shippingStatus={o.shippingStatus}
-              orderStatus={o.orderStatus}
-              onTrack={() => onTrackOrder?.(o.id)}
-            />
-          ))}
+      {/* 當完全沒有資料時顯示的空狀態 */}
+      {hasNoOrdersAtAll ? (
+        <div className="bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] p-8 md:p-16 flex flex-col items-center justify-center text-center shadow-sm">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4 md:mb-6 text-[#8C8880]">
+            <ShoppingBag size={32} className="md:w-10 md:h-10" />
+          </div>
+          <h2 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-2">目前沒有訂單紀錄</h2>
+          <p className="text-sm text-[#8C8880] font-medium mb-6 md:mb-8">
+            您還沒有在 ShareBuy 購買過任何商品<br className="hidden md:block"/>歡迎前往購物頁面探索！
+          </p>
+          <a
+            href="/shop"
+            className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md active:scale-95"
+          >
+            前往購物頁面
+          </a>
         </div>
-      </section>
+      ) : (
+        <div className="space-y-10 md:space-y-12">
+          {/* Active orders */}
+          {activeOrders.length > 0 && (
+            <section>
+              <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6">購買清單</h3>
 
-      {/* History */}
-      <section>
-        <h2 className="text-[28px] font-serif font-bold text-[#1A1A18] mb-8 mt-4">訂購記錄</h2>
+              <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
+                {activeOrders.map((o) => (
+                  <OrderCard
+                    key={o.id}
+                    vendorName={o.vendorName}
+                    items={o.items}
+                    shippingStatus={o.shippingStatus}
+                    orderStatus={o.orderStatus}
+                    onTrack={() => onTrackOrder?.(o.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
-        <div className="flex flex-col gap-6">
-          {historyOrders.map((order) => (
-            <HistoryCard
-              key={order.id}
-              order={order}
-              onOpenDetail={(orderId) => onOpenOrderDetail?.(orderId)}
-            />
-          ))}
+          {/* History */}
+          {historyOrders.length > 0 && (
+            <section>
+              <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6">訂購記錄</h3>
+
+              <div className="flex flex-col gap-4 md:gap-6">
+                {historyOrders.map((order) => (
+                  <HistoryCard
+                    key={order.id}
+                    order={order}
+                    onOpenDetail={(orderId) => onOpenOrderDetail?.(orderId)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
-      </section>
+      )}
+
     </div>
   );
 }

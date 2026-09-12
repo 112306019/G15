@@ -52,29 +52,29 @@ export default function SalesDataPage({ product, onBack }) {
   });
 
   return (
-    <div className="max-w-5xl animate-in fade-in zoom-in-95 duration-500">
+    <div className="max-w-5xl animate-in fade-in zoom-in-95 duration-500 p-4 md:p-0 mx-auto pb-12">
       
       <button 
         onClick={onBack} 
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
+        className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
       >
-        <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
+        <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
         返回成效分析
       </button>
 
-      <div className="mb-12 flex items-end justify-between">
+      <div className="mb-8 md:mb-12 flex flex-col md:flex-row items-start md:items-end justify-between gap-4 md:gap-0">
         <div>
-          <p className="text-[#8C8880] font-bold mb-2 uppercase text-sm tracking-widest">
+          <p className="text-[#8C8880] font-bold mb-1 md:mb-2 uppercase text-xs md:text-sm tracking-widest line-clamp-1">
             {product?.campaign_name || ''}
           </p>
-          <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">銷售數據</h2>
+          <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">銷售數據</h2>
         </div>
 
         {/* 週/月切換 */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full md:w-auto">
           <button
             onClick={() => setPeriod('week')}
-            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
+            className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl md:rounded-full text-xs md:text-sm font-bold transition-all ${
               period === 'week'
                 ? 'bg-[#1A1A18] text-white'
                 : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -84,7 +84,7 @@ export default function SalesDataPage({ product, onBack }) {
           </button>
           <button
             onClick={() => setPeriod('month')}
-            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
+            className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl md:rounded-full text-xs md:text-sm font-bold transition-all ${
               period === 'month'
                 ? 'bg-[#1A1A18] text-white'
                 : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
@@ -96,20 +96,21 @@ export default function SalesDataPage({ product, onBack }) {
       </div>
 
       {/* 圖表區塊 */}
-      <div className="bg-white rounded-[2.5rem] p-12 border border-[#E2DDD4] shadow-sm mb-12">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-3.5 h-3.5 bg-[#C8522A] rounded-full shadow-[0_0_10px_rgba(200,82,42,0.4)]"></div>
-          <span className="text-sm font-black text-[#1A1A18] tracking-wider uppercase">銷量</span>
+      <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-5 md:p-12 border border-[#E2DDD4] shadow-sm mb-6 md:mb-12">
+        <div className="flex items-center gap-2 md:gap-3 mb-6 md:mb-10">
+          <div className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 bg-[#C8522A] rounded-full shadow-[0_0_10px_rgba(200,82,42,0.4)]"></div>
+          <span className="text-xs md:text-sm font-black text-[#1A1A18] tracking-wider uppercase">銷量</span>
         </div>
 
         {loading ? (
-          <div className="h-80 flex items-center justify-center text-[#8C8880] font-bold">
+          <div className="h-64 md:h-80 flex items-center justify-center text-[#8C8880] font-bold text-sm">
             載入中...
           </div>
         ) : (
-          <div className="h-80 w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-10 overflow-x-auto">
-            {/* 左側數值 */}
-            <div className="absolute -left-10 top-0 h-full flex flex-col justify-between py-1 text-[11px] text-[#8C8880] font-bold">
+          <div className="h-64 md:h-80 w-full flex items-end gap-2 md:gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-6 md:pt-10 pl-6 md:pl-0 overflow-x-auto hide-scrollbar">
+            
+            {/* 左側數值 (Y 軸) */}
+            <div className="absolute left-0 md:-left-10 top-0 h-full flex flex-col justify-between py-1 text-[9px] md:text-[11px] text-[#8C8880] font-bold">
               <span>{maxValue}</span>
               <span>{midAxisLabels[0]}</span>
               <span>{midAxisLabels[1]}</span>
@@ -118,12 +119,12 @@ export default function SalesDataPage({ product, onBack }) {
             </div>
 
             {chartData.map((item, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[24px]">
+              <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px] md:min-w-[24px]">
                 <div
-                  className="w-3 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
+                  className="w-2.5 md:w-3 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
                   style={{ height: `${maxValue > 0 ? (item.y_value / maxValue) * 100 : 0}%` }}
                 />
-                <span className="text-[10px] text-[#8C8880] mt-4 font-bold rotate-45 origin-left whitespace-nowrap">
+                <span className="text-[9px] md:text-[10px] text-[#8C8880] mt-3 md:mt-4 font-bold rotate-45 origin-left whitespace-nowrap">
                   {item.x_label}
                 </span>
               </div>
@@ -133,13 +134,13 @@ export default function SalesDataPage({ product, onBack }) {
       </div>
 
       {/* 數據統計 */}
-      <div className="bg-[#F5F0E8] rounded-3xl p-8 inline-flex flex-col gap-4 border border-[#E2DDD4] shadow-sm">
-        <p className="text-[#1A1A18] font-black text-xl flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
+      <div className="bg-[#F5F0E8] rounded-2xl md:rounded-3xl p-5 md:p-8 flex flex-col gap-3 md:gap-4 border border-[#E2DDD4] shadow-sm">
+        <p className="text-[#1A1A18] font-black text-base md:text-xl flex items-center gap-3 md:gap-4">
+          <span className="w-1.5 h-6 md:w-2 md:h-8 bg-[#1A1A18] rounded-full"></span>
           目前累積總銷售數量：<span className="text-[#C8522A]">{usageCount}</span>
         </p>
-        <p className="text-[#1A1A18] font-black text-xl flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
+        <p className="text-[#1A1A18] font-black text-base md:text-xl flex items-center gap-3 md:gap-4">
+          <span className="w-1.5 h-6 md:w-2 md:h-8 bg-[#1A1A18] rounded-full"></span>
           累積分潤：<span className="text-[#C8522A]">NT$ {totalCommission.toLocaleString()}</span>
         </p>
       </div>

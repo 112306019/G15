@@ -68,16 +68,13 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
     const isPending = applicationStatus === 'pending';
     const isRejected = applicationStatus === 'rejected';
 
-    // 🟢 簡約風格輸入框樣式
-    const baseInputClass = "w-full rounded-2xl bg-gray-50 border border-transparent px-5 py-3.5 text-sm outline-none transition-all focus:bg-white focus:ring-2 focus:ring-slate-800 shadow-sm placeholder:text-gray-400";
+    const baseInputClass = "w-full rounded-xl md:rounded-2xl bg-gray-50 border border-transparent px-4 py-3 md:px-5 md:py-3.5 text-xs md:text-sm outline-none transition-all focus:bg-white focus:ring-2 focus:ring-slate-800 shadow-sm placeholder:text-gray-400";
     const errorInputClass = "border-red-300 bg-red-50 focus:ring-red-500";
 
     const inputClass = (isValid, isError) =>
         isError ? `${baseInputClass} ${errorInputClass}` : baseInputClass;
 
     const socialErrors = useMemo(() => !hasAnySocial, [hasAnySocial]);
-
-
 
     const handleSubmit = async () => {
         setTouched({
@@ -101,11 +98,6 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
             ok = false;
         }
 
-        if (ok && !hasAnySocial) {
-            errorMsg = "請至少填入一個社群帳號";
-            ok = false;
-        }
-
         if (ok && fbUsername.trim() && !fbUrl.trim()) {
             errorMsg = "填寫 FB 帳號後，請務必附上 FB 連結";
             ok = false;
@@ -118,11 +110,6 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
 
         if (ok && threadsUsername.trim() && !threadsUrl.trim()) {
             errorMsg = "填寫 Threads 帳號後，請務必附上 Threads 連結";
-            ok = false;
-        }
-
-        if (ok && !termsAccepted) {
-            errorMsg = "請勾選同意 KOC 條款";
             ok = false;
         }
 
@@ -166,14 +153,14 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
 
 
     return (
-        <div className="animate-in fade-in duration-500 max-w-3xl">
-            <div className="mb-10 flex flex-col gap-2">
-                <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">我想成為KOC</h2>
+        <div className="animate-in fade-in duration-500 max-w-3xl p-4 md:p-0 mx-auto pb-12">
+            <div className="mb-8 md:mb-10 flex flex-col gap-2">
+                <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我想成為 KOC</h2>
                 {onViewIntro && (
                     <button
                         type="button"
                         onClick={onViewIntro}
-                        className="w-fit text-xs font-bold text-gray-400 underline underline-offset-4 transition-colors hover:text-slate-800"
+                        className="w-fit text-[11px] md:text-xs font-bold text-gray-400 underline underline-offset-4 transition-colors hover:text-slate-800"
                     >
                         還不了解 KOC 計畫嗎？先看看簡介
                     </button>
@@ -181,28 +168,28 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
             </div>
 
             {isPending && (
-                <div className="mb-8 rounded-2xl bg-amber-50 border border-amber-200 px-6 py-4 text-sm text-amber-700 font-bold">
+                <div className="mb-6 md:mb-8 rounded-xl md:rounded-2xl bg-amber-50 border border-amber-200 px-5 py-4 md:px-6 md:py-4 text-xs md:text-sm text-amber-700 font-bold leading-relaxed shadow-sm">
                     您的申請正在審核中，請耐心等候，審核期間無法重新提交。
                 </div>
             )}
 
             {isRejected && (
-                <div className="mb-8 rounded-2xl bg-red-50 border border-red-200 px-6 py-4 text-sm text-red-700">
+                <div className="mb-6 md:mb-8 rounded-xl md:rounded-2xl bg-red-50 border border-red-200 px-5 py-4 md:px-6 md:py-4 text-xs md:text-sm text-red-700 leading-relaxed shadow-sm">
                     <p className="font-bold mb-1">您的申請未通過審核</p>
                     {rejectReason && <p className="text-red-600">原因：{rejectReason}</p>}
-                    <p className="mt-2 text-xs text-red-500">您可以修改資料後重新提交申請。</p>
+                    <p className="mt-2 text-[10px] md:text-xs text-red-500 font-bold">您可以修改資料後重新提交申請。</p>
                 </div>
             )}
 
             <div className={isPending ? "opacity-50 pointer-events-none select-none" : ""}>
 
-                {/* 🟢 基本資訊卡片 */}
-                <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
-                    <h3 className="mb-6 text-lg font-bold text-slate-700">申請資料</h3>
+                {/* 基本資訊卡片 */}
+                <div className="mb-6 md:mb-8 rounded-2xl md:rounded-3xl border border-gray-100 bg-white p-6 md:p-8 shadow-sm">
+                    <h3 className="mb-5 md:mb-6 text-base md:text-lg font-bold text-slate-700">申請資料</h3>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-5 md:gap-6 md:grid-cols-2">
                         <div>
-                            <label className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">顯示名稱</label>
+                            <label className="mb-1.5 md:mb-2 block text-[10px] md:text-xs font-bold tracking-wider text-gray-400 uppercase">顯示名稱</label>
                             <input
                                 className={inputClass(displayNameValid && touched.displayName, touched.displayName && !displayNameValid)}
                                 placeholder="請輸入顯示名稱"
@@ -213,7 +200,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                         </div>
 
                         <div>
-                            <label className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">電子郵件</label>
+                            <label className="mb-1.5 md:mb-2 block text-[10px] md:text-xs font-bold tracking-wider text-gray-400 uppercase">電子郵件</label>
                             <input
                                 type="email"
                                 className={inputClass(emailValid && touched.email, touched.email && !emailValid && email.trim().length > 0)}
@@ -226,17 +213,18 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                     </div>
                 </div>
 
-                {/* 🟢 社群帳號卡片 */}
-                <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
-                    <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between">
-                        <h3 className="text-lg font-bold text-slate-700">社群帳號</h3>
-                        <span className="text-xs font-bold text-red-400 mt-2 md:mt-0">*請至少填入一項（須為公開帳號）</span>
+                {/* 社群帳號卡片 */}
+                <div className="mb-6 md:mb-8 rounded-2xl md:rounded-3xl border border-gray-100 bg-white p-6 md:p-8 shadow-sm">
+                    <div className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-end justify-between">
+                        <h3 className="text-base md:text-lg font-bold text-slate-700">社群帳號</h3>
+                        <span className="text-[10px] md:text-xs font-bold text-red-400 mt-1.5 md:mt-0">*請至少填入一項（須為公開帳號）</span>
                     </div>
-                    <p className="mb-6 text-xs text-gray-400">提交後將由管理員審核您的社群帳號</p>
+                    <p className="mb-5 md:mb-6 text-[11px] md:text-xs text-gray-400">提交後將由管理員審核您的社群帳號</p>
+                    
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                         {/* FB */}
                         <div>
-                            <label className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">FB</label>
+                            <label className="mb-1.5 md:mb-2 block text-[10px] md:text-xs font-bold tracking-wider text-gray-400 uppercase">FB</label>
                             <input
                                 className={inputClass(touched.fbUsername && fbUsername.trim().length > 0, touched.fbUsername && socialErrors && !hasAnySocial)}
                                 placeholder="帳號名稱"
@@ -254,7 +242,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                         </div>
                         {/* IG */}
                         <div>
-                            <label className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">IG</label>
+                            <label className="mb-1.5 md:mb-2 block text-[10px] md:text-xs font-bold tracking-wider text-gray-400 uppercase">IG</label>
                             <input
                                 className={inputClass(touched.igUsername && igUsername.trim().length > 0, touched.igUsername && socialErrors && !hasAnySocial)}
                                 placeholder="@username"
@@ -272,7 +260,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
 
                         {/* Threads */}
                         <div>
-                            <label className="mb-2 block text-xs font-bold tracking-wider text-gray-400 uppercase">THREADS</label>
+                            <label className="mb-1.5 md:mb-2 block text-[10px] md:text-xs font-bold tracking-wider text-gray-400 uppercase">THREADS</label>
                             <input
                                 className={inputClass(touched.threadsUsername && threadsUsername.trim().length > 0, touched.threadsUsername && socialErrors && !hasAnySocial)}
                                 placeholder="@username"
@@ -290,25 +278,25 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                     </div>
                 </div>
 
-                {/* 🟢 同意條款與送出按鈕 */}
-                <div className="flex flex-col md:flex-row items-center justify-between mt-10 gap-6">
-                    <div className="flex items-center gap-3">
+                {/* 同意條款與送出按鈕 */}
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mt-8 md:mt-10 gap-5 md:gap-6">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
                         <button
                             type="button"
                             onClick={() => setTermsAccepted(!termsAccepted)}
-                            className="flex items-center gap-3 group"
+                            className="flex items-center gap-2.5 md:gap-3 group"
                         >
-                            <div className={`flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all ${termsAccepted ? 'border-slate-800 bg-slate-800' : 'border-gray-300 bg-white group-hover:border-slate-400'}`}>
-                                {termsAccepted && <Check size={14} className="text-white" strokeWidth={3} />}
+                            <div className={`flex h-5 w-5 md:h-6 md:w-6 items-center justify-center rounded-lg border-2 transition-all ${termsAccepted ? 'border-slate-800 bg-slate-800' : 'border-gray-300 bg-white group-hover:border-slate-400'}`}>
+                                {termsAccepted && <Check size={12} className="md:w-3.5 md:h-3.5 text-white" strokeWidth={3} />}
                             </div>
-                            <span className="text-sm font-medium text-gray-500">
+                            <span className="text-xs md:text-sm font-medium text-gray-500">
                                 申請成為 KOC 代表您已同意
                             </span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setShowTermsModal(true)}
-                            className="text-sm font-bold text-slate-800 underline underline-offset-4 hover:text-black"
+                            className="text-xs md:text-sm font-bold text-slate-800 underline underline-offset-4 hover:text-black"
                         >
                             KOC 條款
                         </button>
@@ -318,28 +306,27 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                         type="button"
                         onClick={handleSubmit}
                         disabled={submitState === "submitting"}
-                        className={`rounded-full px-10 py-4 text-sm font-bold text-white transition-all shadow-lg ${submitState === "success" ? "bg-green-500 hover:bg-green-600" : "bg-black hover:bg-gray-800 active:scale-95"
+                        className={`w-full md:w-auto rounded-xl md:rounded-full px-8 md:px-10 py-3.5 md:py-4 text-xs md:text-sm font-bold text-white transition-all shadow-md ${submitState === "success" ? "bg-green-500 hover:bg-green-600" : "bg-black hover:bg-gray-800 active:scale-95"
                             } ${submitState === "submitting" ? "opacity-50 cursor-wait" : ""}`}
                     >
                         {submitState === "submitting" ? "資料傳送中..." : submitState === "success" ? "✓ 申請已送出" : "確認送出申請"}
                     </button>
                 </div>
 
-                {/* 🟢 彈出提示 (Toast) */}
                 <div
-                    className={`fixed bottom-10 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-slate-800 px-8 py-3.5 text-sm font-bold text-white transition-all duration-300 shadow-xl ${toast.show ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
+                    className={`fixed bottom-6 md:bottom-10 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-slate-800 px-6 md:px-8 py-2.5 md:py-3.5 text-xs md:text-sm font-bold text-white transition-all duration-300 shadow-xl ${toast.show ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
                         }`}
                 >
                     {toast.msg}
                 </div>
             </div>
 
-            {/* 🟢 KOC 條款彈窗 */}
+            {/* KOC條款彈窗 */}
             {showTermsModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
-                    <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl max-h-[80vh] overflow-y-auto">
-                        <h3 className="text-xl font-bold text-slate-900 mb-6">KOC 合作條款</h3>
-                        <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
+                    <div className="bg-white rounded-2xl md:rounded-[2rem] p-6 md:p-8 max-w-lg w-full shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg md:text-xl font-bold text-slate-900 mb-4 md:mb-6">KOC 合作條款</h3>
+                        <div className="space-y-3 md:space-y-4 text-xs md:text-sm text-gray-600 leading-relaxed">
                             <p><strong className="text-slate-800">一、資格與審核</strong><br />
                             申請人須提供真實且公開之社群帳號資訊，平台將依申請內容進行人工審核，審核結果將於系統中通知。</p>
 
@@ -358,7 +345,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                         <button
                             type="button"
                             onClick={() => setShowTermsModal(false)}
-                            className="mt-8 w-full rounded-full bg-black py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800"
+                            className="mt-6 md:mt-8 w-full rounded-xl md:rounded-full bg-black py-3 md:py-3.5 text-xs md:text-sm font-bold text-white transition-all hover:bg-gray-800"
                         >
                             我已閱讀
                         </button>
@@ -366,15 +353,15 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                 </div>
             )}
 
-            {/* 🟢 申請成功彈窗 */}
+            {/* 申請成功彈窗 */}
             {showSuccessModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
-                    <div className="bg-white rounded-[2rem] p-10 max-w-md w-full shadow-2xl text-center">
-                        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                            <Check size={32} className="text-green-600" strokeWidth={3} />
+                    <div className="bg-white rounded-2xl md:rounded-[2rem] p-8 md:p-10 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-200">
+                        <div className="mx-auto mb-4 md:mb-6 flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full bg-green-100">
+                            <Check size={28} className="md:w-8 md:h-8 text-green-600" strokeWidth={3} />
                         </div>
-                        <h3 className="mb-3 text-xl font-bold text-slate-900">申請已送出</h3>
-                        <p className="mb-8 text-sm leading-relaxed text-gray-500">
+                        <h3 className="mb-2 md:mb-3 text-lg md:text-xl font-bold text-slate-900">申請已送出</h3>
+                        <p className="mb-6 md:mb-8 text-xs md:text-sm leading-relaxed text-gray-500">
                             您的 KOC 申請已成功送出，請等待平台審核。<br />
                             審核通過後，請重新登入即可進入 KOC 專屬功能。
                         </p>
@@ -384,7 +371,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                                 setShowSuccessModal(false);
                                 onSubmit?.();
                             }}
-                            className="w-full rounded-full bg-black py-4 text-sm font-bold text-white transition-all hover:bg-gray-800 active:scale-95"
+                            className="w-full rounded-xl md:rounded-full bg-black py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-gray-800 active:scale-95"
                         >
                             我知道了
                         </button>
