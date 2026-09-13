@@ -32,7 +32,7 @@ export default function Header({
 
   const getActiveKey = (tab) => {
     if (['home', 'task_detail', 'review', 'analysis', 'sales_data'].includes(tab)) return 'home';
-    if (['earnings', 'earnings_detail', 'pending_detail'].includes(tab)) return 'earnings';
+    if (['earnings', 'earnings_detail'].includes(tab)) return 'earnings';
     if (['shop', 'product_detail', 'cart', 'checkout'].includes(tab)) return 'shop';
     return '';
   };

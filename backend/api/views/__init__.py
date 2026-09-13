@@ -14,7 +14,6 @@ from .koc import (
     remove_application,
     get_revenue_total,
     get_revenue_history,
-    get_pending_earnings_detail,
     get_missing_tax_forms,
     get_remuneration_forms,
     request_payout,

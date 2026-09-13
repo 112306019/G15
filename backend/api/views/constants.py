@@ -19,6 +19,46 @@ STAGE_CODE_MAP = {
 # 廠商的分潤加總，不會再逐筆寫案件/廠商名稱。
 REMUNERATION_SERVICE_CONTENT = '社群行銷推廣服務酬勞'
 
+# 已結束（stage='completed'）的任務，案件截止日超過這麼多天後，任務詳情跟聊天室
+# 就不再顯示（軟隱藏，只是查詢時濾掉，不會真的刪除 KOCMissionNew/ChatRoom/Message
+# 資料本身）。不分正常結案／過期／KOC 自己取消，一律套用同一個天數。
+MISSION_HISTORY_VISIBLE_DAYS = 90
+
+
+def exclude_hidden_missions(queryset):
+    """
+    套用在 KOCMissionNew 的 QuerySet 上，濾掉「已結束超過
+    MISSION_HISTORY_VISIBLE_DAYS 天」的任務，用在任務列表這種一次抓多筆的地方。
+    只影響 stage='completed' 的任務，其餘階段的任務不受影響、一律照樣顯示。
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(days=MISSION_HISTORY_VISIBLE_DAYS)
+    return queryset.exclude(
+        stage='completed',
+        application__campaign__end_date__lt=cutoff,
+    )
+
+
+def is_mission_hidden(mission):
+    """
+    套用在單一一筆 KOCMissionNew 物件上（例如任務詳情、聊天室），判斷這筆任務是否
+    已經過了顯示期限。傳入的 mission 需要 select_related('application__campaign')
+    過，否則這裡會多一次查詢。
+    """
+    if mission.stage != 'completed':
+        return False
+
+    campaign = mission.application.campaign
+    if not campaign or not campaign.end_date:
+        return False
+
+    from django.utils import timezone
+    from datetime import timedelta
+
+    return timezone.now() > campaign.end_date + timedelta(days=MISSION_HISTORY_VISIBLE_DAYS)
+
 # KOC 提領：跨行轉帳銀行會收取的手續費，這筆錢不是平台賺的，只是告知用（實際扣款
 # 是銀行端處理，平台這邊的錢包/撥款金額不會扣掉這 15 元）。
 CROSS_BANK_TRANSFER_FEE = 15
@@ -31,6 +71,10 @@ MIN_PAYOUT_AMOUNT = CROSS_BANK_TRANSFER_FEE + 1
 MAX_VIOLATION_COUNT = 5
 # 停權天數，約 3 個月。
 SUSPENSION_DURATION_DAYS = 90
+
+# KOC 任務進入「待交文案」(writing) 或「待交作品連結」(publishing) 階段後，
+# 超過這麼多天還沒交件，就發一次逾期提醒通知（見 sync_submission_deadline_reminders）。
+SUBMISSION_REMINDER_DAYS = 7
 
 
 def sync_expired_koc_suspensions():
@@ -108,6 +152,8 @@ def sync_expired_promoting_missions():
        的話會直接落到預設分支，畫面顯示英文字 "expired"。跟上面兩項用
        同一個日期精度（只比較「日」，不比較時分秒），避免同一支函式對
        「過期」的定義不一致。
+    4. 任務因為過期被記違規／觸發停權時，發站內通知告知 KOC
+       （見下面 record_koc_violation 呼叫處）。
 
     冪等、無參數，可在任何會讀取/顯示 mission.stage、coupon.status 或
     campaign.status 的 view 最前面呼叫，重複呼叫是安全的（update 影響
@@ -115,6 +161,7 @@ def sync_expired_promoting_missions():
     """
     from django.utils import timezone
     from api.models import KOCMissionNew, CouponNew, Campaigns
+    from api.notifications import create_notification
 
     today = timezone.localdate()
 
@@ -129,7 +176,7 @@ def sync_expired_promoting_missions():
         KOCMissionNew.objects.filter(
             stage__in=['writing', 'reviewing', 'publishing'],
             application__campaign__end_date__date__lt=today
-        ).select_related('koc')
+        ).select_related('koc__user', 'application__campaign')
     )
 
     for mission in stuck_missions:
@@ -138,7 +185,32 @@ def sync_expired_promoting_missions():
         mission.save(update_fields=['stage', 'end_reason'])
 
         if mission.koc:
-            record_koc_violation(mission.koc)
+            suspended, suspended_until = record_koc_violation(mission.koc)
+
+            campaign_name = (
+                mission.application.campaign.name
+                if mission.application and mission.application.campaign else ''
+            )
+            if suspended:
+                create_notification(
+                    user=mission.koc.user,
+                    category='koc',
+                    title='帳號已被停權',
+                    body=(
+                        f'案件「{campaign_name}」因逾期未完成任務被記一次違規，'
+                        f'違規次數已達上限，帳號已被停權至 {suspended_until.strftime("%Y-%m-%d")}，'
+                        '停權期間將無法申請新的接案。'
+                    ),
+                    reference_type='koc_home',
+                )
+            else:
+                create_notification(
+                    user=mission.koc.user,
+                    category='koc',
+                    title='任務逾期，已記一次違規',
+                    body=f'案件「{campaign_name}」因逾期未完成任務（推廣期截止前未交件），已被記一次違規。',
+                    reference_type='koc_home',
+                )
 
     updated_stuck_missions = len(stuck_missions)
 
@@ -152,12 +224,67 @@ def sync_expired_promoting_missions():
         end_date__date__lt=today
     ).update(status='closed')
 
+    sync_submission_deadline_reminders()
+
     return {
         'missions_completed': updated_missions,
         'missions_expired': updated_stuck_missions,
         'coupons_expired': updated_coupons,
         'campaigns_closed': updated_campaigns
     }
+
+
+def sync_submission_deadline_reminders():
+    """
+    Lazy-write：任務進入 writing（待交文案）或 publishing（待交作品連結）階段
+    時，會設定 submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
+    （見 vendor.py 建立任務／審核退回／文案審核通過的地方）。這裡檢查有沒有
+    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知。
+
+    submission_reminder_sent 確保同一次停留期間只提醒一次；重新進入
+    writing/publishing（例如審核退回）會把它歸零，所以下一輪逾期還是會再提醒。
+    跟 sync_expired_promoting_missions 的「過期」是兩件事——那邊是整個推廣期
+    已經結束，這裡只是同一階段內拖太久沒交件。
+
+    冪等、無參數，目前掛在 sync_expired_promoting_missions 結尾一起呼叫。
+    """
+    from django.utils import timezone
+    from api.models import KOCMissionNew
+    from api.notifications import create_notification
+
+    overdue_missions = list(
+        KOCMissionNew.objects.filter(
+            stage__in=['writing', 'publishing'],
+            submission_deadline_at__lt=timezone.now(),
+            submission_reminder_sent=False,
+        ).select_related('koc__user', 'application__campaign')
+    )
+
+    for mission in overdue_missions:
+        if not mission.koc:
+            continue
+
+        item_label = '文案' if mission.stage == 'writing' else '作品連結'
+        campaign_name = (
+            mission.application.campaign.name
+            if mission.application and mission.application.campaign else ''
+        )
+
+        create_notification(
+            user=mission.koc.user,
+            category='koc',
+            title=f'{item_label}逾期提醒',
+            body=(
+                f'案件「{campaign_name}」已超過 {SUBMISSION_REMINDER_DAYS} 天未提交'
+                f'{item_label}，請盡快完成，以免任務過期被記違規。'
+            ),
+            reference_type='koc_home',
+        )
+        mission.submission_reminder_sent = True
+        mission.save(update_fields=['submission_reminder_sent'])
+
+    return len(overdue_missions)
+
 
 def restore_order_stock(order):
     """

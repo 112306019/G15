@@ -13,6 +13,19 @@ const STAGES = [
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
 const isValidImageUrl = (url) => typeof url === 'string' && /^https?:\/\//.test(url);
 
+// 已結束的任務，案件截止日超過這麼多天後，後端就不會再顯示這筆任務的詳情跟聊天室
+// 了（見 backend/api/views/constants.py 的 MISSION_HISTORY_VISIBLE_DAYS）。
+const MISSION_HISTORY_VISIBLE_DAYS = 90;
+
+// 距離「任務詳情/聊天室被自動移除」還剩幾天，deadline 是 'YYYY-MM-DD' 字串
+function getDaysUntilRemoval(deadline) {
+  if (!deadline) return null;
+  const removalDate = new Date(deadline);
+  removalDate.setDate(removalDate.getDate() + MISSION_HISTORY_VISIBLE_DAYS);
+  const diffDays = Math.ceil((removalDate - new Date()) / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
 // stage 對照表：撰寫文案分頁要合併 writing(0) + reviewing(1) 兩種後端 stage，
 // 所以這個分頁的值是陣列，其餘分頁維持單一數字
 const STAGE_MAP = {
@@ -368,7 +381,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         );
-      case 5:
+      case 5: {
+        const daysUntilRemoval = getDaysUntilRemoval(task.deadline);
         return (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between px-2">
@@ -379,8 +393,17 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-2">
               <Search size={16}/> 查看詳情
             </button>
+
+            {daysUntilRemoval !== null && (
+              <p className="text-[10px] font-bold text-[#8C8880] text-center">
+                {daysUntilRemoval > 0
+                  ? `任務詳情與聊天室將於 ${daysUntilRemoval} 天後自動移除`
+                  : '任務詳情與聊天室已超過顯示期限'}
+              </p>
+            )}
           </div>
         );
+      }
       default: return null;
     }
   };

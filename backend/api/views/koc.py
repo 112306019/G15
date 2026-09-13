@@ -18,9 +18,7 @@ from ..serializers import (
     ApplicationListItemSerializer,
     MissionListItemSerializer,
     MissionStageCountsSerializer,
-    RevenueTotalSerializer,
     RevenueHistoryItemSerializer,
-    PendingEarningsItemSerializer,
     AnalyticsListItemSerializer,
     AnalyticsDetailSerializer,
     SaveDraftSerializer,  
@@ -44,6 +42,8 @@ from .constants import (
     sync_expired_promoting_missions,
     sync_expired_koc_suspensions,
     record_koc_violation,
+    exclude_hidden_missions,
+    is_mission_hidden,
 )
 # 獲取koc個人資料
 @api_view(['GET'])
@@ -694,6 +694,13 @@ def mission_get_detail(request):
             "err": "找不到對應的任務"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
+    # 已結束超過 30 天的任務不再顯示詳情（軟隱藏，資料庫仍保留）
+    if is_mission_hidden(mission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
     #latest_submission = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time').first()
     latest_submission = Submissions.objects.filter(
         kocmission=mission,
@@ -756,7 +763,9 @@ def get_mission_list(request):
             "err": "找不到對應的 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
+    missions = exclude_hidden_missions(
+        KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
+    )
 
     # stage 是可選參數：如果有帶，篩出特定階段；沒帶就回全部階段（給前端自己分組用）
     if stage_param is not None:
@@ -1138,10 +1147,10 @@ def get_mission_stage_counts(request):
     for row in application_counts_qs:
         application_result[row['status']] = row['count']
 
-    # 2. 查 KOCMissionNew，依 stage 分組計算數量
+    # 2. 查 KOCMissionNew，依 stage 分組計算數量（已結束超過顯示期限的要濾掉，
+    # 不然徽章數字會跟列表頁實際看到的筆數對不起來）
     mission_counts_qs = (
-        KOCMissionNew.objects
-        .filter(koc=koc)
+        exclude_hidden_missions(KOCMissionNew.objects.filter(koc=koc))
         .values('stage')
         .annotate(count=Count('kocmission_id'))
     )
@@ -1231,12 +1240,6 @@ def get_revenue_total(request):
     except KocWallet.DoesNotExist:
         withdrawable_amount = 0
 
-    # 待定收益：統計 Earnings 表 status='pending' 的總和
-    pending_total = Earnings.objects.filter(
-        user=koc.user, status='pending'
-    ).aggregate(total=Sum('amount'))['total']
-    pending_amount = pending_total or 0
-
     # 是否已綁定銀行帳戶：檢查 KOC 的 bank_account 欄位是否有值
     has_bank_account = bool(koc.bank_account)
 
@@ -1244,7 +1247,6 @@ def get_revenue_total(request):
         "success": True,
         "err": "",
         "withdrawable_amount": withdrawable_amount,
-        "pending_amount": pending_amount,
         "hasBankAccount": has_bank_account,
         "min_payout_amount": MIN_PAYOUT_AMOUNT,
         "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
@@ -1427,53 +1429,6 @@ def get_revenue_history(request):
         "success": True,
         "err": "",
         "history": result
-    }, status=http_status.HTTP_200_OK)
-
-# 獲取待定收益明細
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def get_pending_earnings_detail(request):
-    user_id = request.query_params.get('user_id')
-
-    if not user_id:
-        return Response({
-            "success": False,
-            "err": "user_id 為必填"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的使用者"
-        }, status=http_status.HTTP_404_NOT_FOUND)
-
-    earnings = Earnings.objects.filter(
-        user=user,
-        status='pending'
-    ).select_related('kocmission__application__campaign').order_by('-created_at')
-
-    result = []
-    for earning in earnings:
-        campaign_name = None
-        if earning.kocmission:
-            try:
-                campaign_name = earning.kocmission.application.campaign.name
-            except Exception:
-                campaign_name = None
-
-        result.append({
-            "earnings_no": str(earning.earnings_id).zfill(8),
-            "amount": earning.amount,
-            "campaign_name": campaign_name,
-            "date": earning.created_at.strftime('%Y-%m-%d') if earning.created_at else None,
-        })
-
-    return Response({
-        "success": True,
-        "err": "",
-        "pending_earnings": result
     }, status=http_status.HTTP_200_OK)
 
 # 獲取成效分析總表
@@ -1776,11 +1731,17 @@ def get_or_create_chat_room(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        mission = KOCMissionNew.objects.get(pk=kocmission_id)
+        mission = KOCMissionNew.objects.select_related('application__campaign').get(pk=kocmission_id)
     except KOCMissionNew.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(mission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     room, _ = ChatRoom.objects.get_or_create(kocmission=mission)
@@ -1806,11 +1767,18 @@ def get_chat_history(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        room = ChatRoom.objects.get(pk=room_id)
+        room = ChatRoom.objects.select_related('kocmission__application__campaign').get(pk=room_id)
     except ChatRoom.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的聊天室",
+            "messages": []
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(room.kocmission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限",
             "messages": []
         }, status=http_status.HTTP_404_NOT_FOUND)
 
@@ -1854,11 +1822,17 @@ def send_chat_message(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        room = ChatRoom.objects.get(pk=room_id)
+        room = ChatRoom.objects.select_related('kocmission__application__campaign').get(pk=room_id)
     except ChatRoom.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的聊天室"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(room.kocmission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     message = Message.objects.create(

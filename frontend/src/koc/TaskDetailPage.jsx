@@ -14,6 +14,7 @@ export default function TaskDetailPage({ task, onBack }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [copyText, setCopyText] = useState('');
   const [linkText, setLinkText] = useState('');
@@ -40,6 +41,7 @@ export default function TaskDetailPage({ task, onBack }) {
     if (!task) return;
     const fetchDetail = async () => {
       setLoading(true);
+      setLoadError('');
       try {
         const res = await api.get('/koc/mission/getDetail', {
           params: { KOCMission_id: task.id }
@@ -48,9 +50,12 @@ export default function TaskDetailPage({ task, onBack }) {
           setDetail(res.data);
           // 如果有草稿內容，預填進文字框
           setCopyText(res.data.draft_content || '');
+        } else {
+          setLoadError(res.data.err || '任務載入失敗');
         }
       } catch (err) {
         console.error('載入任務詳情失敗', err);
+        setLoadError('任務載入失敗，請稍後再試');
       } finally {
         setLoading(false);
       }
@@ -165,6 +170,19 @@ export default function TaskDetailPage({ task, onBack }) {
   };
 
   if (!task) return null;
+
+  if (loadError) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4 text-[#8C8880] font-bold">
+      <p>{loadError}</p>
+      <button
+        onClick={() => onBack(task.stage)}
+        className="bg-[#1A1A18] text-[#F5F0E8] px-6 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all"
+      >
+        返回接案中心
+      </button>
+    </div>
+  );
+
   if (loading || !detail) return (
     <div className="flex items-center justify-center h-64 text-[#8C8880] font-bold">
       載入中...

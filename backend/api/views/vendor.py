@@ -11,7 +11,7 @@ from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
-from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
+from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock, SUBMISSION_REMINDER_DAYS
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
 from api.notifications import create_notification
@@ -1424,7 +1424,9 @@ def vendor_application_review(request):
                             "koc_id": application.koc_id,
                             # 任務建立時進入撰寫文案階段，
                             # 對齊 constants.STAGE_CODE_MAP 的 "writing"
-                            "stage": "writing"
+                            "stage": "writing",
+                            # 進入 writing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
+                            "submission_deadline_at": timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS),
                         }
                     )
                 )
@@ -1439,7 +1441,11 @@ def vendor_application_review(request):
 
                 if not mission.stage:
                     mission.stage = "writing"
+                    mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+                    mission.submission_reminder_sent = False
                     mission_fields_to_update.append("stage")
+                    mission_fields_to_update.append("submission_deadline_at")
+                    mission_fields_to_update.append("submission_reminder_sent")
 
                 if mission_fields_to_update:
                     mission.save(
@@ -1758,9 +1764,11 @@ def vendor_mission_review_submission(request):
 
     if review_result == "approved":
         if submission.submission_type == "text":
-            # 文案審核通過：進入待發佈
+            # 文案審核通過：進入待發佈，重新起算交件提醒期限
             mission.stage = "publishing"
-            mission.save(update_fields=["stage"])
+            mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+            mission.submission_reminder_sent = False
+            mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
         # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
         # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
         # "reviewing"，會被上面的檢查擋掉。
@@ -1768,12 +1776,14 @@ def vendor_mission_review_submission(request):
     elif review_result == "revising":
         # 審核退回：依 submission 的類型回到對應的撰寫階段
         # ('text' -> 'writing'，'link' -> 'publishing')
-        # 而不是不分類型都退回 "writing"
+        # 而不是不分類型都退回 "writing"，同時重新起算交件提醒期限
         mission.stage = SUBMISSION_TYPE_TO_STAGE.get(
             submission.submission_type,
             "writing"
         )
-        mission.save(update_fields=["stage"])
+        mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+        mission.submission_reminder_sent = False
+        mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
 
     # 只有文案審核通過才啟用優惠碼
     if should_activate_coupon:

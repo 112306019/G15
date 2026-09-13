@@ -10,7 +10,6 @@ import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
-import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
@@ -66,7 +65,6 @@ const VIEW_TO_PATH = {
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
   tax_form_records: '/earnings/tax-forms',
-  pending_detail: '/earnings/pending',
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
@@ -437,7 +435,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
-      'home', 'earnings', 'earnings_detail', 'pending_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -490,14 +488,14 @@ function MainSystem() {
   const view = getViewKeyFromPath(location.pathname);
 
   const shellViews = [
-    'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
+    'home', 'earnings', 'earnings_detail', 'profile',
     'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
     'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'pending_detail', 'tax_form_records'].includes(view)) return 'earnings';
+    if (['earnings', 'earnings_detail', 'tax_form_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
@@ -732,7 +730,6 @@ function MainSystem() {
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <EarningsPage
               onDetail={() => handleNavigate('earnings_detail')}
-              onTrack={() => handleNavigate('pending_detail')}
               onTaxFormRecords={() => handleNavigate('tax_form_records')}
             />
           </ShellLayout>
@@ -747,12 +744,6 @@ function MainSystem() {
         <Route path="/earnings/tax-forms" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <TaxFormRecordsPage onBack={() => handleNavigate('earnings')} />
-          </ShellLayout>
-        } />
-
-        <Route path="/earnings/pending" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <PendingEarningsPage onBack={() => handleNavigate('earnings')} />
           </ShellLayout>
         } />
 

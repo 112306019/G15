@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
-import { Wallet, FileText, FileSignature, Clock, ChevronRight, Loader2, X, AlertCircle } from 'lucide-react';
+import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle } from 'lucide-react';
 
 function extractApiError(err, fallback) {
   const apiError = err.response?.data?.err;
@@ -50,11 +50,10 @@ function MissingTaxFormModal({ amount, onClose, onGoFill }) {
   );
 }
 
-export default function EarningsPage({ onDetail, onTrack, onTaxFormRecords }) {
+export default function EarningsPage({ onDetail, onTaxFormRecords }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
   const [withdrawable, setWithdrawable] = useState(0);
-  const [pending, setPending] = useState(0);
 
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
@@ -71,7 +70,6 @@ export default function EarningsPage({ onDetail, onTrack, onTaxFormRecords }) {
         });
         if (res.data.success) {
           setWithdrawable(res.data.withdrawable_amount);
-          setPending(res.data.pending_amount);
           if (res.data.min_payout_amount != null) setMinPayoutAmount(res.data.min_payout_amount);
           if (res.data.cross_bank_transfer_fee != null) setTransferFee(res.data.cross_bank_transfer_fee);
         }
@@ -205,31 +203,6 @@ export default function EarningsPage({ onDetail, onTrack, onTaxFormRecords }) {
                   查看收益明細
                 </button>
               </div>
-            </div>
-          </div>
-
-          {/* 🌟 待定收益區塊：維持明亮乾淨的風格 */}
-          <div
-            onClick={onTrack}
-            className="group bg-white rounded-[2.5rem] p-8 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-[#E2DDD4] shadow-sm hover:shadow-xl hover:border-[#C8522A]/40 transition-all duration-300 cursor-pointer"
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-[#F5F0E8] rounded-[1.2rem] flex items-center justify-center text-[#8C8880] group-hover:bg-[#FDF0ED] group-hover:text-[#C8522A] transition-colors shadow-sm">
-                <Clock size={28} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold tracking-widest mb-1.5 text-[#8C8880]">待定收益</h3>
-                <p className="text-3xl font-black text-[#1A1A18] tracking-tight">
-                  <span className="text-lg font-bold text-[#8C8880] mr-1">NT$</span>
-                  {pending.toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-2 text-sm font-bold text-[#1A1A18] group-hover:text-[#C8522A] transition-colors mt-4 md:mt-0 pt-4 md:pt-0 border-t border-[#E2DDD4] md:border-t-0">
-              <span className="md:hidden text-[#8C8880]">前往查看進度</span>
-              <span className="hidden md:inline">追蹤進度</span>
-              <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 

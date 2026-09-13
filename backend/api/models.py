@@ -309,6 +309,15 @@ class KOCMissionNew(models.Model):
         max_length=20, choices=END_REASON_CHOICES, blank=True, null=True, db_column='end_reason'
     )
 
+    # 任務進入 writing（待交文案）或 publishing（待交作品連結）時設定為當下時間
+    # + SUBMISSION_REMINDER_DAYS 天，用來判斷是否該發「逾期未交件」提醒通知
+    # （見 constants.sync_submission_deadline_reminders）。每次重新進入這兩個
+    # 階段（建立任務、審核退回）都會重設，離開這兩個階段後就不會再被用到。
+    submission_deadline_at = models.DateTimeField(null=True, blank=True, db_column='submission_deadline_at')
+    # 本次停留在 writing/publishing 期間，是否已經發過逾期提醒，避免重複通知。
+    # 重新進入這兩個階段時會歸零。
+    submission_reminder_sent = models.BooleanField(default=False, db_column='submission_reminder_sent')
+
     class Meta:
         db_table = 'Koc_Mission'
 
