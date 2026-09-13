@@ -60,11 +60,7 @@ export default function AdminVendorDetail() {
         });
       } catch (err) {
         console.error('取得廠商詳細資料失敗：', err);
-
-        setError(
-          err.response?.data?.err ||
-          '取得廠商詳細資料失敗'
-        );
+        setError(err.response?.data?.err || '取得廠商詳細資料失敗');
       } finally {
         setLoading(false);
       }
@@ -76,21 +72,20 @@ export default function AdminVendorDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-[#8C8880] font-bold">
+        <p className="text-[#8C8880] font-bold text-sm">
           廠商資料載入中...
         </p>
       </div>
     );
   }
 
-
   if (!vendor) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in">
-        <div className="w-16 h-16 bg-[#F8F9FA] text-[#8C8880] rounded-full flex items-center justify-center mb-4 border border-[#E2DDD4]">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in p-4">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#F8F9FA] text-[#8C8880] rounded-full flex items-center justify-center mb-4 border border-[#E2DDD4]">
           <AlertTriangle size={24} />
         </div>
-        <p className="text-[#1A1A18] font-bold text-lg mb-2">找不到廠商資料</p>
+        <p className="text-[#1A1A18] font-bold text-base sm:text-lg mb-2">找不到廠商資料</p>
         <button onClick={() => navigate('/admin/vendors')} className="text-[#C8522A] text-sm font-bold mt-4 hover:underline">返回列表</button>
       </div>
     );
@@ -110,12 +105,9 @@ export default function AdminVendorDetail() {
     }
 
     let reviewStatus = '';
-
-    if (actionType === 'approve') {
-      reviewStatus = 'approved';
-    } else if (actionType === 'reject') {
-      reviewStatus = 'rejected';
-    } else {
+    if (actionType === 'approve') reviewStatus = 'approved';
+    else if (actionType === 'reject') reviewStatus = 'rejected';
+    else {
       alert('目前後端只支援核准或拒絕廠商申請。');
       return;
     }
@@ -125,10 +117,7 @@ export default function AdminVendorDetail() {
         Admin_id: Number(adminId),
         Vendor_id: vendor.id,
         Status: reviewStatus,
-        Action_reason:
-          actionType === 'approve'
-            ? '廠商資料確認無誤'
-            : '廠商申請資料未通過審核',
+        Action_reason: actionType === 'approve' ? '廠商資料確認無誤' : '廠商申請資料未通過審核',
       });
 
       if (!response.data.success) {
@@ -137,48 +126,38 @@ export default function AdminVendorDetail() {
       }
 
       setShowConfirmModal(false);
-
-      alert(
-        actionType === 'approve'
-          ? `已核准【${vendor.companyName}】的廠商申請。`
-          : `已拒絕【${vendor.companyName}】的廠商申請。`
-      );
-
+      alert(actionType === 'approve' ? `已核准【${vendor.companyName}】的廠商申請。` : `已拒絕【${vendor.companyName}】的廠商申請。`);
       navigate('/admin/vendors');
     } catch (error) {
       console.error('審核廠商失敗：', error);
-
-      alert(
-        error.response?.data?.err ||
-        '審核廠商失敗，請稍後再試。'
-      );
+      alert(error.response?.data?.err || '審核廠商失敗，請稍後再試。');
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 relative">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 relative pb-10">
       
       {/* 🟢 操作確認 Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[2rem] p-10 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-6 mx-auto ${
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-10 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
+            <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center mb-4 sm:mb-6 mx-auto ${
               actionType === 'suspend' || actionType === 'reject' ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#B89B6A]'
             }`}>
-              {actionType === 'suspend' || actionType === 'reject' ? <ShieldAlert size={28} /> : <CheckCircle size={28} />}
+              {actionType === 'suspend' || actionType === 'reject' ? <ShieldAlert size={24} className="sm:w-7 sm:h-7" /> : <CheckCircle size={24} className="sm:w-7 sm:h-7" />}
             </div>
-            <h3 className="text-2xl font-serif font-black text-[#1A1A18] text-center mb-3">
+            <h3 className="text-xl sm:text-2xl font-serif font-black text-[#1A1A18] text-center mb-2 sm:mb-3">
               {actionType === 'approve' && '確認核准入駐？'}
               {actionType === 'reject' && '確認退回申請？'}
               {actionType === 'suspend' && '確認停權此廠商？'}
               {actionType === 'reactivate' && '確認恢復權限？'}
             </h3>
-            <p className="text-[#8C8880] text-center text-sm mb-8 font-medium leading-relaxed">
+            <p className="text-[#8C8880] text-center text-xs sm:text-sm mb-6 sm:mb-8 font-medium leading-relaxed">
               即將對 <span className="font-bold text-[#1A1A18]">{vendor.companyName}</span> 執行此操作，系統將自動記錄審核操作日誌並發送通知。
             </p>
-            <div className="flex gap-4">
-              <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-3.5 bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA] rounded-xl font-bold transition-colors text-sm">取消</button>
-              <button onClick={executeAction} className={`flex-1 px-4 py-3.5 text-white rounded-xl font-bold transition-all shadow-md text-sm ${
+            <div className="flex gap-3 sm:gap-4">
+              <button onClick={() => setShowConfirmModal(false)} className="flex-1 px-4 py-3 sm:py-3.5 bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA] rounded-xl font-bold transition-colors text-xs sm:text-sm">取消</button>
+              <button onClick={executeAction} className={`flex-1 px-4 py-3 sm:py-3.5 text-white rounded-xl font-bold transition-all shadow-md text-xs sm:text-sm ${
                 actionType === 'suspend' || actionType === 'reject' ? 'bg-[#C8522A] hover:bg-[#A64220]' : 'bg-[#1A1A18] hover:bg-[#333]'
               }`}>確認執行</button>
             </div>
@@ -186,28 +165,33 @@ export default function AdminVendorDetail() {
         </div>
       )}
 
-      {/* 🟢 頂部：返回按鈕 */}
-      <button onClick={() => navigate('/admin/vendors')} className="flex items-center gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-sm mb-4">
-        <ArrowLeft size={16} /> 返回廠商列表
+      {/* 🟢 頂部：橢圓白色返回按鈕 */}
+      <button 
+        onClick={() => navigate('/admin/vendors')} 
+        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18] shadow-sm hover:shadow-md rounded-full font-bold text-xs sm:text-sm transition-all mb-2 sm:mb-4 group w-fit"
+      >
+        <ArrowLeft size={16} className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:-translate-x-0.5" /> 
+        返回廠商列表
       </button>
       
       {/* 🟢 廠商卡片 */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] p-8 md:p-10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#F5F0E8] rounded-full mix-blend-multiply filter blur-[80px] opacity-70"></div>
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-[#E2DDD4] p-5 sm:p-8 md:p-10 relative overflow-hidden">
+        {/* 背景光暈 */}
+        <div className="absolute top-0 right-0 w-40 h-40 md:w-64 md:h-64 bg-[#F5F0E8] rounded-full mix-blend-multiply filter blur-[60px] md:blur-[80px] opacity-70"></div>
 
         {/* --- 廠商標題區 --- */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-10 pb-10 border-b border-[#E2DDD4] relative z-10">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-[#1A1A18] rounded-[1.5rem] flex items-center justify-center text-[#F5F0E8] shadow-md border-4 border-[#F8F9FA]">
-              <Building2 size={40} strokeWidth={1.5} />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8 mb-6 sm:mb-8 md:mb-10 pb-6 sm:pb-8 md:pb-10 border-b border-[#E2DDD4] relative z-10">
+          <div className="flex flex-row items-center gap-4 sm:gap-6 w-full md:w-auto">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-[#1A1A18] rounded-xl sm:rounded-[1.5rem] flex items-center justify-center text-[#F5F0E8] shadow-md border-2 sm:border-4 border-[#F8F9FA] shrink-0">
+              <Building2 className="w-8 h-8 sm:w-10 sm:h-10" strokeWidth={1.5} />
             </div>
-            <div>
-              <h2 className="text-3xl font-serif font-black text-[#1A1A18] mb-2">{vendor.companyName}</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-sans font-bold bg-[#F8F9FA] text-[#8C8880] px-2 py-1 rounded-md tracking-widest border border-[#E2DDD4]">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-serif font-black text-[#1A1A18] mb-1.5 sm:mb-2 truncate">{vendor.companyName}</h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="text-[9px] sm:text-[10px] font-sans font-bold bg-[#F8F9FA] text-[#8C8880] px-1.5 sm:px-2 py-1 rounded-md tracking-widest border border-[#E2DDD4]">
                   ID: {vendor.id}
                 </span>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest ${
+                <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-1 rounded-md border tracking-widest ${
                   vendor.status === 'approved' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 
                   vendor.status === 'pending' ? 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30' :
                   'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
@@ -218,109 +202,110 @@ export default function AdminVendorDetail() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-row flex-wrap gap-2 sm:gap-3 w-full md:w-auto mt-2 md:mt-0">
             {vendor.status === 'pending' && (
               <>
-                <button onClick={() => handleActionClick('approve')} className="px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-sm">核准入駐</button>
-                <button onClick={() => handleActionClick('reject')} className="px-6 py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-sm">退回申請</button>
+                <button onClick={() => handleActionClick('approve')} className="flex-1 md:flex-none px-4 sm:px-6 py-2.5 sm:py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-xs sm:text-sm">核准入駐</button>
+                <button onClick={() => handleActionClick('reject')} className="flex-1 md:flex-none px-4 sm:px-6 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-xs sm:text-sm">退回申請</button>
               </>
             )}
             {vendor.status === 'approved' && (
-              <button onClick={() => handleActionClick('suspend')} className="px-6 py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-sm">停權帳號</button>
+              <button onClick={() => handleActionClick('suspend')} className="w-full md:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#C8522A] rounded-xl font-bold hover:bg-[#FDF0ED] transition-colors text-xs sm:text-sm">停權帳號</button>
             )}
             {vendor.status === 'rejected' && (
-              <button onClick={() => handleActionClick('reactivate')} className="px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-sm">恢復權限</button>
+              <button onClick={() => handleActionClick('reactivate')} className="w-full md:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold hover:bg-[#333] transition-all shadow-md text-xs sm:text-sm">恢復權限</button>
             )}
           </div>
         </div>
 
         {/* --- 基本資料 & 錢包狀態 --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10 mb-10">
-          <div className="space-y-6">
-            <h3 className="font-serif font-bold text-xl text-[#1A1A18] flex items-center gap-2">
-              <FileText size={20} className="text-[#8C8880]" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 md:gap-10 relative z-10 mb-8 sm:mb-10">
+          <div className="space-y-4 sm:space-y-6">
+            <h3 className="font-serif font-bold text-lg sm:text-xl text-[#1A1A18] flex items-center gap-2">
+              <FileText size={18} className="text-[#8C8880] sm:w-5 sm:h-5" />
               企業聯絡資訊
             </h3>
-            <div className="bg-[#F8F9FA] rounded-2xl p-6 border border-[#E2DDD4] space-y-4">
+            <div className="bg-[#F8F9FA] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-[#E2DDD4] space-y-3 sm:space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-[#8C8880]">主要聯絡人</span>
-                <span className="text-sm font-bold text-[#1A1A18]">{vendor.contactName}</span>
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">主要聯絡人</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">{vendor.contactName}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-[#8C8880]">電子信箱</span>
-                <span className="text-sm font-bold text-[#1A1A18]">{vendor.email}</span>
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">電子信箱</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate max-w-[150px] sm:max-w-xs text-right">{vendor.email}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-[#8C8880]">統一編號</span>
-                <span className="text-sm font-bold text-[#1A1A18]">{vendor.taxId}</span>
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">統一編號</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">{vendor.taxId}</span>
               </div>
-              <div className="flex justify-between items-center pt-4 border-t border-[#E2DDD4] border-dashed">
-                <span className="text-sm font-bold text-[#8C8880]">註冊日期</span>
-                <span className="text-sm font-bold text-[#1A1A18]">{vendor.createdAt}</span>
+              <div className="flex justify-between items-center pt-3 sm:pt-4 border-t border-[#E2DDD4] border-dashed">
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">註冊日期</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">{vendor.createdAt}</span>
               </div>
             </div>
           </div>
           
-          <div className="space-y-6">
-            <h3 className="font-serif font-bold text-xl text-[#1A1A18] flex items-center gap-2">
-              <Wallet size={20} className="text-[#C8522A]" />
+          <div className="space-y-4 sm:space-y-6">
+            <h3 className="font-serif font-bold text-lg sm:text-xl text-[#1A1A18] flex items-center gap-2">
+              <Wallet size={18} className="text-[#C8522A] sm:w-5 sm:h-5" />
               錢包與財務狀態
             </h3>
-            <div className="bg-[#F8F9FA] rounded-2xl p-6 border border-[#E2DDD4] space-y-4">
+            <div className="bg-[#F8F9FA] rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-[#E2DDD4] space-y-3 sm:space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-[#8C8880]">廠商錢包編號</span>
-                <span className="text-sm font-bold text-[#1A1A18]">{vendor.walletId || '未建立'}</span>
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">廠商錢包編號</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate max-w-[120px] sm:max-w-none text-right">{vendor.walletId || '未建立'}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-bold text-[#8C8880]">帳戶餘額 (退款/儲值)</span>
-                <span className="text-lg font-black text-[#C8522A]">NT$ {vendor.balance?.toLocaleString() || 0}</span>
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">帳戶餘額</span>
+                <span className="text-base sm:text-lg font-black text-[#C8522A]">NT$ {vendor.balance?.toLocaleString() || 0}</span>
               </div>
-              <div className="flex justify-between items-center pt-4 border-t border-[#E2DDD4] border-dashed">
-                <span className="text-sm font-bold text-[#8C8880]">錢包狀態</span>
-                <span className="text-sm font-bold text-[#1A1A18]">正常可用</span>
+              <div className="flex justify-between items-center pt-3 sm:pt-4 border-t border-[#E2DDD4] border-dashed">
+                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">錢包狀態</span>
+                <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">正常可用</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* --- 活動與預算紀錄 --- */}
-        <div className="space-y-6 relative z-10 pt-8 border-t border-[#E2DDD4]">
-          <h3 className="font-serif font-bold text-xl text-[#1A1A18] flex items-center gap-2">
-            <Megaphone size={20} className="text-[#B89B6A]" />
+        <div className="space-y-4 sm:space-y-6 relative z-10 pt-6 sm:pt-8 border-t border-[#E2DDD4]">
+          <h3 className="font-serif font-bold text-lg sm:text-xl text-[#1A1A18] flex items-center gap-2">
+            <Megaphone size={18} className="text-[#B89B6A] sm:w-5 sm:h-5" />
             進行中活動與預算
           </h3>
           
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse bg-[#F8F9FA] rounded-2xl overflow-hidden border border-[#E2DDD4]">
+          <div className="overflow-x-auto -mx-5 sm:mx-0 px-5 sm:px-0 custom-scrollbar pb-2 sm:pb-0">
+            <table className="w-full min-w-[500px] text-left border-collapse bg-[#F8F9FA] rounded-xl sm:rounded-2xl overflow-hidden border border-[#E2DDD4]">
               <thead>
                 <tr className="border-b border-[#E2DDD4]">
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">活動名稱</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">活動預算</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">獎勵類型</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">活動走期</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">狀態</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider whitespace-nowrap">活動名稱</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider whitespace-nowrap">活動預算</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider whitespace-nowrap">獎勵類型</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider whitespace-nowrap">活動走期</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider whitespace-nowrap">狀態</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
                 {vendor.campaigns && vendor.campaigns.length > 0 ? (
                   vendor.campaigns.map((campaign) => (
                     <tr key={campaign.campaignId} className="hover:bg-white transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-[#1A1A18] text-sm">{campaign.name}</div>
-                        <div className="text-xs text-[#8C8880] mt-1">ID: {campaign.campaignId}</div>
+                      <td className="px-4 sm:px-6 py-3 sm:py-4">
+                        <div className="font-bold text-[#1A1A18] text-xs sm:text-sm whitespace-nowrap">{campaign.name}</div>
+                        <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">ID: {campaign.campaignId}</div>
                       </td>
-                      <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 font-black text-[#1A1A18] text-xs sm:text-sm whitespace-nowrap">
                         NT$ {campaign.budget.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">
-                        <span className="bg-white border border-[#E2DDD4] px-2 py-1 rounded-md">{campaign.rewardType}</span>
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">
+                        <span className="inline-block whitespace-nowrap bg-white border border-[#E2DDD4] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md">{campaign.rewardType}</span>
                       </td>
-                      <td className="px-6 py-4 text-xs font-bold text-[#8C8880]">
+                      <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] whitespace-nowrap">
                         <div className="flex items-center gap-1"><Calendar size={12}/> {campaign.startDate}</div>
-                        <div className="flex items-center gap-1 mt-1 text-[#1A1A18]">至 {campaign.endDate}</div>
+                        <div className="flex items-center gap-1 mt-0.5 sm:mt-1 text-[#1A1A18]">至 {campaign.endDate}</div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
+                      <td className="px-4 sm:px-6 py-3 sm:py-4">
+                        {/* 💡 這裡加上了 inline-block 與 whitespace-nowrap 確保文字不會換行 */}
+                        <span className={`inline-block whitespace-nowrap text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-1 rounded-md border tracking-widest uppercase ${
                           campaign.status === 'active' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 'bg-[#E2DDD4] text-[#8C8880]'
                         }`}>
                           {campaign.status === 'active' ? '招募中' : '已結案'}
@@ -330,7 +315,7 @@ export default function AdminVendorDetail() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">
+                    <td colSpan="5" className="px-4 sm:px-6 py-6 sm:py-8 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
                       目前尚無任何活動紀錄
                     </td>
                   </tr>
