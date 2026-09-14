@@ -280,6 +280,14 @@ export default function OrdersPage({
     })),
   }));
 
+  // 進行中訂單依出貨狀態分類：已成立（尚未備貨）、備貨中、已出貨
+  // （含已送達但消費者還沒按確認收貨的訂單，一律歸在「已出貨」）
+  const establishedOrders = activeOrders.filter((o) => o.shippingStatus === "unshipped");
+  const preparingOrders = activeOrders.filter((o) => o.shippingStatus === "preparing");
+  const shippedOrders = activeOrders.filter(
+    (o) => o.shippingStatus !== "unshipped" && o.shippingStatus !== "preparing"
+  );
+
   const historyOrders = orders.filter(
     (o) =>
       o.order_status === "completed" ||
@@ -346,23 +354,39 @@ export default function OrdersPage({
         </div>
       ) : (
         <div className="space-y-10 md:space-y-12">
-          {/* Active orders */}
+          {/* Active orders：依出貨狀態分類 */}
           {activeOrders.length > 0 && (
             <section>
               <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6">購買清單</h3>
 
-              <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
-                {activeOrders.map((o) => (
-                  <OrderCard
-                    key={o.id}
-                    vendorName={o.vendorName}
-                    items={o.items}
-                    shippingStatus={o.shippingStatus}
-                    orderStatus={o.orderStatus}
-                    onTrack={() => onTrackOrder?.(o.id)}
-                    onChat={() => onOpenChat?.(o.id)}
-                  />
-                ))}
+              <div className="space-y-8 md:space-y-10">
+                {[
+                  { key: "established", label: "已成立", dot: "bg-[#8C8880]", list: establishedOrders },
+                  { key: "preparing", label: "備貨中", dot: "bg-[#9A6700]", list: preparingOrders },
+                  { key: "shipped", label: "已出貨", dot: "bg-[#1A1A18]", list: shippedOrders },
+                ].map(({ key, label, dot, list }) =>
+                  list.length === 0 ? null : (
+                    <div key={key}>
+                      <h4 className="flex items-center gap-2 text-sm md:text-base font-bold text-[#1A1A18] mb-3 md:mb-4">
+                        <span className={`w-1.5 h-4 md:h-5 rounded-full inline-block ${dot}`} />
+                        {label}（{list.length}）
+                      </h4>
+                      <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
+                        {list.map((o) => (
+                          <OrderCard
+                            key={o.id}
+                            vendorName={o.vendorName}
+                            items={o.items}
+                            shippingStatus={o.shippingStatus}
+                            orderStatus={o.orderStatus}
+                            onTrack={() => onTrackOrder?.(o.id)}
+                            onChat={() => onOpenChat?.(o.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             </section>
           )}
