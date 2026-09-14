@@ -80,7 +80,7 @@ function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, or
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 border-t border-[#E2DDD4] pt-4 md:pt-5">
         {items.map((it, idx) => (
           <div key={idx} className="flex items-center gap-3">
             <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
@@ -93,7 +93,7 @@ function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, or
         ))}
       </div>
 
-      <div className="flex justify-end mt-2 md:mt-0">
+      <div className="flex justify-end border-t border-[#E2DDD4] pt-4 md:pt-5 mt-2 md:mt-0">
         <button
           type="button"
           onClick={(e) => {
