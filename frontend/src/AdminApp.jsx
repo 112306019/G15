@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Store, UserCheck,
-  ClipboardList, CreditCard, LogOut, History, ShieldAlert, Headset, FileText
+  ClipboardList, CreditCard, LogOut, History, 
+  ShieldAlert, Headset, FileText, Menu, X
 } from 'lucide-react';
 
 import LogoIcon from './assets/logo.jpg';
@@ -10,7 +11,7 @@ import LogoText from './assets/ShareBuy.png';
 
 // 引入切好的各個頁面元件
 import AdminOverview from './admin/AdminOverview';
-import AdminInfluencers from './admin/AdminInfluencers';
+import AdminKOC from './admin/AdminKOC';
 import AdminKocDetail from './admin/AdminKOCDetail';
 import AdminKOCPending from './admin/AdminKOCPending';
 import AdminConsumers from './admin/AdminConsumers';
@@ -28,9 +29,13 @@ export default function AdminApp() {
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
-
+  
   // 管理員身分狀態
   const [adminRole, setAdminRole] = useState('super_admin');
+  
+  // 控制手機版側邊選單與右上角個人選單開關的狀態
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
@@ -47,6 +52,12 @@ export default function AdminApp() {
     }
   }, [navigate]);
 
+  // 當路由改變時，自動收起手機版側邊欄與個人選單
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+    setIsProfileMenuOpen(false);
+  }, [location.pathname]);
+
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
@@ -60,7 +71,7 @@ export default function AdminApp() {
   const allMenuItems = [
     { id: 'overview', label: '平台總覽', icon: <LayoutDashboard size={20} />, path: '/admin', roles: ['super_admin', 'finance', 'reviewer'] },
     { id: 'vendors', label: '廠商管理', icon: <Store size={20} />, path: '/admin/vendors', roles: ['super_admin', 'reviewer', 'finance'] },
-    { id: 'influencers', label: 'KOC 管理', icon: <UserCheck size={20} />, path: '/admin/influencers', roles: ['super_admin', 'reviewer', 'finance'] },
+    { id: 'koc', label: 'KOC 管理', icon: <UserCheck size={20} />, path: '/admin/koc', roles: ['super_admin', 'reviewer', 'finance'] },
     { id: 'consumers', label: '一般使用者', icon: <Users size={20} />, path: '/admin/consumers', roles: ['super_admin', 'reviewer'] },
     { id: 'missions', label: '任務與活動追蹤', icon: <ClipboardList size={20} />, path: '/admin/missions', roles: ['super_admin', 'reviewer'] },
     { id: 'finance', label: '訂單與財務', icon: <CreditCard size={20} />, path: '/admin/finance', roles: ['super_admin', 'finance'] },
@@ -71,11 +82,11 @@ export default function AdminApp() {
 
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
 
-  // 新增路由保護元件 (Protected Route)
+  // 路由保護元件
   const ProtectedRoute = ({ allowedRoles, children }) => {
     if (!allowedRoles.includes(adminRole)) {
       return (
-        <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm animate-in fade-in">
+        <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm animate-in fade-in px-4 text-center">
           <div className="w-20 h-20 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center mb-6 border-4 border-[#C8522A]/10">
             <ShieldAlert size={36} />
           </div>
@@ -94,24 +105,31 @@ export default function AdminApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800">
+    <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800 overflow-x-hidden">
 
-      <aside className="w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-10">
-        <div className="h-20 flex items-center px-4 border-b border-[#E2DDD4] cursor-pointer" onClick={() => navigate('/admin')}>
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 md:hidden transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* 側邊欄 (支援響應式滑動) */}
+      <aside className={`w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-30 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+        <div className="h-16 md:h-20 flex items-center px-4 border-b border-[#E2DDD4] cursor-pointer" onClick={() => navigate('/admin')}>
           
-          <div className="bg-[#F5F0E8] w-full px-3 py-2 rounded-full flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm">
+          <div className="bg-[#F5F0E8] w-full px-2.5 py-2 rounded-xl flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm">
             <img 
               src={LogoIcon} 
               alt="ShareBuy Logo" 
-              className="w-8 h-8 rounded-full object-cover shadow-sm shrink-0" 
+              className="h-7 w-7 md:h-8 md:w-8 object-cover rounded-lg shadow-sm flex-shrink-0" 
             />
             <img 
               src={LogoText} 
               alt="ShareBuy Text" 
-              className="h-6 w-auto object-contain mix-blend-multiply translate-y-[1px]" 
+              className="h-5 md:h-6 w-auto object-contain mix-blend-multiply"
             />
-            {/* ADMIN 標籤靠右對齊 */}
-            <span className="text-[9px] bg-[#1A1A18] text-white px-1.5 py-0.5 rounded-md font-bold tracking-wider ml-auto">
+            <span className="text-[10px] bg-[#1A1A18] text-white px-2 py-0.5 rounded-md font-bold tracking-wider ml-auto flex-shrink-0">
               ADMIN
             </span>
           </div>
@@ -126,7 +144,7 @@ export default function AdminApp() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
+                className={`w-full flex items-center gap-3 px-4 py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
                     ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
                     : 'text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]'
                   }`}
@@ -148,26 +166,64 @@ export default function AdminApp() {
         </div>
       </aside>
 
-      <main className="flex-1 ml-64 flex flex-col min-h-screen">
+      {/* 主要內容區 */}
+      <main className="flex-1 w-full md:ml-64 flex flex-col min-h-screen transition-all duration-300">
 
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-end px-10">
-          <div className="flex items-center gap-5">
-            <div className="text-sm font-bold text-[#8C8880] pr-5 border-r border-[#E2DDD4]">
+        {/* 頂部 Header */}
+        <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-between md:justify-end px-4 md:px-10">
+          
+          <button 
+            className="md:hidden p-2 text-[#1A1A18] hover:bg-[#F5F0E8] rounded-lg transition-colors"
+            onClick={() => setIsMobileMenuOpen(true)}
+          >
+            <Menu size={24} />
+          </button>
+
+          <div className="flex items-center gap-3 md:gap-5">
+            <div className="hidden md:block text-sm font-bold text-[#8C8880] pr-5 border-r border-[#E2DDD4]">
               系統時間：{new Date().toLocaleDateString('zh-TW')}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <div className="text-sm font-black text-[#1A1A18]">{adminEmail.split('@')[0]}</div>
-                <div className="text-[10px] font-bold text-[#C8522A] tracking-wider uppercase">{adminRole}</div>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-[#1A1A18] text-white flex items-center justify-center font-bold uppercase">
-                {adminEmail.charAt(0)}
-              </div>
+            
+            <div 
+              className="relative"
+              onMouseEnter={() => setIsProfileMenuOpen(true)}
+              onMouseLeave={() => setIsProfileMenuOpen(false)}
+            >
+              <button 
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="flex items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none py-2"
+              >
+                <div className="text-right hidden sm:block">
+                  <div className="text-sm font-black text-[#1A1A18]">{adminEmail.split('@')[0]}</div>
+                  <div className="text-[10px] font-bold text-[#C8522A] tracking-wider uppercase">{adminRole}</div>
+                </div>
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#1A1A18] text-white flex items-center justify-center font-bold uppercase text-sm md:text-base shadow-sm">
+                  {adminEmail.charAt(0)}
+                </div>
+              </button>
+
+              {/* 下拉選單內容 */}
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-full pt-1 z-50">
+                  <div className="w-40 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#E2DDD4] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-1.5">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-[#C8522A] hover:bg-[#FDF0ED] rounded-lg transition-colors"
+                      >
+                        <LogOut size={16} />
+                        登出系統
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        <div className="p-10 flex-1">
+        {/* 頁面內容區 */}
+        <div className="p-4 sm:p-6 md:p-10 flex-1 overflow-x-hidden">
           <Routes>
             <Route path="/" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance', 'reviewer']}>
@@ -175,56 +231,34 @@ export default function AdminApp() {
               </ProtectedRoute>
             } />
 
-            {/* 廠商管理模組 */}
             <Route path="/vendors" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminVendors />
               </ProtectedRoute>
             } />
-
-            <Route
-              path="/vendors/:id"
-              element={
-                <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
-                  <AdminVendorDetail />
-                </ProtectedRoute>
-              }
-            />     
-
-            {/* KOC 管理模組 */}
-            <Route path="/influencers" element={
+            <Route path="/vendors/:id" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
-                <AdminInfluencers />
+                <AdminVendorDetail />
+              </ProtectedRoute>
+            } />     
+
+            <Route path="/koc" element={
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+                <AdminKOC />
               </ProtectedRoute>
             } />
-            <Route path="/influencers/pending" element={
+            <Route path="/koc/pending" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminKOCPending />
               </ProtectedRoute>
             } />
-            <Route path="/influencers/:id" element={
+            
+            <Route path="/koc/:id" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
-                <AdminKocDetail koc={{
-                  id: 'U0089',
-                  name: '王大寶',
-                  account: 'dabao.ig',
-                  email: 'dabao@example.com',
-                  phone: '0912-345-678',
-                  status: 'active',
-                  createdAt: '2026-01-15',
-                  missions: [
-                    { missionId: 'M-1029', promotionCode: 'DABAO50', stage: '圖文審核中', deadline: '2026-07-20', status: '進行中' },
-                    { missionId: 'M-0988', promotionCode: 'DABAO-SUMMER', stage: '已上線', deadline: '2026-06-30', status: '已結案' }
-                  ],
-                  earnings: [
-                    { kocMissionId: 'KM-0988', amount: 3500, payoutDate: '2026-07-05', status: '已撥款' },
-                    { kocMissionId: 'KM-1029', amount: 5000, payoutDate: null, status: '待結算' }
-                  ]
-                }} />
+                <AdminKocDetail />
               </ProtectedRoute>
             } />
 
-            {/* 一般使用者模組 */}
             <Route path="/consumers" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminConsumers />
@@ -236,35 +270,30 @@ export default function AdminApp() {
               </ProtectedRoute>
             } />
 
-            {/* 任務與活動追蹤模組 */}
             <Route path="/missions" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
                 <AdminMissions />
               </ProtectedRoute>
             } />
 
-            {/* 訂單與財務金流模組 */}
             <Route path="/finance" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminFinance />
               </ProtectedRoute>
             } />
 
-            {/* 勞報單審核模組 */}
             <Route path="/tax-forms" element={
               <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
                 <AdminTaxForms />
               </ProtectedRoute>
             } />
 
-            {/* 客服聊天室模組 */}
             <Route path="/support" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminSupport />
               </ProtectedRoute>
             } />
 
-            {/* 系統操作紀錄模組 */}
             <Route path="/logs" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
                 <AdminLogs />

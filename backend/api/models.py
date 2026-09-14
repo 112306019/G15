@@ -96,6 +96,16 @@ class KOC(models.Model):
     )
     reject_reason = models.TextField(blank=True, null=True, db_column='reject_reason')
     is_suspended = models.BooleanField(default=False, db_column='is_suspended')  # 新增
+    # 停權到期時間：只有 is_suspended=True 時才有意義。到期後由
+    # sync_expired_koc_suspensions() 自動解除（lazy-write，不用排程）。
+    suspended_until = models.DateTimeField(null=True, blank=True, db_column='suspended_until')
+    # 終身累計違規次數（自己取消任務 + 任務放到過期沒完成，兩種都算），只會增加
+    # 不會歸零，給廠商審核接案申請時參考這個 KOC 過去的紀錄，跟下面「距離上次
+    # 停權以來的次數」是分開的兩件事。
+    total_violation_count = models.IntegerField(default=0, db_column='total_violation_count')
+    # 距離「上一次觸發停權」以來的違規次數：每次觸發停權就會歸零重新算，
+    # 決定下一次要再違規幾次才會又被停權（見 record_koc_violation）。
+    violation_count_since_suspension = models.IntegerField(default=0, db_column='violation_count_since_suspension')
 
     class Meta:
         db_table = 'Koc'
@@ -288,17 +298,45 @@ class Application(models.Model):
 
 class KOCMissionNew(models.Model):
     """KOC 任務表（優化版：全面小寫規範 + 減少 JOIN 效能優化）"""
+
+    END_REASON_CHOICES = [
+        ('expired', '已過期'),
+        ('cancelled', 'KOC取消'),
+    ]
+
     kocmission_id = models.AutoField(primary_key=True, db_column='kocmission_id')
-    
+
     # 1. 依然保留與申請表的關聯（為了追蹤當初是哪一次申請通過的）
     application = models.ForeignKey('Application',  on_delete=models.CASCADE, db_column='application_id')
-    
+
     # 🌟 2. 冗餘欄位：直接綁定 KOC（對應 KOC 表），方便網紅打開 App 看任務清單時，不需要 JOIN Application 表！
     koc = models.ForeignKey('KOC', on_delete=models.CASCADE, db_column='koc_id', db_index=True, null=True, blank=True)
     stage = models.CharField(max_length=50, db_column='stage')
+    # 只有 stage='completed' 時才有意義：null/blank 代表案件正常跑完（已結案）；
+    # 'expired' 代表推廣期滿前沒完成該做的事就被系統自動結案（已取消）；
+    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）。
+    end_reason = models.CharField(
+        max_length=20, choices=END_REASON_CHOICES, blank=True, null=True, db_column='end_reason'
+    )
+
+    # 任務進入 writing（待交文案）或 publishing（待交作品連結）時設定為當下時間
+    # + SUBMISSION_REMINDER_DAYS 天，用來判斷是否該發「逾期未交件」提醒通知
+    # （見 constants.sync_submission_deadline_reminders）。每次重新進入這兩個
+    # 階段（建立任務、審核退回）都會重設，離開這兩個階段後就不會再被用到。
+    submission_deadline_at = models.DateTimeField(null=True, blank=True, db_column='submission_deadline_at')
+    # 本次停留在 writing/publishing 期間，是否已經發過逾期提醒，避免重複通知。
+    # 重新進入這兩個階段時會歸零。
+    submission_reminder_sent = models.BooleanField(default=False, db_column='submission_reminder_sent')
+
+    # 貼文連結逾期追蹤：文案審核通過、進入 publishing 階段時記錄時間，
+    # 7 天內沒提交貼文連結（stage 還沒推進到 promoting）就算失信；
+    # missed_publishing_deadline 一旦被設為 True 就永久保留（即使後來補交了），
+    # 作為 KOC 過往失信次數統計的依據。
+    publishing_started_at = models.DateTimeField(null=True, blank=True, db_column='publishing_started_at')
+    missed_publishing_deadline = models.BooleanField(default=False, db_column='missed_publishing_deadline')
 
     class Meta:
-        db_table = 'Koc_Mission'  
+        db_table = 'Koc_Mission'
 
     def __str__(self):
         return f"Mission {self.kocmission_id} for KOC {self.koc_id} (Stage: {self.stage})"
@@ -306,10 +344,10 @@ class KOCMissionNew(models.Model):
 
 class RemunerationForm(models.Model):
     """
-    勞務報酬單（勞報單）：案件完成推廣後，KOC 下載固定範本簽署，上傳到自己的雲端硬碟，
-    把「公開檢視連結」貼回來給平台審核。平台不接收檔案直接上傳，只收連結。
-    一個 KOCMissionNew 只會有一張勞報單，還沒送出過連結之前不會有這筆紀錄
-    （用 get_or_create 在第一次提交時才建立，見 koc_submit_tax_form_link）。
+    勞務報酬單（勞報單）：不再綁定單一案件，而是 KOC 每次申報時，把「目前所有還沒
+    申報過的分潤」加總成一筆金額，開一張勞報單。KOC 下載固定範本簽署，上傳到自己的
+    雲端硬碟，把「公開檢視連結」貼回來給平台審核。平台不接收檔案直接上傳，只收連結。
+    這筆申報實際涵蓋了哪幾筆分潤，記在 Earnings.remuneration_form（見該欄位註解）。
     """
     STATUS_CHOICES = [
         ('pending_review', '待審核'),
@@ -318,12 +356,15 @@ class RemunerationForm(models.Model):
     ]
 
     form_id = models.AutoField(primary_key=True)
-    kocmission = models.OneToOneField(
-        KOCMissionNew,
+    koc = models.ForeignKey(
+        KOC,
         on_delete=models.CASCADE,
-        related_name='remuneration_form',
-        db_column='kocmission_id'
+        related_name='remuneration_forms',
+        db_column='koc_id'
     )
+    # 這張勞報單涵蓋的分潤加總金額（= 建立當下所有 Earnings.remuneration_form 剛好
+    # 被指到這張單的加總，之後不會因為新的分潤產生而變動）
+    amount = models.IntegerField(db_column='amount')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_review', db_column='status')
     cloud_link_url = models.URLField(max_length=500, db_column='cloud_link_url')
     submitted_at = models.DateTimeField(db_column='submitted_at')
@@ -338,7 +379,7 @@ class RemunerationForm(models.Model):
         db_table = 'RemunerationForm'
 
     def __str__(self):
-        return f"RemunerationForm {self.form_id} for Mission {self.kocmission_id} ({self.status})"
+        return f"RemunerationForm {self.form_id} for KOC {self.koc_id} ({self.status})"
 
 
 class Submissions(models.Model):
@@ -545,6 +586,26 @@ class Product(models.Model):
         choices=AD_CATEGORY_CHOICES,
         default='other',
         db_column='ad_category'
+    )
+
+    # 七天鑑賞期退貨規則：預設可退，廠商可選擇這個商品不適用七天鑑賞期，
+    # 但依消保法規定，選「不可退」時必須指定屬於法定例外情況的哪一種原因。
+    NON_RETURNABLE_REASON_CHOICES = [
+        ('perishable', '易腐敗、保存期限較短，或退貨時將逾期'),
+        ('customized', '客製化商品、服務'),
+        ('periodical', '報紙、期刊或雜誌'),
+        ('opened_media', '經拆封的影音商品或電腦軟體'),
+        ('digital_content', '經消費者同意而提供的非有形媒介數位內容或提供即完成的線上服務'),
+        ('opened_hygiene', '已拆封的個人衛生用品'),
+        ('air_transport', '國際航空客運服務'),
+    ]
+    is_returnable = models.BooleanField(default=True, db_column='is_returnable')
+    non_returnable_reason = models.CharField(
+        max_length=30,
+        choices=NON_RETURNABLE_REASON_CHOICES,
+        blank=True,
+        null=True,
+        db_column='non_returnable_reason'
     )
 
     class Meta:
@@ -855,6 +916,16 @@ class Earnings(models.Model):
     # 舊資料沒有這個值，view 層讀取時如果是 None 就以 amount 當作 original_amount。
     original_amount = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    # 這筆分潤有沒有被納入某一張已申報的勞務報酬單。KOC 每次申報時會把當下所有還是
+    # null 的分潤一次加總開單，開單後這裡就會指到那張單，之後不會再被算進下一張。
+    remuneration_form = models.ForeignKey(
+        RemunerationForm,
+        on_delete=models.SET_NULL,
+        db_column='remuneration_form_id',
+        null=True,
+        blank=True,
+        related_name='earnings'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     # 因為哪一筆退貨申請被取消/調整，退貨爭議追查用；正常分潤這欄是空的
     cancelled_by_return_request = models.ForeignKey(
@@ -1019,6 +1090,53 @@ class SupportMessage(models.Model):
         ordering = ['created_at']
 
 
+class OrderChatRoom(models.Model):
+    """
+    消費者針對某張訂單跟廠商溝通的聊天室，跟 SupportChatRoom（找平台客服）是分開的兩件事：
+    這裡是買家跟賣家兩邊直接對話，一張訂單固定一間聊天室。
+    """
+    room_id = models.AutoField(primary_key=True)
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='chat_room',
+        db_column='order_id'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'OrderChatRoom'
+
+    def __str__(self):
+        return f"OrderChatRoom {self.room_id} for Order {self.order_id}"
+
+
+class OrderMessage(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('user', '消費者'),
+        ('vendor', '廠商'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(
+        OrderChatRoom,
+        on_delete=models.CASCADE,
+        related_name='messages',
+        db_column='room_id'
+    )
+    sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
+    # 對應 User.user_id 或 Vendor.vendor_id，依 sender_role 而定，不是外鍵
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    # 對方是否已讀（user 發的訊息看廠商有沒有讀；vendor 發的訊息看消費者有沒有讀）
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'OrderMessage'
+        ordering = ['created_at']
+
+
 class LoginHistory(models.Model):
     log_id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='login_history')
@@ -1125,6 +1243,43 @@ class ShipmentInfo(models.Model):
 
     def __str__(self):
         return f"Shipment {self.shipment_id} - Order {self.order_id}"
+
+
+class Notification(models.Model):
+    """
+    站內通知：系統/廠商/平台做了某件跟這個使用者有關的事，推播一則訊息給他看，
+    跟 ChatRoom/SupportChatRoom/OrderChatRoom 那種「雙方對話」的 Message 不是同一件事
+    （通知是單向的、沒有回覆）。
+    """
+    CATEGORY_CHOICES = [
+        ('order', '訂單'),
+        ('koc', 'KOC接案'),
+    ]
+
+    notification_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_column='user_id'
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_column='category')
+    title = models.CharField(max_length=200, db_column='title')
+    body = models.TextField(blank=True, default='', db_column='body')
+    # 點擊這則通知要導去哪裡：reference_type 決定前端怎麼解讀 reference_id，
+    # 例如 'order'（訂單詳情）、'order_chat'（訂單聊天室）、'koc_home'（接案管理）、
+    # 'tax_form_records'（勞報單紀錄）。不是外鍵，純粹給前端導頁用。
+    reference_type = models.CharField(max_length=50, blank=True, null=True, db_column='reference_type')
+    reference_id = models.CharField(max_length=100, blank=True, null=True, db_column='reference_id')
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Notification'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Notification {self.notification_id} ({self.category}) for {self.user_id}"
 
 
 # ==============================================================================

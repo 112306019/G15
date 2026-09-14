@@ -156,17 +156,17 @@ def send_password_reset_email(user, code):
     )
 
 
-def send_tax_form_rejected_email(user, campaign_name, reject_reason):
+def send_tax_form_rejected_email(user, amount, reject_reason):
     """
     勞務報酬單被退回時通知 KOC。
 
     寄信失敗不應該讓審核流程跟著失敗或卡住 API 回應，
     呼叫端要自己包 try/except，這裡只負責寄信本身。
     """
-    subject = f"【KOC Platform】您的勞務報酬單被退回：{campaign_name}"
+    subject = f"【KOC Platform】您申報的勞務報酬單被退回（NT$ {amount:,}）"
     message = (
         f"{user.display_name or user.name} 您好，\n\n"
-        f"您針對「{campaign_name}」提交的勞務報酬單經審核後需要修正：\n\n"
+        f"您申報金額 NT$ {amount:,} 的勞務報酬單經審核後需要修正：\n\n"
         f"退回原因：{reject_reason}\n\n"
         "請登入平台重新上傳連結。\n\n"
         "KOC Platform 團隊"
@@ -273,6 +273,31 @@ def send_submission_approved_email(submission):
         f"{koc_user.display_name or koc_user.name} 您好，\n\n"
         "恭喜！您提交的文案已通過廠商審核。\n"
         "請將文案發布到您的社群帳號後，回到平台提交貼文連結，即可開始推廣任務。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
+
+
+def send_application_auto_rejected_email(application):
+    """
+    廠商超過 7 天未審核 KOC 的代言活動申請，系統自動取消後寄信通知 KOC。
+    """
+    koc_user = application.koc.user
+    campaign_name = application.campaign.name
+
+    subject = "您的代言活動申請已自動取消"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        f"您申請的代言活動「{campaign_name}」，因超過平台規定的 7 天審核期限，"
+        "廠商尚未完成審核，系統已自動將此申請取消。\n\n"
+        "歡迎您重新尋找其他合作機會。\n\n"
         "KOC Platform 團隊"
     )
 

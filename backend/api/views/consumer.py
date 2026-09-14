@@ -1281,31 +1281,36 @@ def view_order(request):
             continue
         order_list.append(order)
 
+    order_ids = [order.order_id for order in order_list]
+
+    # 商品明細一次撈出所有訂單的份，再用 order_id 分組，避免對每張訂單各發一次查詢（N+1）
     items_by_order = {}
     vendor_ids = set()
 
-    for order in order_list:
-        items = list(
-            OrderItem.objects
-            .filter(order=order)
-            .select_related('product')
-        )
-        items_by_order[order.order_id] = items
-
-        for item in items:
-            if item.product and item.product.vendor_id:
-                vendor_ids.add(item.product.vendor_id)
+    for item in (
+        OrderItem.objects
+        .filter(order_id__in=order_ids)
+        .select_related('product')
+    ):
+        items_by_order.setdefault(item.order_id, []).append(item)
+        if item.product and item.product.vendor_id:
+            vendor_ids.add(item.product.vendor_id)
 
     vendor_name_by_id = {
         v.vendor_id: v.company_name
         for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
     }
 
-    order_ids = [order.order_id for order in order_list]
-
     shipment_by_order = {
         shipment.order_id: shipment
         for shipment in ShipmentInfo.objects.filter(order_id__in=order_ids)
+    }
+
+    # 收件地址同樣一次撈出所有訂單用到的份，不要逐筆訂單各查一次
+    address_ids = [order.address_id for order in order_list if order.address_id]
+    address_by_id = {
+        address.pk: address
+        for address in Address.objects.filter(pk__in=address_ids)
     }
 
     result = []
@@ -1322,9 +1327,7 @@ def view_order(request):
         recipient_data = None
 
         if order.address_id:
-            address = Address.objects.filter(
-                pk=order.address_id
-            ).first()
+            address = address_by_id.get(order.address_id)
 
             if address:
                 recipient_data = {
@@ -1368,6 +1371,7 @@ def view_order(request):
             'cancel_reason': order.cancel_reason,
             'Address_id': order.address_id,
             'created_at': order.created_at,
+            'vendor_id': first_vendor_id,
             'delivered_at': order.delivered_at,
             'completed_at': order.completed_at,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
@@ -1835,6 +1839,45 @@ def create_return_request(request):
                 {
                     'success': False,
                     'err': '目前整張訂單退貨退款僅支援單一廠商訂單；此訂單包含多個廠商商品，暫無法線上申請'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 廠商可為個別商品標記「不適用七天鑑賞期退貨」（依消保法法定例外原因）；
+        # 只要這張訂單裡有任何一個商品不可退，就不能整張退，強制消費者改用
+        # 單品項退貨（那樣只要選到的那個商品本身可退就行，不受這張訂單其他商品影響）。
+        non_returnable_products = (
+            OrderItem.objects.filter(order=order, product__is_returnable=False)
+            .select_related('product')
+        )
+        if non_returnable_products.exists():
+            names = '、'.join(item.product.product_name for item in non_returnable_products)
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此訂單包含不適用七天鑑賞期退貨的商品（{names}），無法整張退貨，請改為選擇單一商品申請退貨'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
+        # 單品項退貨：只要檢查這個被選中的品項本身能不能退。
+        try:
+            target_item = OrderItem.objects.select_related('product').get(
+                order_item_id=order_item_id, order=order
+            )
+        except OrderItem.DoesNotExist:
+            return Response(
+                {'success': False, 'err': '找不到對應的訂單品項'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        if target_item.product and not target_item.product.is_returnable:
+            reason_label = dict(Product.NON_RETURNABLE_REASON_CHOICES).get(
+                target_item.product.non_returnable_reason, ''
+            )
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此商品不適用七天鑑賞期退貨（原因：{reason_label}）'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )

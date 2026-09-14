@@ -107,19 +107,21 @@ export default function Support() {
   }
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-3xl mx-auto pb-10 pt-2">
-      <div className="flex flex-col h-[65vh] rounded-[1.5rem] border border-[#E2DDD4] bg-white shadow-sm overflow-hidden">
+    <div className="animate-in fade-in duration-500 max-w-3xl mx-auto pb-4 sm:pb-10 pt-2 px-0 sm:px-4">
+      {/* 針對手機版拉高對話框高度，電腦版維持 65vh */}
+      <div className="flex flex-col h-[75vh] sm:h-[65vh] rounded-[1.5rem] border border-[#E2DDD4] bg-white shadow-sm overflow-hidden">
+        
         {loadError && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
+          <div className="mx-4 sm:mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
             {loadError}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-3 sm:space-y-4">
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center">
               <Loader2 size={20} className="animate-spin text-[#C8522A]" />
-              <div className="text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
+              <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
             </div>
           ) : messages.length > 0 ? (
             messages.map(message => {
@@ -132,7 +134,7 @@ export default function Support() {
                 >
                   <div
                     className={cn(
-                      'max-w-[75%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words',
+                      'max-w-[85%] sm:max-w-md px-4 py-2.5 rounded-2xl text-[13px] sm:text-sm leading-relaxed whitespace-pre-wrap break-words',
                       isMine
                         ? 'bg-[#1A1A18] text-white rounded-br-sm'
                         : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
@@ -141,7 +143,7 @@ export default function Support() {
                     {message.content}
                     <div
                       className={cn(
-                        'text-[10px] mt-1',
+                        'text-[9px] sm:text-[10px] mt-1',
                         isMine ? 'text-white/50 text-right' : 'text-[#8C8880]'
                       )}
                     >
@@ -153,39 +155,42 @@ export default function Support() {
             })
           ) : (
             <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
-              <Headset size={28} className="mb-3 text-[#E2DDD4]" />
-              <p className="text-sm font-bold">尚無對話紀錄</p>
-              <p className="text-xs mt-2">有任何問題都可以在這裡詢問客服</p>
+              <Headset size={28} className="mb-2 sm:mb-3 text-[#E2DDD4]" />
+              <p className="text-[13px] sm:text-sm font-bold">尚無對話紀錄</p>
+              <p className="text-[11px] sm:text-xs mt-1 sm:mt-2">有任何問題都可以在這裡詢問客服</p>
             </div>
           )}
 
           <div ref={bottomRef} />
         </div>
 
-        <div className="bg-white border-t border-[#E2DDD4] px-6 py-4 shrink-0">
+        <div className="bg-[#F8F9FA] sm:bg-white border-t border-[#E2DDD4] px-3 sm:px-6 py-3 sm:py-4 shrink-0">
           {sendError && (
-            <div className="mb-3 text-xs font-bold text-[#C8522A]">{sendError}</div>
+            <div className="mb-2 sm:mb-3 text-[11px] sm:text-xs font-bold text-[#C8522A]">{sendError}</div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-end sm:items-center gap-2 sm:gap-3">
             <textarea
               rows={1}
               value={input}
               onChange={event => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               disabled={sending || loading}
-              placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
-              className="flex-1 max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+              placeholder="輸入訊息…"
+              className="flex-1 max-h-24 sm:max-h-32 resize-none bg-white sm:bg-[#F8F9FA] border border-[#E2DDD4] rounded-[1.2rem] sm:rounded-xl px-4 py-3 text-[13px] sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
             />
 
             <button
               type="button"
               onClick={handleSend}
               disabled={!input.trim() || sending || loading}
-              className="bg-[#1A1A18] text-white p-3 rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              className="bg-[#1A1A18] text-white p-3 rounded-[1.2rem] sm:rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 h-[46px] w-[46px] flex items-center justify-center"
             >
-              {sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="-ml-0.5" />}
             </button>
+          </div>
+          <div className="hidden sm:block text-[10px] text-[#8C8880] mt-2 font-bold text-right pr-14">
+            Enter 送出，Shift + Enter 換行
           </div>
         </div>
       </div>

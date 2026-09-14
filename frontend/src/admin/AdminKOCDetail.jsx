@@ -105,65 +105,66 @@ export default function AdminKocDetail() {
 
   if (!profileLoading && !profile) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in">
-        <div className="w-16 h-16 bg-[#F8F9FA] text-[#8C8880] rounded-full flex items-center justify-center mb-4 border border-[#E2DDD4]">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in p-4">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#F8F9FA] text-[#8C8880] rounded-full flex items-center justify-center mb-4 border border-[#E2DDD4]">
           <AlertTriangle size={24} />
         </div>
-        <p className="text-[#1A1A18] font-bold text-lg mb-2">找不到 KOC 資料</p>
-        <p className="text-[#8C8880] text-sm mb-6">這筆資料可能已被移除或存取路徑錯誤。</p>
+        <p className="text-[#1A1A18] font-bold text-base sm:text-lg mb-2">找不到 KOC 資料</p>
+        <p className="text-[#8C8880] text-xs sm:text-sm mb-6 text-center">這筆資料可能已被移除或存取路徑錯誤。</p>
         <button
-          onClick={() => navigate('/admin/influencers')}
-          className="flex items-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-3 rounded-full text-sm font-bold tracking-wider hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
+          onClick={() => navigate('/admin/koc')}
+          className="inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-full text-xs sm:text-sm font-bold tracking-wider hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
         >
-          <ArrowLeft size={16} /> 返回 KOC 列表
+          <ArrowLeft size={16} className="w-4 h-4" /> 返回 KOC 列表
         </button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 relative">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in duration-500 relative pb-10">
 
-      {/* 頂部：返回按鈕 */}
+      {/* 頂部：橢圓白色返回按鈕 (自適應大小) */}
       <button
-        onClick={() => navigate('/admin/influencers')}
-        className="flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm mb-4"
+        onClick={() => navigate('/admin/koc')}
+        className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18] shadow-sm hover:shadow-md rounded-full font-bold text-xs sm:text-sm transition-all mb-2 sm:mb-4 group w-fit"
       >
-        <ArrowLeft size={16} /> 返回 KOC 列表
+        <ArrowLeft size={16} className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:-translate-x-0.5" /> 
+        返回 KOC 列表
       </button>
 
       {/* 主要資訊卡片 */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] p-8 md:p-10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#FDF0ED] rounded-full mix-blend-multiply filter blur-[80px] opacity-70"></div>
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-[#E2DDD4] p-5 sm:p-8 md:p-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-40 h-40 md:w-64 md:h-64 bg-[#FDF0ED] rounded-full mix-blend-multiply filter blur-[60px] md:blur-[80px] opacity-70"></div>
 
-        {/* KOC 個人資料區塊 */}
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-8 mb-10 pb-10 border-b border-[#E2DDD4] relative z-10">
+        {/* KOC 個人資料區塊 (適應手機版堆疊) */}
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-6 md:gap-8 mb-6 sm:mb-8 md:mb-10 pb-6 sm:pb-8 md:pb-10 border-b border-[#E2DDD4] relative z-10">
 
-          <div className="w-28 h-28 bg-[#1A1A18] rounded-[1.5rem] flex items-center justify-center text-5xl text-[#F5F0E8] font-serif font-black shadow-[0_8px_20px_rgba(26,26,24,0.15)] border-4 border-white">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-[#1A1A18] rounded-xl sm:rounded-[1.5rem] flex items-center justify-center text-3xl sm:text-4xl md:text-5xl text-[#F5F0E8] font-serif font-black shadow-[0_8px_20px_rgba(26,26,24,0.15)] border-2 sm:border-4 border-white shrink-0">
             {profileLoading ? '…' : (profile?.name?.charAt(0) || '?')}
           </div>
 
-          <div className="flex-1">
-            <h2 className="text-3xl font-serif font-black text-[#1A1A18] flex items-center gap-3 mb-2">
+          <div className="flex-1 min-w-0 w-full">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-serif font-black text-[#1A1A18] flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2 truncate">
               {profileLoading ? '載入中...' : (profile?.name || '未知使用者')}
-              <span className="text-[10px] font-sans font-bold bg-[#B89B6A] text-[#1A1A18] px-2 py-1 rounded-md tracking-widest uppercase">
+              <span className="text-[9px] sm:text-[10px] font-sans font-bold bg-[#B89B6A] text-[#1A1A18] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md tracking-widest uppercase shrink-0">
                 平台認證
               </span>
             </h2>
 
-            <div className="flex flex-wrap items-center gap-4 mt-3 text-sm font-bold text-[#8C8880]">
-              <div className="flex items-center gap-1.5 text-[#1A1A18]">
-                <Instagram size={16} className="text-[#C8522A]" />
-                <span>{profile?.ig_account ? `@${profile.ig_account}` : '未綁定'}</span>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-2 sm:mt-3 text-xs sm:text-sm font-bold text-[#8C8880]">
+              <div className="flex items-center gap-1 sm:gap-1.5 text-[#1A1A18]">
+                <Instagram size={14} className="text-[#C8522A] sm:w-4 sm:h-4" />
+                <span className="truncate">{profile?.ig_account ? `@${profile.ig_account}` : '未綁定'}</span>
               </div>
             </div>
 
-            <div className="mt-5 flex gap-3 items-center flex-wrap">
-              <span className="text-[10px] font-sans font-bold bg-[#F8F9FA] text-[#8C8880] px-2 py-1.5 rounded-md tracking-widest border border-[#E2DDD4]">
+            <div className="mt-4 sm:mt-5 flex gap-2 sm:gap-3 items-center flex-wrap">
+              <span className="text-[9px] sm:text-[10px] font-sans font-bold bg-[#F8F9FA] text-[#8C8880] px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-md tracking-widest border border-[#E2DDD4]">
                 ID: {kocId}
               </span>
               {!profileLoading && profile && (
-                <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-md border tracking-widest ${
+                <span className={`inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-md border tracking-widest ${
                   profile.status === 0
                     ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                     : 'bg-red-50 text-red-600 border-red-200'
@@ -177,14 +178,58 @@ export default function AdminKocDetail() {
         </div>
 
         {/* 任務參與紀錄 */}
-        <div className="space-y-6 relative z-10 mb-10">
-          <h3 className="font-serif font-bold text-xl text-[#1A1A18] flex items-center gap-2">
-            <ClipboardList size={20} className="text-[#B89B6A]" />
+        <div className="space-y-4 sm:space-y-6 relative z-10 mb-8 sm:mb-10">
+          <h3 className="font-serif font-bold text-lg sm:text-xl text-[#1A1A18] flex items-center gap-2">
+            <ClipboardList size={18} className="text-[#B89B6A] sm:w-5 sm:h-5" />
             任務參與紀錄
           </h3>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse bg-[#F8F9FA] rounded-2xl overflow-hidden border border-[#E2DDD4]">
+          {/* === 手機版視圖 (卡片式) === */}
+          <div className="md:hidden flex flex-col gap-3">
+            {missionsLoading && <div className="py-6 text-center text-xs font-bold text-[#8C8880]">載入中...</div>}
+            {!missionsLoading && missionsError && <div className="py-6 text-center text-xs font-bold text-red-500">{missionsError}</div>}
+            {!missionsLoading && !missionsError && missions.length === 0 && (
+              <div className="py-6 text-center text-xs font-bold text-[#8C8880]">目前尚無接案紀錄</div>
+            )}
+            
+            {!missionsLoading && !missionsError && missions.map((mission) => (
+              <div key={mission.KOCMisson_id} className="bg-[#F8F9FA] rounded-xl p-4 border border-[#E2DDD4]">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">任務編號</div>
+                    <div className="font-bold text-[#1A1A18] text-sm">{mission.KOCMisson_id}</div>
+                  </div>
+                  <span className={`inline-block whitespace-nowrap text-[9px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
+                    mission.Stage === 3 ? 'bg-[#E2DDD4] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
+                  }`}>
+                    {STAGE_LABELS[mission.Stage] ?? '未知'}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">綁定推薦碼</div>
+                    <div className="text-xs font-bold text-[#C8522A]">{mission.Promotion_code || '無'}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">截止時間</div>
+                    <div className="text-xs font-bold text-[#1A1A18]">{mission.Deadline || '未設定'}</div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => openStageModal(mission)}
+                  className="w-full inline-flex justify-center items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#1A1A18] px-3 py-2 rounded-lg text-xs font-bold hover:border-[#1A1A18] transition-all shadow-sm"
+                >
+                  <Edit size={14} /> 更新階段
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* === 電腦版視圖 (表格) === */}
+          <div className="hidden md:block overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse bg-[#F8F9FA] rounded-2xl overflow-hidden border border-[#E2DDD4] whitespace-nowrap">
               <thead>
                 <tr className="border-b border-[#E2DDD4]">
                   <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">任務編號 (Mission ID)</th>
@@ -196,27 +241,13 @@ export default function AdminKocDetail() {
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
                 {missionsLoading && (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">
-                      載入中...
-                    </td>
-                  </tr>
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">載入中...</td></tr>
                 )}
-
                 {!missionsLoading && missionsError && (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-red-500">
-                      {missionsError}
-                    </td>
-                  </tr>
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-red-500">{missionsError}</td></tr>
                 )}
-
                 {!missionsLoading && !missionsError && missions.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">
-                      目前尚無接案紀錄
-                    </td>
-                  </tr>
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">目前尚無接案紀錄</td></tr>
                 )}
 
                 {!missionsLoading && !missionsError && missions.map((mission) => (
@@ -228,7 +259,7 @@ export default function AdminKocDetail() {
                       {mission.Promotion_code || '無'}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
+                      <span className={`inline-block whitespace-nowrap text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
                         mission.Stage === 3 ? 'bg-[#E2DDD4] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
                       }`}>
                         {STAGE_LABELS[mission.Stage] ?? '未知'}
@@ -240,7 +271,7 @@ export default function AdminKocDetail() {
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => openStageModal(mission)}
-                        className="inline-flex items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#1A1A18] px-3 py-1.5 rounded-lg text-xs font-bold hover:border-[#1A1A18] transition-all"
+                        className="inline-flex items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#1A1A18] px-3 py-1.5 rounded-lg text-xs font-bold hover:border-[#1A1A18] transition-all shadow-sm"
                       >
                         <Edit size={12} /> 更新階段
                       </button>
@@ -252,26 +283,26 @@ export default function AdminKocDetail() {
           </div>
         </div>
 
-        {/* 收益與撥款紀錄：目前平台 API 尚未提供對應查詢，先保留空狀態 */}
-        <div className="space-y-6 relative z-10 pt-8 border-t border-[#E2DDD4]">
-          <h3 className="font-serif font-bold text-xl text-[#1A1A18] flex items-center gap-2">
-            <CreditCard size={20} className="text-[#C8522A]" />
+        {/* 收益與撥款紀錄 */}
+        <div className="space-y-4 sm:space-y-6 relative z-10 pt-6 sm:pt-8 border-t border-[#E2DDD4]">
+          <h3 className="font-serif font-bold text-lg sm:text-xl text-[#1A1A18] flex items-center gap-2">
+            <CreditCard size={18} className="text-[#C8522A] sm:w-5 sm:h-5" />
             收益與撥款資料
           </h3>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse bg-[#F8F9FA] rounded-2xl overflow-hidden border border-[#E2DDD4]">
+          <div className="overflow-x-auto -mx-5 sm:mx-0 px-5 sm:px-0 custom-scrollbar pb-2 sm:pb-0">
+            <table className="w-full min-w-[500px] text-left border-collapse bg-[#F8F9FA] rounded-xl sm:rounded-2xl overflow-hidden border border-[#E2DDD4] whitespace-nowrap">
               <thead>
                 <tr className="border-b border-[#E2DDD4]">
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">收益來源 (KOC 任務)</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">收益金額</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">撥款日期</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">撥款狀態</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">收益來源 (KOC 任務)</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">收益金額</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">撥款日期</th>
+                  <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">撥款狀態</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-sm font-bold text-[#8C8880]">
+                  <td colSpan="4" className="px-4 sm:px-6 py-6 sm:py-8 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
                     目前尚無收益紀錄
                   </td>
                 </tr>
@@ -285,30 +316,30 @@ export default function AdminKocDetail() {
       {/* 更新階段彈窗 */}
       {stageTarget && (
         <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4]">
-            <div className="w-12 h-12 rounded-full bg-[#F5F0E8] text-[#B89B6A] flex items-center justify-center mb-4 mx-auto">
-              <Edit size={24} />
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-200">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#B89B6A] flex items-center justify-center mb-4 mx-auto">
+              <Edit size={20} className="sm:w-6 sm:h-6" />
             </div>
-            <h3 className="text-xl font-serif font-black text-[#1A1A18] text-center mb-2">更新任務階段</h3>
-            <p className="text-[#8C8880] text-center text-sm mb-6">
-              任務編號：{stageTarget.KOCMisson_id}
+            <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18] text-center mb-1.5 sm:mb-2">更新任務階段</h3>
+            <p className="text-[#8C8880] text-center text-xs sm:text-sm mb-5 sm:mb-6">
+              任務編號：<span className="font-bold text-[#1A1A18]">{stageTarget.KOCMisson_id}</span>
             </p>
             <form onSubmit={submitStageUpdate} className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-[#8C8880] mb-2">選擇新階段</label>
+                <label className="block text-xs sm:text-sm font-bold text-[#8C8880] mb-2">選擇新階段</label>
                 <select
                   value={newStage}
                   onChange={(e) => setNewStage(e.target.value)}
-                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
                 >
                   {STAGE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setStageTarget(null)} className="flex-1 px-4 py-3 bg-white border border-[#E2DDD4] text-[#8C8880] rounded-xl font-bold text-sm hover:bg-[#F8F9FA]">取消</button>
-                <button type="submit" disabled={updatingStage} className="flex-1 px-4 py-3 bg-[#1A1A18] text-white rounded-xl font-bold text-sm hover:bg-[#333] disabled:opacity-50">
+              <div className="flex gap-2.5 sm:gap-3 pt-3 sm:pt-4">
+                <button type="button" onClick={() => setStageTarget(null)} className="flex-1 px-4 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#8C8880] rounded-xl font-bold text-xs sm:text-sm hover:bg-[#F8F9FA] transition-colors">取消</button>
+                <button type="submit" disabled={updatingStage} className="flex-1 px-4 py-2.5 sm:py-3 bg-[#1A1A18] text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-[#333] transition-all shadow-md disabled:opacity-50">
                   {updatingStage ? '更新中...' : '確認更新'}
                 </button>
               </div>

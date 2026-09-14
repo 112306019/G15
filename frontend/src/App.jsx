@@ -11,7 +11,6 @@ import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
-import PendingEarningsPage from './koc/PendingEarningsPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
@@ -20,7 +19,6 @@ import ChatPage from './koc/ChatPage';
 import TaxFormPrintView from './koc/TaxFormPrintView';
 
 // === Shopping 相關頁面 ===
-import ReviewPage from './shopping/ReviewPage';
 import WelcomePage from './shopping/WelcomePage';
 import ShopPage from './shopping/ShopPage';
 import CartPage from './shopping/CartPage';
@@ -28,9 +26,11 @@ import CheckoutPage from './shopping/CheckoutPage';
 import PaymentResultPage from './shopping/PaymentResultPage';
 import ECPayStoreResult from './shopping/ECPayStoreResult';
 import OrdersPage from './shopping/OrdersPage';
+import OrderChatPage from './shopping/OrderChatPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
 import SupportChatPage from './shopping/SupportChatPage';
+import NotificationsPage from './shopping/NotificationsPage';
 
 // === Authentication & Vendor ===
 import LoginPage from './authentication/LoginPage';
@@ -61,7 +61,6 @@ const VIEW_TO_PATH = {
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
   tax_form_records: '/earnings/tax-forms',
-  pending_detail: '/earnings/pending',
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
@@ -72,7 +71,10 @@ const VIEW_TO_PATH = {
 // 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
 function getViewKeyFromPath(pathname) {
   if (pathname.startsWith('/product/')) return 'product_detail';
+  if (pathname.endsWith('/chat') && pathname.startsWith('/orders/')) return 'order_chat';
   if (pathname.startsWith('/orders/') && pathname !== '/orders') return 'order_detail';
+  if (pathname === '/notifications/order') return 'notifications_order';
+  if (pathname === '/notifications/koc') return 'notifications_koc';
   for (const [key, path] of Object.entries(VIEW_TO_PATH)) {
     if (pathname === path) return key;
   }
@@ -101,7 +103,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   });
 
   return (
-    <aside className="w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
+    <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
       <nav className="space-y-2">
         {menuItems.map((item, index) => {
           const isActive = currentView === item.view || (item.subItems && item.subItems.some(sub => sub.view === currentView));
@@ -219,6 +221,13 @@ function OrderDetailRoute() {
   return <OrderDetailPage onBack={() => navigate('/orders')} orderId={id} />;
 }
 
+// 訂單聊天頁（消費者跟廠商溝通）：id 直接來自網址
+function OrderChatRoute() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  return <OrderChatPage onBack={() => navigate('/orders')} orderId={id} />;
+}
+
 // 需要「整包資料」才能顯示、且沒有簡單 fetch-by-id API 的頁面（任務詳情、業績分析），
 // 一律靠路由 state 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
 function TaskDetailRoute({ onJumpHome }) {
@@ -271,6 +280,7 @@ function MainSystem() {
   });
   const [cartCount, setCartCount] = useState(0);
   const [supportUnreadCount, setSupportUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState({ unreadCount: 0, orderUnreadCount: 0, kocUnreadCount: 0, order: [], koc: [] });
 
   // 從後端同步購物車數量
   const syncCartCount = async () => {
@@ -298,6 +308,69 @@ function MainSystem() {
       setSupportUnreadCount(data.unread_count || 0);
     } catch (err) {
       console.error("客服未讀數同步失敗", err);
+    }
+  };
+
+  // 從後端同步站內通知（訂單相關 + KOC 接案相關）
+  const syncNotifications = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/list?user_id=${userId}`);
+      const data = await res.json();
+      if (data.success) {
+        setNotifications({
+          unreadCount: data.unread_count || 0,
+          orderUnreadCount: data.order_unread_count || 0,
+          kocUnreadCount: data.koc_unread_count || 0,
+          order: data.order_notifications || [],
+          koc: data.koc_notifications || [],
+        });
+      }
+    } catch (err) {
+      console.error("通知同步失敗", err);
+    }
+  };
+
+  // 點擊一則通知：標記已讀、並依 reference_type 導去對應頁面
+  const handleOpenNotification = async (notification) => {
+    const userId = localStorage.getItem("userId");
+
+    if (!notification.is_read && userId) {
+      setNotifications((prev) => ({
+        ...prev,
+        unreadCount: Math.max(0, prev.unreadCount - 1),
+        orderUnreadCount: notification.category === "order" ? Math.max(0, prev.orderUnreadCount - 1) : prev.orderUnreadCount,
+        kocUnreadCount: notification.category === "koc" ? Math.max(0, prev.kocUnreadCount - 1) : prev.kocUnreadCount,
+        order: prev.order.map((n) => n.notification_id === notification.notification_id ? { ...n, is_read: true } : n),
+        koc: prev.koc.map((n) => n.notification_id === notification.notification_id ? { ...n, is_read: true } : n),
+      }));
+      try {
+        await fetch(`${API_BASE_URL}/api/notifications/markRead`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, notification_id: notification.notification_id }),
+        });
+      } catch (err) {
+        console.error("通知標記已讀失敗", err);
+      }
+    }
+
+    switch (notification.reference_type) {
+      case "order":
+        handleNavigate("order_detail", notification.reference_id);
+        break;
+      case "order_chat":
+        handleNavigate("order_chat", notification.reference_id);
+        break;
+      case "koc_home":
+        handleNavigate("home");
+        break;
+      case "tax_form_records":
+        handleNavigate("tax_form_records");
+        break;
+      default:
+        break;
     }
   };
 
@@ -338,6 +411,7 @@ function MainSystem() {
     };
     syncUserRole();
     syncSupportUnreadCount();
+    syncNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -358,8 +432,8 @@ function MainSystem() {
   // roleOverride：登入/註冊成功當下 setUserRole 還沒 flush，導航判斷要用新角色而非舊的 state 閉包
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
-      'profile', 'security', 'coupons', 'points', 'orders', 'order_detail',
-      'home', 'earnings', 'earnings_detail', 'pending_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support'
+      'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -384,6 +458,18 @@ function MainSystem() {
       return;
     }
 
+    // 訂單聊天頁（跟廠商溝通）：id 直接進網址
+    if (targetView === 'order_chat') {
+      navigate(`/orders/${data}/chat`);
+      return;
+    }
+
+    // 通知頁：訂單通知／接案通知是分開的兩個頁面，category 直接進網址
+    if (targetView === 'notifications') {
+      navigate(`/notifications/${data || 'order'}`);
+      return;
+    }
+
     // 任務詳情 / 業績分析：資料整包用路由 state 帶過去
     if (targetView === 'task_detail' && data) {
       navigate('/task', { state: { task: data } });
@@ -400,15 +486,15 @@ function MainSystem() {
   const view = getViewKeyFromPath(location.pathname);
 
   const shellViews = [
-    'home', 'earnings', 'earnings_detail', 'pending_detail', 'profile',
-    'security', 'orders', 'order_detail', 'applyKoc',
+    'home', 'earnings', 'earnings_detail', 'profile',
+    'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
     'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'pending_detail', 'tax_form_records'].includes(view)) return 'earnings';
-    if (['orders', 'order_detail'].includes(view)) return 'orders';
+    if (['earnings', 'earnings_detail', 'tax_form_records'].includes(view)) return 'earnings';
+    if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
 
@@ -422,9 +508,7 @@ function MainSystem() {
     navigate('/welcome', { replace: true });
   };
 
-  // 閒置 30 分鐘自動登出：只在已登入狀態下才需要偵測，
-  // 監聽常見的使用者活動事件，只要有動作就重新計時，
-  // 完全沒有活動達到門檻時間才觸發登出。
+  // 閒置 30 分鐘自動登出
   useEffect(() => {
     const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
     const token = localStorage.getItem('token');
@@ -461,11 +545,11 @@ function MainSystem() {
     );
   }
 
-  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print/');
+  const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print');
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
-      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} supportUnreadCount={supportUnreadCount} onLogout={handleLogout} />}
+      {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} supportUnreadCount={supportUnreadCount} onLogout={handleLogout} notifications={notifications} onRefreshNotifications={syncNotifications} onOpenNotification={handleOpenNotification} />}
 
       <Routes>
         <Route path="/" element={null} />
@@ -558,9 +642,6 @@ function MainSystem() {
           />
         } />
 
-        {/* 綠界付款結果頁：OrderResultURL 由後端驗證完再把瀏覽器導回這裡（帶 order_id），
-            這是一個「從外部整頁導回來」的進入點，不透過 handleNavigate，所以沒有登入保護閘門，
-            頁面本身只靠 order_id 呼叫後端查真正的付款狀態，不採信網址上其他任何參數 */}
         <Route path="/checkout/result" element={
           <PaymentResultPage onCartCleared={() => syncCartCount()} />
         } />
@@ -572,7 +653,8 @@ function MainSystem() {
 
         <Route path="/chat" element={<ChatPage />} />
 
-        <Route path="/tax-form-print/:kocmissionId" element={<TaxFormPrintView />} />
+        <Route path="/tax-form-print" element={<TaxFormPrintView />} />
+        <Route path="/tax-form-print/:formId" element={<TaxFormPrintView />} />
 
         {/* 下面這些頁面共用左側 Sidebar 的殼 */}
         <Route path="/home" element={
@@ -620,6 +702,7 @@ function MainSystem() {
             <OrdersPage
               onTrackOrder={(id) => handleNavigate('order_detail', id)}
               onOpenOrderDetail={(id) => handleNavigate('order_detail', id)}
+              onOpenChat={(id) => handleNavigate('order_chat', id)}
             />
           </ShellLayout>
         } />
@@ -630,11 +713,16 @@ function MainSystem() {
           </ShellLayout>
         } />
 
+        <Route path="/orders/:id/chat" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <OrderChatRoute />
+          </ShellLayout>
+        } />
+
         <Route path="/earnings" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <EarningsPage
               onDetail={() => handleNavigate('earnings_detail')}
-              onTrack={() => handleNavigate('pending_detail')}
               onTaxFormRecords={() => handleNavigate('tax_form_records')}
             />
           </ShellLayout>
@@ -652,12 +740,6 @@ function MainSystem() {
           </ShellLayout>
         } />
 
-        <Route path="/earnings/pending" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <PendingEarningsPage onBack={() => handleNavigate('earnings')} />
-          </ShellLayout>
-        } />
-
         <Route path="/favorites" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <FavoritesPage
@@ -670,7 +752,31 @@ function MainSystem() {
         <Route path="/support" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <SupportChatPage
-              onBack={() => { syncSupportUnreadCount(); handleNavigate('shop'); }}
+              onBack={() => { syncSupportUnreadCount(); handleNavigate(userRole === 'koc' ? 'home' : 'shop'); }}
+            />
+          </ShellLayout>
+        } />
+
+        <Route path="/notifications/order" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <NotificationsPage
+              category="order"
+              notifications={notifications}
+              onRefresh={syncNotifications}
+              onOpenNotification={handleOpenNotification}
+              onBack={() => handleNavigate(userRole === 'koc' ? 'home' : 'shop')}
+            />
+          </ShellLayout>
+        } />
+
+        <Route path="/notifications/koc" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <NotificationsPage
+              category="koc"
+              notifications={notifications}
+              onRefresh={syncNotifications}
+              onOpenNotification={handleOpenNotification}
+              onBack={() => handleNavigate(userRole === 'koc' ? 'home' : 'shop')}
             />
           </ShellLayout>
         } />
@@ -686,8 +792,6 @@ function MainSystem() {
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <ApplyKOCPage
               onSubmit={() => {
-                // 申請只是送出審核，還不是 KOC；要等平台審核通過、
-                // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
                 handleNavigate('shop');
               }}
               onViewIntro={() => handleNavigate('kocIntro')}
@@ -706,12 +810,13 @@ function MainSystem() {
   );
 }
 
-// 左側 Sidebar + 內容區的共用外殼，取代原本用 shellViews.includes(view) 判斷再包一層的寫法
+// 左側 Sidebar + 內容區的共用外殼
+// [RWD 優化] 將 padding 和 margin 改為響應式，手機版取消左側 margin，讓內容滿版
 function ShellLayout({ userRole, activeView, onNavigate, children }) {
   return (
-    <div className="flex p-8 max-w-7xl mx-auto">
+    <div className="flex p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
       <Sidebar userRole={userRole} currentView={activeView} onNavigate={onNavigate} />
-      <main className="flex-1 ml-12">
+      <main className="flex-1 w-full lg:ml-8 xl:ml-12 min-w-0">
         {children}
       </main>
     </div>

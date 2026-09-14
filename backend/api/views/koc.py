@@ -18,9 +18,7 @@ from ..serializers import (
     ApplicationListItemSerializer,
     MissionListItemSerializer,
     MissionStageCountsSerializer,
-    RevenueTotalSerializer,
     RevenueHistoryItemSerializer,
-    PendingEarningsItemSerializer,
     AnalyticsListItemSerializer,
     AnalyticsDetailSerializer,
     SaveDraftSerializer,  
@@ -37,7 +35,15 @@ from .constants import (
     STAGE_ALLOWED_SUBMISSION_TYPE,
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP,
-    sync_expired_promoting_missions
+    REMUNERATION_SERVICE_CONTENT,
+    CROSS_BANK_TRANSFER_FEE,
+    MIN_PAYOUT_AMOUNT,
+    MAX_VIOLATION_COUNT,
+    sync_expired_promoting_missions,
+    sync_expired_koc_suspensions,
+    record_koc_violation,
+    exclude_hidden_missions,
+    is_mission_hidden,
 )
 # 獲取koc個人資料
 @api_view(['GET'])
@@ -324,18 +330,20 @@ def get_applied_campaign_list(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def apply_mission(request):
+    sync_expired_koc_suspensions()
+
     koc_id = request.data.get('koc_id')
     order_id = request.data.get('order_id')
     campaign_id = request.data.get('campaign_id')
-    
+
     if not all([koc_id, order_id, campaign_id]):
         return Response({
             "success": False,
             "err": "缺少必要參數: koc_id, order_id 或 campaign_id",
             "application_id": "",
-            "status": "pending" 
+            "status": "pending"
         }, status=400)
-        
+
     try:
         koc_profile = KOC.objects.filter(koc_id=koc_id).first()
         if not koc_profile:
@@ -345,7 +353,17 @@ def apply_mission(request):
                 "application_id": "",
                 "status": "pending"
             }, status=400)
-            
+
+        if koc_profile.is_suspended:
+            until_text = koc_profile.suspended_until.strftime('%Y-%m-%d') if koc_profile.suspended_until else ''
+            return Response({
+                "success": False,
+                "err": f"您的接案權限已被凍結{f'至 {until_text}' if until_text else ''}，暫時無法申請新案件",
+                "application_id": "",
+                "status": "pending"
+            }, status=403)
+
+
         order_items = OrderItem.objects.filter(order_id=order_id).select_related('product')
         if not order_items.exists():
             return Response({
@@ -702,6 +720,13 @@ def mission_get_detail(request):
             "err": "找不到對應的任務"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
+    # 已結束超過 30 天的任務不再顯示詳情（軟隱藏，資料庫仍保留）
+    if is_mission_hidden(mission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
     #latest_submission = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time').first()
     latest_submission = Submissions.objects.filter(
         kocmission=mission,
@@ -764,7 +789,9 @@ def get_mission_list(request):
             "err": "找不到對應的 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    missions = KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
+    missions = exclude_hidden_missions(
+        KOCMissionNew.objects.filter(koc=koc).select_related('application__campaign__vendor')
+    )
 
     # stage 是可選參數：如果有帶，篩出特定階段；沒帶就回全部階段（給前端自己分組用）
     if stage_param is not None:
@@ -821,16 +848,6 @@ def get_mission_list(request):
         if submission.kocmission_id not in revising_feedback_map:
             revising_feedback_map[submission.kocmission_id] = submission.vendor_feedback
 
-    # 🔥 批次查出勞報單狀態，已結案的任務卡片才需要顯示
-    completed_mission_ids = [
-        mission.kocmission_id for mission in missions
-        if mission.stage == 'completed'
-    ]
-    tax_form_map = {
-        form.kocmission_id: form
-        for form in RemunerationForm.objects.filter(kocmission_id__in=completed_mission_ids)
-    }
-
     today = timezone.localdate()
 
     result = []
@@ -838,7 +855,6 @@ def get_mission_list(request):
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
         vendor_feedback = revising_feedback_map.get(mission.kocmission_id)
-        tax_form = tax_form_map.get(mission.kocmission_id)
 
         # 任務是否已過期：不管卡在哪個階段，只要現在日期超過「活動截止日 + 推廣寬限天數」
         # 就算過期。已結案(completed)代表任務本身有正常跑完，不算過期；
@@ -861,9 +877,7 @@ def get_mission_list(request):
             "is_revising": vendor_feedback is not None,
             "vendor_feedback": vendor_feedback,
             "is_expired": is_expired,
-            "tax_form_status": tax_form.status if tax_form else "not_submitted",
-            "tax_form_url": tax_form.cloud_link_url if tax_form else None,
-            "tax_form_reject_reason": tax_form.reject_reason if tax_form else None,
+            "end_reason": mission.end_reason,
         })
 
     return Response({
@@ -873,19 +887,22 @@ def get_mission_list(request):
     }, status=http_status.HTTP_200_OK)
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
-def get_tax_form_data(request):
+def cancel_mission(request):
     """
-    取得勞務報酬單所需資料，給前端用瀏覽器直接渲染/列印成單據
-    （不再由後端產生 PDF）。
-    URL: /koc/mission/taxFormData?User_id=xxx&kocmission_id=1
+    KOC 自行取消尚未結束的任務（撰寫文案/上傳作品/推廣中都可以取消）。
+    URL: /koc/mission/cancel
 
-    只回傳系統裡目前有的資料；身分證字號、代扣稅額、二代健保費、執行業務代號
-    這些系統沒有收集或不計算的欄位，前端會顯示成空白手填欄位。
+    取消後任務直接進入「已結束」（stage='completed'），end_reason 標記為
+    'cancelled'，歸類在前端的「已取消」分類（跟過期自動結案的任務同一組，
+    但原因不同）。順便停用優惠碼，避免取消後消費者還撿得到連結繼續使用。
+
+    這也算一次 KOC 違規（見 record_koc_violation），跟任務放到過期沒完成
+    是同一套計數、同一個停權門檻，不分開算。
     """
-    user_id = request.query_params.get('User_id')
-    kocmission_id = request.query_params.get('kocmission_id')
+    user_id = request.data.get('User_id')
+    kocmission_id = request.data.get('kocmission_id')
 
     if not user_id:
         return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
@@ -893,37 +910,112 @@ def get_tax_form_data(request):
         return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        mission = KOCMissionNew.objects.select_related(
-            'koc__user', 'application__campaign__vendor',
-        ).get(kocmission_id=kocmission_id)
+        mission = KOCMissionNew.objects.select_related('koc').get(kocmission_id=kocmission_id)
     except KOCMissionNew.DoesNotExist:
         return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
 
     if not mission.koc or str(mission.koc.user_id) != str(user_id):
         return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
 
-    koc_user = mission.koc.user
-    campaign = mission.application.campaign
-    vendor = campaign.vendor
+    if mission.stage == 'completed':
+        return Response({'success': False, 'err': '此任務已經結束，無法取消'}, status=http_status.HTTP_400_BAD_REQUEST)
 
-    amount = Earnings.objects.filter(kocmission=mission).aggregate(total=Sum('amount'))['total'] or 0
+    mission.stage = 'completed'
+    mission.end_reason = 'cancelled'
+    mission.save(update_fields=['stage', 'end_reason'])
 
-    vendor_address = ''.join(filter(None, [vendor.sender_city, vendor.sender_district, vendor.sender_address]))
+    CouponNew.objects.filter(kocmission=mission).exclude(status__in=['expired', 'disabled']).update(status='disabled')
+
+    koc = mission.koc
+    suspended, suspended_until = record_koc_violation(koc)
 
     return Response({
         'success': True,
         'err': '',
-        'mission_id': mission.kocmission_id,
+        'kocmission_id': mission.kocmission_id,
+        'stage': STAGE_CODE_MAP[mission.stage],
+        'end_reason': mission.end_reason,
+        'total_violation_count': koc.total_violation_count,
+        'max_violation_count': MAX_VIOLATION_COUNT,
+        'suspended': suspended,
+        'suspended_until': suspended_until,
+    }, status=http_status.HTTP_200_OK)
+
+
+def _get_undeclared_amount(koc):
+    """這個 KOC 目前有多少分潤還沒被納入任何一張勞務報酬單。"""
+    return Earnings.objects.filter(
+        user=koc.user, remuneration_form__isnull=True
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+
+def _get_open_form(koc):
+    """
+    這個 KOC 目前「進行中」的勞報單：審核中、或被退回還沒重新送出的那一張。
+    正常情況下同時間只會有一張（送出後要等審核完才能再開下一張，見 submit_tax_form_link），
+    所以直接抓最新一筆即可。
+    """
+    return (
+        RemunerationForm.objects
+        .filter(koc=koc)
+        .exclude(status='approved')
+        .order_by('-created_at')
+        .first()
+    )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_tax_form_data(request):
+    """
+    取得勞務報酬單所需資料，給前端用瀏覽器直接渲染/列印成單據
+    （不再由後端產生 PDF）。
+    URL: /koc/mission/taxFormData?User_id=xxx&form_id=1（form_id 可省略）
+
+    帶 form_id：查看某一張「已經送出過」的勞報單當時申報的金額與時間。
+    不帶 form_id：預覽「現在馬上申報的話」會是多少錢（等於目前所有還沒申報過的分潤加總），
+    給 KOC 在正式送出連結前先把單子印出來看金額用。
+
+    只回傳系統裡目前有的資料；身分證字號、代扣稅額、二代健保費、執行業務代號
+    這些系統沒有收集或不計算的欄位，前端會顯示成空白手填欄位。
+    """
+    user_id = request.query_params.get('User_id')
+    form_id = request.query_params.get('form_id')
+
+    if not user_id:
+        return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        koc = KOC.objects.select_related('user').get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的 KOC'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    if form_id:
+        try:
+            form = RemunerationForm.objects.get(form_id=form_id)
+        except RemunerationForm.DoesNotExist:
+            return Response({'success': False, 'err': '找不到對應的勞報單'}, status=http_status.HTTP_404_NOT_FOUND)
+
+        if form.koc_id != koc.koc_id:
+            return Response({'success': False, 'err': '無權限查看此勞報單'}, status=http_status.HTTP_403_FORBIDDEN)
+
+        amount = form.amount
+        submitted_at = form.submitted_at
+    else:
+        amount = _get_undeclared_amount(koc)
+        submitted_at = timezone.now()
+
+    koc_user = koc.user
+
+    return Response({
+        'success': True,
+        'err': '',
         'koc_name': koc_user.display_name or koc_user.name,
         'koc_phone': koc_user.phone,
         'koc_email': koc_user.email,
-        'koc_address': mission.koc.address,
-        'vendor_name': vendor.company_name,
-        'vendor_tax_id': vendor.tax_id,
-        'vendor_address': vendor_address,
-        'campaign_name': campaign.name,
-        'campaign_start_date': campaign.start_date.strftime('%Y-%m-%d') if campaign.start_date else None,
-        'campaign_end_date': campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
+        'koc_address': koc.address,
+        'service_content': REMUNERATION_SERVICE_CONTENT,
+        'submitted_at': submitted_at.strftime('%Y-%m-%d') if submitted_at else None,
         'amount': amount,
     }, status=http_status.HTTP_200_OK)
 
@@ -932,20 +1024,20 @@ def get_tax_form_data(request):
 @permission_classes([AllowAny])
 def submit_tax_form_link(request):
     """
-    KOC 提交（或退回後重新提交）勞務報酬單的雲端連結。
+    KOC 申報勞務報酬單：把「目前所有還沒申報過的分潤」加總成一筆金額，開一張新的單。
     URL: /koc/mission/submitTaxFormLink
 
-    只有已結案(completed)的任務才能提交；一旦審核通過就鎖住，不能再改連結
-    （要改的話要先聯絡客服走別的流程，不是這支 API 的範圍）。
+    同時間只能有一張進行中的單：如果上一張還在審核中，不能再開新的；如果上一張被
+    退回，只能在同一張單上重新提交（換連結、重新送審），金額維持退回當時的原始
+    金額不變——不會因為重新提交而悄悄改變，避免 KOC 已經印出來簽名的單子金額
+    對不起來。退回之後新增加的分潤仍是「未申報」狀態，會留到這張單審核通過後、
+    下一次開新單時才會被納入。
     """
     user_id = request.data.get('User_id')
-    kocmission_id = request.data.get('kocmission_id')
     url = (request.data.get('url') or '').strip()
 
     if not user_id:
         return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
-    if not kocmission_id:
-        return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
     if not url:
         return Response({'success': False, 'err': '請貼上雲端分享連結'}, status=http_status.HTTP_400_BAD_REQUEST)
 
@@ -956,46 +1048,95 @@ def submit_tax_form_link(request):
         return Response({'success': False, 'err': '連結格式不正確，請確認是完整的網址'}, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        mission = KOCMissionNew.objects.select_related('koc').get(kocmission_id=kocmission_id)
-    except KOCMissionNew.DoesNotExist:
-        return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
+        koc = KOC.objects.get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的 KOC'}, status=http_status.HTTP_404_NOT_FOUND)
 
-    if not mission.koc or str(mission.koc.user_id) != str(user_id):
-        return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
-
-    if mission.stage != 'completed':
-        return Response({'success': False, 'err': '案件尚未結案，還不能提交勞報單'}, status=http_status.HTTP_400_BAD_REQUEST)
-
-    existing = RemunerationForm.objects.filter(kocmission=mission).first()
-    if existing and existing.status == 'approved':
-        return Response({'success': False, 'err': '此勞報單已審核通過，無法再次提交'}, status=http_status.HTTP_400_BAD_REQUEST)
+    open_form = _get_open_form(koc)
+    if open_form and open_form.status == 'pending_review':
+        return Response({'success': False, 'err': '您已有一張審核中的勞務報酬單，請等候審核結果'}, status=http_status.HTTP_400_BAD_REQUEST)
 
     now = timezone.now()
 
-    if existing:
-        existing.cloud_link_url = url
-        existing.status = 'pending_review'
-        existing.submitted_at = now
-        existing.reject_reason = None
-        existing.reviewed_at = None
-        existing.reviewed_by_admin_id = None
-        existing.save(update_fields=[
-            'cloud_link_url', 'status', 'submitted_at', 'reject_reason', 'reviewed_at', 'reviewed_by_admin_id',
+    if open_form:
+        # 重新提交被退回的單：只換連結、重置審核狀態，金額跟涵蓋的分潤都不變
+        form = open_form
+        form.cloud_link_url = url
+        form.status = 'pending_review'
+        form.submitted_at = now
+        form.reject_reason = None
+        form.reviewed_at = None
+        form.reviewed_by_admin_id = None
+        form.save(update_fields=[
+            'cloud_link_url', 'status', 'submitted_at',
+            'reject_reason', 'reviewed_at', 'reviewed_by_admin_id',
         ])
-        form = existing
     else:
-        form = RemunerationForm.objects.create(
-            kocmission=mission,
-            cloud_link_url=url,
-            status='pending_review',
-            submitted_at=now,
-        )
+        with transaction.atomic():
+            # 用 select_for_update 鎖住還沒申報過的分潤，避免跟同一時間另一次
+            # 申報請求重複計入同一筆分潤
+            undeclared_earnings = Earnings.objects.select_for_update().filter(
+                user=koc.user, remuneration_form__isnull=True
+            )
+            total = undeclared_earnings.aggregate(total=Sum('amount'))['total'] or 0
+
+            if total <= 0:
+                return Response({'success': False, 'err': '目前沒有可申報的分潤'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+            form = RemunerationForm.objects.create(
+                koc=koc,
+                amount=total,
+                cloud_link_url=url,
+                status='pending_review',
+                submitted_at=now,
+            )
+            undeclared_earnings.update(remuneration_form=form)
 
     return Response({
         'success': True,
         'err': '',
+        'form_id': form.form_id,
+        'amount': form.amount,
         'tax_form_status': form.status,
         'tax_form_url': form.cloud_link_url,
+    }, status=http_status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_remuneration_forms(request):
+    """
+    KOC 的勞務報酬單申報紀錄列表（查看報酬單頁面用）。
+    URL: /koc/revenue/getRemunerationForms?user_id=xxx
+    """
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({'success': False, 'err': 'user_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        koc = KOC.objects.get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({'success': False, 'err': '找不到對應的 KOC'}, status=http_status.HTTP_404_NOT_FOUND)
+
+    forms = RemunerationForm.objects.filter(koc=koc).order_by('-created_at')
+
+    return Response({
+        'success': True,
+        'err': '',
+        'undeclared_amount': _get_undeclared_amount(koc),
+        'forms': [
+            {
+                'form_id': form.form_id,
+                'amount': form.amount,
+                'status': form.status,
+                'cloud_link_url': form.cloud_link_url,
+                'submitted_at': form.submitted_at,
+                'reviewed_at': form.reviewed_at,
+                'reject_reason': form.reject_reason,
+            }
+            for form in forms
+        ],
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1032,10 +1173,10 @@ def get_mission_stage_counts(request):
     for row in application_counts_qs:
         application_result[row['status']] = row['count']
 
-    # 2. 查 KOCMissionNew，依 stage 分組計算數量
+    # 2. 查 KOCMissionNew，依 stage 分組計算數量（已結束超過顯示期限的要濾掉，
+    # 不然徽章數字會跟列表頁實際看到的筆數對不起來）
     mission_counts_qs = (
-        KOCMissionNew.objects
-        .filter(koc=koc)
+        exclude_hidden_missions(KOCMissionNew.objects.filter(koc=koc))
         .values('stage')
         .annotate(count=Count('kocmission_id'))
     )
@@ -1125,12 +1266,6 @@ def get_revenue_total(request):
     except KocWallet.DoesNotExist:
         withdrawable_amount = 0
 
-    # 待定收益：統計 Earnings 表 status='pending' 的總和
-    pending_total = Earnings.objects.filter(
-        user=koc.user, status='pending'
-    ).aggregate(total=Sum('amount'))['total']
-    pending_amount = pending_total or 0
-
     # 是否已綁定銀行帳戶：檢查 KOC 的 bank_account 欄位是否有值
     has_bank_account = bool(koc.bank_account)
 
@@ -1138,8 +1273,38 @@ def get_revenue_total(request):
         "success": True,
         "err": "",
         "withdrawable_amount": withdrawable_amount,
-        "pending_amount": pending_amount,
         "hasBankAccount": has_bank_account,
+        "min_payout_amount": MIN_PAYOUT_AMOUNT,
+        "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
+    }, status=http_status.HTTP_200_OK)
+
+
+# 查詢「還沒申報過勞報單」的分潤金額，給前端在按下提領前先跳出提示用，
+# 不用等實際送出 request_payout 才被後端擋下來。
+# URL: /koc/revenue/getMissingTaxForms?user_id=xxx
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_missing_tax_forms(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        koc = KOC.objects.get(user_id=user_id)
+    except KOC.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "undeclared_amount": _get_undeclared_amount(koc),
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1171,6 +1336,16 @@ def request_payout(request):
             "err": "尚未綁定銀行帳戶，無法申請撥款"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
+    # KOC 可以自己決定何時提領，不用再等案件結束，但硬性要求分潤都要先申報過勞報單，
+    # 才能真的把錢領出去（前端會先跳提示引導去填，這裡是後端最後一道防線）。
+    undeclared_amount = _get_undeclared_amount(koc)
+    if undeclared_amount > 0:
+        return Response({
+            "success": False,
+            "err": "有分潤尚未提交勞務報酬單，請先完成提交才能申請提領",
+            "undeclared_amount": undeclared_amount,
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
     try:
         wallet = koc.wallet
     except KocWallet.DoesNotExist:
@@ -1191,6 +1366,13 @@ def request_payout(request):
         return Response({
             "success": False,
             "err": "申請金額不可小於等於 0 或超過可提領餘額"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    # 跨行提領銀行會收 15 元手續費，金額至少要 16 元才有意義（扣完手續費還會剩下錢）
+    if payout_amount < MIN_PAYOUT_AMOUNT:
+        return Response({
+            "success": False,
+            "err": f"提領金額需達 NT$ {MIN_PAYOUT_AMOUNT} 以上才能申請（跨行提領需支付 NT$ {CROSS_BANK_TRANSFER_FEE} 手續費）"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
@@ -1273,53 +1455,6 @@ def get_revenue_history(request):
         "success": True,
         "err": "",
         "history": result
-    }, status=http_status.HTTP_200_OK)
-
-# 獲取待定收益明細
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def get_pending_earnings_detail(request):
-    user_id = request.query_params.get('user_id')
-
-    if not user_id:
-        return Response({
-            "success": False,
-            "err": "user_id 為必填"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(pk=user_id)
-    except User.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的使用者"
-        }, status=http_status.HTTP_404_NOT_FOUND)
-
-    earnings = Earnings.objects.filter(
-        user=user,
-        status='pending'
-    ).select_related('kocmission__application__campaign').order_by('-created_at')
-
-    result = []
-    for earning in earnings:
-        campaign_name = None
-        if earning.kocmission:
-            try:
-                campaign_name = earning.kocmission.application.campaign.name
-            except Exception:
-                campaign_name = None
-
-        result.append({
-            "earnings_no": str(earning.earnings_id).zfill(8),
-            "amount": earning.amount,
-            "campaign_name": campaign_name,
-            "date": earning.created_at.strftime('%Y-%m-%d') if earning.created_at else None,
-        })
-
-    return Response({
-        "success": True,
-        "err": "",
-        "pending_earnings": result
     }, status=http_status.HTTP_200_OK)
 
 # 獲取成效分析總表
@@ -1624,11 +1759,17 @@ def get_or_create_chat_room(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        mission = KOCMissionNew.objects.get(pk=kocmission_id)
+        mission = KOCMissionNew.objects.select_related('application__campaign').get(pk=kocmission_id)
     except KOCMissionNew.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(mission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     room, _ = ChatRoom.objects.get_or_create(kocmission=mission)
@@ -1654,11 +1795,18 @@ def get_chat_history(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        room = ChatRoom.objects.get(pk=room_id)
+        room = ChatRoom.objects.select_related('kocmission__application__campaign').get(pk=room_id)
     except ChatRoom.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的聊天室",
+            "messages": []
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(room.kocmission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限",
             "messages": []
         }, status=http_status.HTTP_404_NOT_FOUND)
 
@@ -1702,11 +1850,17 @@ def send_chat_message(request):
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     try:
-        room = ChatRoom.objects.get(pk=room_id)
+        room = ChatRoom.objects.select_related('kocmission__application__campaign').get(pk=room_id)
     except ChatRoom.DoesNotExist:
         return Response({
             "success": False,
             "err": "找不到對應的聊天室"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    if is_mission_hidden(room.kocmission):
+        return Response({
+            "success": False,
+            "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     message = Message.objects.create(
