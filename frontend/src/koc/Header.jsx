@@ -112,19 +112,6 @@ export default function Header({
               <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
             </div>
           )}
-
-          <div
-            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-            onClick={() => handleNavigate('support')}
-          >
-            <Headset size={22} strokeWidth={2.5} className={activeTab === 'support' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-
-            {supportUnreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {supportUnreadCount}
-              </span>
-            )}
-          </div>
         </div>
 
         {/* 購物車：手機版與電腦版都保留 */}
@@ -202,10 +189,16 @@ export default function Header({
           onMouseLeave={() => setProfileMenuOpen(false)}
         >
           <div
-            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
             onClick={() => handleNavigate('profile')}
           >
             <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+
+            {supportUnreadCount > 0 && (
+              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+                {supportUnreadCount}
+              </span>
+            )}
           </div>
 
           {/* 右上角個人選單 */}
@@ -218,6 +211,20 @@ export default function Header({
                 >
                   <Settings size={16} strokeWidth={2.5} />
                   個人設定
+                </button>
+                <button
+                  onClick={() => { setProfileMenuOpen(false); handleNavigate('support'); }}
+                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <Headset size={16} strokeWidth={2.5} />
+                    客服諮詢
+                  </span>
+                  {supportUnreadCount > 0 && (
+                    <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                      {supportUnreadCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleNavigate('security'); }}
