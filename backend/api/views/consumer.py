@@ -1843,6 +1843,45 @@ def create_return_request(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 廠商可為個別商品標記「不適用七天鑑賞期退貨」（依消保法法定例外原因）；
+        # 只要這張訂單裡有任何一個商品不可退，就不能整張退，強制消費者改用
+        # 單品項退貨（那樣只要選到的那個商品本身可退就行，不受這張訂單其他商品影響）。
+        non_returnable_products = (
+            OrderItem.objects.filter(order=order, product__is_returnable=False)
+            .select_related('product')
+        )
+        if non_returnable_products.exists():
+            names = '、'.join(item.product.product_name for item in non_returnable_products)
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此訂單包含不適用七天鑑賞期退貨的商品（{names}），無法整張退貨，請改為選擇單一商品申請退貨'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
+        # 單品項退貨：只要檢查這個被選中的品項本身能不能退。
+        try:
+            target_item = OrderItem.objects.select_related('product').get(
+                order_item_id=order_item_id, order=order
+            )
+        except OrderItem.DoesNotExist:
+            return Response(
+                {'success': False, 'err': '找不到對應的訂單品項'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        if target_item.product and not target_item.product.is_returnable:
+            reason_label = dict(Product.NON_RETURNABLE_REASON_CHOICES).get(
+                target_item.product.non_returnable_reason, ''
+            )
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此商品不適用七天鑑賞期退貨（原因：{reason_label}）'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     # 退貨期限用 delivered_at 起算，不看消費者有沒有點過「確認收貨」。
     if not order.delivered_at:
         return Response(

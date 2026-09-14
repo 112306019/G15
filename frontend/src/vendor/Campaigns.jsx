@@ -833,7 +833,8 @@ export default function Campaigns() {
           orders: 0,
           gmv: 0,
           avatar: '👤',
-          violationCount: application.koc_violation_count || 0
+          violationCount: application.koc_violation_count || 0,
+          avgSalesAmount: application.koc_avg_sales_amount
         }))
       )
     } catch (error) {
@@ -1337,7 +1338,7 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '帶來訂單', '創造 GMV', '審核'].map(h => (
+                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '平均接案銷售額', '帶來訂單', '創造 GMV', '審核'].map(h => (
                     <th
                       key={h}
                       className={cn(
@@ -1414,6 +1415,10 @@ export default function Campaigns() {
                         >
                           {koc.violationCount} 次
                         </span>
+                      </td>
+
+                      <td className="p-4 sm:p-5 text-sm font-bold text-[#1A1A18]">
+                        {koc.avgSalesAmount != null ? formatCurrency(koc.avgSalesAmount) : '—'}
                       </td>
 
                       <td className="p-4 sm:p-5 text-sm font-black text-[#1A1A18]">{koc.orders}</td>

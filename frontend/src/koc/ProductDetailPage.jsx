@@ -54,6 +54,7 @@ export default function ProductDetailPage({
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
         imageUrl: product.image_url || "",
+        status: product.status || "active",
       });
     }
   }, [product]);
@@ -121,6 +122,11 @@ export default function ProductDetailPage({
       return;
     }
 
+    if (productDetail.status !== "active") {
+      showToast("此商品已下架，無法加入購物車");
+      return;
+    }
+
     const userId = localStorage.getItem("userId");
 
     try {
@@ -165,6 +171,11 @@ export default function ProductDetailPage({
 
     if (!Number.isInteger(productId) || productId <= 0) {
       showToast("找不到商品資料，請重新整理後再試");
+      return;
+    }
+
+    if (productDetail.status !== "active") {
+      showToast("此商品已下架，無法購買");
       return;
     }
 
@@ -289,7 +300,11 @@ export default function ProductDetailPage({
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-              {productDetail.stock <= 0 ? (
+              {productDetail.status !== "active" ? (
+                <div className="flex-1 bg-gray-200 text-gray-500 py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide text-center text-sm md:text-base">
+                  此商品已下架
+                </div>
+              ) : productDetail.stock <= 0 ? (
                 <div className="flex-1 bg-gray-200 text-gray-500 py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide text-center text-sm md:text-base">
                   已售完
                 </div>

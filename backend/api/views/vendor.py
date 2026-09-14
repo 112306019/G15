@@ -1236,11 +1236,37 @@ def vendor_application_getlist(request):
 
         koc_violation_count = application.koc.total_violation_count if application.koc else 0
 
+        # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
+        # （stage 為 promoting 或 completed），用任務綁定的優惠碼
+        # 查出對應訂單，加總訂單金額後除以已完成任務數。
+        koc_avg_sales_amount = None
+        if application.koc_id:
+            completed_missions = KOCMissionNew.objects.filter(
+                koc_id=application.koc_id,
+                stage__in=["promoting", "completed"],
+            )
+            completed_count = completed_missions.count()
+
+            if completed_count > 0:
+                promo_codes = list(
+                    CouponNew.objects
+                    .filter(kocmission__in=completed_missions)
+                    .values_list("promotion_code", flat=True)
+                )
+                total_sales = (
+                    Order.objects
+                    .filter(promotion_code__in=promo_codes)
+                    .aggregate(total=Sum("total_amount"))
+                    .get("total") or 0
+                )
+                koc_avg_sales_amount = float(total_sales) / completed_count
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
             "koc_name": koc_name,
             "koc_violation_count": koc_violation_count,
+            "koc_avg_sales_amount": koc_avg_sales_amount,
             "campaign_id": str(
                 application.campaign.campaign_id
             ),

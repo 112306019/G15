@@ -42,6 +42,8 @@ function mapProductFromApi(product) {
     sku: `PRODUCT-${String(product.product_id).padStart(5, '0')}`,
     category: product.category || '未分類',
     adCategory: product.ad_category || 'other',
+    isReturnable: product.is_returnable !== false,
+    nonReturnableReason: product.non_returnable_reason || '',
     price: Number(product.price || 0),
     discountedPrice:
       product.discounted_price === null
@@ -135,7 +137,7 @@ function Thumb({ emoji, size = 'md' }) {
 function ProductModal({ open, onClose, onComplete, editingProduct}) {
   const { toast } = useToast()
   const emptyForm = {
-    name: '', sku: '', category: '', adCategory: 'other', price: '', discountedPrice: '',
+    name: '', sku: '', category: '', adCategory: 'other', isReturnable: true, nonReturnableReason: '', price: '', discountedPrice: '',
     stock: '', description: '', imageUrl: '', thumbnail: '📦'
   }
   
@@ -181,6 +183,8 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
         sku: editingProduct.sku || '',
         category: editingProduct.category || '',
         adCategory: editingProduct.adCategory || 'other',
+        isReturnable: editingProduct.isReturnable !== false,
+        nonReturnableReason: editingProduct.nonReturnableReason || '',
         price: editingProduct.price || '',
         discountedPrice: editingProduct.discountedPrice || '',
         stock: editingProduct.stock ?? '',
@@ -275,6 +279,51 @@ function ProductModal({ open, onClose, onComplete, editingProduct}) {
                 <option value="other">其他</option>
               </select>
               <p className="text-[10px] sm:text-[11px] text-[#8C8880]">用於自動判讀 KOC 提交文案的合規審核規則</p>
+            </div>
+            <div className="flex flex-col gap-1.5 w-full sm:col-span-2">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">七天鑑賞期退貨</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, isReturnable: true, nonReturnableReason: '' }))}
+                  className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                    form.isReturnable
+                      ? 'border-[#1A1A18] bg-[#1A1A18] text-white'
+                      : 'border-[#E2DDD4] bg-[#F8F9FA] text-[#8C8880]'
+                  }`}
+                >
+                  可退貨
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, isReturnable: false }))}
+                  className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
+                    !form.isReturnable
+                      ? 'border-[#C8522A] bg-[#C8522A] text-white'
+                      : 'border-[#E2DDD4] bg-[#F8F9FA] text-[#8C8880]'
+                  }`}
+                >
+                  不可退貨
+                </button>
+              </div>
+
+              {!form.isReturnable && (
+                <select
+                  value={form.nonReturnableReason}
+                  onChange={set('nonReturnableReason')}
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm outline-none mt-2"
+                >
+                  <option value="">請選擇不可退貨原因</option>
+                  <option value="perishable">易腐敗、保存期限較短，或退貨時將逾期</option>
+                  <option value="customized">客製化商品、服務</option>
+                  <option value="periodical">報紙、期刊或雜誌</option>
+                  <option value="opened_media">經拆封的影音商品或電腦軟體</option>
+                  <option value="digital_content">經消費者同意而提供的非有形媒介數位內容或提供即完成的線上服務</option>
+                  <option value="opened_hygiene">已拆封的個人衛生用品</option>
+                  <option value="air_transport">國際航空客運服務</option>
+                </select>
+              )}
+              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">依消保法規定，不可退貨須為法定例外情況之一</p>
             </div>
           </div>
 
@@ -376,6 +425,7 @@ export default function Products() {
       vendor_id: vendorId, product_name: form.name.trim(), description: form.description.trim(),
       price: Number(form.price), discounted_price: form.discountedPrice === '' ? null : Number(form.discountedPrice),
       stock: Number(form.stock), category: form.category || '', ad_category: form.adCategory || 'other',
+      is_returnable: form.isReturnable, non_returnable_reason: form.isReturnable ? null : (form.nonReturnableReason || null),
       image_url: form.imageUrl.trim(), status: editingProduct?.apiStatus || 'inactive'
     }
     if (editingProduct) {
