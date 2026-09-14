@@ -11,9 +11,10 @@ from django.db.models import Sum, Count
 from decimal import Decimal, ROUND_HALF_UP
 from api.r2_storage import upload_image_to_r2
 
-from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock
+from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock, SUBMISSION_REMINDER_DAYS
 from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
+from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
 
@@ -1233,10 +1234,13 @@ def vendor_application_getlist(request):
                 or ""
             )
 
+        koc_violation_count = application.koc.total_violation_count if application.koc else 0
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
             "koc_name": koc_name,
+            "koc_violation_count": koc_violation_count,
             "campaign_id": str(
                 application.campaign.campaign_id
             ),
@@ -1439,7 +1443,9 @@ def vendor_application_review(request):
                             "koc_id": application.koc_id,
                             # 任務建立時進入撰寫文案階段，
                             # 對齊 constants.STAGE_CODE_MAP 的 "writing"
-                            "stage": "writing"
+                            "stage": "writing",
+                            # 進入 writing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
+                            "submission_deadline_at": timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS),
                         }
                     )
                 )
@@ -1454,7 +1460,11 @@ def vendor_application_review(request):
 
                 if not mission.stage:
                     mission.stage = "writing"
+                    mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+                    mission.submission_reminder_sent = False
                     mission_fields_to_update.append("stage")
+                    mission_fields_to_update.append("submission_deadline_at")
+                    mission_fields_to_update.append("submission_reminder_sent")
 
                 if mission_fields_to_update:
                     mission.save(
@@ -1508,6 +1518,19 @@ def vendor_application_review(request):
             "success": False,
             "err": str(error)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    if application.koc:
+        create_notification(
+            user=application.koc.user,
+            category="koc",
+            title="接案申請已通過" if review_result == "approved" else "接案申請被拒絕",
+            body=(
+                f"您申請的案件「{application.campaign.name}」已通過審核，可以開始接案囉！"
+                if review_result == "approved"
+                else f"您申請的案件「{application.campaign.name}」很可惜未通過審核。"
+            ),
+            reference_type="koc_home",
+        )
 
     return Response({
         "success": True,
@@ -1760,10 +1783,11 @@ def vendor_mission_review_submission(request):
 
     if review_result == "approved":
         if submission.submission_type == "text":
-            # 文案審核通過：進入待發佈，同時記錄開始計算 7 天貼文連結提交期限的時間點
+            # 文案審核通過：進入待發佈，重新起算交件提醒期限
             mission.stage = "publishing"
-            mission.publishing_started_at = timezone.now()
-            mission.save(update_fields=["stage", "publishing_started_at"])
+            mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+            mission.submission_reminder_sent = False
+            mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
             # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
             try:
                 send_submission_approved_email(submission)
@@ -1776,12 +1800,14 @@ def vendor_mission_review_submission(request):
     elif review_result == "revising":
         # 審核退回：依 submission 的類型回到對應的撰寫階段
         # ('text' -> 'writing'，'link' -> 'publishing')
-        # 而不是不分類型都退回 "writing"
+        # 而不是不分類型都退回 "writing"，同時重新起算交件提醒期限
         mission.stage = SUBMISSION_TYPE_TO_STAGE.get(
             submission.submission_type,
             "writing"
         )
-        mission.save(update_fields=["stage"])
+        mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+        mission.submission_reminder_sent = False
+        mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
 
         # 設定 3 天修改期限，並寄信通知 KOC；寄信失敗不影響審核本身成功與否。
         submission.revising_deadline = timezone.now() + timedelta(days=3)
@@ -1796,6 +1822,20 @@ def vendor_mission_review_submission(request):
     if should_activate_coupon:
         coupon.status = "active"
         coupon.save(update_fields=["status"])
+
+    submission_type_label = "文案" if submission.submission_type == "text" else "作品連結"
+    if mission.koc:
+        create_notification(
+            user=mission.koc.user,
+            category="koc",
+            title=f"{submission_type_label}審核通過" if review_result == "approved" else f"{submission_type_label}被退回",
+            body=(
+                f"您提交的{submission_type_label}已通過審核。"
+                if review_result == "approved"
+                else f"您提交的{submission_type_label}被退回，請依廠商意見修改後重新提交。"
+            ),
+            reference_type="koc_home",
+        )
 
     return Response({
         "success": True,
@@ -2420,6 +2460,21 @@ def vendor_order_update_shipping(request):
                 ]
             )
 
+    shipping_status_labels = {
+        "preparing": "備貨中",
+        "shipped": "已出貨",
+        "delivered": "已送達",
+    }
+    if shipping_status in shipping_status_labels:
+        create_notification(
+            user=order.user,
+            category="order",
+            title=f"訂單{shipping_status_labels[shipping_status]}",
+            body=f"您的訂單出貨狀態已更新為「{shipping_status_labels[shipping_status]}」。",
+            reference_type="order",
+            reference_id=order.order_id,
+        )
+
     return Response({
         "success": True,
         "err": "",
@@ -2756,6 +2811,20 @@ def vendor_order_respond_cancel_request(request):
             order.order_status = "pending"
             order.cancel_rejected_at = timezone.now()
             order.save(update_fields=["order_status", "cancel_rejected_at"])
+
+    create_notification(
+        user=order.user,
+        category="order",
+        title="取消申請已核准" if approve else "取消申請被拒絕",
+        body=(
+            "您的取消訂單申請已核准，訂單已取消。"
+            if approve
+            else "您的取消訂單申請已被廠商拒絕，訂單將繼續處理。"
+        ),
+        reference_type="order",
+        reference_id=order.order_id,
+    )
+
     return Response({
         "success": True,
         "err": "",
@@ -2990,6 +3059,15 @@ def vendor_order_upload_invoice(request):
         send_invoice_notification_email(order)
     except Exception as e:
         print(f"發票通知信寄送失敗（order_id={order_id}）: {e}")
+
+    create_notification(
+        user=order.user,
+        category="order",
+        title="發票已開立",
+        body=f"您的訂單發票號碼為 {invoice_number}。",
+        reference_type="order",
+        reference_id=order.order_id,
+    )
 
     return Response({
         "success": True,
@@ -3882,13 +3960,15 @@ def get_vendor_finance_transactions(request):
     )
 
     STATUS_TEXT_MAP = {
-        "order_income": ("鑑賞期中", "frozen"),  # 還在凍結餘額，不可勾選申請撥款
-        "settle": ("待撥款", "pending"),          # 已轉入可提領餘額，可勾選申請撥款
+        "order_income": ("鑑賞期中", "frozen", "入帳日"),    # 還在凍結餘額，不可勾選申請撥款
+        "settle": ("待撥款", "pending", "結算日"),            # 已轉入可提領餘額，可勾選申請撥款
+        "return_deduction": ("退款扣抵", "frozen", "退款日"),
+        "withdraw_failed_refund": ("撥款失敗退回", "pending", "退回日"),
     }
     PAYOUT_STATUS_TEXT_MAP = {
-        "pending": ("撥款確認中", "processing"),
-        "completed": ("已完成撥款", "success"),
-        "failed": ("款項異常,審核中", "error"),
+        "pending": ("撥款確認中", "processing", "撥款日"),
+        "completed": ("已完成撥款", "success", "撥款日"),
+        "failed": ("款項異常,審核中", "error", "撥款日"),
     }
 
     # withdraw 類型的交易，實際狀態要看對應的 VendorPayouts.status
@@ -3907,11 +3987,11 @@ def get_vendor_finance_transactions(request):
 
         if t.type == "withdraw":
             payout = payouts_by_id.get(t.reference_id)
-            status_text, status_type = PAYOUT_STATUS_TEXT_MAP.get(
-                payout.status if payout else "pending", ("撥款確認中", "processing")
+            status_text, status_type, date_label = PAYOUT_STATUS_TEXT_MAP.get(
+                payout.status if payout else "pending", ("撥款確認中", "processing", "撥款日")
             )
         else:
-            status_text, status_type = STATUS_TEXT_MAP.get(t.type, (t.type, "pending"))
+            status_text, status_type, date_label = STATUS_TEXT_MAP.get(t.type, (t.type, "pending", "日期"))
 
         results.append({
             "id": f"{t.transaction_id:08d}",
@@ -3921,6 +4001,7 @@ def get_vendor_finance_transactions(request):
             "gross_amount": t.gross_amount,
             "fee_amount": t.fee_amount,
             "date": t.created_at.date().isoformat(),
+            "dateLabel": date_label,
             "statusText": status_text,
             "statusType": status_type,
             "account": account_display,
@@ -3937,79 +4018,17 @@ def get_vendor_finance_transactions(request):
 @permission_classes([AllowAny])
 def vendor_request_payout(request):
     """
-    廠商申請撥款：把可提領餘額(balance_available)送出撥款申請
+    廠商申請撥款
     URL: POST /vendor/finance/requestPayout
+
+    撥款方式已改為月結：系統會在每月固定日期自動幫有可提領餘額
+    (balance_available) 的廠商建立撥款單，見 platform.py 的
+    admin_run_monthly_vendor_payouts。廠商不用也不能再自己隨時
+    申請撥款，這支端點保留但直接回絕，避免舊版前端還在呼叫這支
+    URL 時噴出非預期錯誤；等前端也把「申請撥款」按鈕拿掉之後，
+    這支跟 urls.py 裡對應的 route 可以一起刪掉。
     """
-    vendor_id = request.data.get("vendor_id")
-    amount = request.data.get("amount")
-
-    if not vendor_id:
-        return Response({
-            "success": False,
-            "err": "vendor_id is required"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        vendor = Vendor.objects.get(vendor_id=vendor_id)
-    except Vendor.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "Vendor not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    if not vendor.bank_account:
-        return Response({
-            "success": False,
-            "err": "尚未綁定銀行帳戶，無法申請撥款"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        wallet = vendor.wallet
-    except VendorWallet.DoesNotExist:
-        wallet = None
-
-    available = wallet.balance_available if wallet else 0
-
-    if available <= 0:
-        return Response({
-            "success": False,
-            "err": "目前沒有可提領的餘額"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    payout_amount = int(amount) if amount else available
-
-    if payout_amount <= 0 or payout_amount > available:
-        return Response({
-            "success": False,
-            "err": "申請金額不可小於等於 0 或超過可提領餘額"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    with transaction.atomic():
-        wallet = VendorWallet.objects.select_for_update().get(vendor=vendor)
-        wallet.balance_available = wallet.balance_available - payout_amount
-        wallet.save(update_fields=["balance_available", "updated_at"])
-
-        payout = VendorPayouts.objects.create(
-            vendor=vendor,
-            amount=payout_amount,
-            payout_date=timezone.localdate(),
-            status="pending"
-        )
-
-        Transactions.objects.create(
-            vendor_wallet=wallet,
-            type="withdraw",
-            amount=payout_amount,
-            reference_type="payout",
-            reference_id=str(payout.payout_id)
-        )
-
     return Response({
-        "success": True,
-        "err": "",
-        "payout_id": payout.payout_id,
-        "amount": payout.amount,
-        "payout_date": payout.payout_date,
-        "status": payout.status,
-        "remaining_balance": wallet.balance_available,
-    }, status=status.HTTP_200_OK)
+        "success": False,
+        "err": "撥款已改為每月自動結算，無法自行申請撥款，請留意每月撥款通知"
+    }, status=status.HTTP_400_BAD_REQUEST)

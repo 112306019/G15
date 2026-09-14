@@ -12,7 +12,8 @@ import {
   Loader2,
   MessageCircle,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  ArrowLeft
 } from 'lucide-react'
 
 import {
@@ -37,7 +38,7 @@ const avatarCls = [
 
 function Avatar({ name = '?', size = 'md' }) {
   const idx = (name.charCodeAt(0) || 0) % avatarCls.length
-  const sz = size === 'sm' ? 'w-10 h-10 text-sm' : size === 'lg' ? 'w-16 h-16 text-xl' : 'w-12 h-12 text-base'
+  const sz = size === 'sm' ? 'w-8 h-8 md:w-10 md:h-10 text-xs md:text-sm' : size === 'lg' ? 'w-12 h-12 md:w-16 md:h-16 text-lg md:text-xl' : 'w-10 h-10 md:w-12 md:h-12 text-sm md:text-base'
   return (
     <div className={cn('rounded-full flex items-center justify-center font-bold shrink-0 border border-[#E2DDD4]/50 shadow-sm', sz, avatarCls[idx])}>
       {name.slice(0, 1)}
@@ -282,6 +283,8 @@ export default function ChatPage() {
       0
     )
 
+  // 手機版判斷是否顯示聊天清單 (當沒選中房間時顯示)
+  const showListOnMobile = !activeRoomId;
 
   useEffect(() => {
     loadChatrooms()
@@ -386,23 +389,10 @@ export default function ChatPage() {
             activeRoomId
         )
 
-      if (
-        !selectedRoomStillExists &&
-        mappedRooms.length > 0
-      ) {
-        const firstRoom =
-          mappedRooms[0]
-
-        setActiveVendorId(
-          firstRoom.vendorId
-        )
-
-        setActiveRoomId(
-          firstRoom.roomId
-        )
-      }
-
-      if (mappedRooms.length === 0) {
+      // 避免手機版一進來就切到對話，只在有選擇房間時才切換。
+      // 在電腦版可能可以預設選中第一間，但在手機版最好停在列表頁。
+      // 所以如果原本有選中的房間且還存在，就保持；否則清空選擇（停在列表）。
+      if (!selectedRoomStillExists) {
         setActiveVendorId(null)
         setActiveRoomId(null)
       }
@@ -691,19 +681,24 @@ export default function ChatPage() {
 
 
   return (
-    <div className="flex h-[calc(100vh-65px)] bg-white">
+    <div className="flex h-[calc(100dvh-60px)] md:h-[calc(100vh-65px)] bg-white max-w-7xl mx-auto border-x border-[#E2DDD4] shadow-sm relative overflow-hidden">
 
-      {/* 左側：廠商聊天室清單 */}
-      <div className="w-72 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0">
-        <div className="px-4 py-4 border-b border-[#E2DDD4]">
+      {/* ======================= */}
+      {/* 左側：廠商聊天室清單     */}
+      {/* ======================= */}
+      <div className={cn(
+        "border-r border-[#E2DDD4] flex flex-col bg-white shrink-0 absolute md:relative inset-0 md:inset-auto z-10 transition-transform duration-300 md:w-72 md:translate-x-0",
+        showListOnMobile ? "translate-x-0 w-full" : "-translate-x-full md:block"
+      )}>
+        <div className="px-4 py-3 md:py-4 border-b border-[#E2DDD4] shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-[#1A1A18] text-sm">
+            <h2 className="font-bold text-[#1A1A18] text-sm md:text-base">
               聊天室
             </h2>
 
             <div className="flex items-center gap-2">
               {totalUnread > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-[#C8522A] text-white text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">
                   {totalUnread}
                 </span>
               )}
@@ -712,15 +707,14 @@ export default function ChatPage() {
                 type="button"
                 onClick={loadChatrooms}
                 disabled={roomLoading}
-                className="p-1.5 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                className="p-1.5 md:p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50 transition-colors"
                 title="重新整理聊天室"
               >
                 <RefreshCw
                   size={14}
                   className={cn(
-                    roomLoading
-                      ? 'animate-spin'
-                      : ''
+                    roomLoading ? 'animate-spin' : '',
+                    "md:w-4 md:h-4"
                   )}
                 />
               </button>
@@ -729,7 +723,7 @@ export default function ChatPage() {
 
           <div className="flex items-center gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2">
             <Search
-              size={13}
+              size={14}
               className="text-[#8C8880]"
             />
 
@@ -741,43 +735,43 @@ export default function ChatPage() {
                 )
               }
               placeholder="搜尋廠商或活動…"
-              className="bg-transparent text-xs text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
+              className="bg-transparent text-[13px] md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
             />
           </div>
         </div>
 
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar pb-20 md:pb-0">
           {roomLoading ? (
             <div className="py-16 text-center">
               <Loader2
-                size={18}
+                size={20}
                 className="animate-spin mx-auto text-[#C8522A]"
               />
 
-              <div className="text-xs font-bold text-[#8C8880] mt-3">
+              <div className="text-xs md:text-sm font-bold text-[#8C8880] mt-3">
                 聊天室載入中...
               </div>
             </div>
           ) : error ? (
             <div className="px-5 py-10 text-center">
               <AlertCircle
-                size={22}
+                size={24}
                 className="mx-auto text-red-500 mb-3"
               />
 
-              <div className="text-xs font-bold text-red-600">
+              <div className="text-xs md:text-sm font-bold text-red-600">
                 {error}
               </div>
             </div>
           ) : filteredVendors.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <MessageCircle
-                size={26}
+                size={32}
                 className="mx-auto text-[#E2DDD4] mb-3"
               />
 
-              <div className="text-xs font-bold text-[#8C8880]">
+              <div className="text-xs md:text-sm font-bold text-[#8C8880]">
                 尚無聊天室
               </div>
             </div>
@@ -810,8 +804,8 @@ export default function ChatPage() {
                   className={cn(
                     `
                       w-full flex items-center
-                      gap-3 px-4 py-4
-                      text-left border-l-2
+                      gap-3 md:gap-4 px-4 py-3.5 md:py-4
+                      text-left border-l-4
                       transition-colors
                     `,
                     isActive
@@ -826,11 +820,11 @@ export default function ChatPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-[#1A1A18] truncate">
+                      <span className="text-sm md:text-base font-bold text-[#1A1A18] truncate">
                         {group.vendorName}
                       </span>
 
-                      <span className="text-[10px] text-[#8C8880] shrink-0">
+                      <span className="text-[10px] md:text-[11px] font-medium text-[#8C8880] shrink-0">
                         {formatMessageDate(
                           latestRoom
                             ?.lastMessageTime
@@ -838,19 +832,19 @@ export default function ChatPage() {
                       </span>
                     </div>
 
-                    <div className="text-[10px] text-[#8C8880] mt-1 truncate">
+                    <div className="text-[11px] md:text-xs text-[#8C8880] mt-1 truncate">
                       {latestRoom
                         ?.lastMessage ||
                         `${group.rooms.length} 個任務聊天室`}
                     </div>
 
-                    <div className="text-[9px] font-mono text-[#8C8880] mt-1">
-                      {group.vendorId}
+                    <div className="text-[9px] md:text-[10px] font-mono font-medium text-[#E2DDD4] mt-1">
+                      ID: {group.vendorId}
                     </div>
                   </div>
 
                   {unreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center shrink-0">
+                    <span className="bg-[#C8522A] text-white text-[10px] md:text-xs font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center shrink-0">
                       {unreadCount}
                     </span>
                   )}
@@ -862,45 +856,58 @@ export default function ChatPage() {
       </div>
 
 
-      {/* 右側：對話內容 */}
-      <div className="flex-1 flex flex-col bg-[#F8F9FA] min-w-0">
+      {/* ======================= */}
+      {/* 右側：對話內容           */}
+      {/* ======================= */}
+      <div className={cn(
+        "flex-1 flex flex-col bg-[#F8F9FA] min-w-0 absolute md:relative inset-0 md:inset-auto z-0 transition-transform duration-300",
+        showListOnMobile ? "translate-x-full md:translate-x-0" : "translate-x-0"
+      )}>
 
         {!activeRoom ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880]">
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center text-[#8C8880]">
             <MessageCircle
-              size={42}
+              size={48}
               className="mb-4 text-[#E2DDD4]"
             />
 
-            <div className="text-sm font-bold">
+            <div className="text-base font-bold text-[#1A1A18]">
               請選擇聊天室
             </div>
 
-            <div className="text-xs mt-2">
+            <div className="text-sm mt-2 font-medium">
               選擇左側廠商開始溝通
             </div>
           </div>
         ) : (
           <>
-            {/* 廠商資訊 */}
-            <div className="bg-white border-b border-[#E2DDD4] px-6 py-4 flex items-center gap-4 shrink-0">
+            {/* 廠商資訊標頭 */}
+            <div className="bg-white border-b border-[#E2DDD4] px-4 md:px-6 py-2.5 md:py-4 flex items-center gap-3 shrink-0 shadow-sm z-10">
+              <button 
+                onClick={() => {
+                  setActiveRoomId(null);
+                  setActiveVendorId(null);
+                }}
+                className="md:hidden p-1.5 -ml-2 mr-1 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+              >
+                <ArrowLeft size={20} />
+              </button>
+
               <Avatar
                 name={
                   activeRoom.vendorName ||
                   activeGroup?.vendorName ||
                   '?'
                 }
-                size="lg"
+                size="sm"
               />
 
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-[#1A1A18]">
+                <div className="font-bold text-[#1A1A18] text-[13px] md:text-base leading-tight">
                   {activeRoom.vendorName}
                 </div>
 
-                <div className="text-xs text-[#8C8880] mt-1">
-                  {activeRoom.vendorId}
-                  {' · '}
+                <div className="text-[10px] md:text-xs font-medium text-[#8C8880] mt-0.5 truncate">
                   {activeRoom.campaignName}
                 </div>
               </div>
@@ -913,82 +920,77 @@ export default function ChatPage() {
                   )
                 }
                 disabled={messageLoading}
-                className="p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                className="p-1.5 md:p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50 transition-colors"
                 title="重新整理訊息"
               >
                 <RefreshCw
                   size={16}
                   className={cn(
-                    messageLoading
-                      ? 'animate-spin'
-                      : ''
+                    messageLoading ? 'animate-spin' : ''
                   )}
                 />
               </button>
             </div>
 
 
-            {/* 任務聊天室 Tabs */}
-            <div className="bg-white border-b border-[#E2DDD4] px-6 flex gap-1 shrink-0 overflow-x-auto">
-              {(activeGroup?.rooms || []).map(
-                room => (
-                  <button
-                    type="button"
-                    key={room.roomId}
-                    onClick={() =>
-                      selectRoom(room)
-                    }
-                    className={cn(
-                      `
-                        flex items-center gap-2
-                        px-4 py-3 text-xs
-                        font-semibold border-b-2
-                        transition-all
-                        whitespace-nowrap
-                      `,
-                      activeRoomId ===
-                        room.roomId
-                        ? 'border-[#C8522A] text-[#C8522A]'
-                        : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-                    )}
-                  >
-                    <Tag size={11} />
+            {/* 任務聊天室 Tabs (若該廠商有多個任務) */}
+            {(activeGroup?.rooms || []).length > 1 && (
+              <div className="bg-white border-b border-[#E2DDD4] px-4 md:px-6 flex gap-2 shrink-0 overflow-x-auto hide-scrollbar">
+                {(activeGroup?.rooms || []).map(
+                  room => (
+                    <button
+                      type="button"
+                      key={room.roomId}
+                      onClick={() =>
+                        selectRoom(room)
+                      }
+                      className={cn(
+                        `
+                          flex items-center gap-1.5 md:gap-2
+                          px-3 md:px-4 py-2.5 md:py-3 text-[11px] md:text-xs
+                          font-bold border-b-2
+                          transition-all
+                          whitespace-nowrap
+                        `,
+                        activeRoomId ===
+                          room.roomId
+                          ? 'border-[#C8522A] text-[#C8522A]'
+                          : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+                      )}
+                    >
+                      <Tag size={10} className="md:w-[12px] md:h-[12px]" />
 
-                    <span className="font-bold">
-                      {room.campaignName}
-                    </span>
-
-                    <span className="font-mono text-[10px]">
-                      #{room.kocMissionId}
-                    </span>
-
-                    {room.unreadCount > 0 && (
-                      <span className="bg-[#C8522A] text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
-                        {room.unreadCount}
+                      <span>
+                        {room.campaignName}
                       </span>
-                    )}
-                  </button>
-                )
-              )}
-            </div>
+
+                      {room.unreadCount > 0 && (
+                        <span className="bg-[#C8522A] text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
+                          {room.unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
 
 
-            {/* 任務資訊 */}
-            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-6 py-2.5 flex items-center gap-3 text-xs text-[#C8522A] shrink-0">
-              <span className="font-bold">
+            {/* 任務狀態標籤 */}
+            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-4 md:px-6 py-2 flex flex-wrap md:flex-nowrap items-center gap-2 text-[10px] md:text-xs text-[#C8522A] shrink-0">
+              <span className="font-bold truncate max-w-[150px] md:max-w-[200px]">
                 {activeRoom.campaignName}
               </span>
 
-              <span>·</span>
+              <span className="hidden md:inline">·</span>
 
-              <span>
-                任務 #
-                {activeRoom.kocMissionId}
+              <span className="hidden sm:inline font-mono">
+                任務 #{activeRoom.kocMissionId}
               </span>
 
-              <span>·</span>
+              <span className="hidden sm:inline">·</span>
 
-              <span className="font-bold">
+              <span className="font-bold px-2 py-0.5 bg-white rounded-md shadow-sm border border-[#C8522A]/20">
                 {stageLabels[
                   activeRoom.missionStage
                 ] ||
@@ -1000,19 +1002,19 @@ export default function ChatPage() {
 
             {/* 錯誤訊息 */}
             {messageError && (
-              <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
+              <div className="mx-4 md:mx-6 mt-3 md:mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-xs font-bold text-red-600">
                 {messageError}
               </div>
             )}
 
 
-            {/* 訊息區 */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+            {/* 對話訊息區 */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-3 md:px-6 py-4 md:py-5 space-y-3 md:space-y-4">
               {messageLoading &&
               messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center">
                   <Loader2
-                    size={20}
+                    size={24}
                     className="animate-spin text-[#C8522A]"
                   />
 
@@ -1030,7 +1032,7 @@ export default function ChatPage() {
                     <div
                       key={message.messageId}
                       className={cn(
-                        'flex',
+                        'flex w-full',
                         isKoc
                           ? 'justify-end'
                           : 'justify-start'
@@ -1039,25 +1041,28 @@ export default function ChatPage() {
                       <div
                         className={cn(
                           `
-                            max-w-[75%]
-                            sm:max-w-md
-                            px-4 py-2.5
+                            max-w-[85%]
+                            sm:max-w-[75%]
+                            md:max-w-md
+                            px-3.5 py-2.5
+                            md:px-4 md:py-3
                             rounded-2xl
-                            text-sm
+                            text-[13px] md:text-sm
                             leading-relaxed
                             whitespace-pre-wrap
                             break-words
+                            shadow-sm
                           `,
                           isKoc
                             ? 'bg-[#1A1A18] text-white rounded-br-sm'
-                            : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
+                            : 'bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-bl-sm'
                         )}
                       >
                         {message.content}
 
                         <div
                           className={cn(
-                            'text-[10px] mt-1',
+                            'text-[9px] md:text-[10px] mt-1 md:mt-1.5 font-medium',
                             isKoc
                               ? 'text-white/50 text-right'
                               : 'text-[#8C8880]'
@@ -1073,16 +1078,16 @@ export default function ChatPage() {
                 })
               ) : (
                 <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
-                  <Tag
-                    size={28}
+                  <MessageCircle
+                    size={36}
                     className="mb-3 text-[#E2DDD4]"
                   />
 
-                  <p className="text-sm font-bold">
+                  <p className="text-sm font-bold text-[#1A1A18]">
                     尚無訊息
                   </p>
 
-                  <p className="text-xs mt-2">
+                  <p className="text-xs mt-1.5 font-medium">
                     開始與廠商溝通吧
                   </p>
                 </div>
@@ -1093,8 +1098,8 @@ export default function ChatPage() {
 
 
             {/* 輸入區 */}
-            <div className="bg-white border-t border-[#E2DDD4] px-6 py-4 shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="bg-white border-t border-[#E2DDD4] px-3 md:px-6 py-2.5 md:py-4 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+              <div className="flex items-end gap-2 md:gap-3">
                 <textarea
                   rows={1}
                   value={input}
@@ -1107,8 +1112,8 @@ export default function ChatPage() {
                     handleInputKeyDown
                   }
                   disabled={sending}
-                  placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
-                  className="flex-1 max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+                  placeholder="輸入訊息…"
+                  className="flex-1 max-h-24 md:max-h-32 min-h-[40px] md:min-h-[48px] resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl px-4 py-2.5 md:py-3 text-[13px] md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60 custom-scrollbar"
                 />
 
                 <button
@@ -1118,15 +1123,15 @@ export default function ChatPage() {
                     !input.trim() ||
                     sending
                   }
-                  className="bg-[#1A1A18] text-white p-3 rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="bg-[#1A1A18] text-white h-[40px] w-[40px] md:h-[48px] md:w-[48px] rounded-full flex items-center justify-center hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                 >
                   {sending ? (
                     <Loader2
-                      size={17}
+                      size={18}
                       className="animate-spin"
                     />
                   ) : (
-                    <Send size={17} />
+                    <Send size={18} className="-ml-0.5" />
                   )}
                 </button>
               </div>

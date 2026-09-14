@@ -1,6 +1,7 @@
 import logging
 import csv
 import io
+from django.conf import settings
 from django.http import HttpResponse
 from django.contrib.auth.hashers import check_password
 from decimal import Decimal, ROUND_HALF_UP
@@ -44,9 +45,9 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.emails import send_koc_approval_email, send_vendor_approval_email
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
+from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 
 logger = logging.getLogger(__name__)
@@ -265,15 +266,24 @@ def calculate_order_commission(order):
         kocmission=mission,
         order=order,
         amount=commission_amount,
-        status=EARNINGS_STATUS_CHOICES_MAP["pending"]
+        status=EARNINGS_STATUS_CHOICES_MAP["withdrawable"]
     )
 
-    # 分潤剛算出來時，錢還不能直接動用：先記錄在 KOC 錢包的
-    # 凍結餘額（balance_frozen），等活動正式結算（見
-    # admin_settle_campaign_earnings）才會轉成可提領餘額。
+    # 訂單完成當下就直接把分潤記入可提領餘額，不用等整個案件結束才結算
+    # （原本會先進 balance_frozen，等 admin_settle_campaign_earnings 手動結算才轉
+    # balance_available；admin_settle_campaign_earnings 仍保留，作為補算舊資料或
+    # 例外情況用的工具，正常流程不會再用到）。
     wallet, _ = KocWallet.objects.get_or_create(koc=mission.koc)
-    wallet.balance_frozen = wallet.balance_frozen + commission_amount
-    wallet.save(update_fields=["balance_frozen", "updated_at"])
+    wallet.balance_available = wallet.balance_available + commission_amount
+    wallet.save(update_fields=["balance_available", "updated_at"])
+
+    Transactions.objects.create(
+        koc_wallet=wallet,
+        type="reward",
+        amount=commission_amount,
+        reference_type="earning",
+        reference_id=str(earning.earnings_id)
+    )
 
     coupon.usage_count = (
         coupon.usage_count or 0
@@ -632,16 +642,37 @@ def reverse_earning_and_vendor_income_for_return(return_request):
 # POST /platform_admin/vendor/settle-earnings
 #
 # 用途：出貨後鑑賞期過了，才能把「已入帳但還在凍結」的款項轉為可提領。
-# 這支可以由排程（cron / celery beat）定期呼叫，也可以在後台放一顆手動按鈕呼叫。
-# 鑑賞期天數定義在 constants.py 的 VENDOR_SETTLEMENT_HOLD_DAYS。
+# 這支由排程（cron / celery beat）定期呼叫，會自動把「已經過鑑賞期」的
+# 全部廠商一起結算；也可以在後台放一顆手動按鈕呼叫（帶 vendor_id 只結算
+# 單一廠商）。鑑賞期天數定義在 constants.py 的 VENDOR_SETTLEMENT_HOLD_DAYS。
+#
+# 權限：跟 admin_run_monthly_vendor_payouts 一樣是雙軌——帶 Admin_id 走
+# 原本的角色檢查（後台手動按鈕用），沒帶就比對 X-Cron-Token 這個 header
+# 是否等於 settings.VENDOR_PAYOUT_CRON_TOKEN（這個 token 是共用的，不是
+# 只給撥款用，任何排程觸發的財務批次工作都比對同一個值）。
 # ==============================================================================
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_settle_vendor_earnings(request):
-    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
-    if err:
-        return err
+    admin_obj = None
+    admin_id = request.data.get('Admin_id')
+
+    if admin_id:
+        # 後台手動點「結算」按鈕：走原本的角色檢查
+        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        if err:
+            return err
+    else:
+        # 排程系統呼叫：沒有登入中的管理員，改比對 cron token
+        cron_token = request.headers.get('X-Cron-Token')
+        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+
+        if not expected_token or cron_token != expected_token:
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
 
     vendor_id = request.data.get('vendor_id')  # 選填：只結算單一廠商；不帶則全廠商一起跑
 
@@ -1169,6 +1200,132 @@ def admin_confirm_vendor_payout(request):
 
 
 # ==============================================================================
+# 廠商撥款改月結：原本 vendor_request_payout 是廠商自己隨時申請撥款，
+# 現在改成「月結」——廠商不用也不能再自行申請，改由這支在每月固定日期
+# 被排程呼叫，自動幫每一個「有可提領餘額」的廠商各自建立一張撥款單，
+# 把 balance_available 歸零、轉成一筆 pending 的 VendorPayouts + withdraw
+# 交易。之後的後台流程（列表 admin_list_vendor_payouts、匯出
+# admin_export_payout_transfers、標記完成/失敗 admin_confirm_vendor_payout）
+# 完全沿用既有的，不用另外改，因為它們都是照 VendorPayouts 的紀錄在跑，
+# 不管這筆紀錄當初是廠商自己申請的還是月結批次產生的。
+#
+# 這支本身「不管日期」，只要被打就會立刻對所有符合條件的廠商跑一次；
+# 實際「每月幾號跑」由外部排程系統設定（例如 Render 的 Cron Job，或
+# celery beat 的 crontab schedule），之後日期定案了再去那邊設定
+# cron expression 即可，不用改這支程式。
+#
+# 權限：這支預期主要是被排程系統打，不是登入中的管理員操作，所以除了
+# 原本「帶 Admin_id」的手動觸發路徑（後台可以放一顆「手動月結」按鈕，
+# 給忘記排程或需要補跑時用），也接受帶 X-Cron-Token 這個 header，
+# 比對 settings.VENDOR_PAYOUT_CRON_TOKEN（要記得在 settings.py /
+# 環境變數加這個值，排程系統呼叫時把它放進 header 帶過來）。
+#
+# 注意：AdminAuditLogs.admin_id 這個欄位如果在 models.py 裡不是
+# nullable，排程觸發（沒有 admin_obj）這條路徑寫入稽核紀錄時會炸掉，
+# 要嘛把欄位改成可以是 null，要嘛另外準備一個代表「系統排程」的
+# Admins 帳號在這裡帶入——這部分我沒看到 models.py，麻煩確認一下。
+#
+# POST /platform_admin/vendor/run-monthly-payouts
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_run_monthly_vendor_payouts(request):
+    admin_obj = None
+    admin_id = request.data.get('Admin_id')
+
+    if admin_id:
+        # 後台手動觸發（例如補跑、或還沒設排程前先手動點）：走原本的角色檢查
+        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        if err:
+            return err
+    else:
+        # 排程系統呼叫：沒有登入中的管理員，改比對 cron token
+        cron_token = request.headers.get('X-Cron-Token')
+        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+
+        if not expected_token or cron_token != expected_token:
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    wallets = (
+        VendorWallet.objects
+        .select_related('vendor')
+        .filter(balance_available__gt=0)
+    )
+
+    payouts_created = []
+    skipped = []
+
+    for wallet in wallets:
+        vendor = wallet.vendor
+
+        # 沒綁銀行帳戶的廠商沒辦法自動撥款，先略過，列在 skipped 裡
+        # 讓後台知道要請廠商去補資料，錢還是留在 balance_available 裡
+        # 等下個月結算週期再試一次。
+        if not vendor.bank_account:
+            skipped.append({
+                'vendor_id': vendor.vendor_id,
+                'reason': '尚未綁定銀行帳戶，無法自動撥款'
+            })
+            continue
+
+        with transaction.atomic():
+            locked_wallet = VendorWallet.objects.select_for_update().get(pk=wallet.pk)
+            payout_amount = locked_wallet.balance_available
+
+            # select_for_update 之後重新確認一次金額，避免跟同時間其他
+            # 請求（例如退貨扣款）之間有 race condition
+            if payout_amount <= 0:
+                continue
+
+            locked_wallet.balance_available = 0
+            locked_wallet.save(update_fields=['balance_available', 'updated_at'])
+
+            payout = VendorPayouts.objects.create(
+                vendor=vendor,
+                amount=payout_amount,
+                payout_date=timezone.localdate(),
+                status='pending'
+            )
+
+            Transactions.objects.create(
+                vendor_wallet=locked_wallet,
+                type='withdraw',
+                amount=payout_amount,
+                reference_type='payout',
+                reference_id=str(payout.payout_id)
+            )
+
+        payouts_created.append({
+            'vendor_id': vendor.vendor_id,
+            'payout_id': payout.payout_id,
+            'amount': payout_amount,
+        })
+
+    total_amount = sum(p['amount'] for p in payouts_created)
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='run_monthly_vendor_payouts',
+        action_reason=(
+            f'月結批次撥款，共產生 {len(payouts_created)} 筆撥款單，'
+            f'總金額 NT$ {total_amount}，{len(skipped)} 個廠商因故略過'
+        ),
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'payouts_created': payouts_created,
+        'total_amount': total_amount,
+        'skipped': skipped,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
 # 活動結算：活動結束後，把該活動所有「可提領」的分潤一次匯入 KOC 錢包
 # POST /platform_admin/campaign/settle-earnings
 # ==============================================================================
@@ -1207,6 +1364,10 @@ def admin_get_earnings(request):
 
 # 列出「有可提領分潤」的活動，並標出是否已經過了 end_date + promo_days，
 # 可以讓前端知道要顯示可結算還是要等待。
+#
+# 注意：calculate_order_commission 現在建立 Earnings 時就直接是 withdrawable，
+# 正常流程不會再產生 pending 分潤，這支 API（以及下面的 admin_settle_campaign_earnings）
+# 只當作補算舊資料或例外情況的手動工具保留，不是主要結算路徑。
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_list_settleable_campaigns(request):
@@ -2962,36 +3123,21 @@ def admin_get_tax_forms(request):
             'err': f"status 必須是 {', '.join(sorted(valid_statuses))} 其中之一"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    forms = RemunerationForm.objects.select_related(
-        'kocmission__koc__user',
-        'kocmission__application__campaign',
-    ).order_by('-submitted_at')
+    forms = RemunerationForm.objects.select_related('koc__user').order_by('-submitted_at')
 
     if status_filter:
         forms = forms.filter(status=status_filter)
 
-    mission_ids = [form.kocmission_id for form in forms]
-    earnings_totals = (
-        Earnings.objects.filter(kocmission_id__in=mission_ids)
-        .values('kocmission_id')
-        .annotate(total=Sum('amount'))
-    )
-    earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
-
     result = []
     for form in forms:
-        mission = form.kocmission
-        campaign = mission.application.campaign
-        koc_user = mission.koc.user if mission.koc else None
+        koc_user = form.koc.user if form.koc else None
 
         result.append({
             'form_id': form.form_id,
-            'kocmission_id': mission.kocmission_id,
-            'koc_id': mission.koc_id,
+            'koc_id': form.koc_id,
             'koc_name': (koc_user.display_name or koc_user.name) if koc_user else '',
-            'campaign_name': campaign.name,
-            'vendor_name': campaign.vendor.company_name,
-            'amount': earnings_map.get(mission.kocmission_id, 0),
+            'service_content': REMUNERATION_SERVICE_CONTENT,
+            'amount': form.amount,
             'status': form.status,
             'cloud_link_url': form.cloud_link_url,
             'submitted_at': form.submitted_at,
@@ -3036,10 +3182,7 @@ def admin_review_tax_form(request):
         return Response({'success': False, 'err': '退回時必須填寫原因'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        form = RemunerationForm.objects.select_related(
-            'kocmission__koc__user',
-            'kocmission__application__campaign',
-        ).get(form_id=form_id)
+        form = RemunerationForm.objects.select_related('koc__user').get(form_id=form_id)
     except RemunerationForm.DoesNotExist:
         return Response({'success': False, 'err': '找不到對應的勞報單'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -3053,14 +3196,25 @@ def admin_review_tax_form(request):
     form.save(update_fields=['status', 'reviewed_at', 'reviewed_by_admin_id', 'reject_reason'])
 
     if action == 'reject':
-        koc_user = form.kocmission.koc.user if form.kocmission.koc else None
+        koc_user = form.koc.user if form.koc else None
         if koc_user and koc_user.email:
             try:
-                send_tax_form_rejected_email(
-                    koc_user, form.kocmission.application.campaign.name, reject_reason,
-                )
+                send_tax_form_rejected_email(koc_user, form.amount, reject_reason)
             except Exception:
                 logger.exception('勞報單退回通知信寄送失敗：form_id=%s', form.form_id)
+
+    if form.koc:
+        create_notification(
+            user=form.koc.user,
+            category='koc',
+            title='勞務報酬單審核通過' if action == 'approve' else '勞務報酬單被退回',
+            body=(
+                f'您申報的 NT$ {form.amount:,} 勞務報酬單已審核通過。'
+                if action == 'approve'
+                else f'您申報的 NT$ {form.amount:,} 勞務報酬單被退回：{reject_reason}'
+            ),
+            reference_type='tax_form_records',
+        )
 
     return Response({
         'success': True,

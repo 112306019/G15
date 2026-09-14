@@ -36,6 +36,7 @@ from .views.platform import (
     admin_list_vendor_payouts,
     admin_confirm_vendor_payout,
     admin_export_payout_transfers,
+    admin_run_monthly_vendor_payouts,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
@@ -76,6 +77,8 @@ from .views import koc, vendor
 from .views.vendor import vendor_upload_image
 from .views import shipping
 from .views import support
+from .views import order_chat
+from .views import notifications as notification_views
 
 urlpatterns = [
     # koc
@@ -88,13 +91,15 @@ urlpatterns = [
     path('koc/application/getlist', views.get_application_list, name='get-application-list'),
     path('koc/mission/getDetail', views.mission_get_detail, name='koc-mission-get-detail'),
     path('koc/mission/getlist', views.get_mission_list, name='koc-mission-get-list'),
+    path('koc/mission/cancel', views.cancel_mission, name='koc-mission-cancel'),
     path('koc/mission/getStageCounts', views.get_mission_stage_counts, name='koc-mission-get-stage-counts'),
     path('koc/mission/submitTaxFormLink', views.submit_tax_form_link, name='koc-mission-submit-tax-form-link'),
     path('koc/mission/taxFormData', views.get_tax_form_data, name='koc-mission-tax-form-data'),
     path('koc/application/remove/<int:application_id>', views.remove_application, name='koc-application-remove'),
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
-    path('koc/revenue/getPendingDetail', views.get_pending_earnings_detail, name='koc-revenue-get-pending-detail'),
+    path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
+    path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
     path('koc/analytics/getList', views.get_analytics_list, name='koc-analytics-get-list'),
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
@@ -127,6 +132,7 @@ urlpatterns = [
     path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
     path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
     path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
+    path('platform/vendor/run-monthly-payouts', admin_run_monthly_vendor_payouts, name='platform-vendor-run-monthly-payouts'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
@@ -268,6 +274,16 @@ urlpatterns = [
     path('platform/support/getMessages', support.admin_support_get_messages, name='admin-support-get-messages'),
     path('platform/support/sendMessage', support.admin_support_send_message, name='admin-support-send-message'),
     path('platform/support/markRead', support.admin_support_mark_read, name='admin-support-mark-read'),
+
+    # 站內通知
+    path('notifications/list', notification_views.list_notifications, name='notifications-list'),
+    path('notifications/markRead', notification_views.mark_notification_read, name='notifications-mark-read'),
+
+    # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
+    path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),
+    path('user/orderChat/sendMessage', order_chat.user_order_chat_send_message, name='user-order-chat-send-message'),
+    path('vendor/orderChat/getMessages', order_chat.vendor_order_chat_get_messages, name='vendor-order-chat-get-messages'),
+    path('vendor/orderChat/sendMessage', order_chat.vendor_order_chat_send_message, name='vendor-order-chat-send-message'),
 
     # Admin API
     # Platform Admin 平台端 API

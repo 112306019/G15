@@ -70,23 +70,12 @@ class MissionStageCountsSerializer(serializers.Serializer):
     publishing = serializers.IntegerField()
     completed = serializers.IntegerField()
 
-class RevenueTotalSerializer(serializers.Serializer):
-    withdrawable_amount = serializers.IntegerField()
-    pending_amount = serializers.IntegerField()
-    hasBankAccount = serializers.BooleanField()
-
 class RevenueHistoryItemSerializer(serializers.Serializer):
     date = serializers.CharField(allow_null=True)
     amount = serializers.IntegerField()
     KOCMission_id = serializers.CharField()
     campaign_name = serializers.CharField()
     status = serializers.IntegerField()
-
-class PendingEarningsItemSerializer(serializers.Serializer):
-    earnings_no = serializers.CharField()
-    amount = serializers.IntegerField()
-    campaign_name = serializers.CharField(allow_null=True)
-    date = serializers.CharField(allow_null=True)
 
 class AnalyticsListItemSerializer(serializers.Serializer):
     KOCMission_id = serializers.CharField()
