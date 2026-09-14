@@ -1018,6 +1018,7 @@ def get_tax_form_data(request):
         'service_content': REMUNERATION_SERVICE_CONTENT,
         'submitted_at': submitted_at.strftime('%Y-%m-%d') if submitted_at else None,
         'amount': amount,
+        'platform_service_fee_rate': PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
