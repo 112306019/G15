@@ -45,7 +45,7 @@ function Card({
     <div
       className={cn(
         `
-          bg-white rounded-2xl
+          bg-white rounded-[1.5rem] sm:rounded-2xl
           border border-[#E2DDD4]
           shadow-sm
         `,
@@ -69,7 +69,7 @@ function StatCard({
     <Card
       className={cn(
         `
-          p-5 flex flex-col
+          p-4 sm:p-5 flex flex-col
           justify-between
           transition-all
           hover:shadow-md
@@ -79,27 +79,27 @@ function StatCard({
           : ''
       )}
     >
-      <div className="flex items-center justify-between mb-5">
-        <span className="text-sm font-bold text-[#8C8880]">
+      <div className="flex items-center justify-between mb-3 sm:mb-5">
+        <span className="text-[11px] sm:text-sm font-bold text-[#8C8880] truncate pr-2">
           {label}
         </span>
 
         <div
           className={cn(
-            'p-2.5 rounded-xl',
+            'p-2 sm:p-2.5 rounded-xl shrink-0',
             accent
               ? 'bg-[#FDF0ED] text-[#C8522A]'
               : 'bg-[#F5F0E8] text-[#1A1A18]'
           )}
         >
-          <Icon size={19} />
+          <Icon size={16} className="sm:w-[19px] sm:h-[19px]" />
         </div>
       </div>
 
       <div>
         <div
           className={cn(
-            'text-2xl font-black',
+            'text-lg sm:text-2xl font-black truncate',
             accent
               ? 'text-[#C8522A]'
               : 'text-[#1A1A18]'
@@ -109,7 +109,7 @@ function StatCard({
         </div>
 
         {sub && (
-          <div className="text-xs font-bold text-[#8C8880] mt-2">
+          <div className="text-[9px] sm:text-xs font-bold text-[#8C8880] mt-1 sm:mt-2 truncate">
             {sub}
           </div>
         )}
@@ -138,8 +138,8 @@ function CouponRateBadge({
       className={cn(
         `
           inline-flex items-center
-          px-3 py-1.5 rounded-full
-          text-[11px] font-bold
+          px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full
+          text-[10px] sm:text-[11px] font-bold whitespace-nowrap
         `,
         className
       )}
@@ -432,10 +432,10 @@ export default function ProductAnalytics() {
 
           name:
             product.productName.length >
-            12
+            10
               ? `${product.productName.slice(
                   0,
-                  12
+                  10
                 )}…`
               : product.productName,
 
@@ -461,13 +461,13 @@ export default function ProductAnalytics() {
 
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
 
       {/* 篩選區 */}
-      <Card className="p-5">
-        <div className="flex flex-col xl:flex-row gap-4 xl:items-end">
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-[#8C8880] mb-2">
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:items-end">
+          <div className="flex-1 w-full">
+            <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
               活動
             </label>
 
@@ -482,8 +482,8 @@ export default function ProductAnalytics() {
               className="
                 w-full bg-[#F8F9FA]
                 border border-[#E2DDD4]
-                rounded-xl px-4 py-3
-                text-sm font-bold
+                rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
+                text-[13px] sm:text-sm font-bold
                 text-[#1A1A18]
                 outline-none
                 focus:border-[#C8522A]
@@ -511,121 +511,127 @@ export default function ProductAnalytics() {
             </select>
           </div>
 
+          <div className="flex gap-3 w-full lg:w-auto flex-1">
+            <div className="flex-1 w-full">
+              <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
+                開始日期
+              </label>
 
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-[#8C8880] mb-2">
-              開始日期
-            </label>
-
-            <input
-              type="date"
-              value={startDate}
-              onChange={event =>
-                setStartDate(
-                  event.target.value
-                )
-              }
-              className="
-                w-full bg-[#F8F9FA]
-                border border-[#E2DDD4]
-                rounded-xl px-4 py-3
-                text-sm font-bold
-                text-[#1A1A18]
-                outline-none
-                focus:border-[#C8522A]
-              "
-            />
-          </div>
-
-
-          <div className="flex-1">
-            <label className="block text-xs font-bold text-[#8C8880] mb-2">
-              結束日期
-            </label>
-
-            <input
-              type="date"
-              value={endDate}
-              onChange={event =>
-                setEndDate(
-                  event.target.value
-                )
-              }
-              min={startDate || undefined}
-              className="
-                w-full bg-[#F8F9FA]
-                border border-[#E2DDD4]
-                rounded-xl px-4 py-3
-                text-sm font-bold
-                text-[#1A1A18]
-                outline-none
-                focus:border-[#C8522A]
-              "
-            />
-          </div>
-
-
-          <button
-            type="button"
-            onClick={loadPerformance}
-            disabled={loading}
-            className="
-              inline-flex items-center
-              justify-center gap-2
-              px-6 py-3 rounded-xl
-              bg-[#1A1A18] text-white
-              text-sm font-bold
-              hover:bg-[#C8522A]
-              disabled:opacity-50
-              transition-colors
-            "
-          >
-            {loading ? (
-              <Loader2
-                size={16}
-                className="animate-spin"
+              <input
+                type="date"
+                value={startDate}
+                onChange={event =>
+                  setStartDate(
+                    event.target.value
+                  )
+                }
+                className="
+                  w-full bg-[#F8F9FA]
+                  border border-[#E2DDD4]
+                  rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
+                  text-[13px] sm:text-sm font-bold
+                  text-[#1A1A18]
+                  outline-none
+                  focus:border-[#C8522A]
+                "
               />
-            ) : (
-              <RefreshCw size={16} />
-            )}
-
-            查詢成效
-          </button>
+            </div>
 
 
-          <button
-            type="button"
-            onClick={clearFilters}
-            disabled={loading}
-            className="
-              inline-flex items-center
-              justify-center gap-2
-              px-5 py-3 rounded-xl
-              border border-[#E2DDD4]
-              bg-white text-[#8C8880]
-              text-sm font-bold
-              hover:text-[#1A1A18]
-              hover:bg-[#F8F9FA]
-              disabled:opacity-50
-            "
-          >
-            <FilterX size={16} />
-            清除
-          </button>
+            <div className="flex-1 w-full">
+              <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
+                結束日期
+              </label>
+
+              <input
+                type="date"
+                value={endDate}
+                onChange={event =>
+                  setEndDate(
+                    event.target.value
+                  )
+                }
+                min={startDate || undefined}
+                className="
+                  w-full bg-[#F8F9FA]
+                  border border-[#E2DDD4]
+                  rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
+                  text-[13px] sm:text-sm font-bold
+                  text-[#1A1A18]
+                  outline-none
+                  focus:border-[#C8522A]
+                "
+              />
+            </div>
+          </div>
+
+
+          <div className="flex gap-2 sm:gap-3 w-full lg:w-auto mt-2 lg:mt-0">
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={loading}
+              className="
+                flex-1 lg:flex-none
+                inline-flex items-center
+                justify-center gap-2
+                px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl
+                border border-[#E2DDD4]
+                bg-white text-[#8C8880]
+                text-[13px] sm:text-sm font-bold
+                hover:text-[#1A1A18]
+                hover:bg-[#F8F9FA]
+                disabled:opacity-50
+                whitespace-nowrap
+              "
+            >
+              <FilterX size={16} />
+              清除
+            </button>
+
+            <button
+              type="button"
+              onClick={loadPerformance}
+              disabled={loading}
+              className="
+                flex-[2] lg:flex-none
+                inline-flex items-center
+                justify-center gap-2
+                px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl
+                bg-[#1A1A18] text-white
+                text-[13px] sm:text-sm font-bold
+                hover:bg-[#C8522A]
+                disabled:opacity-50
+                transition-colors
+                whitespace-nowrap
+              "
+            >
+              {loading ? (
+                <Loader2
+                  size={16}
+                  className="animate-spin"
+                />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+
+              查詢成效
+            </button>
+          </div>
         </div>
       </Card>
 
 
       {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-sm font-bold text-red-600">
-          <AlertCircle size={18} />
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 text-xs sm:text-sm font-bold text-red-600">
+          <AlertCircle size={18} className="shrink-0" />
           {error}
         </div>
       )}
 
 
       {/* KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           label="商品銷售額"
           value={formatCurrency(
@@ -662,19 +668,19 @@ export default function ProductAnalytics() {
 
 
       {/* 商品銷售排行 */}
-      <Card className="p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-serif font-bold text-[#1A1A18]">
+      <Card className="p-4 sm:p-6 overflow-hidden">
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
             商品銷售額排行
           </h2>
 
-          <p className="text-xs text-[#8C8880] mt-1">
+          <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
             依目前查詢條件顯示前十名商品
           </p>
         </div>
 
         {loading ? (
-          <div className="h-[280px] flex flex-col items-center justify-center">
+          <div className="h-[240px] sm:h-[280px] flex flex-col items-center justify-center">
             <Loader2
               size={22}
               className="animate-spin text-[#C8522A]"
@@ -685,99 +691,104 @@ export default function ProductAnalytics() {
             </div>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-[280px] flex flex-col items-center justify-center text-[#8C8880]">
+          <div className="h-[240px] sm:h-[280px] flex flex-col items-center justify-center text-[#8C8880]">
             <ShoppingBag
               size={30}
               className="text-[#E2DDD4] mb-3"
             />
 
-            <div className="text-sm font-bold">
+            <div className="text-xs sm:text-sm font-bold">
               目前沒有商品銷售資料
             </div>
           </div>
         ) : (
-          <ResponsiveContainer
-            width="100%"
-            height={280}
-          >
-            <BarChart
-              data={chartData}
-              margin={{
-                top: 10,
-                right: 10,
-                left: 10,
-                bottom: 10
-              }}
+          <div className="-ml-4 sm:ml-0">
+            <ResponsiveContainer
+              width="100%"
+              height={260}
             >
-              <XAxis
-                dataKey="name"
-                tick={{
-                  fontSize: 11,
-                  fill: '#8C8880',
-                  fontWeight: 'bold'
+              <BarChart
+                data={chartData}
+                margin={{
+                  top: 10,
+                  right: 10,
+                  left: 10,
+                  bottom: 10
                 }}
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-              />
+              >
+                <XAxis
+                  dataKey="name"
+                  tick={{
+                    fontSize: window.innerWidth < 640 ? 9 : 11,
+                    fill: '#8C8880',
+                    fontWeight: 'bold'
+                  }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  angle={window.innerWidth < 640 ? -45 : 0}
+                  textAnchor={window.innerWidth < 640 ? 'end' : 'middle'}
+                  height={window.innerWidth < 640 ? 60 : 30}
+                />
 
-              <YAxis hide />
+                <YAxis hide />
 
-              <Tooltip
-                formatter={value => [
-                  formatCurrency(value),
-                  '銷售額'
-                ]}
-                labelFormatter={(
-                  label,
-                  payload
-                ) =>
-                  payload?.[0]?.payload
-                    ?.fullName || label
-                }
-                cursor={{
-                  fill: '#F8F9FA'
-                }}
-                contentStyle={{
-                  borderRadius: 14,
-                  border:
-                    '1px solid #E2DDD4',
-                  boxShadow:
-                    '0 8px 24px rgba(26,26,24,0.08)',
-                  fontSize: 12,
-                  fontWeight: 'bold'
-                }}
-              />
+                <Tooltip
+                  formatter={value => [
+                    formatCurrency(value),
+                    '銷售額'
+                  ]}
+                  labelFormatter={(
+                    label,
+                    payload
+                  ) =>
+                    payload?.[0]?.payload
+                      ?.fullName || label
+                  }
+                  cursor={{
+                    fill: '#F8F9FA'
+                  }}
+                  contentStyle={{
+                    borderRadius: 14,
+                    border:
+                      '1px solid #E2DDD4',
+                    boxShadow:
+                      '0 8px 24px rgba(26,26,24,0.08)',
+                    fontSize: 12,
+                    fontWeight: 'bold'
+                  }}
+                />
 
-              <Bar
-                dataKey="totalSales"
-                fill="#C8522A"
-                radius={[8, 8, 0, 0]}
-                barSize={42}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+                <Bar
+                  dataKey="totalSales"
+                  fill="#C8522A"
+                  radius={[8, 8, 0, 0]}
+                  barSize={window.innerWidth < 640 ? 20 : 42}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </Card>
 
 
       {/* 商品明細 */}
-      <Card className="overflow-hidden">
-        <div className="px-6 py-5 border-b border-[#E2DDD4] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <Card className="overflow-hidden w-full">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#E2DDD4] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="text-lg font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
               商品成效明細
             </h2>
 
-            <p className="text-xs text-[#8C8880] mt-1">
+            <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
               共 {filteredProducts.length} 項商品
             </p>
           </div>
 
-          <div className="flex items-center gap-3 bg-[#F8F9FA] border border-[#E2DDD4] rounded-full px-4 py-2.5 w-full sm:w-72">
+          <div className="flex items-center gap-2 sm:gap-3 bg-[#F8F9FA] border border-[#E2DDD4] rounded-full px-3 sm:px-4 py-2 sm:py-2.5 w-full sm:w-72">
             <Search
               size={15}
-              className="text-[#8C8880]"
+              className="text-[#8C8880] shrink-0"
             />
 
             <input
@@ -788,14 +799,14 @@ export default function ProductAnalytics() {
                 )
               }
               placeholder="搜尋商品名稱或編號…"
-              className="w-full bg-transparent outline-none text-sm font-bold text-[#1A1A18] placeholder:text-[#8C8880]/60"
+              className="w-full bg-transparent outline-none text-[13px] sm:text-sm font-bold text-[#1A1A18] placeholder:text-[#8C8880]/60"
             />
           </div>
         </div>
 
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left min-w-[700px]">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
                 {[
@@ -809,7 +820,7 @@ export default function ProductAnalytics() {
                 ].map(header => (
                   <th
                     key={header}
-                    className="p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
+                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
                   >
                     {header}
                   </th>
@@ -830,7 +841,7 @@ export default function ProductAnalytics() {
                       className="animate-spin mx-auto text-[#C8522A]"
                     />
 
-                    <div className="text-sm font-bold text-[#8C8880] mt-3">
+                    <div className="text-[11px] sm:text-sm font-bold text-[#8C8880] mt-3">
                       商品成效載入中...
                     </div>
                   </td>
@@ -840,7 +851,7 @@ export default function ProductAnalytics() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="py-20 text-center text-sm font-bold text-[#8C8880]"
+                    className="py-20 text-center text-[11px] sm:text-sm font-bold text-[#8C8880]"
                   >
                     目前沒有符合條件的商品成效資料
                   </td>
@@ -859,14 +870,14 @@ export default function ProductAnalytics() {
                       }
                       className="hover:bg-[#F8F9FA] transition-colors"
                     >
-                      <td className="p-5">
-                        <div className="font-bold text-sm text-[#1A1A18]">
+                      <td className="p-4 sm:p-5">
+                        <div className="font-bold text-[13px] sm:text-sm text-[#1A1A18] max-w-[150px] sm:max-w-xs truncate">
                           {
                             product.productName
                           }
                         </div>
 
-                        <div className="text-[10px] font-mono font-bold text-[#8C8880] mt-1">
+                        <div className="text-[9px] sm:text-[10px] font-mono font-bold text-[#8C8880] mt-1">
                           商品 #
                           {
                             product.productId
@@ -874,7 +885,7 @@ export default function ProductAnalytics() {
                         </div>
                       </td>
 
-                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
                         {
                           product.quantitySold
                         }
@@ -882,25 +893,25 @@ export default function ProductAnalytics() {
                         件
                       </td>
 
-                      <td className="p-5 text-sm font-bold text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-[#1A1A18]">
                         {
                           product.totalOrders
                         }
                       </td>
 
-                      <td className="p-5 text-sm font-black text-[#C8522A]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#C8522A] whitespace-nowrap">
                         {formatCurrency(
                           product.totalSales
                         )}
                       </td>
 
-                      <td className="p-5 text-sm font-bold text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-[#1A1A18]">
                         {
                           product.couponOrders
                         }
                       </td>
 
-                      <td className="p-5">
+                      <td className="p-4 sm:p-5">
                         <CouponRateBadge
                           value={
                             product.couponRate
@@ -908,7 +919,7 @@ export default function ProductAnalytics() {
                         />
                       </td>
 
-                      <td className="p-5 text-sm font-black text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
                         {formatCurrency(
                           product.totalCommission
                         )}

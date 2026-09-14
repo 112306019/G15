@@ -155,11 +155,8 @@ export default function AdminSupport() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center">
-          <Headset size={20} className="text-[#C8522A]" />
-        </div>
-        <h2 className="text-2xl font-black text-[#1A1A18]">客服聊天室</h2>
+      <div className="mb-8">
+        <h2 className="text-3xl font-serif font-black text-[#1A1A18]">客服聊天室</h2>
       </div>
 
       <div className="flex gap-6 h-[75vh]">

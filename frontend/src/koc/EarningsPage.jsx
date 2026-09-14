@@ -123,10 +123,9 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
   }
 
   return (
-    <div className="animate-in fade-in duration-500 font-sans">
+    <div className="animate-in fade-in duration-500 font-sans p-4 md:p-0 max-w-5xl mx-auto pb-12">
 
-      {/* 🌟 拿掉底線，保持乾淨的標題 */}
-      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">
+      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">
         我的收益
       </h2>
 
@@ -136,30 +135,30 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
           <p className="font-bold tracking-widest text-sm">載入中...</p>
         </div>
       ) : (
-        <div className="max-w-3xl space-y-8">
+        <div className="space-y-6 md:space-y-8 max-w-4xl">
 
           {/* 🌟 明亮版：可提領區塊 */}
-          <div className="bg-white rounded-[2.5rem] p-10 md:p-12 relative overflow-hidden shadow-[0_12px_40px_rgba(26,26,24,0.06)] border border-[#E2DDD4]">
+          <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 sm:p-10 md:p-12 relative overflow-hidden shadow-[0_12px_40px_rgba(26,26,24,0.06)] border border-[#E2DDD4]">
 
             {/* 淡淡的點綴光暈，讓白底不無聊 */}
-            <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#F5F0E8] rounded-full blur-[60px] pointer-events-none"></div>
+            <div className="absolute -right-10 -top-10 md:-right-20 md:-top-20 w-48 md:w-64 h-48 md:h-64 bg-[#F5F0E8] rounded-full blur-[40px] md:blur-[60px] pointer-events-none"></div>
 
             <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-[#F5F0E8] rounded-2xl flex items-center justify-center shadow-sm">
+              <div className="flex items-center gap-2 md:gap-3 mb-4 md:mb-6">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F5F0E8] rounded-xl md:rounded-2xl flex items-center justify-center shadow-sm">
                   <Wallet size={20} className="text-[#C8522A]" />
                 </div>
-                <span className="text-sm font-bold tracking-widest text-[#8C8880]">可提領餘額</span>
+                <span className="text-xs md:text-sm font-bold tracking-widest text-[#8C8880]">可提領餘額</span>
               </div>
 
-              <div className="mb-8">
-                <span className="text-xl md:text-2xl font-bold text-[#8C8880] mr-2">NT$</span>
-                <span className="text-5xl md:text-6xl font-black text-[#1A1A18] tracking-tight">
+              <div className="mb-8 md:mb-10">
+                <span className="text-lg md:text-2xl font-bold text-[#8C8880] mr-2">NT$</span>
+                <span className="text-4xl sm:text-5xl md:text-6xl font-black text-[#1A1A18] tracking-tight">
                   {withdrawable.toLocaleString()}
                 </span>
               </div>
 
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl md:rounded-2xl px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
                 <span>
                   注意事項：跨行提領需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
@@ -169,7 +168,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
               <button
                 onClick={handleWithdrawClick}
                 disabled={!canWithdraw || withdrawing}
-                className="w-full mb-4 flex items-center justify-center gap-2 bg-[#C8522A] text-white px-8 py-4 rounded-2xl text-sm font-bold tracking-widest hover:bg-[#1A1A18] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                className="w-full mb-4 flex items-center justify-center gap-2 bg-[#C8522A] text-white px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#1A1A18] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
               >
                 {withdrawing ? <Loader2 size={18} className="animate-spin" /> : <Wallet size={18} />}
                 {withdrawing ? '處理中...' : '提領至銀行帳戶'}
@@ -187,19 +186,19 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
                 <p className="text-xs font-bold text-green-700 mb-4 text-center">{withdrawSuccess}</p>
               )}
 
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                 <button
                   onClick={onTaxFormRecords}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-8 py-4 rounded-2xl text-sm font-bold tracking-widest hover:bg-[#C8522A] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md"
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#C8522A] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md"
                 >
-                  <FileSignature size={18} />
+                  <FileSignature size={16} className="md:w-[18px] md:h-[18px]" />
                   查看勞報單紀錄
                 </button>
                 <button
                   onClick={onDetail}
-                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-[#E2DDD4] text-[#1A1A18] px-8 py-4 rounded-2xl text-sm font-bold tracking-widest hover:bg-[#F5F0E8] hover:-translate-y-1 transition-all active:translate-y-0 shadow-sm"
+                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#F5F0E8] hover:-translate-y-1 transition-all active:translate-y-0 shadow-sm"
                 >
-                  <FileText size={18} />
+                  <FileText size={16} className="md:w-[18px] md:h-[18px]" />
                   查看收益明細
                 </button>
               </div>
@@ -207,7 +206,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
           </div>
 
           {/* 輔助說明小提示 */}
-          <p className="text-xs font-bold text-[#8C8880] text-center mt-8">
+          <p className="text-[10px] md:text-xs font-bold text-[#8C8880] text-left md:text-center mt-6 md:mt-8 px-2">
             ※ 使用您優惠碼的訂單完成後，分潤會立即結算至可提領餘額，可自行決定何時提領。
           </p>
 

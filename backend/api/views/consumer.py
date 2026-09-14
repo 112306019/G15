@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import timedelta
+import re
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -7,9 +8,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo
+from api.r2_storage import upload_image_to_r2
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
-from .constants import restore_order_stock
+from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
 from payments.models import PaymentTransaction
 from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
@@ -29,6 +31,81 @@ def _is_campaign_promo_expired(campaign):
     """活動是否已經超過優惠碼效期（活動結束日 + promo_days 寬限期）"""
     deadline = campaign.end_date + timedelta(days=campaign.promo_days or 0)
     return timezone.now() > deadline
+
+
+def _complete_order_with_finance(order):
+    """
+    用同一套流程完成訂單，確保「手動完成」與「7 天後自動完成」都會：
+    1. 寫入 order_status / completed_at
+    2. 建立 KOC 分潤
+    3. 建立 Vendor 凍結收入
+
+    回傳 (commission_result, vendor_result, changed)。
+    changed=False 代表這張訂單本來就已經 completed。
+    """
+    with transaction.atomic():
+        locked_order = Order.objects.select_for_update().get(order_id=order.order_id)
+
+        if locked_order.order_status == 'completed':
+            return None, None, False
+
+        locked_order.order_status = 'completed'
+        if not locked_order.completed_at:
+            locked_order.completed_at = timezone.now()
+        locked_order.save(update_fields=['order_status', 'completed_at'])
+
+        try:
+            commission_result = calculate_order_commission(locked_order)
+        except ValueError as commission_error:
+            commission_result = {
+                'created': False,
+                'commission_amount': 0,
+                'message': str(commission_error),
+            }
+
+        try:
+            vendor_result = calculate_vendor_earning(locked_order)
+        except Exception as vendor_error:
+            vendor_result = [{
+                'created': False,
+                'message': str(vendor_error),
+            }]
+
+    return commission_result, vendor_result, True
+
+
+def sync_auto_completed_orders():
+    """
+    Lazy sync：把已送達超過 7 天、沒有未結案退貨申請的訂單自動完成。
+
+    不能用 QuerySet.update() 直接改狀態，因為完成訂單同時是建立
+    KOC 分潤與 Vendor 凍結收入的觸發點；因此逐筆走 _complete_order_with_finance。
+    """
+    cutoff = timezone.now() - timedelta(days=RETURN_REQUEST_WINDOW_DAYS)
+
+    candidates = (
+        Order.objects
+        .filter(
+            shipping_status='delivered',
+            delivered_at__isnull=False,
+            delivered_at__lt=cutoff,
+            payment_status__in=['paid', 'completed'],
+        )
+        .exclude(order_status__in=['completed', 'cancelled'])
+        .order_by('delivered_at')
+    )
+
+    completed_count = 0
+
+    for order in candidates:
+        if not is_order_auto_completable(order):
+            continue
+
+        _commission, _vendor, changed = _complete_order_with_finance(order)
+        if changed:
+            completed_count += 1
+
+    return completed_count
 
 
 ## 商品查詢
@@ -264,7 +341,13 @@ def view_cart(request):
         return Response({'Cart_id': None, 'items': []}, status=status.HTTP_200_OK)
 
     cart = carts.first()
-    items = CartItem.objects.filter(cart=cart)
+    items = CartItem.objects.filter(cart=cart).select_related('product')
+
+    vendor_ids = {item.product.vendor_id for item in items if item.product}
+    vendor_name_by_id = {
+        v.vendor_id: v.company_name
+        for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
+    }
 
     result_items = []
     for item in items:
@@ -275,6 +358,9 @@ def view_cart(request):
             'Unit_price': item.unit_price,
             'Quantity': item.quantity,
             'subtotal': item.subtotal,
+            'Vendor_id': item.product.vendor_id,
+            'Vendor_name': vendor_name_by_id.get(item.product.vendor_id, item.product.vendor_id),
+            'product_status': item.product.status,
         })
 
     return Response({
@@ -470,6 +556,7 @@ def delete_wishlist(request):
 @permission_classes([AllowAny])
 def verify_coupon(request):
     promotion_code = request.data.get('Promotion_code')
+    user_id = request.data.get('User_id')
 
     if not promotion_code:
         return Response(
@@ -490,6 +577,19 @@ def verify_coupon(request):
             {'success': False, 'err': '優惠碼未啟用或已失效'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    # 同一個消費者、同一組優惠碼，只能使用一次（跨訂單累計）；
+    # 用 Order.promotion_code 直接查歷史訂單，不用另外開一張使用紀錄表。
+    if user_id:
+        already_used = Order.objects.filter(
+            user_id=user_id,
+            promotion_code=promotion_code
+        ).exclude(order_status='cancelled').exists()
+        if already_used:
+            return Response(
+                {'success': False, 'err': '您已經使用過此優惠碼，每組優惠碼限用一次'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     try:
         campaign = coupon.kocmission.application.campaign
@@ -630,6 +730,40 @@ def create_order(request):
             {
                 'success': False,
                 'err': 'items 為必填，訂單至少需要一項商品'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ============================
+    # 收件人姓名驗證
+    # 綠界物流限制：
+    # 中文 2～5 個字；英文 4～10 個字元。
+    # 前端會先驗證一次，後端仍需再驗證，避免繞過前端直接送 API。
+    # ============================
+    recipient_name = (recipient_name or '').strip()
+
+    if not recipient_name:
+        return Response(
+            {
+                'success': False,
+                'err': '收件人姓名為必填'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    is_chinese_name = bool(
+        re.fullmatch(r'[\u4e00-\u9fff]{2,5}', recipient_name)
+    )
+
+    is_english_name = bool(
+        re.fullmatch(r'[A-Za-z]+(?: [A-Za-z]+)*', recipient_name)
+    ) and 4 <= len(recipient_name) <= 10
+
+    if not is_chinese_name and not is_english_name:
+        return Response(
+            {
+                'success': False,
+                'err': '收件人姓名格式不正確：中文請輸入 2～5 個字，英文請輸入 4～10 個字元'
             },
             status=status.HTTP_400_BAD_REQUEST
         )
@@ -1116,6 +1250,9 @@ def create_order(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def view_order(request):
+    # 使用者查看訂單時順便執行一次自動完成同步。
+    sync_auto_completed_orders()
+
     user_id = request.query_params.get('User_id') or request.query_params.get('user_id')
     guest_id = request.query_params.get('Guest_id', None)
     order_id = request.query_params.get('Order_id', None)
@@ -1235,6 +1372,8 @@ def view_order(request):
             'Address_id': order.address_id,
             'created_at': order.created_at,
             'vendor_id': first_vendor_id,
+            'delivered_at': order.delivered_at,
+            'completed_at': order.completed_at,
             'vendor_name': vendor_name_by_id.get(first_vendor_id, ''),
             'recipient': recipient_data,
             'shipment': shipment_data,
@@ -1436,32 +1575,10 @@ def update_order_status(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        already_completed = order.order_status == 'completed'
+        commission_result, vendor_result, changed = _complete_order_with_finance(order)
 
-        order.order_status = 'completed'
-        order.save()
-
-        if not already_completed:
-            try:
-                commission_result = calculate_order_commission(order)
-            except ValueError as commission_error:
-                commission_result = {
-                    'created': False,
-                    'commission_amount': 0,
-                    'message': str(commission_error)
-                }
-
-            # 廠商入帳跟 KOC 分潤是同一個觸發點：訂單第一次被標記 completed 的當下。
-            # 這裡故意放在 commission 計算「之後」，因為 calculate_vendor_earning 需要
-            # 讀取剛才 calculate_order_commission 建立的 Earnings 紀錄，藉此判斷這筆
-            # 訂單裡有多少金額已經被算給 KOC 分潤，才能從廠商淨額裡正確扣除。
-            try:
-                vendor_result = calculate_vendor_earning(order)
-            except Exception as vendor_error:
-                vendor_result = [{
-                    'created': False,
-                    'message': str(vendor_error)
-                }]
+        # 重新抓一次，讓 response 裡的 completed_at / order_status 是最新資料。
+        order.refresh_from_db(fields=['order_status', 'completed_at'])
     else:
         order.order_status = order_status
         order.save()
@@ -1470,6 +1587,7 @@ def update_order_status(request):
         'success': True,
         'Order_id': str(order.order_id),
         'order_status': order.order_status,
+        'completed_at': order.completed_at,
     }
 
     if commission_result:
@@ -1622,3 +1740,392 @@ def get_product_campaign(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'success': False, 'err': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ==============================================================================
+# 退貨退款：消費者端
+# POST /consumer/order/return/create    申請退貨退款
+# GET  /consumer/order/return/list      查看自己的退貨申請
+# POST /consumer/order/return/dispute   廠商拒絕後提出爭議，交給 Admin 判定
+# ==============================================================================
+
+def _check_order_ownership(order, user_id, guest_id):
+    """跟 update_order_status 用同一套擁有者檢查，回傳 None 代表通過。"""
+    if user_id and str(order.user_id) != str(user_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    if guest_id and str(order.guest_id) != str(guest_id):
+        return Response(
+            {'success': False, 'err': '無權限操作此訂單'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    return None
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_return_request(request):
+    """
+    建立整張訂單退貨退款申請。
+
+    第一版只支援：
+    - 整張訂單全額退貨退款
+    - 單一廠商訂單
+
+    requested_amount 不接受前端指定，永遠由後端使用 Order.total_amount，
+    避免前端竄改退款金額，也避免目前尚未完成的部分退款／跨廠商拆帳邏輯。
+    """
+    order_id = request.data.get('Order_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    reason = request.data.get('reason')
+    description = request.data.get('description', '')
+    order_item_id = request.data.get('Order_item_id')  # 選填：有帶代表是單品項部分退貨
+    return_quantity = request.data.get('quantity')  # 只在有帶 Order_item_id 時使用
+
+    if not order_id or not reason:
+        return Response(
+            {'success': False, 'err': 'Order_id 和 reason 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order_item_id and not return_quantity:
+        return Response(
+            {'success': False, 'err': '指定 Order_item_id 時，quantity 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    valid_reasons = dict(ReturnRequest.REASON_CHOICES)
+    if reason not in valid_reasons:
+        return Response(
+            {'success': False, 'err': f'reason 必須是以下其中之一：{", ".join(valid_reasons.keys())}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        order = Order.objects.get(order_id=order_id)
+    except Order.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '訂單不存在'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if order.order_status == 'cancelled':
+        return Response(
+            {'success': False, 'err': '此訂單已取消，無法申請退貨'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if order.payment_status == 'refunded':
+        return Response(
+            {'success': False, 'err': '此訂單已完成退款，無法再次申請退貨'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 單一廠商限制只適用整張訂單退款；單品項部分退貨不受此限（本來就只針對一個品項）。
+    if not order_item_id:
+        vendor_ids = set(
+            OrderItem.objects.filter(order=order)
+            .values_list('product__vendor_id', flat=True)
+        )
+        if len(vendor_ids) != 1:
+            return Response(
+                {
+                    'success': False,
+                    'err': '目前整張訂單退貨退款僅支援單一廠商訂單；此訂單包含多個廠商商品，暫無法線上申請'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    # 退貨期限用 delivered_at 起算，不看消費者有沒有點過「確認收貨」。
+    if not order.delivered_at:
+        return Response(
+            {'success': False, 'err': '此訂單尚未送達，無法申請退貨'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not is_return_window_open(order):
+        deadline = order.delivered_at + timedelta(days=RETURN_REQUEST_WINDOW_DAYS)
+        return Response(
+            {'success': False, 'err': f'退貨期限已於 {deadline.isoformat()} 截止'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if has_unresolved_return_request(order):
+        return Response(
+            {'success': False, 'err': '此訂單已有一筆退貨申請正在處理中'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 退款金額完全由後端計算，不接受前端指定，避免竄改。
+    refund_scope = 'full_order'
+    order_item_obj = None
+    final_quantity = None
+
+    if order_item_id:
+        # 單品項部分退貨：退款金額 = 該品項單價 × 退貨數量，
+        # 再扣掉這張訂單優惠碼折扣依比例分攤到這幾件商品的部分。
+        refund_scope = 'partial_item'
+
+        try:
+            order_item_obj = OrderItem.objects.get(order_item_id=order_item_id, order=order)
+        except OrderItem.DoesNotExist:
+            return Response(
+                {'success': False, 'err': '找不到對應的訂單品項'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            final_quantity = int(return_quantity)
+        except (TypeError, ValueError):
+            return Response(
+                {'success': False, 'err': 'quantity 必須是正整數'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if final_quantity <= 0 or final_quantity > order_item_obj.quantity:
+            return Response(
+                {'success': False, 'err': f'退貨數量必須介於 1 到 {order_item_obj.quantity} 之間'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        all_items = OrderItem.objects.filter(order=order)
+        order_original_total = sum(Decimal(str(item.subtotal)) for item in all_items)
+        order_coupon_discount = order_original_total - Decimal(str(order.total_amount))
+
+        if order_original_total <= 0:
+            return Response(
+                {'success': False, 'err': '訂單金額異常，無法申請退款'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 這個品項分攤到的優惠碼折扣總額，依「此品項原價小計 / 訂單原價總額」的比例計算
+        item_discount_share = (
+            order_coupon_discount * Decimal(str(order_item_obj.subtotal)) / order_original_total
+        )
+        # 平均分攤到每一件，再乘上這次要退的件數
+        discount_per_unit = item_discount_share / order_item_obj.quantity
+        refund_discount = (discount_per_unit * final_quantity).quantize(Decimal('0.01'))
+
+        final_amount = (
+            Decimal(str(order_item_obj.unit_price)) * final_quantity - refund_discount
+        ).quantize(Decimal('0.01'))
+
+        if final_amount < 0:
+            final_amount = Decimal('0.00')
+    else:
+        # 整張訂單全額退款
+        final_amount = Decimal(str(order.total_amount))
+
+    if final_amount <= 0 and refund_scope == 'full_order':
+        return Response(
+            {'success': False, 'err': '訂單總金額異常，無法申請退款'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request = ReturnRequest.objects.create(
+        order=order,
+        user_id=order.user_id,
+        order_item=order_item_obj,
+        quantity=final_quantity,
+        reason=reason,
+        description=description,
+        requested_amount=final_amount,
+        status='requested',
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'status': return_request.status,
+        'refund_scope': refund_scope,
+        'requested_amount': str(return_request.requested_amount),
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_return_packing_proof(request):
+    """
+    消費者在寄出退貨商品前，上傳打包過程的照片/影片證明
+    （外觀完好、配件齊全、緩衝材包好），1~5 張。
+
+    只有申請還在 requested 或 approved 階段（商品還沒真的寄出、
+    廠商也還沒收到）能補打包證明；一旦進入 returning 之後的狀態
+    就不再開放上傳，避免爭議發生後回頭補造證據。
+    """
+    return_id = request.data.get('Return_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    photo_urls = request.data.get('photo_urls', [])
+
+    if not return_id:
+        return Response(
+            {'success': False, 'err': 'Return_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not isinstance(photo_urls, list) or not (1 <= len(photo_urls) <= 5):
+        return Response(
+            {'success': False, 'err': 'photo_urls 需為 1~5 張照片/影片的網址陣列'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到此退貨申請'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(return_request.order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if return_request.status not in ('requested', 'approved'):
+        return Response(
+            {'success': False, 'err': f'此退貨申請目前狀態是「{return_request.status}」，無法再上傳打包證明'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.packing_proof_urls = photo_urls
+    return_request.packing_proof_uploaded_at = timezone.now()
+    return_request.save(update_fields=['packing_proof_urls', 'packing_proof_uploaded_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'packing_proof_urls': return_request.packing_proof_urls,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_return_requests(request):
+    order_id = request.query_params.get('Order_id')
+    user_id = request.query_params.get('User_id')
+    guest_id = request.query_params.get('Guest_id')
+
+    if not user_id and not guest_id:
+        return Response(
+            {'success': False, 'err': 'User_id 或 Guest_id 至少需要一個'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    returns = ReturnRequest.objects.select_related('order').order_by('-requested_at')
+
+    if order_id:
+        returns = returns.filter(order_id=order_id)
+    if user_id:
+        returns = returns.filter(order__user_id=user_id)
+    if guest_id:
+        returns = returns.filter(order__guest_id=guest_id)
+
+    result = []
+    for r in returns:
+        result.append({
+            'return_id': str(r.return_id),
+            'order_id': str(r.order_id),
+            'reason': r.reason,
+            'description': r.description,
+            'status': r.status,
+            'requested_amount': str(r.requested_amount),
+            'refunded_amount': str(r.refunded_amount) if r.refunded_amount is not None else None,
+            'vendor_note': r.vendor_note,
+            'admin_note': r.admin_note,
+            'requested_at': r.requested_at,
+            'approved_at': r.approved_at,
+            'rejected_at': r.rejected_at,
+            'returned_at': r.returned_at,
+            'refunded_at': r.refunded_at,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def dispute_return_request(request):
+    """
+    廠商拒絕退貨後，消費者不服，提出爭議，交給 Admin 判定
+    （見 platform.py 的 admin_list_return_disputes / admin_resolve_return_dispute）。
+    只有 status='rejected' 的申請能提爭議——已經同意、已經在退款中、
+    或已經是爭議中的，都不能重複觸發。
+    """
+    return_id = request.data.get('Return_id')
+    user_id = request.data.get('User_id')
+    guest_id = request.data.get('Guest_id')
+    description = request.data.get('description', '')
+
+    if not return_id:
+        return Response(
+            {'success': False, 'err': 'Return_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        return_request = ReturnRequest.objects.select_related('order').get(return_id=return_id)
+    except ReturnRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'err': '找不到此退貨申請'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    ownership_err = _check_order_ownership(return_request.order, user_id, guest_id)
+    if ownership_err:
+        return ownership_err
+
+    if return_request.status != 'rejected':
+        return Response(
+            {'success': False, 'err': f'此退貨申請目前狀態是「{return_request.status}」，只有被拒絕的申請能提出爭議'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    return_request.status = 'disputed'
+    if description:
+        return_request.description = (return_request.description or '') + f"\n[消費者爭議補充] {description}"
+    return_request.save(update_fields=['status', 'description'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'return_id': str(return_request.return_id),
+        'status': return_request.status,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def consumer_upload_image(request):
+    """
+    消費者上傳圖片（目前用於退貨打包證明），存到 R2，回傳圖片網址。
+    URL: /consumer/upload-image
+    """
+    file_obj = request.FILES.get('image')
+
+    if not file_obj:
+        return Response({
+            "success": False,
+            "err": "請提供圖片檔案（欄位名稱：image）"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        image_url = upload_image_to_r2(file_obj, file_obj.name)
+        return Response({
+            "success": True,
+            "image_url": image_url
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "err": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

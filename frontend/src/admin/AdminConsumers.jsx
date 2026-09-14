@@ -1,5 +1,4 @@
-import { API_BASE_URL } from '../config';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ChevronRight } from 'lucide-react';
 
@@ -54,7 +53,7 @@ export default function AdminConsumers() {
         <div>
           <h1 className="text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-3">
             一般使用者管理
-            <span className="text-xs font-bold bg-[#F8F9FA] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
+            <span className="text-xs font-bold bg-[#F5F0E8] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
               共 {filtered.length} 筆
             </span>
           </h1>
@@ -95,46 +94,54 @@ export default function AdminConsumers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
-                {filtered.map((consumer) => (
-                  <tr key={consumer.id} className="hover:bg-[#F5F0E8]/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#F8F9FA] text-[#1A1A18] border border-[#E2DDD4] flex items-center justify-center font-serif font-black text-lg">
-                          {consumer.name?.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-bold text-[#1A1A18]">{consumer.name}</div>
-                          <div className="text-xs font-medium text-[#8C8880]">ID: {consumer.id}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-[#1A1A18]">{consumer.email}</div>
-                      <div className="text-xs font-medium text-[#8C8880] mt-0.5">{consumer.phone}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-[#8C8880]">
-                      {consumer.createdAt}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md border ${
-                        consumer.status === 'active'
-                          ? 'bg-white text-[#1A1A18] border-[#1A1A18]'
-                          : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
-                      }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${consumer.status === 'active' ? 'bg-[#1A1A18]' : 'bg-[#8C8880]'}`}></div>
-                        {consumer.status === 'active' ? '正常' : '已停權'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => navigate(`/admin/consumers/${consumer.id}`)}
-                        className="inline-flex items-center gap-1 bg-white border border-[#E2DDD4] text-[#1A1A18] px-4 py-2 rounded-lg text-xs font-bold hover:border-[#1A1A18] hover:shadow-sm transition-all"
-                      >
-                        查看明細 <ChevronRight size={14} />
-                      </button>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">
+                      目前沒有符合條件的一般使用者
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filtered.map((consumer) => (
+                    <tr key={consumer.id} className="hover:bg-[#F5F0E8]/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#F8F9FA] text-[#1A1A18] border border-[#E2DDD4] flex items-center justify-center font-serif font-black text-lg">
+                            {consumer.name?.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="font-bold text-[#1A1A18]">{consumer.name}</div>
+                            <div className="text-xs font-medium text-[#8C8880]">ID: {consumer.id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-[#1A1A18]">{consumer.email}</div>
+                        <div className="text-xs font-medium text-[#8C8880] mt-0.5">{consumer.phone}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-[#8C8880]">
+                        {consumer.createdAt}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md border ${
+                          consumer.status === 'active'
+                            ? 'bg-white text-[#1A1A18] border-[#1A1A18]'
+                            : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${consumer.status === 'active' ? 'bg-[#1A1A18]' : 'bg-[#8C8880]'}`}></div>
+                          {consumer.status === 'active' ? '正常' : '已停權'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => navigate(`/admin/consumers/${consumer.id}`)}
+                          className="inline-flex items-center gap-1 bg-white border border-[#E2DDD4] text-[#1A1A18] px-4 py-2 rounded-lg text-xs font-bold hover:border-[#1A1A18] hover:shadow-sm transition-all"
+                        >
+                          查看明細 <ChevronRight size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -1,6 +1,10 @@
+import { API_BASE_URL } from '../config';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowRight, Fingerprint, ChevronDown } from 'lucide-react';
+// 🌟 移除了 Fingerprint，保留需要的 Icon
+import { ShieldCheck, ArrowRight } from 'lucide-react';
+import LogoIcon from '../assets/logo.jpg';
+import LogoText from '../assets/ShareBuy.png';
 
 function InputField({ label, hint, ...props }) {
   return (
@@ -19,48 +23,68 @@ function InputField({ label, hint, ...props }) {
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@koc.com");
-  const [password, setPassword] = useState("password");
-  const [role, setRole] = useState("super_admin"); // 🌟 新增權限狀態（跟後端 Admins.role 的 snake_case 慣例對齊）
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
-  const handleLogin = (e) => {
+  const [loginError, setLoginError] = useState("");
+
+  const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    
-    // 模擬網路延遲，讓按鈕的互動更有感
-    setTimeout(() => {
-      // 測試環境放寬條件，或使用預設的 admin@koc.com / password
-      if(email === 'admin@koc.com' && password === 'password') {
-         localStorage.setItem('admin_token', 'super_secret_token_123');
-         localStorage.setItem('admin_email', email);
-         localStorage.setItem('admin_id', '1');
-         localStorage.setItem('admin_role', role); // 🌟 將選擇的權限存入 localStorage
-         navigate('/admin');
-      } else {
-         alert("帳號或密碼錯誤！請使用預設的 admin@koc.com / password 進行測試。");
-         setIsLoggingIn(false);
+    setLoginError("");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Email: email, Password: password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        setLoginError(data.err || "帳號或密碼錯誤");
+        setIsLoggingIn(false);
+        return;
       }
-    }, 800);
+
+      localStorage.setItem('admin_token', `admin-session-${data.Admin_id}`);
+      localStorage.setItem('admin_email', data.Email);
+      localStorage.setItem('admin_id', String(data.Admin_id));
+      localStorage.setItem('admin_role', data.Role);
+
+      navigate('/admin');
+    } catch (err) {
+      console.error("登入失敗", err);
+      setLoginError("連線失敗，請稍後再試");
+      setIsLoggingIn(false);
+    }
   };
 
   return (
     <div className="flex min-h-screen font-sans animate-in fade-in duration-700">
       
       {/* =========================================
-          🟢 左側：高級品牌形象區 (深色主題 + 光暈)
+          左側品牌形象區
       ========================================== */}
       <div className="hidden md:flex md:w-1/2 lg:w-[55%] bg-[#1A1A18] relative overflow-hidden flex-col justify-between p-12 lg:p-20">
         
-        {/* 背景氛圍光暈 (Glassmorphism 裝飾) */}
+        {/* 背景光暈*/}
         <div className="absolute top-[-10%] left-[-10%] w-[30rem] h-[30rem] bg-[#C8522A] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[30rem] h-[30rem] bg-[#B89B6A] rounded-full mix-blend-screen filter blur-[120px] opacity-20"></div>
 
         {/* 頂部 Logo 與徽章 */}
-        <div className="relative z-10 flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#C8522A] rounded-full inline-block shadow-[0_0_15px_rgba(200,82,42,0.5)]"></span>
-          <h1 className="text-2xl font-black text-[#F5F0E8] tracking-[0.2em] uppercase">KOC Platform</h1>
-          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[10px] px-3 py-1 rounded-full tracking-widest font-bold">
+        <div className="relative z-10 flex items-center gap-3">
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-full object-cover shadow-[0_0_15px_rgba(200,82,42,0.5)]" 
+          />
+          <img 
+            src={LogoText} 
+            alt="ShareBuy Text" 
+            className="h-7 w-auto object-contain translate-y-1 contrast-125 brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" 
+          />
+          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[10px] px-3 py-1 rounded-full tracking-widest font-bold mt-1 ml-1">
             ADMIN PORTAL
           </span>
         </div>
@@ -86,21 +110,27 @@ export default function AdminLogin() {
       </div>
 
       {/* =========================================
-          🟢 右側：登入操作區 (溫暖色系 #F5F0E8)
+          右側：登入操作區
       ========================================== */}
       <div className="w-full md:w-1/2 lg:w-[45%] bg-[#F5F0E8] flex items-center justify-center p-8 sm:p-12 lg:p-20 relative">
         
         {/* 手機版才會出現的小 Logo */}
         <div className="absolute top-8 left-8 flex md:hidden items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          <h1 className="text-lg font-black text-[#1A1A18] tracking-widest uppercase">KOC</h1>
+          <img 
+            src={LogoIcon} 
+            alt="ShareBuy Logo" 
+            className="w-8 h-8 rounded-lg object-cover shadow-sm" 
+          />
         </div>
 
         <div className="w-full max-w-md">
-          {/* 登入區標題 */}
           <div className="mb-10">
-            <div className="w-14 h-14 bg-white shadow-sm border border-[#E2DDD4] rounded-2xl flex items-center justify-center mb-8">
-              <Fingerprint size={28} className="text-[#1A1A18]" />
+            <div className="flex items-center gap-3 mb-8">
+              <img 
+                src={LogoIcon} 
+                alt="ShareBuy Logo" 
+                className="h-14 w-14 object-cover rounded-2xl shadow-sm" 
+              />
             </div>
             <h2 className="text-3xl font-serif font-black text-[#1A1A18] mb-3">系統授權登入</h2>
             <p className="text-[#8C8880] font-bold text-sm tracking-wide">請輸入您的管理員專屬憑證以繼續</p>
@@ -108,44 +138,29 @@ export default function AdminLogin() {
 
           {/* 登入表單 */}
           <form onSubmit={handleLogin} className="space-y-4">
-            <InputField 
-              label="管理員信箱" 
+            <InputField
+              label="管理員信箱"
               type="email"
-              placeholder="admin@koc.com" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
+              placeholder="admin@koc.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              hint="預設：admin@koc.com"
-            />
-            
-            <InputField 
-              label="專屬密碼" 
-              type="password" 
-              placeholder="••••••••" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required
-              hint="預設：password"
             />
 
-            {/* 🌟 測試用下拉選單 */}
-            <div className="mb-5 relative">
-              <div className="flex justify-between items-end mb-2">
-                <label className="block text-sm font-bold text-[#1A1A18] tracking-wide">登入身分權限 (測試用)</label>
+            <InputField
+              label="密碼"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+
+            {loginError && (
+              <div className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl px-4 py-3">
+                {loginError}
               </div>
-              <div className="relative">
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full appearance-none rounded-2xl border border-[#E2DDD4] bg-white px-5 py-4 text-sm font-bold text-[#1A1A18] shadow-sm outline-none transition-all focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30 cursor-pointer"
-                >
-                  <option value="super_admin">👑 Super Admin (最高權限)</option>
-                  <option value="reviewer">📝 Reviewer (審核員，無財務權限)</option>
-                  <option value="finance">💰 Finance (財務員，僅看帳與審核)</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-[#8C8880] pointer-events-none" />
-              </div>
-            </div>
+            )}
 
             <button 
               type="submit"

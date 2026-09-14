@@ -38,7 +38,7 @@ export default function AdminOverview({ currentRole }) {
   const [error, setError] = useState('');
 
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
-  const [newAdmin, setNewAdmin] = useState({ email: '', password: '', role: 'Reviewer' });
+  const [newAdmin, setNewAdmin] = useState({ email: '', password: '', role: 'reviewer' });
 
   useEffect(() => {
     const fetchOverview = async () => {
@@ -103,7 +103,7 @@ export default function AdminOverview({ currentRole }) {
     e.preventDefault();
     alert(`已成功建立 ${newAdmin.role} 帳號：${newAdmin.email}`);
     setShowAddAdminModal(false);
-    setNewAdmin({ email: '', password: '', role: 'Reviewer' });
+    setNewAdmin({ email: '', password: '', role: 'reviewer' });
   };
 
   return (
@@ -129,7 +129,7 @@ export default function AdminOverview({ currentRole }) {
           </button>
           
           {/* 🌟 權限控管：只有 Super Admin 能看到新增管理員按鈕 */}
-          {currentRole === 'Super Admin' && (
+          {currentRole === 'super_admin' && (
             <button 
               onClick={() => setShowAddAdminModal(true)}
               className="flex items-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
@@ -197,7 +197,7 @@ export default function AdminOverview({ currentRole }) {
       </div>
 
       {/* 只有 Super Admin 或 Finance 能看到收益 */}
-      {currentRole === 'Super Admin' || currentRole === 'Finance' ? (
+      {currentRole === 'super_admin' || currentRole === 'finance' ? (
         <div className="bg-[#1A1A18] p-6 rounded-[1.5rem] shadow-md border border-[#1A1A18] relative overflow-hidden group">
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B89B6A] rounded-full filter blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity" />
 
@@ -282,7 +282,7 @@ export default function AdminOverview({ currentRole }) {
           </div>
 
           {/* 只有特定權限可以進入完整 Log 頁面 */}
-          {(currentRole === 'Super Admin' || currentRole === 'Reviewer') && (
+          {(currentRole === 'super_admin' || currentRole === 'reviewer') && (
             <button onClick={() => navigate('/admin/logs')} className="w-full mt-6 py-3.5 text-sm font-bold text-[#1A1A18] border border-[#E2DDD4] rounded-xl hover:bg-[#F8F9FA] transition-colors flex items-center justify-center gap-2">
               <History size={16} /> 查看完整操作紀錄
             </button>
@@ -334,9 +334,9 @@ export default function AdminOverview({ currentRole }) {
                   onChange={(e) => setNewAdmin({...newAdmin, role: e.target.value})}
                   className="w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 appearance-none cursor-pointer"
                 >
-                  <option value="Reviewer">審核員 (Reviewer) - 追蹤活動與操作紀錄</option>
-                  <option value="Finance">財務管理 (Finance) - 處理訂單與分潤撥款</option>
-                  <option value="Super Admin">超級管理員 (Super Admin) - 系統最高權限</option>
+                  <option value="reviewer">審核員 (Reviewer) - 追蹤活動與操作紀錄</option>
+                  <option value="finance">財務管理 (Finance) - 處理訂單與分潤撥款</option>
+                  <option value="super_admin">超級管理員 (Super Admin) - 系統最高權限</option>
                 </select>
               </div>
 

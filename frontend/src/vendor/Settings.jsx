@@ -12,25 +12,48 @@ import {
 
 // 🟢 內建品牌高質感 UI
 function Card({ children, className = "" }) {
-  return <div className={`bg-white rounded-[2rem] border border-[#E2DDD4] shadow-sm p-8 md:p-10 ${className}`}>{children}</div>
+  return (
+    <div
+      className={cn(
+        'bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-5 sm:p-8 md:p-10',
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 function Input({ label, ...props }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">{label}</label>
-      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl px-5 py-3.5 text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50 hover:border-[#1A1A18]/30" {...props} />
+    <div className="flex flex-col gap-1.5 w-full">
+      <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+        {label}
+      </label>
+      <input
+        className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50 hover:border-[#1A1A18]/30"
+        {...props}
+      />
     </div>
   )
 }
 
 function Button({ variant = 'default', className, children, ...props }) {
   const variants = {
-    brand: 'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md active:translate-y-0',
-    danger: 'border border-[#FFF0F0] bg-[#FFF0F0] text-[#D93025] hover:bg-[#D93025] hover:text-white hover:-translate-y-1 shadow-sm active:translate-y-0',
+    brand:
+      'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md active:translate-y-0',
+    danger:
+      'border border-[#FFF0F0] bg-[#FFF0F0] text-[#D93025] hover:bg-[#D93025] hover:text-white hover:-translate-y-1 shadow-sm active:translate-y-0',
   }
   return (
-    <button className={cn('inline-flex items-center justify-center px-8 py-3.5 rounded-2xl text-sm font-bold tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0', variants[variant], className)} {...props}>
+    <button
+      className={cn(
+        'inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-[13px] sm:text-sm font-bold tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 whitespace-nowrap',
+        variants[variant],
+        className
+      )}
+      {...props}
+    >
       {children}
     </button>
   )
@@ -62,8 +85,13 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [notifications, setNotifications] = useState({ newOrder: true, review: true, chat: false, weekly: true })
-  
+  const [notifications, setNotifications] = useState({
+    newOrder: true,
+    review: true,
+    chat: false,
+    weekly: true
+  })
+
   useEffect(() => {
     async function loadProfile() {
       if (!vendorId) {
@@ -79,14 +107,9 @@ export default function Settings() {
         const response = await getVendorProfile(vendorId)
         const vendor = response.data.vendor
 
-        const senderCity =
-          normalizeCityName(vendor.sender_city || '')
-
-        const senderDistrict =
-          vendor.sender_district || ''
-
-        const autoPostalCode =
-          getPostalCode(senderCity, senderDistrict)
+        const senderCity = normalizeCityName(vendor.sender_city || '')
+        const senderDistrict = vendor.sender_district || ''
+        const autoPostalCode = getPostalCode(senderCity, senderDistrict)
 
         setProfile({
           company_name: vendor.company_name || '',
@@ -97,9 +120,7 @@ export default function Settings() {
           sender_name: vendor.sender_name || '',
           sender_phone: vendor.sender_phone || '',
           sender_postal_code:
-            autoPostalCode ||
-            vendor.sender_postal_code ||
-            '',
+            autoPostalCode || vendor.sender_postal_code || '',
           sender_city: senderCity,
           sender_district: senderDistrict,
           sender_address: vendor.sender_address || '',
@@ -110,9 +131,7 @@ export default function Settings() {
         })
       } catch (err) {
         setError(
-          err.response?.data?.err ||
-          err.message ||
-          '廠商資料載入失敗'
+          err.response?.data?.err || err.message || '廠商資料載入失敗'
         )
       } finally {
         setLoading(false)
@@ -129,19 +148,18 @@ export default function Settings() {
     navigate('/vendor-login')
   }
 
-  const handleProfileChange = (event) => {
+  const handleProfileChange = event => {
     const { name, value } = event.target
 
-    setProfile((previous) => ({
+    setProfile(previous => ({
       ...previous,
       [name]: value,
     }))
   }
 
-  const senderDistrictOptions =
-    getDistrictsByCity(profile.sender_city)
+  const senderDistrictOptions = getDistrictsByCity(profile.sender_city)
 
-  const handleSenderCityChange = (event) => {
+  const handleSenderCityChange = event => {
     const city = event.target.value
 
     setProfile(previous => ({
@@ -152,17 +170,13 @@ export default function Settings() {
     }))
   }
 
-  const handleSenderDistrictChange = (event) => {
+  const handleSenderDistrictChange = event => {
     const district = event.target.value
 
     setProfile(previous => ({
       ...previous,
       sender_district: district,
-      sender_postal_code:
-        getPostalCode(
-          previous.sender_city,
-          district
-        ),
+      sender_postal_code: getPostalCode(previous.sender_city, district),
     }))
   }
 
@@ -176,10 +190,7 @@ export default function Settings() {
 
       if (
         senderPhone &&
-        (
-          senderPhone.length !== 10 ||
-          !senderPhone.startsWith('09')
-        )
+        (senderPhone.length !== 10 || !senderPhone.startsWith('09'))
       ) {
         setError('寄件人手機需為 09 開頭的 10 碼手機號碼')
         return
@@ -212,8 +223,8 @@ export default function Settings() {
         typeof apiError === 'string'
           ? apiError
           : apiError
-            ? JSON.stringify(apiError)
-            : err.message || '公司資料更新失敗'
+          ? JSON.stringify(apiError)
+          : err.message || '公司資料更新失敗'
       )
     } finally {
       setSaving(false)
@@ -221,18 +232,19 @@ export default function Settings() {
   }
 
   return (
-    // 🌟 保留 mx-auto 與 max-w-4xl 置中，但移除頂部大標題
-    <div className="mx-auto w-full max-w-4xl pb-12 font-sans animate-in fade-in duration-500">
+    <div className="mx-auto w-full max-w-4xl pb-12 font-sans animate-in fade-in duration-500 p-4 sm:p-0">
       
-      <div className="space-y-8 mt-2">
+      <div className="space-y-6 sm:space-y-8 mt-2">
         {/* 🟢 公司資訊 */}
-        <Card className="space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
-            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <Building size={20} className="text-[#C8522A]" />
+        <Card className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <Building size={18} className="sm:w-5 sm:h-5 text-[#C8522A]" />
               基本公司資訊
             </h2>
-            <p className="text-xs font-bold text-[#8C8880] ml-7">將顯示於平台發布的任務與請款單據中</p>
+            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+              將顯示於平台發布的任務與請款單據中
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -243,23 +255,19 @@ export default function Settings() {
             ) : (
               <>
                 {error && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                  <div className="rounded-xl sm:rounded-2xl border border-red-200 bg-red-50 p-3 sm:p-4 text-[13px] sm:text-sm font-bold text-red-700">
                     {error}
                   </div>
                 )}
 
                 {message && (
-                  <div className="rounded-2xl border border-green-200 bg-[#EAF6EC] p-4 text-sm font-bold text-[#2F8F4E]">
+                  <div className="rounded-xl sm:rounded-2xl border border-green-200 bg-[#EAF6EC] p-3 sm:p-4 text-[13px] sm:text-sm font-bold text-[#2F8F4E]">
                     {message}
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input
-                    label="廠商編號"
-                    value={vendorId || ''}
-                    disabled
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  <Input label="廠商編號" value={vendorId || ''} disabled />
                   <Input
                     label="統一編號"
                     name="tax_id"
@@ -289,11 +297,12 @@ export default function Settings() {
                   />
                 </div>
 
-                <div className="pt-4 flex justify-end">
+                <div className="pt-2 sm:pt-4 flex justify-end">
                   <Button
                     variant="brand"
                     onClick={handleSaveProfile}
                     disabled={saving}
+                    className="w-full sm:w-auto"
                   >
                     {saving ? '儲存中...' : '儲存公司變更'}
                   </Button>
@@ -304,13 +313,15 @@ export default function Settings() {
         </Card>
 
         {/* 🚚 寄件資訊 */}
-        <Card className="space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
-            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <MapPin size={20} className="text-[#B89B6A]" />
+        <Card className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <MapPin size={18} className="sm:w-5 sm:h-5 text-[#B89B6A]" />
               預設寄件資訊
             </h2>
-            <p className="text-xs font-bold text-[#8C8880] ml-7">建立黑貓宅配物流單時，系統會自動帶入此地址</p>
+            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+              建立黑貓宅配物流單時，系統會自動帶入此地址
+            </p>
           </div>
 
           {loading ? (
@@ -319,7 +330,7 @@ export default function Settings() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <Input
                   label="寄件人姓名"
                   name="sender_name"
@@ -332,12 +343,12 @@ export default function Settings() {
                   label="寄件人手機"
                   name="sender_phone"
                   value={profile.sender_phone}
-                  onChange={(event) =>
+                  onChange={event =>
                     setProfile(previous => ({
                       ...previous,
                       sender_phone: event.target.value
                         .replace(/\D/g, '')
-                        .slice(0, 10)
+                        .slice(0, 10),
                     }))
                   }
                   inputMode="tel"
@@ -345,37 +356,44 @@ export default function Settings() {
                   placeholder="09xxxxxxxx"
                 />
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">
                     寄件縣市
                   </label>
                   <select
                     value={profile.sender_city}
                     onChange={handleSenderCityChange}
-                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl px-5 py-3.5 text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all hover:border-[#1A1A18]/30 cursor-pointer"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all hover:border-[#1A1A18]/30 cursor-pointer"
                   >
                     <option value="">請選擇縣市</option>
                     {TAIWAN_CITIES.map(city => (
-                      <option key={city} value={city}>{city}</option>
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">
                     寄件鄉鎮市區
                   </label>
                   <select
                     value={profile.sender_district}
                     onChange={handleSenderDistrictChange}
                     disabled={!profile.sender_city}
-                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl px-5 py-3.5 text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all hover:border-[#1A1A18]/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-[#E2DDD4]"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all hover:border-[#1A1A18]/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-[#E2DDD4]"
                   >
                     <option value="">
-                      {profile.sender_city ? '請選擇鄉鎮市區' : '請先選擇縣市'}
+                      {profile.sender_city
+                        ? '請選擇鄉鎮市區'
+                        : '請先選擇縣市'}
                     </option>
                     {senderDistrictOptions.map(item => (
-                      <option key={`${item.district}-${item.postalCode}`} value={item.district}>
+                      <option
+                        key={`${item.district}-${item.postalCode}`}
+                        value={item.district}
+                      >
                         {item.district}
                       </option>
                     ))}
@@ -401,23 +419,28 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-[#F5F0E8] px-5 py-4 text-xs font-medium text-[#8C8880] flex items-center gap-2">
-                <MapPin size={16} className="text-[#B89B6A]" />
-                完整寄件地址：
-                <span className="font-bold text-[#1A1A18]">
-                  {[
-                    profile.sender_city,
-                    profile.sender_district,
-                    profile.sender_address
-                  ].filter(Boolean).join('') || '尚未設定完整地址'}
+              <div className="rounded-xl sm:rounded-2xl bg-[#F5F0E8] px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-medium text-[#8C8880] flex items-start sm:items-center gap-2">
+                <MapPin size={16} className="text-[#B89B6A] shrink-0 mt-0.5 sm:mt-0" />
+                <span>
+                  完整寄件地址：
+                  <span className="font-bold text-[#1A1A18] ml-1">
+                    {[
+                      profile.sender_city,
+                      profile.sender_district,
+                      profile.sender_address,
+                    ]
+                      .filter(Boolean)
+                      .join('') || '尚未設定完整地址'}
+                  </span>
                 </span>
               </div>
 
-              <div className="pt-4 flex justify-end">
+              <div className="pt-2 sm:pt-4 flex justify-end">
                 <Button
                   variant="brand"
                   onClick={handleSaveProfile}
                   disabled={saving}
+                  className="w-full sm:w-auto"
                 >
                   {saving ? '儲存中...' : '儲存寄件資訊'}
                 </Button>
@@ -427,13 +450,15 @@ export default function Settings() {
         </Card>
 
         {/* 💰 撥款銀行帳戶 */}
-        <Card className="space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
-            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <Landmark size={20} className="text-[#2F8F4E]" />
+        <Card className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <Landmark size={18} className="sm:w-5 sm:h-5 text-[#2F8F4E]" />
               撥款銀行帳戶
             </h2>
-            <p className="text-xs font-bold text-[#8C8880] ml-7">申請撥款前必須先綁定，款項將直接匯入此帳戶</p>
+            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+              申請撥款前必須先綁定，款項將直接匯入此帳戶
+            </p>
           </div>
 
           {loading ? (
@@ -442,15 +467,17 @@ export default function Settings() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 <Input
                   label="銀行代碼"
                   name="bank_code"
                   value={profile.bank_code}
-                  onChange={(event) =>
+                  onChange={event =>
                     setProfile(previous => ({
                       ...previous,
-                      bank_code: event.target.value.replace(/\D/g, '').slice(0, 10),
+                      bank_code: event.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 10),
                     }))
                   }
                   inputMode="numeric"
@@ -461,10 +488,12 @@ export default function Settings() {
                   label="銀行帳號"
                   name="bank_account"
                   value={profile.bank_account}
-                  onChange={(event) =>
+                  onChange={event =>
                     setProfile(previous => ({
                       ...previous,
-                      bank_account: event.target.value.replace(/\D/g, '').slice(0, 50),
+                      bank_account: event.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 50),
                     }))
                   }
                   inputMode="numeric"
@@ -482,11 +511,12 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end">
+              <div className="pt-2 sm:pt-4 flex justify-end">
                 <Button
                   variant="brand"
                   onClick={handleSaveProfile}
                   disabled={saving}
+                  className="w-full sm:w-auto"
                 >
                   {saving ? '儲存中...' : '儲存銀行帳戶'}
                 </Button>
@@ -496,32 +526,63 @@ export default function Settings() {
         </Card>
 
         {/* 🟢 通知設定 */}
-        <Card className="space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
-            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <Bell size={20} className="text-[#1A1A18]" />
+        <Card className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <Bell size={18} className="sm:w-5 sm:h-5 text-[#1A1A18]" />
               通知偏好設定
             </h2>
-            <p className="text-xs font-bold text-[#8C8880] ml-7">自訂您想接收的系統與 Email 通知</p>
+            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+              自訂您想接收的系統與 Email 通知
+            </p>
           </div>
 
           <div className="space-y-2">
             {[
-              { key: 'newOrder', label: '新訂單通知', desc: '當有新的 KOC 帶入訂單時發送通知' },
-              { key: 'review', label: '文案審核待辦', desc: '當 KOC 提交新文案時發送通知' },
-              { key: 'chat', label: '新訊息通知', desc: '聊天室收到新訊息時發送通知' },
-              { key: 'weekly', label: '每週成效報告', desc: '每週一發送上週的 KOC 行銷成效總結' },
+              {
+                key: 'newOrder',
+                label: '新訂單通知',
+                desc: '當有新的 KOC 帶入訂單時發送通知',
+              },
+              {
+                key: 'review',
+                label: '文案審核待辦',
+                desc: '當 KOC 提交新文案時發送通知',
+              },
+              {
+                key: 'chat',
+                label: '新訊息通知',
+                desc: '聊天室收到新訊息時發送通知',
+              },
+              {
+                key: 'weekly',
+                label: '每週成效報告',
+                desc: '每週一發送上週的 KOC 行銷成效總結',
+              },
             ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between py-4 border-b border-[#E2DDD4]/60 last:border-0 last:pb-0">
-                <div>
-                  <div className="text-sm font-bold text-[#1A1A18]">{label}</div>
-                  <div className="text-xs font-medium text-[#8C8880] mt-1">{desc}</div>
+              <div
+                key={key}
+                className="flex items-center justify-between py-3 sm:py-4 border-b border-[#E2DDD4]/60 last:border-0 last:pb-0 gap-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] sm:text-sm font-bold text-[#1A1A18]">
+                    {label}
+                  </div>
+                  <div className="text-[11px] sm:text-xs font-medium text-[#8C8880] mt-0.5 sm:mt-1 truncate sm:whitespace-normal">
+                    {desc}
+                  </div>
                 </div>
-                <button 
-                  onClick={() => toggle(key)} 
-                  className={`w-14 h-8 rounded-full transition-colors relative shadow-inner ${notifications[key] ? 'bg-[#C8522A]' : 'bg-[#E2DDD4]'}`}
+                <button
+                  onClick={() => toggle(key)}
+                  className={`w-12 sm:w-14 h-7 sm:h-8 rounded-full transition-colors relative shadow-inner shrink-0 ${
+                    notifications[key] ? 'bg-[#C8522A]' : 'bg-[#E2DDD4]'
+                  }`}
                 >
-                  <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${notifications[key] ? 'left-7' : 'left-1'}`} />
+                  <span
+                    className={`absolute top-1 w-5 sm:w-6 h-5 sm:h-6 bg-white rounded-full shadow-md transition-all duration-300 ${
+                      notifications[key] ? 'left-6 sm:left-7' : 'left-1'
+                    }`}
+                  />
                 </button>
               </div>
             ))}
@@ -529,16 +590,18 @@ export default function Settings() {
         </Card>
 
         {/* 🟢 安全性 */}
-        <Card className="space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-4">
-            <h2 className="text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <Shield size={20} className="text-[#8C8880]" />
+        <Card className="space-y-6 sm:space-y-8">
+          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+              <Shield size={18} className="sm:w-5 sm:h-5 text-[#8C8880]" />
               安全性設定
             </h2>
-            <p className="text-xs font-bold text-[#8C8880] ml-7">定期更新密碼以確保帳號安全</p>
+            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+              定期更新密碼以確保帳號安全
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div className="md:col-span-2">
               <Input label="舊密碼" type="password" placeholder="••••••••" />
             </div>
@@ -546,23 +609,30 @@ export default function Settings() {
             <Input label="確認新密碼" type="password" placeholder="••••••••" />
           </div>
 
-          <div className="pt-4 flex justify-end">
-            <Button variant="brand">更新密碼</Button>
+          <div className="pt-2 sm:pt-4 flex justify-end">
+            <Button variant="brand" className="w-full sm:w-auto">更新密碼</Button>
           </div>
         </Card>
 
         {/* 🟢 登出區塊 */}
-        <Card className="border-[#FFF0F0] bg-[#FFF0F0]/50 flex flex-col sm:flex-row justify-between items-start sm:items-center p-8">
+        <Card className="border-[#FFF0F0] bg-[#FFF0F0]/50 flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 sm:p-8 gap-4 sm:gap-0">
           <div>
-            <h2 className="text-lg font-bold text-[#D93025] mb-1">登出廠商後台</h2>
-            <p className="text-sm text-[#D93025]/70 font-medium">登出後，您將需要重新輸入帳號密碼才能再次存取。</p>
+            <h2 className="text-base sm:text-lg font-bold text-[#D93025] mb-1">
+              登出廠商後台
+            </h2>
+            <p className="text-[11px] sm:text-sm text-[#D93025]/70 font-medium">
+              登出後，您將需要重新輸入帳號密碼才能再次存取。
+            </p>
           </div>
-          <Button variant="danger" onClick={handleLogout} className="gap-2 shrink-0 mt-6 sm:mt-0 px-8">
+          <Button
+            variant="danger"
+            onClick={handleLogout}
+            className="w-full sm:w-auto gap-2 shrink-0 px-8"
+          >
             <LogOut size={16} /> 安全登出
           </Button>
         </Card>
       </div>
-
     </div>
   )
 }

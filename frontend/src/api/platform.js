@@ -103,6 +103,16 @@ export const getEarningsTracking = (params = {}) => {
   return api.get('/platform/mission/getEarningsTracking', { params })
 }
 
+// 廠商審核逾期列表
+export const getVendorReviewOverdue = (params = {}) => {
+  return api.get('/platform/vendor/review-overdue', { params })
+}
+
+// 手動重新寄送廠商審核逾期提醒信
+export const notifyVendorReviewOverdue = (data) => {
+  return api.post('/platform/vendor/review-overdue/notify', data)
+}
+
 
 // ======================================================
 // 客服聊天室

@@ -1,6 +1,7 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, Headset } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -13,11 +14,11 @@ import EarningsDetailPage from './koc/EarningsDetailPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
-import KocIntroPage from './shopping/KocIntroPage';import ChatPage from './koc/ChatPage';
+import KocIntroPage from './shopping/KocIntroPage';
+import ChatPage from './koc/ChatPage';
 import TaxFormPrintView from './koc/TaxFormPrintView';
 
 // === Shopping 相關頁面 ===
-import ReviewPage from './shopping/ReviewPage';
 import WelcomePage from './shopping/WelcomePage';
 import ShopPage from './shopping/ShopPage';
 import CartPage from './shopping/CartPage';
@@ -38,14 +39,9 @@ import SecurityPage from './authentication/SecurityPage';
 import VendorApp from './VendorApp';
 import VendorLogin from './authentication/VendorLogin';
 
-
 // === 平台管理端 (Admin) 相關頁面 ===
 import AdminLogin from './admin/AdminLogin';
 import AdminApp from './AdminApp';
-
-
-// 🌟 新增：引入 Heart icon
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 // 路由對應表：view 名稱（沿用給子元件用的字串） <-> 實際網址
 const VIEW_TO_PATH = {
@@ -68,7 +64,8 @@ const VIEW_TO_PATH = {
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
-  kocIntro: '/koc-intro',  review: '/review',
+  kocIntro: '/koc-intro',  
+  review: '/review',
 };
 
 // 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
@@ -95,6 +92,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
+    { icon: <Headset size={18} />, label: '客服諮詢', view: 'support' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
 
@@ -105,7 +103,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   });
 
   return (
-    <aside className="w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
+    <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
       <nav className="space-y-2">
         {menuItems.map((item, index) => {
           const isActive = currentView === item.view || (item.subItems && item.subItems.some(sub => sub.view === currentView));
@@ -510,9 +508,7 @@ function MainSystem() {
     navigate('/welcome', { replace: true });
   };
 
-  // 閒置 30 分鐘自動登出：只在已登入狀態下才需要偵測，
-  // 監聽常見的使用者活動事件，只要有動作就重新計時，
-  // 完全沒有活動達到門檻時間才觸發登出。
+  // 閒置 30 分鐘自動登出
   useEffect(() => {
     const IDLE_LIMIT_MS = 30 * 60 * 1000; // 30 分鐘
     const token = localStorage.getItem('token');
@@ -646,9 +642,6 @@ function MainSystem() {
           />
         } />
 
-        {/* 綠界付款結果頁：OrderResultURL 由後端驗證完再把瀏覽器導回這裡（帶 order_id），
-            這是一個「從外部整頁導回來」的進入點，不透過 handleNavigate，所以沒有登入保護閘門，
-            頁面本身只靠 order_id 呼叫後端查真正的付款狀態，不採信網址上其他任何參數 */}
         <Route path="/checkout/result" element={
           <PaymentResultPage onCartCleared={() => syncCartCount()} />
         } />
@@ -799,8 +792,6 @@ function MainSystem() {
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <ApplyKOCPage
               onSubmit={() => {
-                // 申請只是送出審核，還不是 KOC；要等平台審核通過、
-                // 重新登入後 user.role 才會變成 koc，這裡先留在消費者身份
                 handleNavigate('shop');
               }}
               onViewIntro={() => handleNavigate('kocIntro')}
@@ -819,12 +810,13 @@ function MainSystem() {
   );
 }
 
-// 左側 Sidebar + 內容區的共用外殼，取代原本用 shellViews.includes(view) 判斷再包一層的寫法
+// 左側 Sidebar + 內容區的共用外殼
+// [RWD 優化] 將 padding 和 margin 改為響應式，手機版取消左側 margin，讓內容滿版
 function ShellLayout({ userRole, activeView, onNavigate, children }) {
   return (
-    <div className="flex p-8 max-w-7xl mx-auto">
+    <div className="flex p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
       <Sidebar userRole={userRole} currentView={activeView} onNavigate={onNavigate} />
-      <main className="flex-1 ml-12">
+      <main className="flex-1 w-full lg:ml-8 xl:ml-12 min-w-0">
         {children}
       </main>
     </div>
