@@ -310,6 +310,35 @@ def send_application_auto_rejected_email(application):
     )
 
 
+def send_platform_fee_invoice_email(payout):
+    """
+    平台就撥款申請扣取的平台服務費（platform_fee）開立統一發票後，
+    寄信通知 KOC 發票號碼，作為其申報個人所得稅時可列報的成本費用憑證。
+
+    寄信失敗不應該讓上傳流程跟著失敗或卡住 API 回應，
+    呼叫端要自己包 try/except，這裡只負責寄信本身。
+    """
+    koc_user = payout.koc
+
+    subject = "平台服務費發票已開立"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        f"您第 {payout.payout_id} 筆撥款申請（實際撥款金額 NT$ {payout.amount:,}）"
+        f"所收取的平台服務費 NT$ {payout.platform_fee:,}，統一發票已開立完成。\n"
+        f"發票號碼：{payout.invoice_number}\n\n"
+        "請妥善保存此發票號碼，作為您申報個人所得稅時可列報的成本費用憑證。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
+
+
 def send_publishing_overdue_email(mission, days):
     """
     任務進入 publishing（待提交作品連結以開始推廣）階段已超過指定天數、

@@ -844,6 +844,11 @@ class Payouts(models.Model):
     platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
+    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：發票本身在平台
+    # 外部的電子發票/會計系統開立，這裡只登打號碼留存記錄，比照 Order 的
+    # invoice_number/invoice_uploaded_at 同一套模式（見 admin_koc_payout_upload_invoice）。
+    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
 
     class Meta:
         db_table = 'Payouts'
