@@ -1760,9 +1760,10 @@ def vendor_mission_review_submission(request):
 
     if review_result == "approved":
         if submission.submission_type == "text":
-            # 文案審核通過：進入待發佈
+            # 文案審核通過：進入待發佈，同時記錄開始計算 7 天貼文連結提交期限的時間點
             mission.stage = "publishing"
-            mission.save(update_fields=["stage"])
+            mission.publishing_started_at = timezone.now()
+            mission.save(update_fields=["stage", "publishing_started_at"])
             # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
             try:
                 send_submission_approved_email(submission)

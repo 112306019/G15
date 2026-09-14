@@ -297,6 +297,13 @@ class KOCMissionNew(models.Model):
     koc = models.ForeignKey('KOC', on_delete=models.CASCADE, db_column='koc_id', db_index=True, null=True, blank=True)
     stage = models.CharField(max_length=50, db_column='stage')
 
+    # 貼文連結逾期追蹤：文案審核通過、進入 publishing 階段時記錄時間，
+    # 7 天內沒提交貼文連結（stage 還沒推進到 promoting）就算失信；
+    # missed_publishing_deadline 一旦被設為 True 就永久保留（即使後來補交了），
+    # 作為 KOC 過往失信次數統計的依據。
+    publishing_started_at = models.DateTimeField(null=True, blank=True, db_column='publishing_started_at')
+    missed_publishing_deadline = models.BooleanField(default=False, db_column='missed_publishing_deadline')
+
     class Meta:
         db_table = 'Koc_Mission'  
 
