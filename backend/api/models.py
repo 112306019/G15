@@ -588,6 +588,26 @@ class Product(models.Model):
         db_column='ad_category'
     )
 
+    # 七天鑑賞期退貨規則：預設可退，廠商可選擇這個商品不適用七天鑑賞期，
+    # 但依消保法規定，選「不可退」時必須指定屬於法定例外情況的哪一種原因。
+    NON_RETURNABLE_REASON_CHOICES = [
+        ('perishable', '易腐敗、保存期限較短，或退貨時將逾期'),
+        ('customized', '客製化商品、服務'),
+        ('periodical', '報紙、期刊或雜誌'),
+        ('opened_media', '經拆封的影音商品或電腦軟體'),
+        ('digital_content', '經消費者同意而提供的非有形媒介數位內容或提供即完成的線上服務'),
+        ('opened_hygiene', '已拆封的個人衛生用品'),
+        ('air_transport', '國際航空客運服務'),
+    ]
+    is_returnable = models.BooleanField(default=True, db_column='is_returnable')
+    non_returnable_reason = models.CharField(
+        max_length=30,
+        choices=NON_RETURNABLE_REASON_CHOICES,
+        blank=True,
+        null=True,
+        db_column='non_returnable_reason'
+    )
+
     class Meta:
         db_table = 'Product'
 
