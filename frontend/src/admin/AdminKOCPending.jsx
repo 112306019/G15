@@ -132,235 +132,202 @@ export default function AdminKOCPending() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-10">
       {/* 頁面標題 */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 md:mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-3">
             KOC 待審核清單
 
-            <span className="text-xs font-bold bg-[#F8F9FA] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
+            <span className="text-[10px] md:text-xs font-bold bg-[#F8F9FA] text-[#8C8880] px-2.5 py-1 rounded-md tracking-wider font-sans border border-[#E2DDD4]">
               共 {pendingList.length} 筆
             </span>
           </h1>
 
-          <p className="text-[#8C8880] mt-2 font-medium">
+          <p className="text-[#8C8880] mt-1.5 md:mt-2 text-xs md:text-sm font-medium">
             審核使用者申請成為 KOC 的資格，確認社群帳號後同意或拒絕。
           </p>
         </div>
       </div>
 
-      {/* 待審核表格 */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            {/* 表頭永遠保留 */}
+      {/* 列表內容區塊 */}
+      <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden">
+        
+        <div className="md:hidden flex flex-col divide-y divide-[#E2DDD4]">
+          {loading && <div className="p-10 text-center text-sm font-bold text-[#8C8880]">載入中...</div>}
+          
+          {!loading && error && (
+            <div className="p-10 text-center text-sm font-bold text-[#C8522A] flex flex-col items-center gap-3">
+              <p>{error}</p>
+              <button type="button" onClick={fetchPendingList} className="rounded-full bg-[#1A1A18] px-6 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#C8522A]">
+                重新載入
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && pendingList.length === 0 && (
+            <div className="p-10 text-center text-sm font-bold text-[#8C8880] flex flex-col items-center gap-3">
+              <Clock size={28} className="text-[#E2DDD4]" />
+              <span>目前沒有待審核的 KOC 申請</span>
+            </div>
+          )}
+
+          {!loading && !error && pendingList.map((koc) => {
+            const isActioning = actioningId === koc.koc_id;
+
+            return (
+              <div key={koc.koc_id} className="p-5 sm:p-6 hover:bg-[#F5F0E8]/30 transition-colors">
+                {/* 申請人資訊 */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-[#F8F9FA] text-[#1A1A18] border border-[#E2DDD4] flex items-center justify-center font-serif font-black text-xl shrink-0 shadow-sm">
+                    {koc.name?.charAt(0) || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-[#1A1A18] text-sm truncate">{koc.name || '未提供姓名'}</div>
+                    <div className="text-[11px] font-medium text-[#8C8880] truncate mt-0.5">{koc.email || '未提供 Email'}</div>
+                    <div className="text-[10px] font-medium text-[#8C8880]/70 mt-0.5">KOC ID：{koc.koc_id}</div>
+                  </div>
+                </div>
+
+                {/* 社群與時間區塊 */}
+                <div className="bg-[#F8F9FA] rounded-xl p-3.5 mb-4 flex flex-col gap-3 border border-[#E2DDD4]/50">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-bold text-[#8C8880]">社群帳號</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {koc.ig_account && (
+                        <a href={koc.ig_url || '#'} target={koc.ig_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                           className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.ig_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                          <Instagram size={12} /> {koc.ig_account}
+                        </a>
+                      )}
+                      {koc.fb_account && (
+                        <a href={koc.fb_url || '#'} target={koc.fb_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                           className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.fb_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                          FB: {koc.fb_account}
+                        </a>
+                      )}
+                      {koc.threads_account && (
+                        <a href={koc.threads_url || '#'} target={koc.threads_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                           className={`text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.threads_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                          Threads: {koc.threads_account}
+                        </a>
+                      )}
+                      {!koc.ig_account && !koc.fb_account && !koc.threads_account && (
+                        <span className="text-[11px] font-medium text-[#8C8880]">未提供社群帳號</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[#E2DDD4] pt-2 mt-1">
+                    <span className="text-[10px] font-bold text-[#8C8880]">申請時間</span>
+                    <span className="text-[11px] font-bold text-[#1A1A18]">{formatAppliedAt(koc.applied_at)}</span>
+                  </div>
+                </div>
+
+                {/* 操作按鈕 */}
+                <div className="flex gap-2.5">
+                  <button type="button" onClick={() => openRejectModal(koc)} disabled={isActioning} className="flex-1 inline-flex justify-center items-center gap-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-2.5 rounded-xl text-xs font-bold hover:border-[#C8522A] hover:text-[#C8522A] transition-all shadow-sm disabled:opacity-50">
+                    <X size={14} /> 拒絕
+                  </button>
+                  <button type="button" onClick={() => handleApprove(koc)} disabled={isActioning} className="flex-1 inline-flex justify-center items-center gap-1 bg-[#1A1A18] text-[#F5F0E8] py-2.5 rounded-xl text-xs font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50">
+                    <Check size={14} /> {isActioning ? '處理中' : '同意申請'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">
-                  申請人
-                </th>
-
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">
-                  社群帳號
-                </th>
-
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">
-                  申請時間
-                </th>
-
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider text-center">
-                  操作
-                </th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">申請人</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">社群帳號</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">申請時間</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider text-center">操作</th>
               </tr>
             </thead>
-
             <tbody className="divide-y divide-[#E2DDD4]">
-              {/* 載入中 */}
-              {loading && (
-                <tr>
-                  <td colSpan={4}>
-                    <div className="py-20 text-center text-[#8C8880] font-bold">
-                      載入中...
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {/* 載入錯誤 */}
+              {loading && <tr><td colSpan={4}><div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div></td></tr>}
               {!loading && error && (
                 <tr>
                   <td colSpan={4}>
-                    <div className="py-20 text-center text-[#C8522A] font-bold">
+                    <div className="py-20 text-center text-[#C8522A] font-bold flex flex-col items-center gap-3">
                       <p>{error}</p>
-
-                      <button
-                        type="button"
-                        onClick={fetchPendingList}
-                        className="mt-4 rounded-full bg-[#1A1A18] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#C8522A]"
-                      >
+                      <button type="button" onClick={fetchPendingList} className="rounded-full bg-[#1A1A18] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#C8522A]">
                         重新載入
                       </button>
                     </div>
                   </td>
                 </tr>
               )}
-
-              {/* 沒有資料，表頭仍然存在 */}
               {!loading && !error && pendingList.length === 0 && (
                 <tr>
                   <td colSpan={4}>
                     <div className="py-20 text-center text-[#8C8880] font-bold flex flex-col items-center gap-3">
-                      <Clock
-                        size={32}
-                        className="text-[#E2DDD4]"
-                      />
-
-                      <span>
-                        目前沒有待審核的 KOC 申請
-                      </span>
+                      <Clock size={32} className="text-[#E2DDD4]" />
+                      <span>目前沒有待審核的 KOC 申請</span>
                     </div>
                   </td>
                 </tr>
               )}
-
-              {/* 有資料 */}
-              {!loading &&
-                !error &&
-                pendingList.map((koc) => {
-                  const isActioning =
-                    actioningId === koc.koc_id;
-
-                  return (
-                    <tr
-                      key={koc.koc_id}
-                      className="hover:bg-[#F5F0E8]/50 transition-colors group"
-                    >
-                      {/* 申請人 */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#F8F9FA] text-[#1A1A18] border border-[#E2DDD4] flex items-center justify-center font-serif font-black text-lg">
-                            {koc.name?.charAt(0) || '?'}
-                          </div>
-
-                          <div>
-                            <div className="font-bold text-[#1A1A18]">
-                              {koc.name || '未提供姓名'}
-                            </div>
-
-                            <div className="text-xs font-medium text-[#8C8880]">
-                              {koc.email || '未提供 Email'}
-                            </div>
-
-                            <div className="text-[11px] font-medium text-[#8C8880]/70 mt-1">
-                              KOC ID：{koc.koc_id}
-                            </div>
-                          </div>
+              {!loading && !error && pendingList.map((koc) => {
+                const isActioning = actioningId === koc.koc_id;
+                return (
+                  <tr key={koc.koc_id} className="hover:bg-[#F5F0E8]/50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#F8F9FA] text-[#1A1A18] border border-[#E2DDD4] flex items-center justify-center font-serif font-black text-lg">
+                          {koc.name?.charAt(0) || '?'}
                         </div>
-                      </td>
-
-                      {/* 社群帳號 */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1.5">
-                          {koc.ig_account &&
-                            (koc.ig_url ? (
-                              <a
-                                href={koc.ig_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-bold text-[#C8522A] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md flex items-center gap-1 w-fit hover:underline"
-                              >
-                                <Instagram size={11} />
-                                {koc.ig_account}
-                              </a>
-                            ) : (
-                              <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
-                                <Instagram size={11} />
-                                {koc.ig_account}
-                              </span>
-                            ))}
-
-                          {koc.fb_account &&
-                            (koc.fb_url ? (
-                              
-                              <a                                href={koc.fb_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-bold text-[#C8522A] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit hover:underline"
-                              >
-                                FB：{koc.fb_account}
-                              </a>
-                            ) : (
-                              <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit">
-                                FB：{koc.fb_account}
-                              </span>
-                            ))}
-
-                          {koc.threads_account &&
-                            (koc.threads_url ? (
-                              <a
-                                href={koc.threads_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-bold text-[#C8522A] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit hover:underline"
-                              >
-                                Threads {koc.threads_account}
-                              </a>
-                            ) : (
-                              <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2 py-0.5 rounded-md w-fit">
-                                Threads {koc.threads_account}
-                              </span>
-                            ))}
-
-                          {!koc.ig_account &&
-                            !koc.fb_account &&
-                            !koc.threads_account && (
-                              <span className="text-xs font-medium text-[#8C8880]">
-                                未提供社群帳號
-                              </span>
-                            )}
+                        <div>
+                          <div className="font-bold text-[#1A1A18]">{koc.name || '未提供姓名'}</div>
+                          <div className="text-xs font-medium text-[#8C8880]">{koc.email || '未提供 Email'}</div>
+                          <div className="text-[11px] font-medium text-[#8C8880]/70 mt-1">KOC ID：{koc.koc_id}</div>
                         </div>
-                      </td>
-
-                      {/* 申請時間 */}
-                      <td className="px-6 py-4 text-xs font-bold text-[#8C8880] whitespace-nowrap">
-                        {formatAppliedAt(koc.applied_at)}
-                      </td>
-
-                      {/* 操作 */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleApprove(koc)
-                            }
-                            disabled={isActioning}
-                            className="inline-flex items-center gap-1 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#C8522A] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Check size={14} />
-
-                            {isActioning
-                              ? '處理中'
-                              : '同意'}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openRejectModal(koc)
-                            }
-                            disabled={isActioning}
-                            className="inline-flex items-center gap-1 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 py-2 rounded-lg text-xs font-bold hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <X size={14} />
-                            拒絕
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1.5 max-w-[300px]">
+                        {koc.ig_account && (
+                          <a href={koc.ig_url || '#'} target={koc.ig_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                             className={`inline-block whitespace-nowrap text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.ig_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                            <Instagram size={11} /> {koc.ig_account}
+                          </a>
+                        )}
+                        {koc.fb_account && (
+                          <a href={koc.fb_url || '#'} target={koc.fb_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                             className={`inline-block whitespace-nowrap text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.fb_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                            FB: {koc.fb_account}
+                          </a>
+                        )}
+                        {koc.threads_account && (
+                          <a href={koc.threads_url || '#'} target={koc.threads_url ? "_blank" : "_self"} rel="noopener noreferrer" 
+                             className={`inline-block whitespace-nowrap text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 w-fit ${koc.threads_url ? 'text-[#C8522A] bg-white border border-[#E2DDD4] hover:underline shadow-sm' : 'text-[#8C8880] bg-[#E2DDD4]/30'}`}>
+                            Threads: {koc.threads_account}
+                          </a>
+                        )}
+                        {!koc.ig_account && !koc.fb_account && !koc.threads_account && (
+                          <span className="text-xs font-medium text-[#8C8880]">未提供社群帳號</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs font-bold text-[#8C8880]">
+                      {formatAppliedAt(koc.applied_at)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button type="button" onClick={() => handleApprove(koc)} disabled={isActioning} className="inline-flex items-center gap-1 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                          <Check size={14} /> {isActioning ? '處理中' : '同意'}
+                        </button>
+                        <button type="button" onClick={() => openRejectModal(koc)} disabled={isActioning} className="inline-flex items-center gap-1 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 py-2.5 rounded-xl text-xs font-bold hover:border-[#C8522A] hover:text-[#C8522A] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                          <X size={14} /> 拒絕
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -368,65 +335,28 @@ export default function AdminKOCPending() {
 
       {/* 拒絕申請彈窗 */}
       {rejectModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4"
-          onClick={closeRejectModal}
-        >
-          <div
-            className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <h3 className="text-lg font-bold text-[#1A1A18] mb-2">
-              拒絕 KOC 申請
-            </h3>
-
-            <p className="text-sm text-[#8C8880] mb-5">
-              請填寫拒絕原因，將會顯示給申請人參考
-              （{rejectTarget?.name || '未提供姓名'}）。
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4" onClick={closeRejectModal}>
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18] mb-2">拒絕 KOC 申請</h3>
+            <p className="text-xs sm:text-sm text-[#8C8880] mb-5 font-medium leading-relaxed">
+              請填寫拒絕原因，將會顯示給申請人參考（<span className="font-bold text-[#1A1A18]">{rejectTarget?.name || '未提供姓名'}</span>）。
             </p>
-
             <textarea
               rows={4}
               value={rejectReason}
-              onChange={(event) =>
-                setRejectReason(event.target.value)
-              }
+              onChange={(event) => setRejectReason(event.target.value)}
               placeholder="例如：社群帳號未公開、資料不完整等"
-              className="w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A] resize-none mb-2"
+              className="w-full rounded-xl border border-[#E2DDD4] bg-white px-4 py-3 text-sm outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none mb-2 transition-all shadow-sm"
             />
-
-            <div className="text-right text-xs text-[#8C8880] mb-6">
+            <div className="text-right text-[10px] sm:text-xs font-bold text-[#8C8880] mb-6">
               {rejectReason.length} 字
             </div>
-
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={closeRejectModal}
-                disabled={
-                  actioningId ===
-                  rejectTarget?.koc_id
-                }
-                className="flex-1 rounded-full border border-[#E2DDD4] text-[#8C8880] py-3 text-sm font-bold hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
-              >
+              <button type="button" onClick={closeRejectModal} disabled={actioningId === rejectTarget?.koc_id} className="flex-1 rounded-xl border border-[#E2DDD4] text-[#8C8880] py-3 text-xs sm:text-sm font-bold hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-colors disabled:opacity-50">
                 取消
               </button>
-
-              <button
-                type="button"
-                onClick={handleReject}
-                disabled={
-                  actioningId ===
-                  rejectTarget?.koc_id
-                }
-                className="flex-1 rounded-full bg-[#C8522A] text-white py-3 text-sm font-bold hover:bg-[#A64220] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actioningId ===
-                rejectTarget?.koc_id
-                  ? '處理中...'
-                  : '確認拒絕'}
+              <button type="button" onClick={handleReject} disabled={actioningId === rejectTarget?.koc_id} className="flex-1 rounded-xl bg-[#C8522A] text-white py-3 text-xs sm:text-sm font-bold hover:bg-[#A64220] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                {actioningId === rejectTarget?.koc_id ? '處理中...' : '確認拒絕'}
               </button>
             </div>
           </div>

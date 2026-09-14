@@ -54,8 +54,6 @@ export default function AdminFinance() {
               : '待定',
         })));
       } else if (!earnRes.ok) {
-        // 請求失敗時後端回傳的是物件（{success:false, err:...}）不是陣列，
-        // 不能直接吞掉不處理，不然畫面會停在舊資料、看起來像「按了結算沒反應」
         console.error("分潤資料載入失敗", earnData?.err || earnRes.status);
       }
 
@@ -87,9 +85,7 @@ export default function AdminFinance() {
       return;
     }
 
-    if (!window.confirm("確定要結算這個活動的所有可提領分潤，並匯入 KOC 錢包嗎？")) {
-      return;
-    }
+    if (!window.confirm("確定要結算這個活動的所有可提領分潤，並匯入 KOC 錢包嗎？")) return;
 
     setSettlingId(campaignId);
     try {
@@ -108,26 +104,13 @@ export default function AdminFinance() {
         return;
       }
 
-      // 先做本地端的樂觀更新：不管重新抓資料的網路請求後續是否順利，
-      // 使用者按下結算的當下就要立刻看到這筆活動從「待結算」消失，
-      // 不然畫面感覺起來就像「按了沒反應」，還要手動整頁重新整理才會消失。
       setSettleableCampaigns(prev => prev.filter(c => c.campaignId !== campaignId));
-
-      const settledEarningsIds = new Set(
-        (data.settled || []).map(s => s.earnings_id)
-      );
+      const settledEarningsIds = new Set((data.settled || []).map(s => s.earnings_id));
       if (settledEarningsIds.size > 0) {
-        setEarnings(prev => prev.map(e =>
-          settledEarningsIds.has(e.earningId)
-            ? { ...e, status: '可提領' }
-            : e
-        ));
+        setEarnings(prev => prev.map(e => settledEarningsIds.has(e.earningId) ? { ...e, status: '可提領' } : e));
       }
 
       alert(`已結算 ${data.settled_count} 筆分潤，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
-
-      // 再跟後端同步一次真正的最新狀態，樂觀更新只是先讓畫面看起來對，
-      // 這次才是真正的資料來源；如果失敗也已經先印出錯誤方便排查。
       await fetchEarningsData();
     } catch (err) {
       console.error("結算失敗", err);
@@ -176,8 +159,6 @@ export default function AdminFinance() {
           notYetEligibleAmount: v.Not_yet_eligible_amount,
           earliestEligibleAt: v.Earliest_eligible_at,
         })));
-      } else if (!settleRes.ok) {
-        console.error("待結算廠商載入失敗", settleData?.err || settleRes.status);
       }
 
       const payoutData = await payoutRes.json();
@@ -191,8 +172,6 @@ export default function AdminFinance() {
           payoutDate: p.Payout_date,
           status: p.Status,
         })));
-      } else if (!payoutRes.ok) {
-        console.error("待處理撥款申請載入失敗", payoutData?.err || payoutRes.status);
       }
     } catch (err) {
       console.error("廠商金流資料載入失敗", err);
@@ -200,40 +179,23 @@ export default function AdminFinance() {
   };
 
   const handleSettleVendor = async (vendorId) => {
-    if (!adminId) {
-      alert("找不到管理員登入資訊，請重新登入後再試一次");
-      return;
-    }
-
-    if (!window.confirm("確定要把這個廠商已過鑑賞期的凍結餘額，結算成可提領餘額嗎？")) {
-      return;
-    }
+    if (!adminId) { alert("找不到管理員登入資訊"); return; }
+    if (!window.confirm("確定要把這個廠商已過鑑賞期的凍結餘額，結算成可提領餘額嗎？")) return;
 
     setSettlingVendorId(vendorId);
     try {
       const res = await fetch(`${API_BASE_URL}/api/platform/vendor/settle-earnings`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ vendor_id: vendorId, Admin_id: adminId }),
       });
       const data = await res.json();
+      if (!res.ok || data.success === false) { alert(data.err || "結算失敗"); return; }
 
-      if (!res.ok || data.success === false) {
-        alert(data.err || "結算失敗，請稍後再試");
-        return;
-      }
-
-      // 樂觀更新：立刻把這個廠商從「待結算」清單移除，不等重新抓資料的
-      // 網路請求（跟上面 KOC 活動結算同一個原因，避免看起來像沒反應）
       setSettleableVendors(prev => prev.filter(v => v.vendorId !== vendorId));
-
       alert(`已結算 ${data.settled_count} 筆，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
       await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
     } catch (err) {
-      console.error("廠商結算失敗", err);
       alert("結算失敗，請稍後再試");
     } finally {
       setSettlingVendorId(null);
@@ -241,470 +203,318 @@ export default function AdminFinance() {
   };
 
   const handleConfirmPayout = async (payoutId, newStatus) => {
-    if (!adminId) {
-      alert("找不到管理員登入資訊，請重新登入後再試一次");
-      return;
-    }
-
+    if (!adminId) return;
     const confirmMsg = newStatus === 'completed'
       ? "確定已經完成匯款，把這筆申請標記為完成嗎？"
       : "確定要標記這筆撥款失敗嗎？金額會退回廠商的可提領餘額。";
-
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
+    if (!window.confirm(confirmMsg)) return;
 
     setConfirmingPayoutId(payoutId);
     try {
       const res = await fetch(`${API_BASE_URL}/api/platform/vendor/payout/confirm`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ payout_id: payoutId, status: newStatus, Admin_id: adminId }),
       });
       const data = await res.json();
+      if (!res.ok || data.success === false) { alert(data.err || "處理失敗"); return; }
 
-      if (!res.ok || data.success === false) {
-        alert(data.err || "處理失敗，請稍後再試");
-        return;
-      }
-
-      // 樂觀更新：立刻把這筆撥款申請從「待處理」清單移除
       setVendorPayouts(prev => prev.filter(p => p.payoutId !== payoutId));
-
       await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
     } catch (err) {
-      console.error("撥款處理失敗", err);
       alert("處理失敗，請稍後再試");
     } finally {
       setConfirmingPayoutId(null);
     }
   };
 
-  // 廠商撥款已改月結：正常情況下會由後端排程（cron / celery beat）
-  // 在每月固定日期自動打 admin_run_monthly_vendor_payouts，這顆按鈕是
-  // 給忘記設排程、或需要補跑（例如某廠商當時銀行帳戶沒綁好，補齊後
-  // 想馬上讓他這期就撥款）時用的手動觸發入口。
   const handleRunMonthlyPayouts = async () => {
-    if (!adminId) {
-      alert("找不到管理員登入資訊，請重新登入後再試一次");
-      return;
-    }
-
-    if (!window.confirm("確定要立即執行月結撥款嗎？會幫所有有可提領餘額的廠商建立撥款單。")) {
-      return;
-    }
+    if (!adminId) return;
+    if (!window.confirm("確定要立即執行月結撥款嗎？會幫所有有可提領餘額的廠商建立撥款單。")) return;
 
     setRunningMonthlyPayouts(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/platform/vendor/run-monthly-payouts`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ Admin_id: adminId }),
       });
       const data = await res.json();
-
-      if (!res.ok || data.success === false) {
-        alert(data.err || "月結撥款執行失敗，請稍後再試");
-        return;
-      }
+      if (!res.ok || data.success === false) { alert(data.err || "執行失敗"); return; }
 
       const skippedCount = data.skipped?.length || 0;
-      alert(
-        `已產生 ${data.payouts_created?.length ?? 0} 筆撥款單，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`
-        + (skippedCount > 0 ? `，另有 ${skippedCount} 個廠商因故略過（詳見主控台）` : '')
-      );
-      if (skippedCount > 0) {
-        console.warn("月結撥款略過的廠商", data.skipped);
-      }
-
+      alert(`已產生 ${data.payouts_created?.length ?? 0} 筆撥款單，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}` + (skippedCount > 0 ? `，另有 ${skippedCount} 個廠商因故略過` : ''));
       await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
     } catch (err) {
-      console.error("月結撥款執行失敗", err);
-      alert("月結撥款執行失敗，請稍後再試");
+      alert("執行失敗，請稍後再試");
     } finally {
       setRunningMonthlyPayouts(false);
     }
   };
 
   const handleExportPayouts = async (exportType) => {
-    if (!adminId) {
-      alert("找不到管理員登入資訊，請重新登入後再試一次");
-      return;
-    }
-
+    if (!adminId) return;
     setExportingPayouts(exportType);
     try {
       const res = await fetch(`${API_BASE_URL}/api/platform/payouts/export?type=${exportType}&status=pending&Admin_id=${adminId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) {
-        // 匯出失敗時後端一樣是回 JSON 物件（{success:false, err:...}），
-        // 不是 CSV，所以要先檢查狀態碼，不能直接把失敗訊息當檔案下載下去
         const errData = await res.json().catch(() => null);
-        alert(errData?.err || "匯出失敗，請稍後再試");
-        return;
+        alert(errData?.err || "匯出失敗"); return;
       }
-
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // 檔名照後端 Content-Disposition 給的日期命名；這裡簡單給一個預設檔名，
-      // 瀏覽器實際下載時通常還是會採用回應標頭裡的檔名
       a.download = `payout_transfers_${exportType}_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("匯出轉帳資訊失敗", err);
-      alert("匯出失敗，請稍後再試");
+      alert("匯出失敗");
     } finally {
       setExportingPayouts(null);
     }
   };
 
   const RETURN_REASON_LABELS = {
-    defective: '商品瑕疵',
-    mismatched: '商品與描述不符',
-    wrong_size: '尺寸不合',
-    no_longer_needed: '不符合需求',
-    other: '其他',
+    defective: '商品瑕疵', mismatched: '商品與描述不符', wrong_size: '尺寸不合',
+    no_longer_needed: '不符合需求', other: '其他',
   };
 
   const fetchReturnDisputes = async () => {
     if (!adminId) return;
     try {
       setLoadingDisputes(true);
-      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes?Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes?Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.err || "退貨爭議載入失敗");
-
       setReturnDisputes(Array.isArray(data) ? data.map(item => ({
-        returnId: item.Return_id,
-        orderId: item.Order_id,
-        userId: item.User_id,
-        reason: item.Reason,
-        description: item.Description || "",
-        requestedAmount: Number(item.Requested_amount || 0),
-        vendorNote: item.Vendor_note || "",
-        requestedAt: item.Requested_at,
+        returnId: item.Return_id, orderId: item.Order_id, userId: item.User_id,
+        reason: item.Reason, description: item.Description || "", requestedAmount: Number(item.Requested_amount || 0),
+        vendorNote: item.Vendor_note || "", requestedAt: item.Requested_at,
       })) : []);
-    } catch (err) {
-      console.error("退貨爭議載入失敗", err);
-      alert(err.message || "退貨爭議載入失敗");
-    } finally {
-      setLoadingDisputes(false);
-    }
+    } catch (err) { alert(err.message); } finally { setLoadingDisputes(false); }
   };
 
   const handleResolveReturnDispute = async (item, decision) => {
     const adminNote = (returnNotes[item.returnId] || "").trim();
-
-    if (!adminNote) {
-      alert("請先填寫平台判定說明");
-      return;
-    }
-
+    if (!adminNote) { alert("請先填寫平台判定說明"); return; }
     const isApprove = decision === "approve_refund";
-    const confirmed = window.confirm(
-      isApprove
-        ? `確定核准此筆整單退款 NT$ ${item.requestedAmount.toLocaleString()}？`
-        : "確定維持廠商拒絕，不核准此筆退款嗎？"
-    );
-    if (!confirmed) return;
+    if (!window.confirm(isApprove ? `確定核准退款 NT$ ${item.requestedAmount.toLocaleString()}？` : "確定維持廠商拒絕？")) return;
 
     try {
       setResolvingReturnId(item.returnId);
-
       const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes/resolve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          Admin_id: adminId,
-          Return_id: item.returnId,
-          Decision: decision,
-          Admin_note: adminNote,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ Admin_id: adminId, Return_id: item.returnId, Decision: decision, Admin_note: adminNote }),
       });
-
       const data = await res.json();
-      if (!res.ok || data.success === false) {
-        throw new Error(data?.err || "退貨爭議判定失敗");
-      }
+      if (!res.ok || data.success === false) throw new Error(data?.err || "判定失敗");
 
       setReturnDisputes(prev => prev.filter(row => row.returnId !== item.returnId));
-      setReturnNotes(prev => {
-        const next = { ...prev };
-        delete next[item.returnId];
-        return next;
-      });
-
-      alert(isApprove ? "已核准此筆退款" : "已維持廠商拒絕");
-
-      await Promise.all([
-        fetchReturnDisputes(),
-        fetchTransactions(),
-        fetchEarningsData(),
-        fetchVendorFinanceData(),
-      ]);
-    } catch (err) {
-      console.error("退貨爭議判定失敗", err);
-      alert(err.message || "退貨爭議判定失敗，請稍後再試");
-    } finally {
-      setResolvingReturnId(null);
-    }
+      setReturnNotes(prev => { const next = { ...prev }; delete next[item.returnId]; return next; });
+      alert(isApprove ? "已核准退款" : "已維持拒絕");
+      await Promise.all([fetchReturnDisputes(), fetchTransactions(), fetchEarningsData(), fetchVendorFinanceData()]);
+    } catch (err) { alert(err.message); } finally { setResolvingReturnId(null); }
   };
 
   const fetchTransactions = async () => {
     try {
-      const txRes = await fetch(`${API_BASE_URL}/api/platform/transactions?Wallet_type=vendor&Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const txRes = await fetch(`${API_BASE_URL}/api/platform/transactions?Wallet_type=vendor&Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
       const txData = await txRes.json();
       if (Array.isArray(txData)) {
         setTransactions(txData.map((t) => ({
-          transactionId: t.Transaction_ID,
-          walletType: t.Wallet_type,
-          ownerName: t.Owner_name,
-          type: t.Type,
-          amount: t.Amount,
-          grossAmount: t.Gross_amount,
-          feeAmount: t.Fee_amount,
-          referenceId: t.Reference_id || "-",
+          transactionId: t.Transaction_ID, walletType: t.Wallet_type, ownerName: t.Owner_name, type: t.Type,
+          amount: t.Amount, grossAmount: t.Gross_amount, feeAmount: t.Fee_amount, referenceId: t.Reference_id || "-",
           date: t.created_at ? new Date(t.created_at).toLocaleDateString("zh-TW") : "-",
         })));
-      } else if (!txRes.ok) {
-        console.error("交易紀錄載入失敗", txData?.err || txRes.status);
       }
-    } catch (err) {
-      console.error("交易紀錄載入失敗", err);
-    }
+    } catch (err) { console.error("交易紀錄載入失敗", err); }
   };
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const payRes = await fetch(`${API_BASE_URL}/api/platform/payments?Admin_id=${adminId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const payRes = await fetch(`${API_BASE_URL}/api/platform/payments?Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
         const payData = await payRes.json();
         if (Array.isArray(payData)) {
           setPayments(payData.map((p) => ({
-            orderId: p.Order_id,
-            userId: p.User_id,
-            amount: parseFloat(p.total_amount) || 0,
-            paymentMethod: p.payment_method || "-",
-            paymentStatus: p.payment_status,
-            orderStatus: p.order_status,
+            orderId: p.Order_id, userId: p.User_id, amount: parseFloat(p.total_amount) || 0,
+            paymentMethod: p.payment_method || "-", paymentStatus: p.payment_status, orderStatus: p.order_status,
             date: p.created_at ? new Date(p.created_at).toLocaleString("zh-TW") : "-",
           })));
         }
-
-        await fetchTransactions();
-        await fetchEarningsData();
-        await fetchVendorFinanceData();
-        await fetchReturnDisputes();
-        await fetchVendorInvoices();
-      } catch (err) {
-        console.error("財務資料載入失敗", err);
-      } finally {
-        setLoading(false);
-      }
+        await fetchTransactions(); await fetchEarningsData(); await fetchVendorFinanceData(); await fetchReturnDisputes(); await fetchVendorInvoices();
+      } catch (err) { console.error("財務資料載入失敗", err); } finally { setLoading(false); }
     };
     fetchAll();
-  }, []);
+  }, [adminId, token]);
 
   const adminRole = localStorage.getItem("admin_role");
-  // 跟後端 Admins.role 的實際存法對齊（snake_case，例如 "super_admin"），
-  // 這裡做正規化比對是為了不管前端登入頁存的是 "Super Admin" 還是
-  // "super_admin"，都能跟後端判斷一致，避免「前端放行、後端 403」的錯亂。
   const normalizedAdminRole = (adminRole || '').trim().toLowerCase().replace(/\s+/g, '_');
-  const FINANCE_ROLES = ['super_admin', 'finance'];
-
-  if (adminRole && !FINANCE_ROLES.includes(normalizedAdminRole)) {
+  if (adminRole && !['super_admin', 'finance'].includes(normalizedAdminRole)) {
     return (
       <div className="max-w-2xl mx-auto py-24 text-center space-y-4">
         <ShieldAlert size={40} className="mx-auto text-[#C8522A]" />
         <h2 className="text-xl font-serif font-black text-[#1A1A18]">您沒有權限檢視此頁面</h2>
-        <p className="text-[#8C8880] font-medium">
-          財務金流頁面僅開放給「Super Admin」或「Finance」角色，您目前的角色是「{adminRole}」。
-          如需存取權限，請聯繫系統管理員。
-        </p>
+        <p className="text-[#8C8880] font-medium">財務金流頁面僅開放給指定角色。</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-10">
 
-      {/* 頂部標題 */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-4">
+      {/* 🟢 頂部標題 */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4 gap-4">
         <div>
-          <h1 className="text-3xl font-serif font-black text-[#1A1A18] tracking-tight">訂單與財務金流</h1>
-          <p className="text-[#8C8880] mt-2 font-medium">檢視全站訂單、KOC 撥款進度與廠商錢包交易紀錄。</p>
+          <h1 className="text-2xl md:text-3xl font-serif font-black text-[#1A1A18] tracking-tight">訂單與財務金流</h1>
+          <p className="text-[#8C8880] mt-1.5 md:mt-2 text-xs md:text-sm font-medium">檢視全站訂單、KOC 撥款進度與廠商錢包交易紀錄。</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8C8880]" />
-            <input type="text" placeholder="搜尋訂單或交易編號..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-sm outline-none focus:border-[#C8522A] shadow-sm" />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880]" />
+            <input type="text" placeholder="搜尋訂單或交易編號..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-xs md:text-sm outline-none focus:border-[#C8522A] shadow-sm" />
           </div>
-          <button className="flex items-center justify-center w-10 h-10 bg-white border border-[#E2DDD4] rounded-xl text-[#1A1A18] hover:bg-[#F8F9FA] transition-all shadow-sm">
-            <Filter size={16} />
-          </button>
-          <button
-            onClick={() => handleExportPayouts('vendor')}
-            disabled={!!exportingPayouts}
-            className="flex items-center gap-2 px-5 h-10 bg-[#1A1A18] text-[#F5F0E8] rounded-xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
-          >
-            <Download size={16} />
-            {exportingPayouts === 'vendor' ? "匯出中..." : "匯出廠商轉帳"}
-          </button>
-          <button
-            onClick={() => handleExportPayouts('koc')}
-            disabled={!!exportingPayouts}
-            className="flex items-center gap-2 px-5 h-10 bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-xl text-sm font-bold hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
-          >
-            <Download size={16} />
-            {exportingPayouts === 'koc' ? "匯出中..." : "匯出KOC轉帳"}
-          </button>
+          <div className="flex gap-2 sm:gap-3">
+            <button className="flex items-center justify-center w-10 h-10 shrink-0 bg-white border border-[#E2DDD4] rounded-xl text-[#1A1A18] hover:bg-[#F8F9FA] transition-all shadow-sm">
+              <Filter size={16} />
+            </button>
+            <button
+              onClick={() => handleExportPayouts('vendor')}
+              disabled={!!exportingPayouts}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 h-10 bg-[#1A1A18] text-[#F5F0E8] rounded-xl text-xs md:text-sm font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
+            >
+              <Download size={14} className="sm:w-4 sm:h-4" />
+              {exportingPayouts === 'vendor' ? "匯出中..." : "匯出廠商"}
+            </button>
+            <button
+              onClick={() => handleExportPayouts('koc')}
+              disabled={!!exportingPayouts}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 h-10 bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-xl text-xs md:text-sm font-bold hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
+            >
+              <Download size={14} className="sm:w-4 sm:h-4" />
+              {exportingPayouts === 'koc' ? "匯出中..." : "匯出KOC"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 頁籤切換區 */}
-      <div className="flex gap-4 border-b border-[#E2DDD4] pb-px overflow-x-auto">
+      {/* 🟢 頁籤切換區 (橫向捲動適應手機版) */}
+      <div className="flex gap-2 sm:gap-4 border-b border-[#E2DDD4] pb-px overflow-x-auto custom-scrollbar">
         <button
           onClick={() => setActiveTab('payments')}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'payments' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <CreditCard size={18} /> 消費者訂單與付款
+          <CreditCard size={16} className="sm:w-[18px] sm:h-[18px]" /> 消費者訂單
         </button>
         <button
           onClick={() => setActiveTab('earnings')}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'earnings' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <DollarSign size={18} /> KOC 收益與撥款
+          <DollarSign size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 收益
         </button>
         <button
           onClick={() => setActiveTab('transactions')}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'transactions' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <Wallet size={18} /> 廠商交易與錢包
+          <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" /> 廠商交易
         </button>
-
         <button
-          onClick={() => {
-            setActiveTab('returns');
-            fetchReturnDisputes();
-          }}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+          onClick={() => { setActiveTab('returns'); fetchReturnDisputes(); }}
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'returns' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <ShieldAlert size={18} /> 退貨爭議
+          <ShieldAlert size={16} className="sm:w-[18px] sm:h-[18px]" /> 退貨爭議
           {returnDisputes.length > 0 && (
             <span className="ml-1 min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#C8522A] text-white text-[10px]">
               {returnDisputes.length}
             </span>
           )}
         </button>
-
         <button
-          onClick={() => {
-            setActiveTab('invoices');
-            fetchVendorInvoices();
-          }}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all whitespace-nowrap ${
+          onClick={() => { setActiveTab('invoices'); fetchVendorInvoices(); }}
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'invoices' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <FileText size={18} /> 發票紀錄
+          <FileText size={16} className="sm:w-[18px] sm:h-[18px]" /> 發票紀錄
         </button>
       </div>
 
-      {/* 表格顯示區塊 */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+      {/* 🟢 主要顯示區塊 */}
+      <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
         {loading ? (
-          <div className="py-20 text-center text-[#8C8880] font-bold">載入中...</div>
+          <div className="py-20 text-center text-sm text-[#8C8880] font-bold">載入中...</div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
 
             {/* TAB 1: 訂單與付款 */}
             {activeTab === 'payments' && (
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">訂單編號 / 時間</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">消費者 ID</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">訂單總金額</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">付款方式</th>
-                    <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">付款狀態</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2DDD4]">
-                  {payments.length === 0 ? (
-                    <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有付款資料</td></tr>
-                  ) : payments.map((pay, idx) => (
-                    <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-[#1A1A18] text-sm">{pay.orderId}</div>
-                        <div className="text-xs text-[#8C8880] mt-1">{pay.date}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{pay.userId}</td>
-                      <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">NT$ {pay.amount.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-[#1A1A18]">{pay.paymentMethod}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                          pay.paymentStatus === 'paid' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
-                        }`}>
-                          {pay.paymentStatus === 'paid' ? <CheckCircle size={12} /> : <Clock size={12} />}
-                          {pay.paymentStatus === 'paid' ? '已付款' : '未付款'}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">訂單編號 / 時間</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">消費者 ID</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">訂單總金額</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">付款方式</th>
+                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">付款狀態</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {payments.length === 0 ? (
+                      <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有付款資料</td></tr>
+                    ) : payments.map((pay, idx) => (
+                      <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
+                        <td className="px-4 sm:px-6 py-3 sm:py-4">
+                          <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{pay.orderId}</div>
+                          <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">{pay.date}</div>
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{pay.userId}</td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 font-black text-[#1A1A18] text-xs sm:text-sm">NT$ {pay.amount.toLocaleString()}</td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-[#1A1A18]">{pay.paymentMethod}</td>
+                        <td className="px-4 sm:px-6 py-3 sm:py-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] sm:text-[10px] font-bold px-2 sm:px-2.5 py-1 rounded-md border tracking-widest uppercase ${
+                            pay.paymentStatus === 'paid' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
+                          }`}>
+                            {pay.paymentStatus === 'paid' ? <CheckCircle size={12} /> : <Clock size={12} />}
+                            {pay.paymentStatus === 'paid' ? '已付款' : '未付款'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* TAB 2: KOC 收益與撥款 */}
             {activeTab === 'earnings' && (
               <>
                 {settleableCampaigns.length > 0 && (
-                  <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-1">
+                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
                       <Landmark size={16} /> 待結算活動
                     </div>
                     {settleableCampaigns.map((c) => (
-                      <div
-                        key={c.campaignId}
-                        className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-2xl px-5 py-4"
-                      >
+                      <div key={c.campaignId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
                         <div>
-                          <div className="text-sm font-bold text-[#1A1A18]">{c.campaignName}</div>
-                          <div className="text-xs font-medium text-[#8C8880] mt-1">
-                            {c.vendorName} ・ {c.pendingCount} 筆可提領分潤 ・ NT$ {c.pendingAmount?.toLocaleString?.() ?? c.pendingAmount}
+                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{c.campaignName}</div>
+                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1 leading-relaxed">
+                            {c.vendorName} <br className="sm:hidden" />
+                            <span className="hidden sm:inline"> ・ </span>{c.pendingCount} 筆可提領分潤 ・ NT$ {c.pendingAmount?.toLocaleString?.() ?? c.pendingAmount}
                           </div>
                           {!c.isEligible && (
-                            <div className="text-xs font-bold text-[#C8522A] mt-1">
+                            <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-1">
                               優惠碼效期至 {new Date(c.eligibleAt).toLocaleDateString("zh-TW")} 才能結算
                             </div>
                           )}
@@ -712,7 +522,7 @@ export default function AdminFinance() {
                         <button
                           onClick={() => handleSettle(c.campaignId)}
                           disabled={!c.isEligible || settlingId === c.campaignId}
-                          className="shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-full md:w-auto shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
                         >
                           {settlingId === c.campaignId ? '結算中...' : '結算分潤'}
                         </button>
@@ -721,39 +531,41 @@ export default function AdminFinance() {
                   </div>
                 )}
 
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益編號 / 任務 ID</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">KOC</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">撥款日期</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">收益狀態</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E2DDD4]">
-                    {earnings.length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有收益資料</td></tr>
-                    ) : earnings.map((earn, idx) => (
-                      <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-[#1A1A18] text-sm">{earn.earningId}</div>
-                          <div className="text-xs font-bold text-[#B89B6A] mt-1">{earn.kocMissionId}</div>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{earn.influencerId}</td>
-                        <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">NT$ {earn.amount?.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-[#1A1A18]">{earn.payoutDate || '-'}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                            earn.status === '已撥款' ? 'bg-white border-[#E2DDD4] text-[#1A1A18]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
-                          }`}>
-                            {earn.status}
-                          </span>
-                        </td>
+                <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
+                  <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">收益編號 / 任務 ID</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">KOC</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">撥款日期</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">收益狀態</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#E2DDD4]">
+                      {earnings.length === 0 ? (
+                        <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有收益資料</td></tr>
+                      ) : earnings.map((earn, idx) => (
+                        <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
+                          <td className="px-4 sm:px-6 py-3 sm:py-4">
+                            <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{earn.earningId}</div>
+                            <div className="text-[10px] sm:text-xs font-bold text-[#B89B6A] mt-0.5 sm:mt-1">{earn.kocMissionId}</div>
+                          </td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{earn.influencerId}</td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 font-black text-[#1A1A18] text-xs sm:text-sm">NT$ {earn.amount?.toLocaleString()}</td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-[#1A1A18]">{earn.payoutDate || '-'}</td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4">
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 sm:px-2.5 py-1 rounded-md border tracking-widest uppercase ${
+                              earn.status === '已撥款' ? 'bg-white border-[#E2DDD4] text-[#1A1A18]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
+                            }`}>
+                              {earn.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </>
             )}
 
@@ -761,27 +573,24 @@ export default function AdminFinance() {
             {activeTab === 'transactions' && (
               <>
                 {settleableVendors.length > 0 && (
-                  <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-1">
+                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
                       <Landmark size={16} /> 待結算廠商
                     </div>
                     {settleableVendors.map((v) => (
-                      <div
-                        key={v.vendorId}
-                        className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-2xl px-5 py-4"
-                      >
+                      <div key={v.vendorId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
                         <div>
-                          <div className="text-sm font-bold text-[#1A1A18]">{v.vendorName}</div>
-                          <div className="text-xs font-medium text-[#8C8880] mt-1">
+                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{v.vendorName}</div>
+                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1 leading-relaxed">
                             可結算 {v.eligibleCount} 筆 ・ NT$ {v.eligibleAmount?.toLocaleString?.() ?? v.eligibleAmount}
                             {v.notYetEligibleCount > 0 && (
-                              <span className="ml-2 text-[#B89B6A]">
-                                （另有 {v.notYetEligibleCount} 筆共 NT$ {v.notYetEligibleAmount?.toLocaleString?.() ?? v.notYetEligibleAmount} 還在鑑賞期內）
+                              <span className="block sm:inline sm:ml-2 text-[#B89B6A]">
+                                （另有 {v.notYetEligibleCount} 筆共 NT$ {v.notYetEligibleAmount?.toLocaleString?.() ?? v.notYetEligibleAmount} 鑑賞期內）
                               </span>
                             )}
                           </div>
                           {v.eligibleAmount === 0 && v.earliestEligibleAt && (
-                            <div className="text-xs font-bold text-[#C8522A] mt-1">
+                            <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-1">
                               最快 {new Date(v.earliestEligibleAt).toLocaleDateString("zh-TW")} 才有款項可結算
                             </div>
                           )}
@@ -789,7 +598,7 @@ export default function AdminFinance() {
                         <button
                           onClick={() => handleSettleVendor(v.vendorId)}
                           disabled={v.eligibleAmount === 0 || settlingVendorId === v.vendorId}
-                          className="shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-full md:w-auto shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
                         >
                           {settlingVendorId === v.vendorId ? '結算中...' : '結算'}
                         </button>
@@ -798,19 +607,19 @@ export default function AdminFinance() {
                   </div>
                 )}
 
-                <div className="p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div>
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18]">
                       <PlayCircle size={16} /> 月結撥款
                     </div>
-                    <p className="text-xs font-medium text-[#8C8880] mt-1">
-                      正常由排程自動於每月固定日期執行；這顆按鈕給忘記設排程或需要補跑時手動觸發。
+                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
+                      正常由排程自動於每月固定日期執行；給忘記設排程或需要補跑時手動觸發。
                     </p>
                   </div>
                   <button
                     onClick={handleRunMonthlyPayouts}
                     disabled={runningMonthlyPayouts}
-                    className="shrink-0 flex items-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
                   >
                     <PlayCircle size={16} />
                     {runningMonthlyPayouts ? '執行中...' : '立即執行月結撥款'}
@@ -818,35 +627,32 @@ export default function AdminFinance() {
                 </div>
 
                 {vendorPayouts.length > 0 && (
-                  <div className="p-6 border-b border-[#E2DDD4] bg-[#FDF0ED]/40 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-1">
+                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#FDF0ED]/40 space-y-3">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
                       <Wallet size={16} /> 待處理撥款（本期月結批次）
                     </div>
                     {vendorPayouts.map((p) => (
-                      <div
-                        key={p.payoutId}
-                        className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-2xl px-5 py-4"
-                      >
+                      <div key={p.payoutId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
                         <div>
-                          <div className="text-sm font-bold text-[#1A1A18]">
+                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
                             {p.vendorName} ・ NT$ {p.amount?.toLocaleString?.() ?? p.amount}
                           </div>
-                          <div className="text-xs font-medium text-[#8C8880] mt-1">
+                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
                             匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
                           </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:shrink-0">
                           <button
                             onClick={() => handleConfirmPayout(p.payoutId, 'failed')}
                             disabled={confirmingPayoutId === p.payoutId}
-                            className="flex items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#8C8880] px-5 py-2.5 rounded-full font-bold text-sm hover:text-[#C8522A] hover:border-[#C8522A] transition-all disabled:opacity-40"
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:text-[#C8522A] hover:border-[#C8522A] transition-all disabled:opacity-40"
                           >
                             <XCircle size={14} /> 匯款失敗
                           </button>
                           <button
                             onClick={() => handleConfirmPayout(p.payoutId, 'completed')}
                             disabled={confirmingPayoutId === p.payoutId}
-                            className="flex items-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-5 py-2.5 rounded-full font-bold text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
                           >
                             <CheckCircle size={14} />
                             {confirmingPayoutId === p.payoutId ? '處理中...' : '標記完成'}
@@ -857,67 +663,65 @@ export default function AdminFinance() {
                   </div>
                 )}
 
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">交易編號 / 廠商</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">交易類型</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">交易金額</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">參照編號</th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">交易日期</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E2DDD4]">
-                    {transactions.length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-[#8C8880]">目前沒有交易紀錄</td></tr>
-                    ) : transactions.map((tx, idx) => {
-                      // withdraw 通常存正數；return_deduction 在退款流程中會存負數。
-                      // 顯示時統一依交易類型判斷方向，再取絕對值，避免出現 '+-850'。
-                      const isOutflow =
-                        tx.type === 'withdraw' ||
-                        tx.type === 'return_deduction';
-                      const displayAmount = Math.abs(Number(tx.amount || 0));
-                      return (
-                        <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-[#1A1A18] text-sm">{tx.transactionId}</div>
-                            <div className="text-xs text-[#8C8880] mt-1">{tx.ownerName}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] px-2 py-1 rounded-md">
-                              {tx.type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className={`font-black text-sm flex items-center gap-1 ${isOutflow ? 'text-[#C8522A]' : 'text-[#B89B6A]'}`}>
-                              {isOutflow ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
-                              {isOutflow ? '-' : '+'}{displayAmount.toLocaleString()}
-                            </div>
-                            {tx.grossAmount != null && (
-                              <div className="text-[10px] text-[#8C8880] mt-0.5">
-                                訂單 NT$ {tx.grossAmount?.toLocaleString()} － 手續費 NT$ {tx.feeAmount?.toLocaleString()}
+                <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
+                  <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易編號 / 廠商</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易類型</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易金額</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">參照編號</th>
+                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易日期</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E2DDD4]">
+                      {transactions.length === 0 ? (
+                        <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有交易紀錄</td></tr>
+                      ) : transactions.map((tx, idx) => {
+                        const isOutflow = tx.type === 'withdraw' || tx.type === 'return_deduction';
+                        const displayAmount = Math.abs(Number(tx.amount || 0));
+                        return (
+                          <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{tx.transactionId}</div>
+                              <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">{tx.ownerName}</div>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <span className="text-[10px] sm:text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] px-2 py-1 rounded-md">
+                                {tx.type}
+                              </span>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <div className={`font-black text-xs sm:text-sm flex items-center gap-1 ${isOutflow ? 'text-[#C8522A]' : 'text-[#B89B6A]'}`}>
+                                {isOutflow ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
+                                {isOutflow ? '-' : '+'}{displayAmount.toLocaleString()}
                               </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{tx.referenceId}</td>
-                          <td className="px-6 py-4 text-sm font-medium text-[#1A1A18]">{tx.date}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              {tx.grossAmount != null && (
+                                <div className="text-[9px] sm:text-[10px] text-[#8C8880] mt-0.5 sm:mt-1">
+                                  訂單 NT$ {tx.grossAmount?.toLocaleString()} － 手續費 NT$ {tx.feeAmount?.toLocaleString()}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{tx.referenceId}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-medium text-[#1A1A18]">{tx.date}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </>
             )}
 
             {/* TAB 4: 退貨爭議 */}
             {activeTab === 'returns' && (
-              <div className="p-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+              <div className="p-4 sm:p-6 bg-[#F8F9FA]">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 sm:mb-6">
                   <div>
-                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">
+                    <h2 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18]">
                       退貨爭議處理
                     </h2>
-                    <p className="text-xs text-[#8C8880] mt-1">
+                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
                       顯示廠商拒絕後，由消費者提出爭議、等待平台判定的案件。
                     </p>
                   </div>
@@ -926,159 +730,109 @@ export default function AdminFinance() {
                     type="button"
                     onClick={fetchReturnDisputes}
                     disabled={loadingDisputes}
-                    className="px-5 py-2.5 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
+                    className="w-full md:w-auto px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
                   >
                     {loadingDisputes ? '重新整理中...' : '重新整理'}
                   </button>
                 </div>
 
                 {loadingDisputes ? (
-                  <div className="py-20 text-center text-[#8C8880] font-bold">
+                  <div className="py-20 text-center text-xs sm:text-sm text-[#8C8880] font-bold">
                     退貨爭議載入中...
                   </div>
                 ) : returnDisputes.length === 0 ? (
                   <div className="py-20 text-center">
-                    <CheckCircle
-                      size={34}
-                      className="mx-auto text-green-600 mb-3"
-                    />
-                    <div className="font-bold text-[#1A1A18]">
+                    <CheckCircle size={34} className="mx-auto text-green-600 mb-3" />
+                    <div className="font-bold text-sm text-[#1A1A18]">
                       目前沒有待處理的退貨爭議
                     </div>
-                    <div className="text-xs text-[#8C8880] mt-2">
+                    <div className="text-[10px] sm:text-xs text-[#8C8880] mt-2">
                       消費者提出爭議後，案件會顯示在這裡。
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {returnDisputes.map(item => (
-                      <div
-                        key={item.returnId}
-                        className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden"
-                      >
-                        <div className="px-6 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div key={item.returnId} className="rounded-2xl sm:rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden shadow-sm">
+                        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                           <div>
-                            <div className="text-xs text-[#8C8880] font-bold">
-                              訂單編號
-                            </div>
-                            <div className="mt-1 font-mono text-sm font-black text-[#1A1A18] break-all">
+                            <div className="text-[10px] sm:text-xs text-[#8C8880] font-bold">訂單編號</div>
+                            <div className="mt-0.5 sm:mt-1 font-mono text-xs sm:text-sm font-black text-[#1A1A18] break-all">
                               {item.orderId}
                             </div>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-3 py-1.5 rounded-full bg-[#FDF0ED] text-[#C8522A] text-xs font-bold">
+                            <span className="px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-full bg-[#FDF0ED] text-[#C8522A] text-[10px] sm:text-xs font-bold">
                               爭議處理中
                             </span>
-
-                            <span className="px-3 py-1.5 rounded-full bg-[#F5F0E8] text-[#1A1A18] text-xs font-black">
+                            <span className="px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-full bg-[#F5F0E8] text-[#1A1A18] text-[10px] sm:text-xs font-black">
                               NT$ {item.requestedAmount.toLocaleString()}
                             </span>
                           </div>
                         </div>
 
-                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <div className="space-y-4">
                             <div>
-                              <div className="text-xs font-bold text-[#8C8880] mb-1">
-                                消費者
-                              </div>
-                              <div className="text-sm font-bold text-[#1A1A18]">
-                                {item.userId || '—'}
-                              </div>
+                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者</div>
+                              <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{item.userId || '—'}</div>
                             </div>
-
                             <div>
-                              <div className="text-xs font-bold text-[#8C8880] mb-1">
-                                消費者退貨原因
-                              </div>
-                              <div className="rounded-xl bg-[#F8F9FA] px-4 py-3 text-sm font-bold text-[#1A1A18]">
+                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者退貨原因</div>
+                              <div className="rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18]">
                                 {RETURN_REASON_LABELS[item.reason] || item.reason || '—'}
                               </div>
                             </div>
-
                             {item.description && (
                               <div>
-                                <div className="text-xs font-bold text-[#8C8880] mb-1">
-                                  消費者說明／爭議補充
-                                </div>
-                                <div className="rounded-xl bg-[#F8F9FA] px-4 py-3 text-sm leading-relaxed text-[#1A1A18] whitespace-pre-line">
+                                <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者說明／爭議補充</div>
+                                <div className="rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm leading-relaxed text-[#1A1A18] whitespace-pre-line">
                                   {item.description}
                                 </div>
                               </div>
                             )}
-
                             <div>
-                              <div className="text-xs font-bold text-[#8C8880] mb-1">
-                                廠商拒絕理由
-                              </div>
-                              <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-sm leading-relaxed text-[#9A6700] whitespace-pre-line">
+                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">廠商拒絕理由</div>
+                              <div className="rounded-xl bg-[#FFF8E7] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm leading-relaxed text-[#9A6700] whitespace-pre-line">
                                 {item.vendorNote || '廠商未留下拒絕理由'}
                               </div>
                             </div>
-
-                            <div className="text-xs text-[#8C8880]">
-                              申請時間：
-                              {item.requestedAt
-                                ? new Date(item.requestedAt).toLocaleString('zh-TW')
-                                : '—'}
+                            <div className="text-[10px] sm:text-xs text-[#8C8880]">
+                              申請時間：{item.requestedAt ? new Date(item.requestedAt).toLocaleString('zh-TW') : '—'}
                             </div>
                           </div>
 
-                          <div>
-                            <div className="text-xs font-bold text-[#8C8880] mb-2">
-                              平台判定說明
-                              <span className="text-[#C8522A] ml-1">*</span>
+                          <div className="border-t border-[#E2DDD4] lg:border-t-0 pt-4 lg:pt-0">
+                            <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-2">
+                              平台判定說明 <span className="text-[#C8522A] ml-1">*</span>
                             </div>
-
                             <textarea
-                              rows={7}
+                              rows={5}
                               value={returnNotes[item.returnId] || ''}
-                              onChange={event =>
-                                setReturnNotes(prev => ({
-                                  ...prev,
-                                  [item.returnId]: event.target.value,
-                                }))
-                              }
+                              onChange={event => setReturnNotes(prev => ({ ...prev, [item.returnId]: event.target.value }))}
                               placeholder="請填寫平台判定依據，例如：經確認此商品不屬於排除七日解除權之商品，因此核准退款。"
-                              className="w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+                              className="w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm outline-none focus:border-[#C8522A]"
                             />
-
-                            <div className="mt-3 rounded-xl bg-[#F5F0E8] px-4 py-3 text-xs leading-relaxed text-[#8C8880]">
+                            <div className="mt-2 sm:mt-3 rounded-xl bg-[#F5F0E8] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs leading-relaxed text-[#8C8880]">
                               平台應依訂單資料、消費者說明與廠商拒絕理由進行判定。
                             </div>
-
-                            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="mt-4 sm:mt-5 flex gap-2.5 sm:gap-3">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleResolveReturnDispute(item, 'reject')
-                                }
-                                disabled={
-                                  resolvingReturnId === item.returnId ||
-                                  !(returnNotes[item.returnId] || '').trim()
-                                }
-                                className="px-5 py-3 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={() => handleResolveReturnDispute(item, 'reject')}
+                                disabled={resolvingReturnId === item.returnId || !(returnNotes[item.returnId] || '').trim()}
+                                className="flex-1 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-40 shadow-sm"
                               >
-                                {resolvingReturnId === item.returnId
-                                  ? '處理中...'
-                                  : '維持拒絕'}
+                                {resolvingReturnId === item.returnId ? '處理中...' : '維持拒絕'}
                               </button>
-
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleResolveReturnDispute(item, 'approve_refund')
-                                }
-                                disabled={
-                                  resolvingReturnId === item.returnId ||
-                                  !(returnNotes[item.returnId] || '').trim()
-                                }
-                                className="px-5 py-3 rounded-full bg-[#1A1A18] text-[#F5F0E8] text-sm font-bold hover:bg-[#C8522A] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={() => handleResolveReturnDispute(item, 'approve_refund')}
+                                disabled={resolvingReturnId === item.returnId || !(returnNotes[item.returnId] || '').trim()}
+                                className="flex-1 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-full bg-[#1A1A18] text-[#F5F0E8] text-xs sm:text-sm font-bold hover:bg-[#C8522A] transition-all disabled:opacity-40 shadow-md"
                               >
-                                {resolvingReturnId === item.returnId
-                                  ? '處理中...'
-                                  : '核准退款'}
+                                {resolvingReturnId === item.returnId ? '處理中...' : '核准退款'}
                               </button>
                             </div>
                           </div>
@@ -1090,157 +844,82 @@ export default function AdminFinance() {
               </div>
             )}
 
-          </div>
-        )}
-
-        {/* TAB 5: 發票紀錄 */}
-        {activeTab === 'invoices' && (
-          <div>
-            <div className="px-6 py-5 border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* TAB 5: 發票紀錄 */}
+            {activeTab === 'invoices' && (
               <div>
-                <h2 className="text-lg font-serif font-black text-[#1A1A18]">
-                  廠商發票紀錄
-                </h2>
-                <p className="text-xs text-[#8C8880] mt-1">
-                  檢視平台開立給廠商的 B2B 服務費發票。
-                </p>
-              </div>
+                <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">廠商發票紀錄</h2>
+                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">檢視平台開立給廠商的 B2B 服務費發票。</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchVendorInvoices}
+                    disabled={loadingInvoices}
+                    className="w-full md:w-auto px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
+                  >
+                    {loadingInvoices ? '重新整理中...' : '重新整理'}
+                  </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={fetchVendorInvoices}
-                disabled={loadingInvoices}
-                className="px-5 py-2.5 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
-              >
-                {loadingInvoices ? '重新整理中...' : '重新整理'}
-              </button>
-            </div>
-
-            {loadingInvoices ? (
-              <div className="py-20 text-center text-[#8C8880] font-bold">
-                發票紀錄載入中...
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        廠商 / 紀錄編號
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        結算金額
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        服務費
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        稅額
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        發票總額
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        發票號碼
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        狀態
-                      </th>
-                      <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">
-                        建立時間
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-[#E2DDD4]">
-                    {vendorInvoices.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={8}
-                          className="py-16 text-center text-[#8C8880]"
-                        >
-                          目前沒有發票紀錄
-                        </td>
-                      </tr>
-                    ) : (
-                      vendorInvoices.map((invoice) => (
-                        <tr
-                          key={invoice.invoice_id}
-                          className="hover:bg-[#FDF0ED]/30 transition-colors"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-[#1A1A18] text-sm">
-                              {invoice.vendor_name || '—'}
-                            </div>
-                            <div className="text-xs text-[#8C8880] mt-1">
-                              #{invoice.invoice_id}
-                            </div>
-                            <div className="text-[10px] text-[#8C8880] mt-1 font-mono">
-                              {invoice.relate_number || '—'}
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 text-sm font-bold text-[#1A1A18] whitespace-nowrap">
-                            NT$ {Number(invoice.settlement_amount || 0).toLocaleString()}
-                          </td>
-
-                          <td className="px-6 py-4 text-sm font-bold text-[#C8522A] whitespace-nowrap">
-                            NT$ {Number(invoice.service_fee || 0).toLocaleString()}
-                          </td>
-
-                          <td className="px-6 py-4 text-sm text-[#8C8880] whitespace-nowrap">
-                            NT$ {Number(invoice.tax_amount || 0).toLocaleString()}
-                          </td>
-
-                          <td className="px-6 py-4 text-sm font-black text-[#1A1A18] whitespace-nowrap">
-                            NT$ {Number(invoice.total_amount || 0).toLocaleString()}
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <div className="text-sm font-mono font-bold text-[#1A1A18] whitespace-nowrap">
-                              {invoice.invoice_number || '尚未取得'}
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <span
-                              className={`inline-flex px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${
-                                invoice.status === 'issued'
-                                  ? 'bg-green-50 text-green-700'
-                                  : invoice.status === 'failed'
-                                  ? 'bg-red-50 text-red-700'
-                                  : 'bg-[#F5F0E8] text-[#8C8880]'
-                              }`}
-                            >
-                              {invoice.status === 'issued'
-                                ? '已開立'
-                                : invoice.status === 'failed'
-                                ? '開立失敗'
-                                : invoice.status || '處理中'}
-                            </span>
-
-                            {invoice.error_message && (
-                              <div
-                                className="text-[10px] text-red-600 mt-2 max-w-[220px]"
-                                title={invoice.error_message}
-                              >
-                                {invoice.error_message}
-                              </div>
-                            )}
-                          </td>
-
-                          <td className="px-6 py-4 text-sm text-[#8C8880] whitespace-nowrap">
-                            {invoice.created_at
-                              ? new Date(invoice.created_at).toLocaleString('zh-TW')
-                              : '—'}
-                          </td>
+                {loadingInvoices ? (
+                  <div className="py-20 text-center text-xs sm:text-sm text-[#8C8880] font-bold">發票紀錄載入中...</div>
+                ) : (
+                  <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">廠商 / 紀錄編號</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">結算金額</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">服務費</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">稅額</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票總額</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票號碼</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">狀態</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">建立時間</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y divide-[#E2DDD4]">
+                        {vendorInvoices.length === 0 ? (
+                          <tr><td colSpan={8} className="py-16 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有發票紀錄</td></tr>
+                        ) : vendorInvoices.map((invoice) => (
+                          <tr key={invoice.invoice_id} className="hover:bg-[#FDF0ED]/30 transition-colors">
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{invoice.vendor_name || '—'}</div>
+                              <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">#{invoice.invoice_id}</div>
+                              <div className="text-[9px] sm:text-[10px] text-[#8C8880] mt-0.5 sm:mt-1 font-mono">{invoice.relate_number || '—'}</div>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#1A1A18]">NT$ {Number(invoice.settlement_amount || 0).toLocaleString()}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#C8522A]">NT$ {Number(invoice.service_fee || 0).toLocaleString()}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">NT$ {Number(invoice.tax_amount || 0).toLocaleString()}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black text-[#1A1A18]">NT$ {Number(invoice.total_amount || 0).toLocaleString()}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <div className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">{invoice.invoice_number || '尚未取得'}</div>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full text-[9px] sm:text-[10px] font-bold ${
+                                invoice.status === 'issued' ? 'bg-green-50 text-green-700' : invoice.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-[#F5F0E8] text-[#8C8880]'
+                              }`}>
+                                {invoice.status === 'issued' ? '已開立' : invoice.status === 'failed' ? '開立失敗' : invoice.status || '處理中'}
+                              </span>
+                              {invoice.error_message && (
+                                <div className="text-[9px] text-red-600 mt-1 sm:mt-2 max-w-[150px] sm:max-w-[220px] truncate" title={invoice.error_message}>
+                                  {invoice.error_message}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">
+                              {invoice.created_at ? new Date(invoice.created_at).toLocaleString('zh-TW') : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
+
           </div>
         )}
       </div>
