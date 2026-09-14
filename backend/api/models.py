@@ -808,6 +808,15 @@ class VendorInvoice(models.Model):
     relate_number = models.CharField(max_length=20, unique=True, db_column='relate_number')
     settlement_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='settlement_amount')
     service_fee = models.DecimalField(max_digits=12, decimal_places=2, db_column='service_fee')
+
+    # service_fee 的呈現用分項拆解（純粹是給廠商看的明細說明，不是真實的兩筆金流）：
+    # platform_service_fee 對應「平台服務費」那一行，koc_commission_display 對應
+    # 「KOC 分潤（含處理費）」那一行，兩者加總會等於 service_fee。實際上平台只收
+    # service_fee 這一筆錢，不會真的把 koc_commission_display 轉給 KOC——KOC 真正
+    # 拿到的分潤是另一套 koc_commission_rate 機制算的，兩者無關。
+    platform_service_fee = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, db_column='platform_service_fee')
+    koc_commission_display = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, db_column='koc_commission_display')
+
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='tax_amount')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='total_amount')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status')

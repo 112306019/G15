@@ -219,7 +219,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   // 就以優惠價為基準去算折扣後金額，而不是用原價。
   const originalPrice = channelDiscountedPrice ?? listPrice
   const discountValue = Number(form.discountValue) || 0
-  const commissionRate = Number(form.kocCommissionRate) || 0
+  const commissionRate = 3 // KOC 分潤比例平台統一固定 3%
 
   const estimatedPrice =
     form.discountType === 'percentage'
@@ -377,9 +377,8 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
       discount_type: form.discountType,
       discount_value: Number(form.discountValue),
-      koc_commission_rate: Number(
-        form.kocCommissionRate
-      ),
+      // KOC 分潤比例由平台統一固定為 3%，不再送廠商輸入的值
+      koc_commission_rate: 3,
 
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
@@ -595,17 +594,13 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               />
             </div>
 
-            <Input
-              label="KOC 分潤比例 (%) *"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              disabled={locked}
-              value={form.kocCommissionRate}
-              onChange={set('kocCommissionRate')}
-              placeholder="例：20"
-            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">KOC 分潤比例</label>
+              <div className="w-full bg-[#F5F0E8] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18]">
+                3%（平台統一固定比例）
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">KOC 分潤比例由平台統一設定，不開放廠商自訂</p>
+            </div>
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 sm:p-5 mt-4 space-y-3">
               <div className="flex justify-between items-center text-sm">
@@ -629,7 +624,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <div className="flex justify-between items-center text-sm">
                 <span className="text-[#8C8880] font-bold">每件 KOC 預估分潤</span>
                 <span className="font-black text-[#C8522A] text-lg">
-                  {originalPrice > 0 && form.discountValue !== '' && form.kocCommissionRate !== '' ? formatCurrency(estimatedCommission) : '—'}
+                  {originalPrice > 0 && form.discountValue !== '' ? formatCurrency(estimatedCommission) : '—'}
                 </span>
               </div>
             </div>
@@ -699,7 +694,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
                   (step === 1 && !form.prodName) ||
-                  (step === 2 && (form.discountValue === '' || form.kocCommissionRate === '' || Number(form.discountValue) < 0 || Number(form.kocCommissionRate) < 0 || Number(form.kocCommissionRate) > 100 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
+                  (step === 2 && (form.discountValue === '' || Number(form.discountValue) < 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
                   isSaving
                 }
                 className="gap-1.5 px-8 w-full sm:w-auto"
