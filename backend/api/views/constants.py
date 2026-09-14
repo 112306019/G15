@@ -239,7 +239,8 @@ def sync_submission_deadline_reminders():
     Lazy-write：任務進入 writing（待交文案）或 publishing（待交作品連結）階段
     時，會設定 submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
     （見 vendor.py 建立任務／審核退回／文案審核通過的地方）。這裡檢查有沒有
-    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知。
+    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知
+    （publishing 階段額外寄一封提醒信，見 send_publishing_overdue_email）。
 
     submission_reminder_sent 確保同一次停留期間只提醒一次；重新進入
     writing/publishing（例如審核退回）會把它歸零，所以下一輪逾期還是會再提醒。
@@ -251,6 +252,7 @@ def sync_submission_deadline_reminders():
     from django.utils import timezone
     from api.models import KOCMissionNew
     from api.notifications import create_notification
+    from api.emails import send_publishing_overdue_email
 
     overdue_missions = list(
         KOCMissionNew.objects.filter(
@@ -280,6 +282,15 @@ def sync_submission_deadline_reminders():
             ),
             reference_type='koc_home',
         )
+
+        # publishing（待提交作品連結以開始推廣）階段逾期額外寄信提醒，
+        # writing（待交文案）階段沿用站內通知即可，不寄信。
+        if mission.stage == 'publishing':
+            try:
+                send_publishing_overdue_email(mission, SUBMISSION_REMINDER_DAYS)
+            except Exception:
+                pass
+
         mission.submission_reminder_sent = True
         mission.save(update_fields=['submission_reminder_sent'])
 
