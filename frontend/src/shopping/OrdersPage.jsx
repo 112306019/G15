@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
-import { ShoppingBag } from 'lucide-react'; // 引入空狀態用的圖示
+import { MessageCircle, ShoppingBag } from "lucide-react";
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -55,10 +55,24 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderCard({ vendorName, items = [], onTrack, shippingStatus, orderStatus }) {
+function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, orderStatus }) {
   return (
     <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
-      <span className="block text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChat?.();
+          }}
+          title="與廠商聯絡"
+          className="flex items-center gap-1.5 rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-xs font-bold text-[#8C8880] transition-colors hover:border-[#C8522A] hover:text-[#C8522A]"
+        >
+          <MessageCircle size={14} />
+          聯絡廠商
+        </button>
+      </div>
 
       {shippingStatus === "delivered" && orderStatus !== "completed" && (
         <div className="rounded-xl bg-[#FFF8E7] px-4 py-3 text-[11px] md:text-xs font-bold text-[#9A6700]">
@@ -208,6 +222,7 @@ function HistoryCard({ order, onOpenDetail }) {
 export default function OrdersPage({
   onTrackOrder,
   onOpenOrderDetail,
+  onOpenChat,
 }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +270,7 @@ export default function OrdersPage({
     (o) => o.order_status === "pending" || o.shipping_status === "shipped"
   ).map((o) => ({
     id: o.Order_id,
+    vendorId: o.vendor_id,
     vendorName: o.vendor_name,
     shippingStatus: o.shipping_status,
     orderStatus: o.order_status,
@@ -344,6 +360,7 @@ export default function OrdersPage({
                     shippingStatus={o.shippingStatus}
                     orderStatus={o.orderStatus}
                     onTrack={() => onTrackOrder?.(o.id)}
+                    onChat={() => onOpenChat?.(o.id)}
                   />
                 ))}
               </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, CheckCircle2, XCircle, Loader2, FileText, Calendar, DollarSign, Building2 } from 'lucide-react';
+import { ExternalLink, CheckCircle2, XCircle, Loader2, FileText, Calendar, DollarSign } from 'lucide-react';
 import { getAdminTaxForms, reviewAdminTaxForm } from '../api/platform';
 
 const STATUS_TABS = [
@@ -202,10 +202,7 @@ export default function AdminTaxForms() {
 
               <div className="bg-[#F8F9FA] rounded-xl p-3.5 mb-4 flex flex-col gap-2.5 border border-[#E2DDD4]/50">
                 <div>
-                  <div className="text-xs font-bold text-[#1A1A18] leading-tight mb-1">{form.campaign_name}</div>
-                  <div className="text-[10px] font-bold text-[#8C8880] flex items-center gap-1">
-                    <Building2 size={10} /> {form.vendor_name}
-                  </div>
+                  <div className="text-xs font-bold text-[#1A1A18] leading-tight mb-1">{form.service_content}</div>
                 </div>
                 <div className="flex items-center justify-between border-t border-[#E2DDD4]/50 pt-2.5 mt-0.5">
                   <span className="text-[10px] font-bold text-[#8C8880] flex items-center gap-1"><DollarSign size={12}/> 金額</span>
@@ -250,8 +247,8 @@ export default function AdminTaxForms() {
           <table className="w-full text-left border-collapse whitespace-nowrap">
             <thead>
               <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">KOC 姓名</th>
-                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">專案名稱</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">網紅姓名</th>
+                <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">勞務內容</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">金額</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">提交時間</th>
                 <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase tracking-wider">狀態</th>
@@ -295,8 +292,7 @@ export default function AdminTaxForms() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-[#1A1A18] truncate max-w-[200px] lg:max-w-xs">{form.campaign_name}</div>
-                    <div className="text-xs text-[#8C8880] mt-1">{form.vendor_name}</div>
+                    <div className="text-sm font-bold text-[#1A1A18]">{form.service_content}</div>
                   </td>
                   <td className="px-6 py-4 text-sm font-black text-[#C8522A]">
                     NT$ {(form.amount || 0).toLocaleString()}
@@ -371,7 +367,7 @@ export default function AdminTaxForms() {
           >
             <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18] mb-1">退回勞報單</h3>
             <p className="text-xs sm:text-sm font-bold text-[#8C8880] mb-4 sm:mb-5">
-              {rejectingForm.koc_name} ・ {rejectingForm.campaign_name}
+              {rejectingForm.koc_name}・NT$ {(rejectingForm.amount || 0).toLocaleString()}
             </p>
 
             <div className="flex flex-wrap gap-2 mb-4">

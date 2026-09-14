@@ -1,18 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, FileText } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send } from 'lucide-react';
 import api from '../api/index';
-import TaxFormModal from './TaxFormModal';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
   { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
   { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 5, label: '已結案', icon: CheckCircle2, desc: '案件完成' },
+  { id: 5, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
 const isValidImageUrl = (url) => typeof url === 'string' && /^https?:\/\//.test(url);
+
+// 已結束的任務，案件截止日超過這麼多天後，後端就不會再顯示這筆任務的詳情跟聊天室
+// 了（見 backend/api/views/constants.py 的 MISSION_HISTORY_VISIBLE_DAYS）。
+const MISSION_HISTORY_VISIBLE_DAYS = 90;
+
+// 距離「任務詳情/聊天室被自動移除」還剩幾天，deadline 是 'YYYY-MM-DD' 字串
+function getDaysUntilRemoval(deadline) {
+  if (!deadline) return null;
+  const removalDate = new Date(deadline);
+  removalDate.setDate(removalDate.getDate() + MISSION_HISTORY_VISIBLE_DAYS);
+  const diffDays = Math.ceil((removalDate - new Date()) / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
 
 // stage 對照表：撰寫文案分頁要合併 writing(0) + reviewing(1) 兩種後端 stage，
 // 所以這個分頁的值是陣列，其餘分頁維持單一數字
@@ -22,14 +34,6 @@ const STAGE_MAP = {
   3: 2,           // 上傳作品：stage=2(publishing)
   4: 3,           // 推廣中：stage=3(promoting)
   5: 4,           // 已結案：stage=4(completed)
-};
-
-// 勞務報酬單（勞報單）狀態徽章對照
-const TAX_FORM_BADGE = {
-  not_submitted: { label: '待上傳勞報單', cls: 'bg-[#F5F0E8] text-[#8C8880]' },
-  pending_review: { label: '勞報單審核中', cls: 'bg-[#FDF0ED] text-[#C8522A]' },
-  rejected: { label: '勞報單退回', cls: 'bg-red-50 text-red-600' },
-  approved: { label: '審核通過 (待撥款)', cls: 'bg-green-50 text-green-700' },
 };
 
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
@@ -46,10 +50,12 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
-  const [taxFormTask, setTaxFormTask] = useState(null);
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
+
+  // 已結束分頁（stage 5）子狀態：已結案（正常跑完）/ 已取消（過期或 KOC 自己取消）
+  const [endedSubTab, setEndedSubTab] = useState('completed');
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
   const [kocId, setKocId] = useState(null);
   const [appliedCampaign, setAppliedCampaign] = useState(null);
@@ -202,9 +208,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               promoCode: null,
               earningsTotal: m.earnings_total,
               isExpired: m.is_expired || false,
-              taxFormStatus: m.tax_form_status || 'not_submitted',
-              taxFormUrl: m.tax_form_url || null,
-              taxFormRejectReason: m.tax_form_reject_reason || null,
+              endReason: m.end_reason || null,
             })));
           }
         }
@@ -273,6 +277,14 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   };
 
   const renderCardAction = (task) => {
+    if (task.isExpired) {
+      return (
+        <button disabled className="w-full bg-[#F5F0E8] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2">
+          案件已過截止日期
+        </button>
+      );
+    }
+
     switch(task.stage) {
       case 1:
         if (task.isRejected) {
@@ -362,7 +374,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         );
-      case 5:
+      case 5: {
+        const daysUntilRemoval = getDaysUntilRemoval(task.deadline);
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
             <div className="flex items-center justify-between px-1 md:px-2">
@@ -370,38 +383,20 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <span className="text-lg md:text-xl font-black text-[#1A1A18]">NT$ {(task.earningsTotal || 0).toLocaleString()}</span>
             </div>
 
-            {task.taxFormStatus === 'not_submitted' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2"
-              >
-                <FileText size={16}/> 上傳勞報單連結
-              </button>
-            )}
-
-            {task.taxFormStatus === 'pending_review' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2"
-              >
-                <FileText size={16}/> 檢視/修改連結
-              </button>
-            )}
-
-            {task.taxFormStatus === 'rejected' && (
-              <button
-                onClick={() => setTaxFormTask(task)}
-                className="w-full bg-[#C8522A] text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2"
-              >
-                <FileText size={16}/> 重新上傳連結
-              </button>
-            )}
-
             <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2">
               <Search size={16}/> 查看詳情
             </button>
+
+            {daysUntilRemoval !== null && (
+              <p className="text-[10px] font-bold text-[#8C8880] text-center">
+                {daysUntilRemoval > 0
+                  ? `任務詳情與聊天室將於 ${daysUntilRemoval} 天後自動移除`
+                  : '任務詳情與聊天室已超過顯示期限'}
+              </p>
+            )}
           </div>
         );
+      }
       default: return null;
     }
   };
@@ -416,6 +411,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       default: return 0;
     }
   };
+
+  // 已結束分頁要再依「已結案／已取消」子分頁篩選一次，其餘分頁照舊全部顯示
+  const visibleTasks = activeStage === 5
+    ? tasks.filter(t => (endedSubTab === 'completed' ? !t.endReason : !!t.endReason))
+    : tasks;
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12 md:pb-20">
@@ -473,7 +473,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end mb-4 md:mb-6 px-1 md:px-2 gap-3 md:gap-4">
-        {activeStage !== 1 && (
+        {activeStage !== 1 && activeStage !== 5 && (
           <h3 className="text-lg md:text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
@@ -500,6 +500,31 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               }`}
             >
               已申請
+            </button>
+          </div>
+        )}
+
+        {activeStage === 5 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEndedSubTab('completed')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                endedSubTab === 'completed'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              已結案（{tasks.filter(t => !t.endReason).length}）
+            </button>
+            <button
+              onClick={() => setEndedSubTab('cancelled')}
+              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
+                endedSubTab === 'cancelled'
+                  ? 'bg-[#C8522A] text-white'
+                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              }`}
+            >
+              已取消（{tasks.filter(t => t.endReason).length}）
             </button>
           </div>
         )}
@@ -555,7 +580,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       ) : (
         /* 任務卡片 Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-          {tasks.map((task) => (
+          {visibleTasks.map((task) => (
             <div key={task.id} className={`bg-white rounded-2xl md:rounded-[2rem] p-5 md:p-6 border ${task.isRejected ? 'border-[#C8522A]/30 bg-[#FDF0ED]/20' : 'border-[#E2DDD4]'} shadow-sm hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] transition-all flex flex-col h-full`}>
               <div className="flex justify-between items-start mb-5 md:mb-6">
                 <div>
@@ -573,9 +598,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   <span className="text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
                     已過期
                   </span>
-                ) : task.stage === 5 ? (
-                  <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${TAX_FORM_BADGE[task.taxFormStatus]?.cls || TAX_FORM_BADGE.not_submitted.cls}`}>
-                    {TAX_FORM_BADGE[task.taxFormStatus]?.label || TAX_FORM_BADGE.not_submitted.label}
+                ) : task.stage === 5 && task.endReason ? (
+                  <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${
+                    task.endReason === 'expired' ? 'bg-[#F5F0E8] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A]'
+                  }`}>
+                    {task.endReason === 'expired' ? '已過期' : '自行取消'}
                   </span>
                 ) : task.stage === 2 && (
                   <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
@@ -603,7 +630,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </div>
           ))}
 
-          {tasks.length === 0 && (
+          {visibleTasks.length === 0 && (
             <div className="col-span-full py-16 md:py-20 text-center flex flex-col items-center justify-center bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] border-dashed">
               <div className="w-12 h-12 md:w-16 md:h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-3 md:mb-4">
                 <CheckCircle2 size={20} className="md:w-6 md:h-6 text-[#8C8880]" />
@@ -642,24 +669,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         </div>
-      )}
-
-      {/* 上傳勞務報酬單連結彈出視窗 */}
-      {taxFormTask && (
-        <TaxFormModal
-          task={taxFormTask}
-          userId={user_id}
-          onClose={() => setTaxFormTask(null)}
-          onSubmitted={(newStatus, newUrl) => {
-            setTasks(previous =>
-              previous.map(t =>
-                t.id === taxFormTask.id
-                  ? { ...t, taxFormStatus: newStatus, taxFormUrl: newUrl, taxFormRejectReason: null }
-                  : t
-              )
-            );
-          }}
-        />
       )}
 
       {/* 申請成功彈出視窗 */}

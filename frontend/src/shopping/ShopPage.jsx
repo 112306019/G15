@@ -395,7 +395,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   
                   {userRole === "koc" ? (
                     <>
-                      <h2 className="font-serif text-2xl md:text-4xl font-black mb-3 md:mb-4 leading-tight">歡迎回來！<br />前往專屬任務大廳</h2>
+                      <h2 className="font-serif text-2xl md:text-4xl font-black mb-3 md:mb-4 leading-tight">歡迎回來！<br />前往專屬接案大廳</h2>
                       <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-6 md:mb-8 font-medium">查看最新的代言商品、追蹤您的專屬優惠碼成效，並管理您的收益。</p>
                     </>
                   ) : (
@@ -405,7 +405,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     </>
                   )}
                   <button onClick={handleKocClick} className="bg-[#C8522A] text-white w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-[#A64220] transition-all shadow-md pointer-events-auto">
-                    {userRole === "koc" ? "進入任務大廳" : "了解 KOC 計畫"}
+                    {userRole === "koc" ? "進入接案大廳" : "了解 KOC 計畫"}
                   </button>
                 </div>
                 

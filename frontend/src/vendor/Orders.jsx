@@ -10,8 +10,11 @@ import {
   ChevronRight,
   AlertTriangle,
   MapPin,
-  Store
+  Store,
+  MessageCircle
 } from 'lucide-react'
+
+import OrderChatModal from './OrderChatModal'
 
 import {
   getVendorOrders,
@@ -1298,6 +1301,100 @@ function ReturnManagementPanel({ vendorId }) {
           </div>
         </div>
       )}
+
+      {disputeModalOpen && disputeTarget && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 overflow-y-auto py-8">
+          <div
+            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+            onClick={closeDisputeModal}
+          />
+
+          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
+            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">提出退貨爭議</h3>
+            <p className="text-xs font-bold text-[#8C8880] mb-4">
+              請說明收到的退回商品有什麼問題，並附上照片佐證，交由平台判定。
+            </p>
+
+            {disputeTarget.packing_proof_urls?.length > 0 && (
+              <div className="mb-5">
+                <div className="text-xs font-bold text-[#8C8880] mb-2">消費者提供的打包證明</div>
+                <div className="flex flex-wrap gap-2">
+                  {disputeTarget.packing_proof_urls.map((url) => (
+                    <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                      <img src={url} alt="消費者打包證明" className="h-16 w-16 rounded-xl border border-[#E2DDD4] object-cover" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <label className="block text-sm font-bold text-[#1A1A18] mb-2">商品問題說明</label>
+            <textarea
+              rows={4}
+              value={disputeDescription}
+              onChange={(e) => setDisputeDescription(e.target.value)}
+              placeholder="請描述收到的商品有什麼問題（例如：外觀損壞、缺配件、非原商品等）"
+              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-4"
+            />
+
+            <label className="block text-sm font-bold text-[#1A1A18] mb-2">
+              佐證照片（1~5 張，必填）
+            </label>
+            <div className="flex flex-wrap gap-3 mb-6">
+              {disputePhotoUrls.map((url) => (
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
+                  <img src={url} alt="爭議佐證" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeDisputePhotoUrl(url)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {disputePhotoUrls.length < 5 && (
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
+                  {disputePhotoUploading ? "上傳中..." : "＋ 新增"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={disputePhotoUploading}
+                    onChange={(e) => {
+                      if (e.target.files?.length) {
+                        handleDisputePhotoFiles(e.target.files)
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={closeDisputeModal}
+                disabled={disputeSubmitting}
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                variant="brand"
+                onClick={submitDispute}
+                disabled={disputeSubmitting || disputePhotoUploading}
+                className="flex-[2]"
+              >
+                {disputeSubmitting ? '送出中...' : '提出爭議'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1319,6 +1416,9 @@ export default function Orders() {
   const [cancelRespondingId, setCancelRespondingId] = useState(null)
   const [logisticsCreating, setLogisticsCreating] = useState(false)
   const [logisticsQuerying, setLogisticsQuerying] = useState(false)
+
+  const [chatOrder, setChatOrder] =
+    useState(null)
 
   const [selectedOrderIds, setSelectedOrderIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('preparing')
@@ -2177,10 +2277,24 @@ export default function Orders() {
                       </td>
 
                       <td className="p-4 sm:p-5">
-                        <ChevronRight
-                          size={17}
-                          className="text-[#8C8880] group-hover:text-[#C8522A]"
-                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            title="聯絡買家"
+                            onClick={event => {
+                              event.stopPropagation()
+                              setChatOrder(order)
+                            }}
+                            className="p-2 rounded-full text-[#8C8880] hover:bg-[#FDF0ED] hover:text-[#C8522A] transition-colors"
+                          >
+                            <MessageCircle size={16} />
+                          </button>
+
+                          <ChevronRight
+                            size={17}
+                            className="text-[#8C8880] group-hover:text-[#C8522A]"
+                          />
+                        </div>
                       </td>
                     </tr>
                   )
@@ -2215,99 +2329,14 @@ export default function Orders() {
         vendorId={vendorId}
       />
 
-      {disputeModalOpen && disputeTarget && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 overflow-y-auto py-8">
-          <div
-            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
-            onClick={closeDisputeModal}
-          />
-
-          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
-            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">提出退貨爭議</h3>
-            <p className="text-xs font-bold text-[#8C8880] mb-4">
-              請說明收到的退回商品有什麼問題，並附上照片佐證，交由平台判定。
-            </p>
-
-            {disputeTarget.packing_proof_urls?.length > 0 && (
-              <div className="mb-5">
-                <div className="text-xs font-bold text-[#8C8880] mb-2">消費者提供的打包證明</div>
-                <div className="flex flex-wrap gap-2">
-                  {disputeTarget.packing_proof_urls.map((url) => (
-                    <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                      <img src={url} alt="消費者打包證明" className="h-16 w-16 rounded-xl border border-[#E2DDD4] object-cover" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <label className="block text-sm font-bold text-[#1A1A18] mb-2">商品問題說明</label>
-            <textarea
-              rows={4}
-              value={disputeDescription}
-              onChange={(e) => setDisputeDescription(e.target.value)}
-              placeholder="請描述收到的商品有什麼問題（例如：外觀損壞、缺配件、非原商品等）"
-              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-4"
-            />
-
-            <label className="block text-sm font-bold text-[#1A1A18] mb-2">
-              佐證照片（1~5 張，必填）
-            </label>
-            <div className="flex flex-wrap gap-3 mb-6">
-              {disputePhotoUrls.map((url) => (
-                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
-                  <img src={url} alt="爭議佐證" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeDisputePhotoUrl(url)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-
-              {disputePhotoUrls.length < 5 && (
-                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
-                  {disputePhotoUploading ? "上傳中..." : "＋ 新增"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    disabled={disputePhotoUploading}
-                    onChange={(e) => {
-                      if (e.target.files?.length) {
-                        handleDisputePhotoFiles(e.target.files)
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={closeDisputeModal}
-                disabled={disputeSubmitting}
-                className="flex-1"
-              >
-                取消
-              </Button>
-              <Button
-                variant="brand"
-                onClick={submitDispute}
-                disabled={disputeSubmitting || disputePhotoUploading}
-                className="flex-[2]"
-              >
-                {disputeSubmitting ? '送出中...' : '提出爭議'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OrderChatModal
+        open={Boolean(chatOrder)}
+        orderId={chatOrder?.orderId}
+        vendorId={vendorId}
+        items={chatOrder?.items}
+        totalAmount={chatOrder?.totalAmount}
+        onClose={() => setChatOrder(null)}
+      />
     </div>
   )
 }

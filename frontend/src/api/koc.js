@@ -72,13 +72,6 @@ export const getRevenueHistory = (userId) => {
   })
 }
 
-// 獲取待定收益明細
-export const getPendingEarningsDetail = (userId) => {
-  return api.get('/koc/revenue/getPendingDetail', {
-    params: { user_id: userId }
-  })
-}
-
 // 獲取成效分析列表
 export const getAnalyticsList = (userId) => {
   return api.get('/koc/analytics/getList', {
