@@ -55,22 +55,22 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, orderStatus }) {
+function OrderCard({ vendorName, items = [], totalAmount, onTrack, onChat, shippingStatus, orderStatus }) {
   return (
     <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "賣家"}</span>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onChat?.();
           }}
-          title="與廠商聯絡"
+          title="與賣家聯絡"
           className="flex items-center gap-1.5 rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-xs font-bold text-[#8C8880] transition-colors hover:border-[#C8522A] hover:text-[#C8522A]"
         >
           <MessageCircle size={14} />
-          聯絡廠商
+          聯絡賣家
         </button>
       </div>
 
@@ -80,17 +80,25 @@ function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, or
         </div>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-[#E2DDD4] pt-4 md:pt-5">
-        {items.map((it, idx) => (
-          <div key={idx} className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
-              {it.image && (
-                <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
-              )}
+      <div className="flex items-center gap-3 border-t border-[#E2DDD4] pt-4 md:pt-5">
+        <div className="flex flex-col gap-3 flex-1 min-w-0">
+          {items.map((it, idx) => (
+            <div key={idx} className="flex items-center gap-3">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
+                {it.image && (
+                  <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
+                )}
+              </div>
+              <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
             </div>
-            <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
+          ))}
+        </div>
+        {totalAmount != null && (
+          <div className="shrink-0 text-right">
+            <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">總金額</div>
+            <div className="text-base font-black text-[#1A1A18] whitespace-nowrap">{formatNTD(totalAmount)}</div>
           </div>
-        ))}
+        )}
       </div>
 
       <div className="flex justify-end border-t border-[#E2DDD4] pt-4 md:pt-5 mt-2 md:mt-0">
@@ -273,6 +281,7 @@ export default function OrdersPage({
     vendorName: o.vendor_name,
     shippingStatus: o.shipping_status,
     orderStatus: o.order_status,
+    totalAmount: o.total_amount,
     items: (o.items || []).map((item) => ({
       name: item.product_name || `商品 ${item.Product_id}`,
       image: item.image_url,
@@ -411,6 +420,7 @@ export default function OrdersPage({
                   key={o.id}
                   vendorName={o.vendorName}
                   items={o.items}
+                  totalAmount={o.totalAmount}
                   shippingStatus={o.shippingStatus}
                   orderStatus={o.orderStatus}
                   onTrack={() => onTrackOrder?.(o.id)}
