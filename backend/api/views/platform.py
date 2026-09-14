@@ -45,7 +45,7 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
@@ -134,6 +134,10 @@ def calculate_order_commission(order):
     """
     訂單完成後計算並寫入 KOC 分潤。
 
+    分潤金額固定為「訂單總金額扣除運費」乘以 KOC_COMMISSION_RATE_PERCENT%，
+    不再依廠商在 CampaignProduct 設定的 koc_commission_rate 逐項計算（那個
+    設定值只保留給廠商端顯示/編輯用，跟實際分潤金額無關）。
+
     暫時沿用現有 Earnings model：
     - 不修改 amount 欄位型態
     - 透過程式檢查避免重複建立
@@ -214,22 +218,19 @@ def calculate_order_commission(order):
         mission.application.campaign
     )
 
-    # 分潤比例要看每個商品自己在 CampaignProduct 裡的 koc_commission_rate，
-    # 不是 coupon 自己的欄位——不同商品在同一個活動裡可以有不同的分潤比例。
-    campaign_products_by_product_id = {
-        cp.product_id: cp
-        for cp in CampaignProduct.objects.filter(campaign=campaign)
-    }
-
-    commission_items = list(
-        OrderItem.objects
-        .filter(
-            order=order,
-            product_id__in=campaign_products_by_product_id.keys()
-        )
+    # 這張訂單至少要有一項活動綁定的商品，優惠碼才算真的用在這個活動上；
+    # 分潤金額本身固定抽「訂單總金額扣除運費」的 KOC_COMMISSION_RATE_PERCENT%，
+    # 不再依商品逐項用 CampaignProduct.koc_commission_rate 計算。
+    campaign_product_ids = set(
+        CampaignProduct.objects.filter(campaign=campaign).values_list("product_id", flat=True)
     )
 
-    if not commission_items:
+    has_commission_item = OrderItem.objects.filter(
+        order=order,
+        product_id__in=campaign_product_ids
+    ).exists()
+
+    if not has_commission_item:
         return {
             "created": False,
             "earning": None,
@@ -237,12 +238,8 @@ def calculate_order_commission(order):
             "message": "沒有符合活動的訂單商品"
         }
 
-    raw_commission = Decimal("0.00")
-    for item in commission_items:
-        campaign_product = campaign_products_by_product_id[item.product_id]
-        item_subtotal = Decimal(str(item.subtotal))
-        item_rate = Decimal(str(campaign_product.koc_commission_rate))
-        raw_commission += item_subtotal * item_rate / Decimal("100")
+    net_order_amount = Decimal(str(order.total_amount)) - Decimal(str(order.shipping_fee))
+    raw_commission = net_order_amount * Decimal(str(KOC_COMMISSION_RATE_PERCENT)) / Decimal("100")
 
     # 目前 Earnings.amount 若是 IntegerField，
     # 先四捨五入成整數

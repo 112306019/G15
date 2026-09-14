@@ -38,6 +38,7 @@ from .constants import (
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
+    PLATFORM_SERVICE_FEE_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
     sync_expired_promoting_missions,
     sync_expired_koc_suspensions,
@@ -1276,6 +1277,7 @@ def get_revenue_total(request):
         "hasBankAccount": has_bank_account,
         "min_payout_amount": MIN_PAYOUT_AMOUNT,
         "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
+        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1375,6 +1377,11 @@ def request_payout(request):
             "err": f"提領金額需達 NT$ {MIN_PAYOUT_AMOUNT} 以上才能申請（跨行提領需支付 NT$ {CROSS_BANK_TRANSFER_FEE} 手續費）"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
+    # 平台服務費：從撥款毛額裡再抽一部分，實際匯入 KOC 銀行帳戶的只有淨額。
+    # 錢包扣的還是毛額（分潤本來就是這個金額），服務費只影響最後真正撥出去多少。
+    platform_fee = round(payout_amount * PLATFORM_SERVICE_FEE_RATE_PERCENT / 100)
+    net_payout_amount = payout_amount - platform_fee
+
     with transaction.atomic():
         wallet = KocWallet.objects.select_for_update().get(koc=koc)
         wallet.balance_available = wallet.balance_available - payout_amount
@@ -1382,7 +1389,8 @@ def request_payout(request):
 
         payout = Payouts.objects.create(
             koc=koc.user,
-            amount=payout_amount,
+            amount=net_payout_amount,
+            platform_fee=platform_fee,
             payout_date=timezone.localdate(),
             status='pending'
         )
@@ -1408,6 +1416,9 @@ def request_payout(request):
         "err": "",
         "payout_id": payout.payout_id,
         "amount": payout.amount,
+        "gross_amount": payout_amount,
+        "platform_fee": payout.platform_fee,
+        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
         "payout_date": payout.payout_date,
         "status": payout.status,
         "remaining_balance": wallet.balance_available,

@@ -356,6 +356,15 @@ EARNINGS_STATUS_CODE_MAP = {
     'cancelled': 3,       # 新增：因退貨退款被取消
 }
 
+# KOC 分潤比例：固定抽「訂單總金額扣除運費」的這個百分比，不再依廠商在
+# CampaignProduct 設定的 koc_commission_rate 逐項計算（那個欄位保留給廠商端
+# 顯示/編輯用，但 calculate_order_commission 已經不會再讀它）。
+KOC_COMMISSION_RATE_PERCENT = 5
+
+# 平台服務費比例：KOC 申請撥款時，從撥款金額裡再抽這個百分比作為平台服務費，
+# 實際匯入 KOC 銀行帳戶的金額 = 撥款金額 - 平台服務費（見 koc.py request_payout）。
+PLATFORM_SERVICE_FEE_RATE_PERCENT = 20
+
 # 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
 VENDOR_SETTLEMENT_HOLD_DAYS = 7
 

@@ -836,7 +836,12 @@ class CampaignParticipants(models.Model):
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
     koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    # amount：實際會匯入 KOC 銀行帳戶的淨額（財務對帳/CSV 匯出用的就是這個欄位）。
+    # 申請當下從錢包扣除的毛額 = amount + platform_fee。
     amount = models.IntegerField()
+    # 這筆撥款從毛額裡抽走的平台服務費（見 constants.PLATFORM_SERVICE_FEE_RATE_PERCENT），
+    # 只在撥款當下計算一次、之後不會再變動，純粹留存記錄／顯示用。
+    platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
 
