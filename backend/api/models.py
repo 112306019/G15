@@ -328,6 +328,13 @@ class KOCMissionNew(models.Model):
     # 重新進入這兩個階段時會歸零。
     submission_reminder_sent = models.BooleanField(default=False, db_column='submission_reminder_sent')
 
+    # 貼文連結逾期追蹤：文案審核通過、進入 publishing 階段時記錄時間，
+    # 7 天內沒提交貼文連結（stage 還沒推進到 promoting）就算失信；
+    # missed_publishing_deadline 一旦被設為 True 就永久保留（即使後來補交了），
+    # 作為 KOC 過往失信次數統計的依據。
+    publishing_started_at = models.DateTimeField(null=True, blank=True, db_column='publishing_started_at')
+    missed_publishing_deadline = models.BooleanField(default=False, db_column='missed_publishing_deadline')
+
     class Meta:
         db_table = 'Koc_Mission'
 
