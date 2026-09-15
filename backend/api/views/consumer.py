@@ -508,8 +508,20 @@ def view_wishlist(request):
         )
 
     wishlists = Wishlist.objects.filter(user=user).select_related('product')
+
+    # 一個商品只會綁一個活動：查出每個商品所屬活動的 status，
+    # 收藏頁面顯示「是否下架」時，商品本身 status 和活動 status 都要看，
+    # 任一邊不是 active 就視為下架。
+    product_ids = [w.product.product_id for w in wishlists if w.product]
+    campaign_status_by_product_id = {
+        cp.product_id: cp.campaign.status
+        for cp in CampaignProduct.objects.filter(product_id__in=product_ids).select_related('campaign')
+    }
+
     result = []
     for w in wishlists:
+        campaign_status = campaign_status_by_product_id.get(w.product.product_id)
+        is_active = w.product.status == 'active' and (campaign_status is None or campaign_status == 'active')
         result.append({
             'Wishlist_id': w.wishlist_id,
             'User_id': w.user.user_id,
@@ -518,6 +530,7 @@ def view_wishlist(request):
             'price': w.product.discounted_price or w.product.price,
             'image_url': w.product.image_url,
             'stock': w.product.stock,
+            'product_status': 'active' if is_active else 'inactive',
         })
 
     return Response(result, status=status.HTTP_200_OK)
