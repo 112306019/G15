@@ -425,7 +425,20 @@ def apply_mission(request):
             campaign_id=campaign_id,
             status="pending"             
         )
-        
+
+        # 通知廠商有新的 KOC 申請等待審核；通知寫入失敗不影響申請本身成功與否。
+        if campaign_obj and campaign_obj.vendor_id:
+            from api.notifications import create_notification
+            koc_name = koc_profile.user.display_name or koc_profile.user.name if koc_profile.user else ''
+            create_notification(
+                vendor=campaign_obj.vendor,
+                category='koc',
+                title='有新的 KOC 申請案件',
+                body=f'{koc_name} 申請了案件「{campaign_obj.name}」，請盡快審核。',
+                reference_type='vendor_review',
+                reference_id=str(new_application.application_id),
+            )
+
         return Response({
             "success": True,
             "err": "",
@@ -531,6 +544,26 @@ def mission_submit(request):
         # 文案提交後，立刻從 writing 推進到 reviewing
         mission.stage = 'reviewing'
         mission.save()
+
+        # 通知廠商有新的文案需要審核；通知寫入失敗不影響提交本身成功與否。
+        try:
+            from api.notifications import create_notification
+            campaign = mission.application.campaign if mission.application else None
+            if campaign and campaign.vendor_id:
+                koc_name = (
+                    (mission.koc.user.display_name or mission.koc.user.name)
+                    if mission.koc and mission.koc.user else ''
+                )
+                create_notification(
+                    vendor=campaign.vendor,
+                    category='koc',
+                    title='有新的文案需要審核',
+                    body=f'{koc_name} 在案件「{campaign.name}」提交了文案，請盡快審核。',
+                    reference_type='vendor_review',
+                    reference_id=str(mission.kocmission_id),
+                )
+        except Exception:
+            pass
     elif submission_type_db == 'link':
         # 連結提交後，優惠碼立刻啟用(解法一：不等廠商審核)
         try:

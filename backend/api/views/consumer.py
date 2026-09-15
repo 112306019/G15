@@ -11,7 +11,7 @@ from django.utils import timezone
 from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
-from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
+from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable, PRODUCT_CATEGORY_CHOICES
 from payments.models import PaymentTransaction
 from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
@@ -106,6 +106,17 @@ def sync_auto_completed_orders():
             completed_count += 1
 
     return completed_count
+
+
+## 商品分類清單：給前端（廠商建立/編輯商品的分類下拉選單、消費者端的分類篩選）
+## 用同一份清單，之後要增減分類只要改 constants.py 的 PRODUCT_CATEGORY_CHOICES。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_product_categories(request):
+    return Response([
+        {'code': code, 'label': label}
+        for code, label in PRODUCT_CATEGORY_CHOICES
+    ], status=status.HTTP_200_OK)
 
 
 ## 商品查詢
@@ -1978,6 +1989,31 @@ def create_return_request(request):
         requested_amount=final_amount,
         status='requested',
     )
+
+    # 通知廠商有新的退貨申請；通知寫入失敗不影響退貨申請本身成功與否。
+    try:
+        from api.notifications import create_notification
+
+        notify_vendor_id = None
+        if order_item_obj and order_item_obj.product:
+            notify_vendor_id = order_item_obj.product.vendor_id
+        else:
+            first_item = OrderItem.objects.filter(order=order).select_related('product').first()
+            if first_item and first_item.product:
+                notify_vendor_id = first_item.product.vendor_id
+
+        vendor_obj = Vendor.objects.filter(vendor_id=notify_vendor_id).first() if notify_vendor_id else None
+        if vendor_obj:
+            create_notification(
+                vendor=vendor_obj,
+                category='return',
+                title='有新的退貨申請',
+                body=f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。',
+                reference_type='vendor_return',
+                reference_id=str(return_request.return_id),
+            )
+    except Exception:
+        pass
 
     return Response({
         'success': True,

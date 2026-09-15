@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { getVendorProfile, updateVendorProfile } from '../api/vendor'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Building, Bell, Shield, MapPin, Landmark } from 'lucide-react'
+import { LogOut, Building, Shield, MapPin, Landmark } from 'lucide-react'
 import { cn } from './lib/utils'
 import {
   TAIWAN_CITIES,
@@ -85,12 +85,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [notifications, setNotifications] = useState({
-    newOrder: true,
-    review: true,
-    chat: false,
-    weekly: true
-  })
 
   useEffect(() => {
     async function loadProfile() {
@@ -140,8 +134,6 @@ export default function Settings() {
 
     loadProfile()
   }, [vendorId])
-
-  const toggle = k => setNotifications(p => ({ ...p, [k]: !p[k] }))
 
   const handleLogout = () => {
     localStorage.removeItem('vendor_id')
@@ -523,70 +515,6 @@ export default function Settings() {
               </div>
             </>
           )}
-        </Card>
-
-        {/* 🟢 通知設定 */}
-        <Card className="space-y-6 sm:space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
-            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
-              <Bell size={18} className="sm:w-5 sm:h-5 text-[#1A1A18]" />
-              通知偏好設定
-            </h2>
-            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
-              自訂您想接收的系統與 Email 通知
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {[
-              {
-                key: 'newOrder',
-                label: '新訂單通知',
-                desc: '當有新的 KOC 帶入訂單時發送通知',
-              },
-              {
-                key: 'review',
-                label: '文案審核待辦',
-                desc: '當 KOC 提交新文案時發送通知',
-              },
-              {
-                key: 'chat',
-                label: '新訊息通知',
-                desc: '聊天室收到新訊息時發送通知',
-              },
-              {
-                key: 'weekly',
-                label: '每週成效報告',
-                desc: '每週一發送上週的 KOC 行銷成效總結',
-              },
-            ].map(({ key, label, desc }) => (
-              <div
-                key={key}
-                className="flex items-center justify-between py-3 sm:py-4 border-b border-[#E2DDD4]/60 last:border-0 last:pb-0 gap-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] sm:text-sm font-bold text-[#1A1A18]">
-                    {label}
-                  </div>
-                  <div className="text-[11px] sm:text-xs font-medium text-[#8C8880] mt-0.5 sm:mt-1 truncate sm:whitespace-normal">
-                    {desc}
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggle(key)}
-                  className={`w-12 sm:w-14 h-7 sm:h-8 rounded-full transition-colors relative shadow-inner shrink-0 ${
-                    notifications[key] ? 'bg-[#C8522A]' : 'bg-[#E2DDD4]'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 w-5 sm:w-6 h-5 sm:h-6 bg-white rounded-full shadow-md transition-all duration-300 ${
-                      notifications[key] ? 'left-6 sm:left-7' : 'left-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            ))}
-          </div>
         </Card>
 
         {/* 🟢 安全性 */}
