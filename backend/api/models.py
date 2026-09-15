@@ -855,6 +855,16 @@ class Payouts(models.Model):
     # 手動登打的發票如果不是走 ECPay B2C（例如財務用別的系統開的）就會是空的。
     random_number = models.CharField(max_length=10, blank=True, null=True, db_column='random_number')
     invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
+    # 這張發票是不是我們自己呼叫綠界 B2C API 自動開立的（True）、還是後台
+    # 手動登打的（False，預設值）。只有自動開立的才知道一定是 ECPay 的
+    # B2C 發票，撥款後來被標記失敗時才能呼叫 ecpay_invoice.void_b2c_invoice
+    # 自動作廢；手動登打的可能是用別的系統開票，沒辦法透過我們的程式作廢，
+    # 只能請財務自己去原本開票的系統手動作廢。
+    invoice_issued_automatically = models.BooleanField(default=False, db_column='invoice_issued_automatically')
+    # 撥款後來被標記「匯款失敗」、且發票是自動開立的情況下，系統會自動呼叫
+    # 作廢 API，這裡記錄作廢時間；null 代表沒有被作廢過（不管是因為根本
+    # 沒失敗、還是失敗但發票是手動開的所以沒有自動作廢）。
+    invoice_voided_at = models.DateTimeField(null=True, blank=True, db_column='invoice_voided_at')
 
     class Meta:
         db_table = 'Payouts'

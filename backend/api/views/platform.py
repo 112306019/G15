@@ -1236,6 +1236,7 @@ def admin_list_koc_payouts(request):
             'Invoice_number': p.invoice_number,
             'Random_number': p.random_number,
             'Invoice_uploaded_at': p.invoice_uploaded_at,
+            'Invoice_voided_at': p.invoice_voided_at,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -1302,6 +1303,28 @@ def admin_confirm_koc_payout(request):
             koc=koc,
             action_reason=action_reason or f'撥款申請 #{payout.payout_id}，金額 NT$ {payout.amount}，標記為「{new_status}」',
         )
+
+    # 撥款標記失敗、而且這張發票是我們自動開立的（不是後台手動登打、來源
+    # 不一定是 ECPay 的），才呼叫作廢 API——錢已經退回 KOC 錢包了，發票
+    # 不作廢的話會變成對應一筆「根本沒真的撥款成功」的有效稅務憑證。
+    # 放在上面的 transaction.atomic() 之外，避免外部 API 呼叫卡住 DB 交易；
+    # 作廢失敗只印出來，不影響撥款已經標記失敗、錢已經退回這件事本身。
+    if new_status == 'failed' and payout.invoice_number and payout.invoice_issued_automatically and not payout.invoice_voided_at:
+        from api.ecpay_invoice import void_b2c_invoice
+        try:
+            invoice_date_str = payout.invoice_uploaded_at.strftime('%Y-%m-%d') if payout.invoice_uploaded_at else ''
+            void_success, void_message = void_b2c_invoice(
+                invoice_no=payout.invoice_number,
+                invoice_date=invoice_date_str,
+                reason='撥款失敗作廢',
+            )
+            if void_success:
+                payout.invoice_voided_at = timezone.now()
+                payout.save(update_fields=['invoice_voided_at'])
+            else:
+                logger.error(f'平台服務費發票自動作廢失敗（payout_id={payout.payout_id}）: {void_message}')
+        except Exception as e:
+            logger.error(f'平台服務費發票自動作廢發生例外（payout_id={payout.payout_id}）: {e}')
 
     return Response({
         'success': True,

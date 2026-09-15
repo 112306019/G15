@@ -23,8 +23,13 @@ function PayoutRow({ payout }) {
       <div className="font-black text-[#C8522A]">NT$ {(payout.amount || 0).toLocaleString()}</div>
       <div className="text-[#8C8880] font-medium">NT$ {(payout.platform_fee || 0).toLocaleString()}</div>
       <div className={payout.invoice_number ? 'font-mono font-bold text-[#1A1A18]' : 'text-[#8C8880] font-medium'}>
-        {payout.invoice_number || '尚未開立'}
-        {payout.invoice_number && payout.random_number && (
+        {payout.invoice_number ? (
+          <span className={payout.invoice_voided_at ? 'line-through text-[#8C8880]' : ''}>{payout.invoice_number}</span>
+        ) : '尚未開立'}
+        {payout.invoice_voided_at && (
+          <span className="ml-1.5 text-[10px] font-bold text-[#C8522A]">已作廢</span>
+        )}
+        {payout.invoice_number && payout.random_number && !payout.invoice_voided_at && (
           <span className="block text-[10px] font-mono font-medium text-[#8C8880] mt-0.5">
             隨機碼 {payout.random_number}
           </span>

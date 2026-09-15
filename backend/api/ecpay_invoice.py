@@ -12,6 +12,7 @@ ECPAY_INVOICE_HASH_KEY = "ejCk326UnaZWKisg"
 ECPAY_INVOICE_HASH_IV = "q9jcZX8Ib9LM8wYk"
 ECPAY_INVOICE_TEST_URL = "https://einvoice-stage.ecpay.com.tw/B2BInvoice/Issue"
 ECPAY_INVOICE_B2C_TEST_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue"
+ECPAY_INVOICE_B2C_VOID_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Invalid"
 
 
 def _pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
@@ -131,7 +132,7 @@ def issue_b2c_invoice(relate_number: str, item_name: str, sales_amount: int, buy
       B2C 發票查詢用的必要資訊，B2B 沒有這個概念，一定要一起存起來，
       不然買受人查不到自己的發票。這是實際打過綠界測試環境驗證過的。
 
-    回傳 (success: bool, invoice_number: str|None, random_number: str|None, message: str)
+    回傳 (success: bool, invoice_number: str|None, random_number: str|None, invoice_date: str|None, message: str)
     """
     tax_amount = round(sales_amount * 0.05)
     total_amount = sales_amount + tax_amount
@@ -184,14 +185,69 @@ def issue_b2c_invoice(relate_number: str, item_name: str, sales_amount: int, buy
         result = response.json()
 
         if result.get("TransCode") != 1:
-            return False, None, None, result.get("TransMsg", "傳輸失敗")
+            return False, None, None, None, result.get("TransMsg", "傳輸失敗")
 
         decrypted = decrypt_data(result["Data"])
 
         if decrypted.get("RtnCode") == 1:
-            return True, decrypted.get("InvoiceNo"), decrypted.get("RandomNumber"), decrypted.get("RtnMsg", "成功")
+            return (
+                True,
+                decrypted.get("InvoiceNo"),
+                decrypted.get("RandomNumber"),
+                decrypted.get("InvoiceDate"),
+                decrypted.get("RtnMsg", "成功"),
+            )
         else:
-            return False, None, None, decrypted.get("RtnMsg", "開立失敗")
+            return False, None, None, None, decrypted.get("RtnMsg", "開立失敗")
 
     except Exception as e:
-        return False, None, None, str(e)
+        return False, None, None, None, str(e)
+
+
+def void_b2c_invoice(invoice_no: str, invoice_date: str, reason: str = "撥款失敗作廢"):
+    """
+    呼叫綠界 B2C 電子發票作廢 API（測試環境），已經實際打過測試環境驗證過。
+
+    用在：撥款當下已經自動開立平台服務費發票，但這筆撥款後來被後台標記
+    「匯款失敗」（見 admin_confirm_koc_payout）——錢已經退回 KOC 錢包了，
+    但發票已經開出去，不作廢的話會變成一張對應到「根本沒有真的撥款成功」
+    的有效稅務憑證，稅務上是錯的，一定要跟著作廢掉。
+
+    invoice_date 只需要日期（yyyy-MM-dd），不用完整時間，
+    直接取 issue 當下回傳的 InvoiceDate 的日期部分即可。
+    reason 上限 20 字，只是給財政部平台記錄用，不會顯示給 KOC 看。
+
+    回傳 (success: bool, message: str)
+    """
+    data_payload = {
+        "MerchantID": ECPAY_INVOICE_MERCHANT_ID,
+        "InvoiceNo": invoice_no,
+        "InvoiceDate": invoice_date,
+        "Reason": reason,
+    }
+
+    encrypted_data = encrypt_data(data_payload)
+
+    request_body = {
+        "MerchantID": ECPAY_INVOICE_MERCHANT_ID,
+        "RqHeader": {"Timestamp": int(time.time())},
+        "Data": encrypted_data,
+    }
+
+    try:
+        response = requests.post(ECPAY_INVOICE_B2C_VOID_URL, json=request_body, timeout=15)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("TransCode") != 1:
+            return False, result.get("TransMsg", "傳輸失敗")
+
+        decrypted = decrypt_data(result["Data"])
+
+        if decrypted.get("RtnCode") == 1:
+            return True, decrypted.get("RtnMsg", "成功")
+        else:
+            return False, decrypted.get("RtnMsg", "作廢失敗")
+
+    except Exception as e:
+        return False, str(e)

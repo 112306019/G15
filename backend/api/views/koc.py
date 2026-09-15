@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import requests
 from django.core.exceptions import ValidationError
@@ -1422,7 +1422,7 @@ def request_payout(request):
     if platform_fee > 0:
         try:
             relate_number = f"KOCPO{payout.payout_id}"[:20]
-            success, invoice_number, random_number, message = issue_b2c_invoice(
+            success, invoice_number, random_number, invoice_date, message = issue_b2c_invoice(
                 relate_number=relate_number,
                 item_name='平台服務費',
                 sales_amount=platform_fee,
@@ -1432,8 +1432,19 @@ def request_payout(request):
             if success:
                 payout.invoice_number = invoice_number
                 payout.random_number = random_number
-                payout.invoice_uploaded_at = timezone.now()
-                payout.save(update_fields=['invoice_number', 'random_number', 'invoice_uploaded_at'])
+                payout.invoice_issued_automatically = True
+                # 優先用綠界回傳的實際開立時間，萬一格式不如預期就退回用當下時間，
+                # 不能讓解析失敗連帶讓整個提領申請跟著出錯。
+                try:
+                    payout.invoice_uploaded_at = timezone.make_aware(
+                        datetime.strptime(invoice_date, '%Y-%m-%d %H:%M:%S')
+                    )
+                except (TypeError, ValueError):
+                    payout.invoice_uploaded_at = timezone.now()
+                payout.save(update_fields=[
+                    'invoice_number', 'random_number',
+                    'invoice_issued_automatically', 'invoice_uploaded_at',
+                ])
                 try:
                     send_platform_fee_invoice_email(payout)
                 except Exception as e:
@@ -1532,6 +1543,7 @@ def get_payout_records(request):
         "invoice_number": p.invoice_number,
         "random_number": p.random_number,
         "invoice_uploaded_at": p.invoice_uploaded_at,
+        "invoice_voided_at": p.invoice_voided_at,
         "payout_date": p.payout_date,
         "status": p.status,
     } for p in payouts]
