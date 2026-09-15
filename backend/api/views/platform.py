@@ -390,6 +390,14 @@ def calculate_vendor_earning(order):
             Decimal("1"), rounding=ROUND_HALF_UP
         )
 
+        # 呈現給廠商看的明細分項：跟平台開發票給廠商時同一套邏輯，固定拆成
+        # 10% 平台服務費 + 5% KOC 分潤（含處理費），兩者相加等於 platform_fee，
+        # 純粹是明細說明用，不是真實分開的兩筆金流。
+        platform_fee_display = (items_subtotal * Decimal("10") / Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        koc_commission_fee_display = platform_fee - platform_fee_display
+
         koc_deduction = Decimal("0")
         if vendor_id == commission_vendor_id:
             koc_deduction = Decimal(str(commission_amount))
@@ -421,6 +429,8 @@ def calculate_vendor_earning(order):
                 amount=net_amount,
                 gross_amount=int(items_subtotal),
                 fee_amount=int(platform_fee + koc_deduction),
+                platform_fee_display=int(platform_fee_display),
+                koc_commission_fee_display=int(koc_commission_fee_display),
                 reference_type="order",
                 reference_id=str(order.order_id)
             )
@@ -2889,6 +2899,8 @@ def get_transactions(request):
             'Amount': t.amount,
             'Gross_amount': t.gross_amount,
             'Fee_amount': t.fee_amount,
+            'Platform_fee_display': t.platform_fee_display,
+            'Koc_commission_fee_display': t.koc_commission_fee_display,
             'Reference_type': t.reference_type,
             'Reference_id': t.reference_id,
             'created_at': t.created_at,

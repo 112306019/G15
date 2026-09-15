@@ -4041,6 +4041,8 @@ def get_vendor_finance_transactions(request):
             "amount": t.amount,
             "gross_amount": t.gross_amount,
             "fee_amount": t.fee_amount,
+            "platform_fee_display": t.platform_fee_display,
+            "koc_commission_fee_display": t.koc_commission_fee_display,
             "date": t.created_at.date().isoformat(),
             "dateLabel": date_label,
             "statusText": status_text,
