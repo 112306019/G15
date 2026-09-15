@@ -1,6 +1,7 @@
 import re
 from rest_framework import serializers
 from .models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions
+from .views.constants import PRODUCT_CATEGORY_CODES
 
 class VendorRegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,6 +91,11 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
     def validate_product_name(self, value):
         return validate_ecpay_goods_name(value)
 
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
+
     def validate(self, data):
         # 選「不可退」時，依消保法規定必須指定屬於法定例外情況的哪一種原因；
         # 選「可退」時則不需要（也不該）帶原因，避免資料不一致。
@@ -125,6 +131,11 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
 class VendorProductUpdateSerializer(serializers.ModelSerializer):
     def validate_product_name(self, value):
         return validate_ecpay_goods_name(value)
+
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
 
     def validate(self, data):
         is_returnable = data.get("is_returnable", getattr(self.instance, "is_returnable", True))
@@ -195,6 +206,11 @@ class VendorCampaignProductSerializer(serializers.Serializer):
         allow_blank=True,
         allow_null=True
     )
+
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
 
     image_url = serializers.CharField(
         required=False,

@@ -728,6 +728,14 @@ def vendor_campaign_create(request):
 
 
     # 所有折扣驗證都在寫入資料庫前完成
+    if data["discount_value"] <= 0:
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "折扣數必須大於 0"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     if (
         data["discount_type"] == "fixed"
         and data["discount_value"] > product_price
@@ -919,6 +927,14 @@ def vendor_campaign_update(request):
 
         product_price = product_data["price"]
 
+
+    if data["discount_value"] <= 0:
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "折扣數必須大於 0"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     if (
         data["discount_type"] == "fixed"

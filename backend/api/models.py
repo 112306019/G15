@@ -1250,10 +1250,20 @@ class Notification(models.Model):
     站內通知：系統/廠商/平台做了某件跟這個使用者有關的事，推播一則訊息給他看，
     跟 ChatRoom/SupportChatRoom/OrderChatRoom 那種「雙方對話」的 Message 不是同一件事
     （通知是單向的、沒有回覆）。
+
+    收件人是 user 或 vendor 兩者之一，never both：user 用於消費者/KOC（都是 User
+    model 的帳號），vendor 用於廠商——Vendor 是完全獨立的帳號系統，不是 User 的子類，
+    所以沒辦法共用同一個外鍵，只能兩個外鍵並存、各自 nullable，由建立時只填其中一個
+    來決定這則通知是要給誰看。category 沿用同一份選項，同樣的 category 字串在 user
+    收件跟 vendor 收件兩邊分開用，例如 'koc' 對 KOC 使用者代表「我的接案」相關通知，
+    對廠商則代表「有 KOC 申請/投稿」需要處理，語意不會混淆，因為查詢時一定會先用
+    user_id 或 vendor_id 篩過。
     """
     CATEGORY_CHOICES = [
         ('order', '訂單'),
         ('koc', 'KOC接案'),
+        ('return', '退貨'),
+        ('payout', '撥款'),
     ]
 
     notification_id = models.AutoField(primary_key=True)
@@ -1261,7 +1271,17 @@ class Notification(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='notifications',
-        db_column='user_id'
+        db_column='user_id',
+        null=True,
+        blank=True,
+    )
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_column='vendor_id',
+        null=True,
+        blank=True,
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_column='category')
     title = models.CharField(max_length=200, db_column='title')
@@ -1279,7 +1299,8 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Notification {self.notification_id} ({self.category}) for {self.user_id}"
+        recipient = f"user={self.user_id}" if self.user_id else f"vendor={self.vendor_id}"
+        return f"Notification {self.notification_id} ({self.category}) for {recipient}"
 
 
 # ==============================================================================

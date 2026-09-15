@@ -119,13 +119,25 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState([{ id: "all", label: "所有分類" }]);
 
-  const categories = [
-    { id: "all", label: "所有分類" },
-    { id: "3c", label: "3C 與配件" },
-    { id: "clothing", label: "質感服飾" },
-    { id: "lifestyle", label: "生活風格" },
-  ];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/product/categories`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setCategories([
+            { id: "all", label: "所有分類" },
+            ...data.map((c) => ({ id: c.code, label: c.label })),
+          ]);
+        }
+      } catch (err) {
+        console.error("商品分類載入失敗", err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const fetchProducts = async () => {

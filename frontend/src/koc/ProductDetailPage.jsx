@@ -320,7 +320,7 @@ export default function ProductDetailPage({
 
         <div className="border-b border-[#E2DDD4] flex gap-6 md:gap-8 mb-6 md:mb-8 overflow-x-auto hide-scrollbar whitespace-nowrap custom-scrollbar">
           <button onClick={() => setActiveTab('description')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'description' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>商品描述</button>
-          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>廠商資訊 (任務)</button>
+          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>推廣活動詳情</button>
         </div>
 
         <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-5 md:p-8 mb-10 md:mb-16 min-h-[150px] md:min-h-[200px]">
