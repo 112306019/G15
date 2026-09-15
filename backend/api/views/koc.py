@@ -1474,11 +1474,28 @@ def get_revenue_history(request):
 
     result = []
     for earning in earnings:
+        # 分潤比例：取這個活動底下所有商品的 koc_commission_rate；
+        # 絕大多數情況一個活動只綁一個商品，直接顯示那個比例即可，
+        # 極少數混合多種比例的情況則顯示「混合比例」，避免顯示錯誤的單一數字。
+        commission_rate_display = None
+        if earning.kocmission:
+            campaign = earning.kocmission.application.campaign
+            rates = set(
+                CampaignProduct.objects
+                .filter(campaign=campaign)
+                .values_list('koc_commission_rate', flat=True)
+            )
+            if len(rates) == 1:
+                commission_rate_display = str(rates.pop())
+            elif len(rates) > 1:
+                commission_rate_display = "混合比例"
+
         # date: 目前先回 null，等轉帳 API 做好後再補上實際匯款日期
         result.append({
             "earnings_no": str(earning.earnings_id).zfill(8),
             "date": None,
             "amount": earning.amount,
+            "commission_rate": commission_rate_display,
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
             "campaign_name": earning.kocmission.application.campaign.name if earning.kocmission else None,
             "status": EARNINGS_STATUS_CODE_MAP[earning.status],

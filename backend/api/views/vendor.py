@@ -800,9 +800,8 @@ def vendor_campaign_create(request):
                 product=product,
                 discount_type=data["discount_type"],
                 discount_value=data["discount_value"],
-                koc_commission_rate=data[
-                    "koc_commission_rate"
-                ]
+                # KOC 分潤比例改為平台統一固定 3%，不再採用廠商自訂的值
+                koc_commission_rate=Decimal("3")
             )
 
     except Exception as error:

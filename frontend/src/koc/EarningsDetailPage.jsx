@@ -23,6 +23,7 @@ export default function EarningsDetailPage({ onBack }) {
             id: item.earnings_no,
             task: item.campaign_name || '-',
             status: STATUS_LABEL[item.status],
+            commissionRate: item.commission_rate,
           })));
         }
       } catch (err) {
@@ -49,11 +50,12 @@ export default function EarningsDetailPage({ onBack }) {
 
       <div className="w-full bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
         
-        <div className="hidden md:grid grid-cols-5 px-10 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+        <div className="hidden md:grid grid-cols-6 px-10 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
           <span>匯款日期</span>
           <span>收款金額</span>
           <span>金流編號</span>
           <span>任務</span>
+          <span>分潤比例</span>
           <span>狀態</span>
         </div>
 
@@ -86,6 +88,11 @@ export default function EarningsDetailPage({ onBack }) {
                       <span className="text-[10px] text-[#8C8880] font-mono tracking-wide">
                         ID: {item.id}
                       </span>
+                      {item.commissionRate && (
+                        <span className="text-[10px] text-[#8C8880] font-medium">
+                          分潤比例 {item.commissionRate}%
+                        </span>
+                      )}
                     </div>
                     <div className={`text-[10px] font-bold px-2 py-1 rounded-md ${
                       item.status === '待轉帳' ? 'text-[#C8522A] bg-[#FDF0ED]' : 'text-[#8C8880] bg-[#F5F0E8]'
@@ -96,12 +103,13 @@ export default function EarningsDetailPage({ onBack }) {
                 </div>
 
                 {/* ======== 電腦版排版 (傳統表格橫排) ======== */}
-                <div className="hidden md:grid grid-cols-5 items-center text-sm gap-4">
+                <div className="hidden md:grid grid-cols-6 items-center text-sm gap-4">
                   <div className="text-[#8C8880] font-medium">{item.date}</div>
                   {/* 金額使用焦糖橘色強調 */}
                   <div className="font-bold text-[#C8522A] text-base">{item.amount}</div>
                   <div className="text-[#8C8880] font-mono">{item.id}</div>
                   <div className="font-bold text-[#1A1A18] truncate pr-4">{item.task}</div>
+                  <div className="text-[#8C8880] font-medium">{item.commissionRate ? `${item.commissionRate}%` : '—'}</div>
                   {/* 根據狀態變色 */}
                   <div className={`font-bold ${item.status === '待轉帳' ? 'text-[#C8522A]' : 'text-[#1A1A18]'}`}>
                     {item.status}

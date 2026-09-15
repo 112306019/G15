@@ -257,11 +257,15 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         min_value=0
     )
 
+    # KOC 分潤比例改為平台統一固定 3%，廠商不能再自訂這個比例；
+    # 欄位保留 required=False 是為了向下相容舊的前端呼叫，
+    # 實際上不管前端傳什麼值，view 層都會強制覆蓋成 KOC_FIXED_COMMISSION_RATE。
     koc_commission_rate = serializers.DecimalField(
         max_digits=5,
         decimal_places=2,
         min_value=0,
-        max_value=100
+        max_value=100,
+        required=False
     )
 
     promo_days = serializers.IntegerField(
