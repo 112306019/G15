@@ -101,23 +101,10 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     if (item.role === 'koc' && userRole !== 'koc') return false;
     if (item.role === 'shopper' && userRole !== 'shopper') return false;
     return true;
-  });
-
-  // 判斷要顯示的身份標籤文字
-  const roleDisplay = userRole === 'koc' ? 'KOC' : '一般消費者';
+  });      
 
   return (
     <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
-      
-      {/* --- 身份提示區塊 --- */}
-      <div className="mb-6 flex flex-col items-center justify-center pb-6 border-b border-[#E2DDD4]/60">
-        <div className="bg-[#FDF0ED] border border-[#F5F0E8] px-4 py-2 rounded-full flex items-center gap-2">
-          <span className="text-sm font-bold text-[#C8522A] tracking-wide">
-            目前角色：{roleDisplay}
-          </span>
-        </div>
-      </div>
-
       <nav className="space-y-2">
         {menuItems.map((item, index) => {
           const isActive = currentView === item.view || (item.subItems && item.subItems.some(sub => sub.view === currentView));
