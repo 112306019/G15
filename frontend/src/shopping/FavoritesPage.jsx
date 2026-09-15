@@ -37,6 +37,7 @@ export default function FavoritesPage({ onNavigate }) {
             price: `NT$${Number(item.price || 0).toLocaleString("zh-TW")}`,
             gradient: GRADIENTS[i % GRADIENTS.length],
             imageUrl: isValidImageUrl(item.image_url) ? item.image_url : "",
+            isDelisted: item.product_status !== "active",
             // 商品詳情頁需要的是原始商品欄位格式（Product_id / Product_name / price），
             // 跟這個畫面自己顯示用的格式不一樣，點進商品詳情時要傳這個而不是整個 item
             raw: {
@@ -82,6 +83,7 @@ export default function FavoritesPage({ onNavigate }) {
 
   // 加入購物車
   const handleAddToCart = async (product) => {
+    if (product.isDelisted) return;
     try {
       const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
         method: "POST",
@@ -154,7 +156,9 @@ export default function FavoritesPage({ onNavigate }) {
           {favorites.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-3 md:p-4 flex flex-col gap-3 md:gap-4 transition-all hover:shadow-lg hover:border-[#D8D4CC] group relative"
+              className={`bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-3 md:p-4 flex flex-col gap-3 md:gap-4 transition-all group relative ${
+                product.isDelisted ? 'opacity-50' : 'hover:shadow-lg hover:border-[#D8D4CC]'
+              }`}
             >
               {/* 移除收藏按鈕 */}
               <button
@@ -168,7 +172,7 @@ export default function FavoritesPage({ onNavigate }) {
               {/* 商品圖片 */}
               <div
                 onClick={() => onNavigate?.('product_detail', product.raw)}
-                className="relative flex aspect-square w-full items-center justify-center rounded-xl md:rounded-2xl overflow-hidden cursor-pointer"
+                className={`relative flex aspect-square w-full items-center justify-center rounded-xl md:rounded-2xl overflow-hidden cursor-pointer ${product.isDelisted ? 'grayscale' : ''}`}
                 style={product.imageUrl ? undefined : { background: product.gradient }}
               >
                 {product.imageUrl ? (
@@ -188,15 +192,22 @@ export default function FavoritesPage({ onNavigate }) {
                 >
                   {product.name}
                 </div>
-                <div className="font-black text-[#1A1A18] text-sm md:text-lg mt-auto pt-1">{product.price}</div>
+                {product.isDelisted ? (
+                  <span className="w-fit rounded-full bg-[#E2DDD4] px-2 py-0.5 text-[10px] font-bold text-[#8C8880] mt-1">
+                    已下架
+                  </span>
+                ) : (
+                  <div className="font-black text-[#1A1A18] text-sm md:text-lg mt-auto pt-1">{product.price}</div>
+                )}
               </div>
 
               {/* 加入購物車按鈕 */}
               <button
                 onClick={() => handleAddToCart(product)}
-                className="w-full py-2.5 md:py-3 rounded-xl border border-[#1A1A18] text-xs md:text-sm font-bold text-[#1A1A18] flex items-center justify-center gap-1.5 md:gap-2 transition-colors hover:bg-[#1A1A18] hover:text-[#F5F0E8]"
+                disabled={product.isDelisted}
+                className="w-full py-2.5 md:py-3 rounded-xl border border-[#1A1A18] text-xs md:text-sm font-bold text-[#1A1A18] flex items-center justify-center gap-1.5 md:gap-2 transition-colors hover:bg-[#1A1A18] hover:text-[#F5F0E8] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[#1A1A18]"
               >
-                <ShoppingBag size={14} className="md:w-4 md:h-4" /> 加入購物車
+                <ShoppingBag size={14} className="md:w-4 md:h-4" /> {product.isDelisted ? '已下架' : '加入購物車'}
               </button>
             </div>
           ))}
