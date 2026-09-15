@@ -844,10 +844,16 @@ class Payouts(models.Model):
     platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
-    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：發票本身在平台
-    # 外部的電子發票/會計系統開立，這裡只登打號碼留存記錄，比照 Order 的
-    # invoice_number/invoice_uploaded_at 同一套模式（見 admin_koc_payout_upload_invoice）。
+    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：撥款當下會先
+    # 自動呼叫綠界 B2C 電子發票 API 開立（見 request_payout、
+    # ecpay_invoice.issue_b2c_invoice）；如果自動開立失敗，這幾個欄位會
+    # 留空，改由後台 admin_koc_payout_upload_invoice 手動登打作為備援，
+    # 沿用同一組欄位，前端不用分辨這張發票是自動還是手動開的。
     invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    # B2C 電子發票專屬的 4 碼隨機碼，買受人（KOC）要憑「發票號碼＋開立日期＋
+    # 隨機碼」才能在財政部電子發票平台查到這張發票，B2B 發票沒有這個欄位。
+    # 手動登打的發票如果不是走 ECPay B2C（例如財務用別的系統開的）就會是空的。
+    random_number = models.CharField(max_length=10, blank=True, null=True, db_column='random_number')
     invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
 
     class Meta:

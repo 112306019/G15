@@ -320,13 +320,18 @@ def send_platform_fee_invoice_email(payout):
     """
     koc_user = payout.koc
 
+    random_number_line = f"隨機碼：{payout.random_number}\n" if payout.random_number else ""
+
     subject = "平台服務費發票已開立"
     message = (
         f"{koc_user.display_name or koc_user.name} 您好，\n\n"
         f"您第 {payout.payout_id} 筆撥款申請（實際撥款金額 NT$ {payout.amount:,}）"
         f"所收取的平台服務費 NT$ {payout.platform_fee:,}，統一發票已開立完成。\n"
-        f"發票號碼：{payout.invoice_number}\n\n"
-        "請妥善保存此發票號碼，作為您申報個人所得稅時可列報的成本費用憑證。\n\n"
+        f"發票號碼：{payout.invoice_number}\n"
+        f"{random_number_line}\n"
+        "請妥善保存以上資訊，作為您申報個人所得稅時可列報的成本費用憑證；"
+        "如需查詢電子發票內容，可至財政部電子發票整合服務平台，"
+        "以「發票號碼＋開立日期＋隨機碼」查詢。\n\n"
         "KOC Platform 團隊"
     )
 

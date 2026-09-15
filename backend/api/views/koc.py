@@ -25,6 +25,8 @@ from ..serializers import (
     KOCApplySerializer,
 )
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
+from api.emails import send_platform_fee_invoice_email
+from api.ecpay_invoice import issue_b2c_invoice
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -1412,6 +1414,35 @@ def request_payout(request):
             earning.save(update_fields=['status'])
             remaining -= earning.amount
 
+    # 平台服務費自動開立 B2C 電子發票：呼叫外部 API，故意放在上面的
+    # transaction.atomic() 之外，不要讓一次慢速的網路請求卡住整筆撥款的
+    # DB 交易。開票失敗（或發生例外）不影響撥款申請本身已經成功，只是
+    # invoice_number 留空，之後由後台 admin_koc_payout_upload_invoice
+    # 手動登打作為備援。
+    if platform_fee > 0:
+        try:
+            relate_number = f"KOCPO{payout.payout_id}"[:20]
+            success, invoice_number, random_number, message = issue_b2c_invoice(
+                relate_number=relate_number,
+                item_name='平台服務費',
+                sales_amount=platform_fee,
+                buyer_name=koc.user.display_name or koc.user.name,
+                buyer_email=koc.user.email,
+            )
+            if success:
+                payout.invoice_number = invoice_number
+                payout.random_number = random_number
+                payout.invoice_uploaded_at = timezone.now()
+                payout.save(update_fields=['invoice_number', 'random_number', 'invoice_uploaded_at'])
+                try:
+                    send_platform_fee_invoice_email(payout)
+                except Exception as e:
+                    print(f"平台服務費發票通知信寄送失敗（payout_id={payout.payout_id}）: {e}")
+            else:
+                print(f"平台服務費發票自動開立失敗（payout_id={payout.payout_id}）: {message}")
+        except Exception as e:
+            print(f"平台服務費發票自動開立發生例外（payout_id={payout.payout_id}）: {e}")
+
     return Response({
         "success": True,
         "err": "",
@@ -1420,6 +1451,7 @@ def request_payout(request):
         "gross_amount": payout_amount,
         "platform_fee": payout.platform_fee,
         "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
+        "invoice_number": payout.invoice_number,
         "payout_date": payout.payout_date,
         "status": payout.status,
         "remaining_balance": wallet.balance_available,
@@ -1498,6 +1530,7 @@ def get_payout_records(request):
         "platform_fee": p.platform_fee,
         "gross_amount": p.amount + p.platform_fee,
         "invoice_number": p.invoice_number,
+        "random_number": p.random_number,
         "invoice_uploaded_at": p.invoice_uploaded_at,
         "payout_date": p.payout_date,
         "status": p.status,

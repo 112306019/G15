@@ -275,6 +275,7 @@ export default function AdminFinance() {
           payoutDate: p.Payout_date,
           status: p.Status,
           invoiceNumber: p.Invoice_number,
+          randomNumber: p.Random_number,
         })));
       }
     } catch (err) {
@@ -310,7 +311,9 @@ export default function AdminFinance() {
 
   const handleUploadKocInvoice = async (payoutId) => {
     if (!adminId) return;
-    const invoiceNumber = (kocInvoiceInputs[payoutId] || '').trim();
+    const input = kocInvoiceInputs[payoutId] || {};
+    const invoiceNumber = (input.invoiceNumber || '').trim();
+    const randomNumber = (input.randomNumber || '').trim();
     if (!invoiceNumber) { alert("請先輸入發票號碼"); return; }
 
     setUploadingKocInvoiceId(payoutId);
@@ -318,12 +321,12 @@ export default function AdminFinance() {
       const res = await fetch(`${API_BASE_URL}/api/platform/koc/payout/uploadInvoice`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ payout_id: payoutId, invoice_number: invoiceNumber, Admin_id: adminId }),
+        body: JSON.stringify({ payout_id: payoutId, invoice_number: invoiceNumber, random_number: randomNumber, Admin_id: adminId }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) { alert(data.err || "登打發票號碼失敗"); return; }
 
-      setKocPayouts(prev => prev.map(p => p.payoutId === payoutId ? { ...p, invoiceNumber: data.invoice_number } : p));
+      setKocPayouts(prev => prev.map(p => p.payoutId === payoutId ? { ...p, invoiceNumber: data.invoice_number, randomNumber } : p));
     } catch {
       alert("登打發票號碼失敗，請稍後再試");
     } finally {
@@ -724,15 +727,28 @@ export default function AdminFinance() {
                               <FileText size={14} /> 服務費統一發票：
                             </span>
                             {p.invoiceNumber ? (
-                              <span className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">{p.invoiceNumber}</span>
+                              <span className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">
+                                {p.invoiceNumber}
+                                {p.randomNumber && <span className="text-[#8C8880] font-medium ml-2">（隨機碼 {p.randomNumber}）</span>}
+                              </span>
                             ) : (
-                              <div className="flex gap-2 flex-1">
+                              <div className="flex flex-col sm:flex-row gap-2 flex-1">
+                                <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] sm:hidden">
+                                  自動開立失敗，請於外部系統開票後手動登打：
+                                </p>
                                 <input
                                   type="text"
-                                  value={kocInvoiceInputs[p.payoutId] || ''}
-                                  onChange={(e) => setKocInvoiceInputs(prev => ({ ...prev, [p.payoutId]: e.target.value }))}
-                                  placeholder="請輸入外部系統開立的發票號碼"
+                                  value={kocInvoiceInputs[p.payoutId]?.invoiceNumber || ''}
+                                  onChange={(e) => setKocInvoiceInputs(prev => ({ ...prev, [p.payoutId]: { ...prev[p.payoutId], invoiceNumber: e.target.value } }))}
+                                  placeholder="發票號碼（自動開立失敗，請手動登打）"
                                   className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-lg px-3 py-1.5 text-xs sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-2 focus:ring-[#C8522A]/20 focus:border-[#C8522A]"
+                                />
+                                <input
+                                  type="text"
+                                  value={kocInvoiceInputs[p.payoutId]?.randomNumber || ''}
+                                  onChange={(e) => setKocInvoiceInputs(prev => ({ ...prev, [p.payoutId]: { ...prev[p.payoutId], randomNumber: e.target.value } }))}
+                                  placeholder="隨機碼（選填）"
+                                  className="w-full sm:w-32 shrink-0 bg-[#F8F9FA] border border-[#E2DDD4] rounded-lg px-3 py-1.5 text-xs sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-2 focus:ring-[#C8522A]/20 focus:border-[#C8522A]"
                                 />
                                 <button
                                   onClick={() => handleUploadKocInvoice(p.payoutId)}

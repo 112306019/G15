@@ -11,6 +11,7 @@ ECPAY_INVOICE_MERCHANT_ID = "2000132"
 ECPAY_INVOICE_HASH_KEY = "ejCk326UnaZWKisg"
 ECPAY_INVOICE_HASH_IV = "q9jcZX8Ib9LM8wYk"
 ECPAY_INVOICE_TEST_URL = "https://einvoice-stage.ecpay.com.tw/B2BInvoice/Issue"
+ECPAY_INVOICE_B2C_TEST_URL = "https://einvoice-stage.ecpay.com.tw/B2CInvoice/Issue"
 
 
 def _pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
@@ -113,3 +114,84 @@ def issue_b2b_invoice(relate_number: str, buyer_tax_id: str, item_name: str, sal
 
     except Exception as e:
         return False, None, str(e)
+
+
+def issue_b2c_invoice(relate_number: str, item_name: str, sales_amount: int, buyer_name: str = "", buyer_email: str = ""):
+    """
+    呼叫綠界 B2C 電子發票開立 API（測試環境），開給沒有統一編號的自然人
+    （例如 KOC 個人）。跟 issue_b2b_invoice 共用同一套加解密機制，差別在：
+    - 不用帶買受人統一編號（CustomerIdentifier 留空）
+    - 不指定載具（CarrierType 留空），也不列印紙本（Print="0"）、
+      不捐贈（Donation="0"）——發票會存進財政部電子發票整合服務平台，
+      買受人憑「發票號碼 + 開立日期 + 隨機碼」就查得到，不需要我們自己
+      產生 PDF。
+    - sales_amount 視為未稅金額，稅額固定用 5% 計算（TaxType=1 應稅）。
+    - 回傳欄位跟 B2B 不一樣：發票號碼的 key 是 InvoiceNo（B2B 是
+      InvoiceNumber），而且多了 RandomNumber（4 碼隨機碼）——這支是
+      B2C 發票查詢用的必要資訊，B2B 沒有這個概念，一定要一起存起來，
+      不然買受人查不到自己的發票。這是實際打過綠界測試環境驗證過的。
+
+    回傳 (success: bool, invoice_number: str|None, random_number: str|None, message: str)
+    """
+    tax_amount = round(sales_amount * 0.05)
+    total_amount = sales_amount + tax_amount
+
+    data_payload = {
+        "MerchantID": ECPAY_INVOICE_MERCHANT_ID,
+        "RelateNumber": relate_number,
+        "CustomerID": "",
+        "CustomerIdentifier": "",
+        "CustomerName": buyer_name or "",
+        "CustomerAddr": "",
+        "CustomerPhone": "",
+        "CustomerEmail": buyer_email or "",
+        "ClearanceMark": "",
+        "Print": "0",
+        "Donation": "0",
+        "LoveCode": "",
+        "CarrierType": "",
+        "CarrierNum": "",
+        "TaxType": "1",
+        "SpecialTaxType": 0,
+        "SalesAmount": sales_amount,
+        "InvoiceRemark": "平台服務費",
+        "InvType": "07",
+        "vat": "1",
+        "Items": [
+            {
+                "ItemSeq": 1,
+                "ItemName": item_name,
+                "ItemCount": 1,
+                "ItemWord": "式",
+                "ItemPrice": sales_amount,
+                "ItemAmount": sales_amount,
+                "ItemTaxType": "1",
+            }
+        ],
+    }
+
+    encrypted_data = encrypt_data(data_payload)
+
+    request_body = {
+        "MerchantID": ECPAY_INVOICE_MERCHANT_ID,
+        "RqHeader": {"Timestamp": int(time.time())},
+        "Data": encrypted_data,
+    }
+
+    try:
+        response = requests.post(ECPAY_INVOICE_B2C_TEST_URL, json=request_body, timeout=15)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("TransCode") != 1:
+            return False, None, None, result.get("TransMsg", "傳輸失敗")
+
+        decrypted = decrypt_data(result["Data"])
+
+        if decrypted.get("RtnCode") == 1:
+            return True, decrypted.get("InvoiceNo"), decrypted.get("RandomNumber"), decrypted.get("RtnMsg", "成功")
+        else:
+            return False, None, None, decrypted.get("RtnMsg", "開立失敗")
+
+    except Exception as e:
+        return False, None, None, str(e)

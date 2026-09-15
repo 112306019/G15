@@ -24,6 +24,11 @@ function PayoutRow({ payout }) {
       <div className="text-[#8C8880] font-medium">NT$ {(payout.platform_fee || 0).toLocaleString()}</div>
       <div className={payout.invoice_number ? 'font-mono font-bold text-[#1A1A18]' : 'text-[#8C8880] font-medium'}>
         {payout.invoice_number || '尚未開立'}
+        {payout.invoice_number && payout.random_number && (
+          <span className="block text-[10px] font-mono font-medium text-[#8C8880] mt-0.5">
+            隨機碼 {payout.random_number}
+          </span>
+        )}
       </div>
       <div>
         <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${badge.cls}`}>

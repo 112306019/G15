@@ -1234,6 +1234,7 @@ def admin_list_koc_payouts(request):
             'Payout_date': p.payout_date,
             'Status': p.status,
             'Invoice_number': p.invoice_number,
+            'Random_number': p.random_number,
             'Invoice_uploaded_at': p.invoice_uploaded_at,
         })
 
@@ -1314,9 +1315,14 @@ def admin_confirm_koc_payout(request):
 @permission_classes([AllowAny])
 def admin_koc_payout_upload_invoice(request):
     """
-    平台向 KOC 收取的服務費（Payouts.platform_fee）在外部電子發票/會計系統
-    開立統一發票後，回來這裡登打發票號碼留存記錄，並寄信通知 KOC——
-    比照 vendor_order_upload_invoice 同一套模式，這裡不負責實際開立發票。
+    撥款申請時會先自動呼叫綠界 B2C 電子發票 API 開立平台服務費的發票
+    （見 koc.py request_payout）；這支是自動開立失敗時的備援手動流程——
+    財務在外部電子發票/會計系統開好票後，回來這裡登打發票號碼留存記錄，
+    並寄信通知 KOC。random_number 是選填，只有財務也是透過 ECPay B2C
+    介面手動開立時才會有這組查詢用的隨機碼，用別的系統開票就留空。
+
+    已經有發票號碼（不管是自動開立成功、還是先前手動登打過）的撥款
+    不能再次登打，避免誤觸把之前正確的發票號碼覆蓋掉。
     """
     _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
     if err:
@@ -1324,6 +1330,7 @@ def admin_koc_payout_upload_invoice(request):
 
     payout_id = request.data.get('payout_id')
     invoice_number = request.data.get('invoice_number')
+    random_number = request.data.get('random_number', '')
 
     if not payout_id or not invoice_number:
         return Response({
@@ -1345,9 +1352,16 @@ def admin_koc_payout_upload_invoice(request):
             'err': '這筆撥款沒有平台服務費，不需要開立發票'
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    if payout.invoice_number:
+        return Response({
+            'success': False,
+            'err': f'這筆撥款已經登記過發票號碼「{payout.invoice_number}」，不能重複登打'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     payout.invoice_number = invoice_number
+    payout.random_number = random_number or None
     payout.invoice_uploaded_at = timezone.now()
-    payout.save(update_fields=['invoice_number', 'invoice_uploaded_at'])
+    payout.save(update_fields=['invoice_number', 'random_number', 'invoice_uploaded_at'])
 
     try:
         send_platform_fee_invoice_email(payout)
