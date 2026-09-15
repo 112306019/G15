@@ -349,8 +349,19 @@ def view_cart(request):
         for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
     }
 
+    # 一個商品只會綁一個活動：查出每個商品所屬活動的 status，
+    # 購物車顯示「是否下架」時，商品本身 status 和活動 status 都要看，
+    # 任一邊不是 active 就視為下架（不能再購買）。
+    product_ids = [item.product.product_id for item in items if item.product]
+    campaign_status_by_product_id = {
+        cp.product_id: cp.campaign.status
+        for cp in CampaignProduct.objects.filter(product_id__in=product_ids).select_related('campaign')
+    }
+
     result_items = []
     for item in items:
+        campaign_status = campaign_status_by_product_id.get(item.product.product_id)
+        is_active = item.product.status == 'active' and (campaign_status is None or campaign_status == 'active')
         result_items.append({
             'Cart_item_id': item.cart_item_id,
             'Product_id': item.product.product_id,
@@ -360,7 +371,7 @@ def view_cart(request):
             'subtotal': item.subtotal,
             'Vendor_id': item.product.vendor_id,
             'Vendor_name': vendor_name_by_id.get(item.product.vendor_id, item.product.vendor_id),
-            'product_status': item.product.status,
+            'product_status': 'active' if is_active else 'inactive',
         })
 
     return Response({
