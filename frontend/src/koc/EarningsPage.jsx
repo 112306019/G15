@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
-import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle } from 'lucide-react';
+import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle, Receipt } from 'lucide-react';
 
 function extractApiError(err, fallback) {
   const apiError = err.response?.data?.err;
@@ -50,7 +50,7 @@ function MissingTaxFormModal({ amount, onClose, onGoFill }) {
   );
 }
 
-export default function EarningsPage({ onDetail, onTaxFormRecords }) {
+export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecords }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
   const [withdrawable, setWithdrawable] = useState(0);
@@ -61,6 +61,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
   const [missingAmount, setMissingAmount] = useState(null);
   const [minPayoutAmount, setMinPayoutAmount] = useState(16);
   const [transferFee, setTransferFee] = useState(15);
+  const [serviceFeeRate, setServiceFeeRate] = useState(20);
 
   useEffect(() => {
     const fetchRevenue = async () => {
@@ -72,6 +73,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
           setWithdrawable(res.data.withdrawable_amount);
           if (res.data.min_payout_amount != null) setMinPayoutAmount(res.data.min_payout_amount);
           if (res.data.cross_bank_transfer_fee != null) setTransferFee(res.data.cross_bank_transfer_fee);
+          if (res.data.platform_service_fee_rate != null) setServiceFeeRate(res.data.platform_service_fee_rate);
         }
       } catch (err) {
         console.error('載入收益失敗', err);
@@ -114,7 +116,14 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
       }
 
       setWithdrawable(payoutRes.data.remaining_balance ?? 0);
-      setWithdrawSuccess(`已送出提領申請，金額 NT$${(payoutRes.data.amount || 0).toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`);
+      const grossAmount = payoutRes.data.gross_amount || 0;
+      const platformFee = payoutRes.data.platform_fee || 0;
+      const netAmount = payoutRes.data.amount || 0;
+      setWithdrawSuccess(
+        `已送出提領申請，申請金額 NT$${grossAmount.toLocaleString()}，` +
+        `扣除平台服務費 NT$${platformFee.toLocaleString()} 後，` +
+        `實際撥款金額為 NT$${netAmount.toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`
+      );
     } catch (err) {
       setWithdrawError(extractApiError(err, '提領失敗，請稍後再試'));
     } finally {
@@ -161,7 +170,8 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl md:rounded-2xl px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
                 <span>
-                  注意事項：跨行提領需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
+                  注意事項：申請提領時將從提領金額中扣除 {serviceFeeRate}% 平台服務費，剩餘淨額才會實際撥款；
+                  跨行提領另需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
                 </span>
               </div>
 
@@ -193,6 +203,13 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
                 >
                   <FileSignature size={16} className="md:w-[18px] md:h-[18px]" />
                   查看勞報單紀錄
+                </button>
+                <button
+                  onClick={onPayoutRecords}
+                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#F5F0E8] hover:-translate-y-1 transition-all active:translate-y-0 shadow-sm"
+                >
+                  <Receipt size={16} className="md:w-[18px] md:h-[18px]" />
+                  查看撥款紀錄
                 </button>
                 <button
                   onClick={onDetail}

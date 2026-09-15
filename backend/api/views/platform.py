@@ -45,8 +45,8 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions
-from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email, send_platform_fee_invoice_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 
@@ -134,6 +134,10 @@ def calculate_order_commission(order):
     """
     訂單完成後計算並寫入 KOC 分潤。
 
+    分潤金額固定為「訂單總金額扣除運費」乘以 KOC_COMMISSION_RATE_PERCENT%，
+    不再依廠商在 CampaignProduct 設定的 koc_commission_rate 逐項計算（那個
+    設定值只保留給廠商端顯示/編輯用，跟實際分潤金額無關）。
+
     暫時沿用現有 Earnings model：
     - 不修改 amount 欄位型態
     - 透過程式檢查避免重複建立
@@ -214,22 +218,19 @@ def calculate_order_commission(order):
         mission.application.campaign
     )
 
-    # 分潤比例要看每個商品自己在 CampaignProduct 裡的 koc_commission_rate，
-    # 不是 coupon 自己的欄位——不同商品在同一個活動裡可以有不同的分潤比例。
-    campaign_products_by_product_id = {
-        cp.product_id: cp
-        for cp in CampaignProduct.objects.filter(campaign=campaign)
-    }
-
-    commission_items = list(
-        OrderItem.objects
-        .filter(
-            order=order,
-            product_id__in=campaign_products_by_product_id.keys()
-        )
+    # 這張訂單至少要有一項活動綁定的商品，優惠碼才算真的用在這個活動上；
+    # 分潤金額本身固定抽「訂單總金額扣除運費」的 KOC_COMMISSION_RATE_PERCENT%，
+    # 不再依商品逐項用 CampaignProduct.koc_commission_rate 計算。
+    campaign_product_ids = set(
+        CampaignProduct.objects.filter(campaign=campaign).values_list("product_id", flat=True)
     )
 
-    if not commission_items:
+    has_commission_item = OrderItem.objects.filter(
+        order=order,
+        product_id__in=campaign_product_ids
+    ).exists()
+
+    if not has_commission_item:
         return {
             "created": False,
             "earning": None,
@@ -237,12 +238,8 @@ def calculate_order_commission(order):
             "message": "沒有符合活動的訂單商品"
         }
 
-    raw_commission = Decimal("0.00")
-    for item in commission_items:
-        campaign_product = campaign_products_by_product_id[item.product_id]
-        item_subtotal = Decimal(str(item.subtotal))
-        item_rate = Decimal(str(campaign_product.koc_commission_rate))
-        raw_commission += item_subtotal * item_rate / Decimal("100")
+    net_order_amount = Decimal(str(order.total_amount)) - Decimal(str(order.shipping_fee))
+    raw_commission = net_order_amount * Decimal(str(KOC_COMMISSION_RATE_PERCENT)) / Decimal("100")
 
     # 目前 Earnings.amount 若是 IntegerField，
     # 先四捨五入成整數
@@ -1219,6 +1216,209 @@ def admin_confirm_vendor_payout(request):
         'err': '',
         'payout_id': payout.payout_id,
         'status': payout.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# KOC 撥款申請：後台處理（比照廠商那一套，補上原本缺的後台端點）
+# GET  /platform/koc/payouts              列出 KOC 撥款申請
+# POST /platform/koc/payout/confirm       把撥款申請標記為完成或失敗
+# POST /platform/koc/payout/uploadInvoice 登打平台服務費的統一發票號碼
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_koc_payouts(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    payout_status = request.query_params.get('status', 'pending')
+
+    payouts = Payouts.objects.select_related('koc__koc_profile').order_by('-payout_date')
+
+    if payout_status:
+        payouts = payouts.filter(status=payout_status)
+
+    result = []
+    for p in payouts:
+        user = p.koc
+        koc_profile = getattr(user, 'koc_profile', None)
+        result.append({
+            'Payout_id': p.payout_id,
+            'Koc_user_id': user.user_id,
+            'Koc_name': user.display_name or user.name,
+            'Bank_display': (
+                f"{koc_profile.bank_number} {koc_profile.bank_account}"
+                if koc_profile and koc_profile.bank_account else '未設定'
+            ),
+            'Amount': p.amount,
+            'Platform_fee': p.platform_fee,
+            'Payout_date': p.payout_date,
+            'Status': p.status,
+            'Invoice_number': p.invoice_number,
+            'Random_number': p.random_number,
+            'Invoice_uploaded_at': p.invoice_uploaded_at,
+            'Invoice_voided_at': p.invoice_voided_at,
+        })
+
+    return Response(result, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_confirm_koc_payout(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    payout_id = request.data.get('payout_id')
+    new_status = request.data.get('status')  # 'completed' 或 'failed'
+    action_reason = request.data.get('Action_reason')
+
+    if new_status not in ('completed', 'failed'):
+        return Response({
+            'success': False,
+            'err': "status 必須是 'completed' 或 'failed'"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payout = Payouts.objects.select_related('koc__koc_profile').get(payout_id=payout_id)
+    except Payouts.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到這筆撥款申請'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if payout.status != 'pending':
+        return Response({
+            'success': False,
+            'err': f'這筆撥款申請已經是「{payout.status}」狀態，不能重複處理'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    koc = getattr(payout.koc, 'koc_profile', None)
+
+    with transaction.atomic():
+        payout.status = new_status
+        payout.save(update_fields=['status'])
+
+        # 如果匯款失敗，錢要退回 KOC 的可提領餘額（退回撥款當時扣掉的毛額，
+        # 也就是 amount + platform_fee，不能讓錢憑空消失）。
+        if new_status == 'failed' and koc:
+            gross_amount = payout.amount + payout.platform_fee
+            wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=koc)
+            wallet.balance_available = wallet.balance_available + gross_amount
+            wallet.save(update_fields=['balance_available', 'updated_at'])
+
+            Transactions.objects.create(
+                koc_wallet=wallet,
+                type="withdraw_failed_refund",
+                amount=gross_amount,
+                reference_type="payout",
+                reference_id=str(payout.payout_id)
+            )
+
+        # 稽核紀錄：誰、對哪個 KOC 的哪一筆撥款申請、做了什麼判定
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='confirm_koc_payout_completed' if new_status == 'completed' else 'confirm_koc_payout_failed',
+            tasks_id=str(payout.payout_id),
+            koc=koc,
+            action_reason=action_reason or f'撥款申請 #{payout.payout_id}，金額 NT$ {payout.amount}，標記為「{new_status}」',
+        )
+
+    # 撥款標記失敗、而且這張發票是我們自動開立的（不是後台手動登打、來源
+    # 不一定是 ECPay 的），才呼叫作廢 API——錢已經退回 KOC 錢包了，發票
+    # 不作廢的話會變成對應一筆「根本沒真的撥款成功」的有效稅務憑證。
+    # 放在上面的 transaction.atomic() 之外，避免外部 API 呼叫卡住 DB 交易；
+    # 作廢失敗只印出來，不影響撥款已經標記失敗、錢已經退回這件事本身。
+    if new_status == 'failed' and payout.invoice_number and payout.invoice_issued_automatically and not payout.invoice_voided_at:
+        from api.ecpay_invoice import void_b2c_invoice
+        try:
+            invoice_date_str = payout.invoice_uploaded_at.strftime('%Y-%m-%d') if payout.invoice_uploaded_at else ''
+            void_success, void_message = void_b2c_invoice(
+                invoice_no=payout.invoice_number,
+                invoice_date=invoice_date_str,
+                reason='撥款失敗作廢',
+            )
+            if void_success:
+                payout.invoice_voided_at = timezone.now()
+                payout.save(update_fields=['invoice_voided_at'])
+            else:
+                logger.error(f'平台服務費發票自動作廢失敗（payout_id={payout.payout_id}）: {void_message}')
+        except Exception as e:
+            logger.error(f'平台服務費發票自動作廢發生例外（payout_id={payout.payout_id}）: {e}')
+
+    return Response({
+        'success': True,
+        'err': '',
+        'payout_id': payout.payout_id,
+        'status': payout.status,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_koc_payout_upload_invoice(request):
+    """
+    撥款申請時會先自動呼叫綠界 B2C 電子發票 API 開立平台服務費的發票
+    （見 koc.py request_payout）；這支是自動開立失敗時的備援手動流程——
+    財務在外部電子發票/會計系統開好票後，回來這裡登打發票號碼留存記錄，
+    並寄信通知 KOC。random_number 是選填，只有財務也是透過 ECPay B2C
+    介面手動開立時才會有這組查詢用的隨機碼，用別的系統開票就留空。
+
+    已經有發票號碼（不管是自動開立成功、還是先前手動登打過）的撥款
+    不能再次登打，避免誤觸把之前正確的發票號碼覆蓋掉。
+    """
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    payout_id = request.data.get('payout_id')
+    invoice_number = request.data.get('invoice_number')
+    random_number = request.data.get('random_number', '')
+
+    if not payout_id or not invoice_number:
+        return Response({
+            'success': False,
+            'err': 'payout_id、invoice_number 為必填'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payout = Payouts.objects.select_related('koc').get(payout_id=payout_id)
+    except Payouts.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到這筆撥款申請'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if payout.platform_fee <= 0:
+        return Response({
+            'success': False,
+            'err': '這筆撥款沒有平台服務費，不需要開立發票'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if payout.invoice_number:
+        return Response({
+            'success': False,
+            'err': f'這筆撥款已經登記過發票號碼「{payout.invoice_number}」，不能重複登打'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    payout.invoice_number = invoice_number
+    payout.random_number = random_number or None
+    payout.invoice_uploaded_at = timezone.now()
+    payout.save(update_fields=['invoice_number', 'random_number', 'invoice_uploaded_at'])
+
+    try:
+        send_platform_fee_invoice_email(payout)
+    except Exception as e:
+        logger.error(f'平台服務費發票通知信寄送失敗（payout_id={payout.payout_id}）: {e}')
+
+    return Response({
+        'success': True,
+        'err': '',
+        'payout_id': payout.payout_id,
+        'invoice_number': payout.invoice_number,
     }, status=status.HTTP_200_OK)
 
 

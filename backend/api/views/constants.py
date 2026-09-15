@@ -239,7 +239,8 @@ def sync_submission_deadline_reminders():
     Lazy-write：任務進入 writing（待交文案）或 publishing（待交作品連結）階段
     時，會設定 submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
     （見 vendor.py 建立任務／審核退回／文案審核通過的地方）。這裡檢查有沒有
-    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知。
+    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知
+    （publishing 階段額外寄一封提醒信，見 send_publishing_overdue_email）。
 
     submission_reminder_sent 確保同一次停留期間只提醒一次；重新進入
     writing/publishing（例如審核退回）會把它歸零，所以下一輪逾期還是會再提醒。
@@ -251,6 +252,7 @@ def sync_submission_deadline_reminders():
     from django.utils import timezone
     from api.models import KOCMissionNew
     from api.notifications import create_notification
+    from api.emails import send_publishing_overdue_email
 
     overdue_missions = list(
         KOCMissionNew.objects.filter(
@@ -280,6 +282,15 @@ def sync_submission_deadline_reminders():
             ),
             reference_type='koc_home',
         )
+
+        # publishing（待提交作品連結以開始推廣）階段逾期額外寄信提醒，
+        # writing（待交文案）階段沿用站內通知即可，不寄信。
+        if mission.stage == 'publishing':
+            try:
+                send_publishing_overdue_email(mission, SUBMISSION_REMINDER_DAYS)
+            except Exception:
+                pass
+
         mission.submission_reminder_sent = True
         mission.save(update_fields=['submission_reminder_sent'])
 
@@ -344,6 +355,15 @@ EARNINGS_STATUS_CODE_MAP = {
     'transferred': 1,    # 已撥款(已轉帳)
     'cancelled': 3,       # 新增：因退貨退款被取消
 }
+
+# KOC 分潤比例：固定抽「訂單總金額扣除運費」的這個百分比，不再依廠商在
+# CampaignProduct 設定的 koc_commission_rate 逐項計算（那個欄位保留給廠商端
+# 顯示/編輯用，但 calculate_order_commission 已經不會再讀它）。
+KOC_COMMISSION_RATE_PERCENT = 5
+
+# 平台服務費比例：KOC 申請撥款時，從撥款金額裡再抽這個百分比作為平台服務費，
+# 實際匯入 KOC 銀行帳戶的金額 = 撥款金額 - 平台服務費（見 koc.py request_payout）。
+PLATFORM_SERVICE_FEE_RATE_PERCENT = 20
 
 # 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
 VENDOR_SETTLEMENT_HOLD_DAYS = 7

@@ -671,8 +671,9 @@ export default function OrderDetailPage({ onBack, orderId }) {
         )}
 
         {!isCancelled &&
-          orderData.order_status !== "cancel_requested" &&
-          orderData.cancel_rejected && (
+          orderData.order_status === "pending" &&
+          orderData.cancel_rejected &&
+          (shippingStatus === "unshipped" || shippingStatus === "preparing") && (
             <div className="mt-6 md:mt-8 border-t border-[#E2DDD4] pt-5 md:pt-6 text-center">
               <div className="text-xs md:text-sm font-bold text-[#C8522A]">
                 賣家已拒絕取消訂單

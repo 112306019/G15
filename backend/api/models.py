@@ -872,9 +872,35 @@ class CampaignParticipants(models.Model):
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
     koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    # amount：實際會匯入 KOC 銀行帳戶的淨額（財務對帳/CSV 匯出用的就是這個欄位）。
+    # 申請當下從錢包扣除的毛額 = amount + platform_fee。
     amount = models.IntegerField()
+    # 這筆撥款從毛額裡抽走的平台服務費（見 constants.PLATFORM_SERVICE_FEE_RATE_PERCENT），
+    # 只在撥款當下計算一次、之後不會再變動，純粹留存記錄／顯示用。
+    platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
+    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：撥款當下會先
+    # 自動呼叫綠界 B2C 電子發票 API 開立（見 request_payout、
+    # ecpay_invoice.issue_b2c_invoice）；如果自動開立失敗，這幾個欄位會
+    # 留空，改由後台 admin_koc_payout_upload_invoice 手動登打作為備援，
+    # 沿用同一組欄位，前端不用分辨這張發票是自動還是手動開的。
+    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    # B2C 電子發票專屬的 4 碼隨機碼，買受人（KOC）要憑「發票號碼＋開立日期＋
+    # 隨機碼」才能在財政部電子發票平台查到這張發票，B2B 發票沒有這個欄位。
+    # 手動登打的發票如果不是走 ECPay B2C（例如財務用別的系統開的）就會是空的。
+    random_number = models.CharField(max_length=10, blank=True, null=True, db_column='random_number')
+    invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
+    # 這張發票是不是我們自己呼叫綠界 B2C API 自動開立的（True）、還是後台
+    # 手動登打的（False，預設值）。只有自動開立的才知道一定是 ECPay 的
+    # B2C 發票，撥款後來被標記失敗時才能呼叫 ecpay_invoice.void_b2c_invoice
+    # 自動作廢；手動登打的可能是用別的系統開票，沒辦法透過我們的程式作廢，
+    # 只能請財務自己去原本開票的系統手動作廢。
+    invoice_issued_automatically = models.BooleanField(default=False, db_column='invoice_issued_automatically')
+    # 撥款後來被標記「匯款失敗」、且發票是自動開立的情況下，系統會自動呼叫
+    # 作廢 API，這裡記錄作廢時間；null 代表沒有被作廢過（不管是因為根本
+    # 沒失敗、還是失敗但發票是手動開的所以沒有自動作廢）。
+    invoice_voided_at = models.DateTimeField(null=True, blank=True, db_column='invoice_voided_at')
 
     class Meta:
         db_table = 'Payouts'

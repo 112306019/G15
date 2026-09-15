@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
-import { MessageCircle, ShoppingBag } from "lucide-react";
+import { MessageCircle, ShoppingBag, ClipboardCheck, PackageSearch, Truck, CheckCircle2, XCircle } from "lucide-react";
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -55,22 +55,22 @@ function StatusBadge({ status }) {
   );
 }
 
-function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, orderStatus }) {
+function OrderCard({ vendorName, items = [], totalAmount, onTrack, onChat, shippingStatus, orderStatus }) {
   return (
     <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "廠商"}</span>
+        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "賣家"}</span>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onChat?.();
           }}
-          title="與廠商聯絡"
+          title="與賣家聯絡"
           className="flex items-center gap-1.5 rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-xs font-bold text-[#8C8880] transition-colors hover:border-[#C8522A] hover:text-[#C8522A]"
         >
           <MessageCircle size={14} />
-          聯絡廠商
+          聯絡賣家
         </button>
       </div>
 
@@ -80,20 +80,28 @@ function OrderCard({ vendorName, items = [], onTrack, onChat, shippingStatus, or
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        {items.map((it, idx) => (
-          <div key={idx} className="flex items-center gap-3">
-            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
-              {it.image && (
-                <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
-              )}
+      <div className="flex items-center gap-3 border-t border-[#E2DDD4] pt-4 md:pt-5">
+        <div className="flex flex-col gap-3 flex-1 min-w-0">
+          {items.map((it, idx) => (
+            <div key={idx} className="flex items-center gap-3">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
+                {it.image && (
+                  <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
+                )}
+              </div>
+              <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
             </div>
-            <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
+          ))}
+        </div>
+        {totalAmount != null && (
+          <div className="shrink-0 text-right">
+            <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">總金額</div>
+            <div className="text-base font-black text-[#1A1A18] whitespace-nowrap">{formatNTD(totalAmount)}</div>
           </div>
-        ))}
+        )}
       </div>
 
-      <div className="flex justify-end mt-2 md:mt-0">
+      <div className="flex justify-end border-t border-[#E2DDD4] pt-4 md:pt-5 mt-2 md:mt-0">
         <button
           type="button"
           onClick={(e) => {
@@ -227,6 +235,7 @@ export default function OrdersPage({
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [returnByOrder, setReturnByOrder] = useState({});
+  const [activeCategory, setActiveCategory] = useState("established");
 
   const userId = localStorage.getItem("userId");
 
@@ -266,26 +275,20 @@ export default function OrdersPage({
     else setLoading(false);
   }, [userId]);
 
-  const activeOrders = orders.filter(
-    (o) => o.order_status === "pending" || o.shipping_status === "shipped"
-  ).map((o) => ({
+  const toActiveItem = (o) => ({
     id: o.Order_id,
     vendorId: o.vendor_id,
     vendorName: o.vendor_name,
     shippingStatus: o.shipping_status,
     orderStatus: o.order_status,
+    totalAmount: o.total_amount,
     items: (o.items || []).map((item) => ({
       name: item.product_name || `商品 ${item.Product_id}`,
       image: item.image_url,
     })),
-  }));
+  });
 
-  const historyOrders = orders.filter(
-    (o) =>
-      o.order_status === "completed" ||
-      o.order_status === "cancelled" ||
-      o.payment_status === "refunded"
-  ).map((o) => ({
+  const toHistoryItem = (o) => ({
     id: o.Order_id,
     vendorName: o.vendor_name,
     status:
@@ -307,7 +310,42 @@ export default function OrdersPage({
       amount: formatNTD(o.total_amount),
       shipping: o.shipping_status,
     },
-  }));
+  });
+
+  const hasReturn = (o) => Boolean(returnByOrder[o.Order_id]);
+
+  // 訂單依狀態分成五類：已成立（尚未備貨）、備貨中、已出貨（含已送達但還沒
+  // 按確認收貨）、已完成（消費者已確認收貨，且沒有退貨/退款）、已取消
+  // （含取消、已退款、退貨流程進行中，細節仍靠卡片上的 StatusBadge 顯示）。
+  const establishedOrders = orders.filter(
+    (o) => o.order_status === "pending" && o.shipping_status === "unshipped"
+  ).map(toActiveItem);
+
+  const preparingOrders = orders.filter(
+    (o) => o.order_status === "pending" && o.shipping_status === "preparing"
+  ).map(toActiveItem);
+
+  const shippedOrders = orders.filter(
+    (o) =>
+      o.order_status === "pending" &&
+      (o.shipping_status === "shipped" || o.shipping_status === "delivered")
+  ).map(toActiveItem);
+
+  const completedOrders = orders.filter(
+    (o) => o.order_status === "completed" && o.payment_status !== "refunded" && !hasReturn(o)
+  ).map(toHistoryItem);
+
+  const cancelledOrders = orders.filter(
+    (o) => o.order_status === "cancelled" || o.payment_status === "refunded" || hasReturn(o)
+  ).map(toHistoryItem);
+
+  const ORDER_CATEGORIES = [
+    { key: "established", label: "已成立", icon: ClipboardCheck, list: establishedOrders, type: "active" },
+    { key: "preparing", label: "備貨中", icon: PackageSearch, list: preparingOrders, type: "active" },
+    { key: "shipped", label: "已出貨", icon: Truck, list: shippedOrders, type: "active" },
+    { key: "completed", label: "已完成", icon: CheckCircle2, list: completedOrders, type: "history" },
+    { key: "cancelled", label: "已取消", icon: XCircle, list: cancelledOrders, type: "history" },
+  ];
 
   if (loading) {
     return (
@@ -318,7 +356,8 @@ export default function OrdersPage({
   }
 
   // 判斷是否完全沒有訂單紀錄
-  const hasNoOrdersAtAll = activeOrders.length === 0 && historyOrders.length === 0;
+  const hasNoOrdersAtAll = ORDER_CATEGORIES.every((c) => c.list.length === 0);
+  const activeCategoryData = ORDER_CATEGORIES.find((c) => c.key === activeCategory) || ORDER_CATEGORIES[0];
 
   return (
     <div className="max-w-5xl animate-in fade-in duration-500 p-4 md:p-0 mx-auto pb-12">
@@ -345,43 +384,60 @@ export default function OrdersPage({
           </a>
         </div>
       ) : (
-        <div className="space-y-10 md:space-y-12">
-          {/* Active orders */}
-          {activeOrders.length > 0 && (
-            <section>
-              <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6">購買清單</h3>
+        <div>
+          {/* 分類圖示列：點選才會展開對應的訂單清單 */}
+          <div className="bg-white p-1.5 md:p-2 rounded-2xl shadow-sm border border-[#E2DDD4] mb-6 md:mb-8 flex justify-start md:justify-between overflow-x-auto hide-scrollbar gap-1 md:gap-0">
+            {ORDER_CATEGORIES.map((category) => {
+              const Icon = category.icon;
+              const isActive = activeCategory === category.key;
+              return (
+                <button
+                  key={category.key}
+                  onClick={() => setActiveCategory(category.key)}
+                  className={`flex-shrink-0 min-w-[90px] md:flex-1 md:min-w-[120px] flex flex-col items-center justify-center py-3 md:py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
+                >
+                  {category.list.length > 0 && (
+                    <span className="absolute top-2 right-3 md:top-3 md:right-6 w-4 h-4 md:w-5 md:h-5 bg-[#C8522A] text-white text-[9px] md:text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
+                      {category.list.length}
+                    </span>
+                  )}
+                  <Icon size={18} className={`mb-1.5 md:mb-2 md:w-5 md:h-5 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
+                  <span className={`text-xs md:text-sm font-bold ${isActive ? 'text-[#1A1A18]' : 'text-[#8C8880]'}`}>{category.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
-              <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
-                {activeOrders.map((o) => (
-                  <OrderCard
-                    key={o.id}
-                    vendorName={o.vendorName}
-                    items={o.items}
-                    shippingStatus={o.shippingStatus}
-                    orderStatus={o.orderStatus}
-                    onTrack={() => onTrackOrder?.(o.id)}
-                    onChat={() => onOpenChat?.(o.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* History */}
-          {historyOrders.length > 0 && (
-            <section>
-              <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6">訂購記錄</h3>
-
-              <div className="flex flex-col gap-4 md:gap-6">
-                {historyOrders.map((order) => (
-                  <HistoryCard
-                    key={order.id}
-                    order={order}
-                    onOpenDetail={(orderId) => onOpenOrderDetail?.(orderId)}
-                  />
-                ))}
-              </div>
-            </section>
+          {/* 目前選取分類的訂單清單 */}
+          {activeCategoryData.list.length === 0 ? (
+            <div className="bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] border-dashed p-10 md:p-16 text-center text-sm md:text-base font-bold text-[#8C8880]">
+              目前沒有「{activeCategoryData.label}」的訂單
+            </div>
+          ) : activeCategoryData.type === "active" ? (
+            <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
+              {activeCategoryData.list.map((o) => (
+                <OrderCard
+                  key={o.id}
+                  vendorName={o.vendorName}
+                  items={o.items}
+                  totalAmount={o.totalAmount}
+                  shippingStatus={o.shippingStatus}
+                  orderStatus={o.orderStatus}
+                  onTrack={() => onTrackOrder?.(o.id)}
+                  onChat={() => onOpenChat?.(o.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 md:gap-6">
+              {activeCategoryData.list.map((order) => (
+                <HistoryCard
+                  key={order.id}
+                  order={order}
+                  onOpenDetail={(orderId) => onOpenOrderDetail?.(orderId)}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

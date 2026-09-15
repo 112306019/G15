@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import requests
 from django.core.exceptions import ValidationError
@@ -25,6 +25,8 @@ from ..serializers import (
     KOCApplySerializer,
 )
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
+from api.emails import send_platform_fee_invoice_email
+from api.ecpay_invoice import issue_b2c_invoice
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -38,6 +40,8 @@ from .constants import (
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
+    PLATFORM_SERVICE_FEE_RATE_PERCENT,
+    KOC_COMMISSION_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
     sync_expired_promoting_missions,
     sync_expired_koc_suspensions,
@@ -1050,6 +1054,7 @@ def get_tax_form_data(request):
         'service_content': REMUNERATION_SERVICE_CONTENT,
         'submitted_at': submitted_at.strftime('%Y-%m-%d') if submitted_at else None,
         'amount': amount,
+        'platform_service_fee_rate': PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1309,6 +1314,7 @@ def get_revenue_total(request):
         "hasBankAccount": has_bank_account,
         "min_payout_amount": MIN_PAYOUT_AMOUNT,
         "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
+        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1408,6 +1414,11 @@ def request_payout(request):
             "err": f"提領金額需達 NT$ {MIN_PAYOUT_AMOUNT} 以上才能申請（跨行提領需支付 NT$ {CROSS_BANK_TRANSFER_FEE} 手續費）"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
+    # 平台服務費：從撥款毛額裡再抽一部分，實際匯入 KOC 銀行帳戶的只有淨額。
+    # 錢包扣的還是毛額（分潤本來就是這個金額），服務費只影響最後真正撥出去多少。
+    platform_fee = round(payout_amount * PLATFORM_SERVICE_FEE_RATE_PERCENT / 100)
+    net_payout_amount = payout_amount - platform_fee
+
     with transaction.atomic():
         wallet = KocWallet.objects.select_for_update().get(koc=koc)
         wallet.balance_available = wallet.balance_available - payout_amount
@@ -1415,7 +1426,8 @@ def request_payout(request):
 
         payout = Payouts.objects.create(
             koc=koc.user,
-            amount=payout_amount,
+            amount=net_payout_amount,
+            platform_fee=platform_fee,
             payout_date=timezone.localdate(),
             status='pending'
         )
@@ -1436,11 +1448,55 @@ def request_payout(request):
             earning.save(update_fields=['status'])
             remaining -= earning.amount
 
+    # 平台服務費自動開立 B2C 電子發票：呼叫外部 API，故意放在上面的
+    # transaction.atomic() 之外，不要讓一次慢速的網路請求卡住整筆撥款的
+    # DB 交易。開票失敗（或發生例外）不影響撥款申請本身已經成功，只是
+    # invoice_number 留空，之後由後台 admin_koc_payout_upload_invoice
+    # 手動登打作為備援。
+    if platform_fee > 0:
+        try:
+            relate_number = f"KOCPO{payout.payout_id}"[:20]
+            success, invoice_number, random_number, invoice_date, message = issue_b2c_invoice(
+                relate_number=relate_number,
+                item_name='平台服務費',
+                sales_amount=platform_fee,
+                buyer_name=koc.user.display_name or koc.user.name,
+                buyer_email=koc.user.email,
+            )
+            if success:
+                payout.invoice_number = invoice_number
+                payout.random_number = random_number
+                payout.invoice_issued_automatically = True
+                # 優先用綠界回傳的實際開立時間，萬一格式不如預期就退回用當下時間，
+                # 不能讓解析失敗連帶讓整個提領申請跟著出錯。
+                try:
+                    payout.invoice_uploaded_at = timezone.make_aware(
+                        datetime.strptime(invoice_date, '%Y-%m-%d %H:%M:%S')
+                    )
+                except (TypeError, ValueError):
+                    payout.invoice_uploaded_at = timezone.now()
+                payout.save(update_fields=[
+                    'invoice_number', 'random_number',
+                    'invoice_issued_automatically', 'invoice_uploaded_at',
+                ])
+                try:
+                    send_platform_fee_invoice_email(payout)
+                except Exception as e:
+                    print(f"平台服務費發票通知信寄送失敗（payout_id={payout.payout_id}）: {e}")
+            else:
+                print(f"平台服務費發票自動開立失敗（payout_id={payout.payout_id}）: {message}")
+        except Exception as e:
+            print(f"平台服務費發票自動開立發生例外（payout_id={payout.payout_id}）: {e}")
+
     return Response({
         "success": True,
         "err": "",
         "payout_id": payout.payout_id,
         "amount": payout.amount,
+        "gross_amount": payout_amount,
+        "platform_fee": payout.platform_fee,
+        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
+        "invoice_number": payout.invoice_number,
         "payout_date": payout.payout_date,
         "status": payout.status,
         "remaining_balance": wallet.balance_available,
@@ -1474,28 +1530,16 @@ def get_revenue_history(request):
 
     result = []
     for earning in earnings:
-        # 分潤比例：取這個活動底下所有商品的 koc_commission_rate；
-        # 絕大多數情況一個活動只綁一個商品，直接顯示那個比例即可，
-        # 極少數混合多種比例的情況則顯示「混合比例」，避免顯示錯誤的單一數字。
-        commission_rate_display = None
-        if earning.kocmission:
-            campaign = earning.kocmission.application.campaign
-            rates = set(
-                CampaignProduct.objects
-                .filter(campaign=campaign)
-                .values_list('koc_commission_rate', flat=True)
-            )
-            if len(rates) == 1:
-                commission_rate_display = str(rates.pop())
-            elif len(rates) > 1:
-                commission_rate_display = "混合比例"
-
         # date: 目前先回 null，等轉帳 API 做好後再補上實際匯款日期
         result.append({
             "earnings_no": str(earning.earnings_id).zfill(8),
             "date": None,
             "amount": earning.amount,
-            "commission_rate": commission_rate_display,
+            # 分潤比例：固定顯示 KOC_COMMISSION_RATE_PERCENT，不再讀
+            # CampaignProduct.koc_commission_rate——calculate_order_commission
+            # 已經改成不管廠商在活動商品上設定的值是多少，一律固定抽這個比例，
+            # 顯示廠商設定的舊值只會誤導 KOC（跟實際拿到的分潤金額對不上）。
+            "commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
             "campaign_name": earning.kocmission.application.campaign.name if earning.kocmission else None,
             "status": EARNINGS_STATUS_CODE_MAP[earning.status],
@@ -1505,6 +1549,48 @@ def get_revenue_history(request):
         "success": True,
         "err": "",
         "history": result
+    }, status=http_status.HTTP_200_OK)
+
+# 獲取撥款紀錄：每一筆申請提領的實付金額、扣了多少平台服務費、
+# 服務費的統一發票號碼（尚未登打就是 null）、目前狀態。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_payout_records(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的使用者"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    payouts = Payouts.objects.filter(koc=user).order_by('-payout_id')
+
+    result = [{
+        "payout_id": p.payout_id,
+        "amount": p.amount,
+        "platform_fee": p.platform_fee,
+        "gross_amount": p.amount + p.platform_fee,
+        "invoice_number": p.invoice_number,
+        "random_number": p.random_number,
+        "invoice_uploaded_at": p.invoice_uploaded_at,
+        "invoice_voided_at": p.invoice_voided_at,
+        "payout_date": p.payout_date,
+        "status": p.status,
+    } for p in payouts]
+
+    return Response({
+        "success": True,
+        "err": "",
+        "payouts": result,
     }, status=http_status.HTTP_200_OK)
 
 # 獲取成效分析總表

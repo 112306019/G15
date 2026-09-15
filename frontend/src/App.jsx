@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, Headset } from 'lucide-react';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -10,6 +10,7 @@ import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
+import PayoutRecordsPage from './koc/PayoutRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
@@ -61,6 +62,7 @@ const VIEW_TO_PATH = {
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
   tax_form_records: '/earnings/tax-forms',
+  payout_records: '/earnings/payouts',
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
@@ -92,7 +94,6 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
-    { icon: <Headset size={18} />, label: '客服諮詢', view: 'support' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
 
@@ -433,7 +434,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
-      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -493,7 +494,7 @@ function MainSystem() {
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'tax_form_records'].includes(view)) return 'earnings';
+    if (['earnings', 'earnings_detail', 'tax_form_records', 'payout_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
@@ -724,6 +725,7 @@ function MainSystem() {
             <EarningsPage
               onDetail={() => handleNavigate('earnings_detail')}
               onTaxFormRecords={() => handleNavigate('tax_form_records')}
+              onPayoutRecords={() => handleNavigate('payout_records')}
             />
           </ShellLayout>
         } />
@@ -737,6 +739,12 @@ function MainSystem() {
         <Route path="/earnings/tax-forms" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <TaxFormRecordsPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/payouts" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <PayoutRecordsPage onBack={() => handleNavigate('earnings')} />
           </ShellLayout>
         } />
 
