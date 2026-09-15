@@ -527,6 +527,13 @@ class Transactions(models.Model):
     gross_amount = models.IntegerField(null=True, blank=True)
     fee_amount = models.IntegerField(null=True, blank=True)
 
+    # fee_amount 的呈現用分項拆解（純粹是給廠商看的明細說明，跟 VendorInvoice
+    # 的 platform_service_fee / koc_commission_display 是同一套設計思路）：
+    # platform_fee_display 對應「平台服務費」，koc_commission_fee_display
+    # 對應「KOC 分潤（含處理費）」，兩者加總等於 fee_amount。
+    platform_fee_display = models.IntegerField(null=True, blank=True)
+    koc_commission_fee_display = models.IntegerField(null=True, blank=True)
+
     # 關聯業務軌跡（例如：reference_type='order', reference_id='訂單UUID'）
     reference_type = models.CharField(max_length=50, blank=True, null=True)
     reference_id = models.CharField(max_length=100, blank=True, null=True)
