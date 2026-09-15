@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, Headset } from 'lucide-react';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -94,7 +94,6 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
-    { icon: <Headset size={18} />, label: '客服諮詢', view: 'support' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
 
