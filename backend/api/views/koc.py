@@ -1469,6 +1469,46 @@ def get_revenue_history(request):
         "history": result
     }, status=http_status.HTTP_200_OK)
 
+# 獲取撥款紀錄：每一筆申請提領的實付金額、扣了多少平台服務費、
+# 服務費的統一發票號碼（尚未登打就是 null）、目前狀態。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_payout_records(request):
+    user_id = request.query_params.get('user_id')
+
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "user_id 為必填"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的使用者"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    payouts = Payouts.objects.filter(koc=user).order_by('-payout_id')
+
+    result = [{
+        "payout_id": p.payout_id,
+        "amount": p.amount,
+        "platform_fee": p.platform_fee,
+        "gross_amount": p.amount + p.platform_fee,
+        "invoice_number": p.invoice_number,
+        "invoice_uploaded_at": p.invoice_uploaded_at,
+        "payout_date": p.payout_date,
+        "status": p.status,
+    } for p in payouts]
+
+    return Response({
+        "success": True,
+        "err": "",
+        "payouts": result,
+    }, status=http_status.HTTP_200_OK)
+
 # 獲取成效分析總表
 @api_view(['GET'])
 @permission_classes([AllowAny])

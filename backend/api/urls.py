@@ -101,6 +101,7 @@ urlpatterns = [
     path('koc/application/remove/<int:application_id>', views.remove_application, name='koc-application-remove'),
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
+    path('koc/revenue/getPayoutRecords', views.get_payout_records, name='koc-revenue-get-payout-records'),
     path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
     path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
