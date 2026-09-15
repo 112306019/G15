@@ -54,6 +54,7 @@ export default function ProductDetailPage({
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
         imageUrl: product.image_url || "",
+        status: product.status || "active",
       });
     }
   }, [product]);
@@ -121,6 +122,11 @@ export default function ProductDetailPage({
       return;
     }
 
+    if (productDetail.status !== "active") {
+      showToast("此商品已下架，無法加入購物車");
+      return;
+    }
+
     const userId = localStorage.getItem("userId");
 
     try {
@@ -165,6 +171,11 @@ export default function ProductDetailPage({
 
     if (!Number.isInteger(productId) || productId <= 0) {
       showToast("找不到商品資料，請重新整理後再試");
+      return;
+    }
+
+    if (productDetail.status !== "active") {
+      showToast("此商品已下架，無法購買");
       return;
     }
 
@@ -289,7 +300,11 @@ export default function ProductDetailPage({
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-              {productDetail.stock <= 0 ? (
+              {productDetail.status !== "active" ? (
+                <div className="flex-1 bg-gray-200 text-gray-500 py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide text-center text-sm md:text-base">
+                  此商品已下架
+                </div>
+              ) : productDetail.stock <= 0 ? (
                 <div className="flex-1 bg-gray-200 text-gray-500 py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide text-center text-sm md:text-base">
                   已售完
                 </div>
@@ -305,7 +320,7 @@ export default function ProductDetailPage({
 
         <div className="border-b border-[#E2DDD4] flex gap-6 md:gap-8 mb-6 md:mb-8 overflow-x-auto hide-scrollbar whitespace-nowrap custom-scrollbar">
           <button onClick={() => setActiveTab('description')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'description' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>商品描述</button>
-          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>廠商資訊 (任務)</button>
+          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>推廣活動詳情</button>
         </div>
 
         <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-5 md:p-8 mb-10 md:mb-16 min-h-[150px] md:min-h-[200px]">

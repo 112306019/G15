@@ -159,6 +159,22 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   const [form, setForm] = useState(defaultForm)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const [categoryOptions, setCategoryOptions] = useState([])
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/product/categories`)
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setCategoryOptions(data)
+        }
+      } catch (err) {
+        console.error('商品分類載入失敗', err)
+      }
+    }
+    loadCategories()
+  }, [])
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
@@ -219,7 +235,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   // 就以優惠價為基準去算折扣後金額，而不是用原價。
   const originalPrice = channelDiscountedPrice ?? listPrice
   const discountValue = Number(form.discountValue) || 0
-  const commissionRate = Number(form.kocCommissionRate) || 0
+  const commissionRate = 3 // KOC 分潤比例平台統一固定 3%
 
   const estimatedPrice =
     form.discountType === 'percentage'
@@ -377,9 +393,8 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
       discount_type: form.discountType,
       discount_value: Number(form.discountValue),
-      koc_commission_rate: Number(
-        form.kocCommissionRate
-      ),
+      // KOC 分潤比例由平台統一固定為 3%，不再送廠商輸入的值
+      koc_commission_rate: 3,
 
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
@@ -554,6 +569,18 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 <Input label="商品售價 (NT$) *" type="number" disabled={locked} value={form.prodPrice} onChange={set('prodPrice')} placeholder="1200" />
                 <Input label="提供庫存 *" type="number" value={form.prodStock} onChange={set('prodStock')} placeholder="100" />
               </div>
+              <div className="flex flex-col gap-1.5 w-full">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">商品分類</label>
+                <select
+                  disabled={locked}
+                  value={form.prodCategory}
+                  onChange={set('prodCategory')}
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60"
+                >
+                  <option value="">選擇分類</option>
+                  {categoryOptions.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </select>
+              </div>
             </>
           )}
         </>}
@@ -585,7 +612,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <Input
                 label={form.discountType === 'percentage' ? '折扣比例 (%) *' : '直接折價金額 (NT$) *'}
                 type="number"
-                min="0"
+                min="0.01"
                 max={form.discountType === 'percentage' ? '100' : originalPrice || undefined}
                 step="0.01"
                 disabled={locked}
@@ -595,17 +622,13 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               />
             </div>
 
-            <Input
-              label="KOC 分潤比例 (%) *"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              disabled={locked}
-              value={form.kocCommissionRate}
-              onChange={set('kocCommissionRate')}
-              placeholder="例：20"
-            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">KOC 分潤比例</label>
+              <div className="w-full bg-[#F5F0E8] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18]">
+                3%（平台統一固定比例）
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">KOC 分潤比例由平台統一設定，不開放廠商自訂</p>
+            </div>
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 sm:p-5 mt-4 space-y-3">
               <div className="flex justify-between items-center text-sm">
@@ -629,7 +652,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <div className="flex justify-between items-center text-sm">
                 <span className="text-[#8C8880] font-bold">每件 KOC 預估分潤</span>
                 <span className="font-black text-[#C8522A] text-lg">
-                  {originalPrice > 0 && form.discountValue !== '' && form.kocCommissionRate !== '' ? formatCurrency(estimatedCommission) : '—'}
+                  {originalPrice > 0 && form.discountValue !== '' ? formatCurrency(estimatedCommission) : '—'}
                 </span>
               </div>
             </div>
@@ -699,7 +722,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
                   (step === 1 && !form.prodName) ||
-                  (step === 2 && (form.discountValue === '' || form.kocCommissionRate === '' || Number(form.discountValue) < 0 || Number(form.kocCommissionRate) < 0 || Number(form.kocCommissionRate) > 100 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
+                  (step === 2 && (form.discountValue === '' || form.kocCommissionRate === '' || Number(form.discountValue) <= 0 || Number(form.kocCommissionRate) < 0 || Number(form.kocCommissionRate) > 100 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
                   isSaving
                 }
                 className="gap-1.5 px-8 w-full sm:w-auto"
@@ -833,7 +856,8 @@ export default function Campaigns() {
           orders: 0,
           gmv: 0,
           avatar: '👤',
-          violationCount: application.koc_violation_count || 0
+          violationCount: application.koc_violation_count || 0,
+          avgSalesAmount: application.koc_avg_sales_amount
         }))
       )
     } catch (error) {
@@ -1032,7 +1056,7 @@ export default function Campaigns() {
   if (campaignLoading) {
     return (
       <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
-        任務資料載入中...
+        活動資料載入中...
       </div>
     )
   }
@@ -1043,7 +1067,7 @@ export default function Campaigns() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-8">
         <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          任務與商品總覽
+          推廣活動與商品總覽
         </h2>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -1337,7 +1361,7 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '帶來訂單', '創造 GMV', '審核'].map(h => (
+                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '平均接案銷售額', '帶來訂單', '創造 GMV', '審核'].map(h => (
                     <th
                       key={h}
                       className={cn(
@@ -1414,6 +1438,10 @@ export default function Campaigns() {
                         >
                           {koc.violationCount} 次
                         </span>
+                      </td>
+
+                      <td className="p-4 sm:p-5 text-sm font-bold text-[#1A1A18]">
+                        {koc.avgSalesAmount != null ? formatCurrency(koc.avgSalesAmount) : '—'}
                       </td>
 
                       <td className="p-4 sm:p-5 text-sm font-black text-[#1A1A18]">{koc.orders}</td>

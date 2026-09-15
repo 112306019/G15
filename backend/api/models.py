@@ -527,6 +527,13 @@ class Transactions(models.Model):
     gross_amount = models.IntegerField(null=True, blank=True)
     fee_amount = models.IntegerField(null=True, blank=True)
 
+    # fee_amount 的呈現用分項拆解（純粹是給廠商看的明細說明，跟 VendorInvoice
+    # 的 platform_service_fee / koc_commission_display 是同一套設計思路）：
+    # platform_fee_display 對應「平台服務費」，koc_commission_fee_display
+    # 對應「KOC 分潤（含處理費）」，兩者加總等於 fee_amount。
+    platform_fee_display = models.IntegerField(null=True, blank=True)
+    koc_commission_fee_display = models.IntegerField(null=True, blank=True)
+
     # 關聯業務軌跡（例如：reference_type='order', reference_id='訂單UUID'）
     reference_type = models.CharField(max_length=50, blank=True, null=True)
     reference_id = models.CharField(max_length=100, blank=True, null=True)
@@ -586,6 +593,26 @@ class Product(models.Model):
         choices=AD_CATEGORY_CHOICES,
         default='other',
         db_column='ad_category'
+    )
+
+    # 七天鑑賞期退貨規則：預設可退，廠商可選擇這個商品不適用七天鑑賞期，
+    # 但依消保法規定，選「不可退」時必須指定屬於法定例外情況的哪一種原因。
+    NON_RETURNABLE_REASON_CHOICES = [
+        ('perishable', '易腐敗、保存期限較短，或退貨時將逾期'),
+        ('customized', '客製化商品、服務'),
+        ('periodical', '報紙、期刊或雜誌'),
+        ('opened_media', '經拆封的影音商品或電腦軟體'),
+        ('digital_content', '經消費者同意而提供的非有形媒介數位內容或提供即完成的線上服務'),
+        ('opened_hygiene', '已拆封的個人衛生用品'),
+        ('air_transport', '國際航空客運服務'),
+    ]
+    is_returnable = models.BooleanField(default=True, db_column='is_returnable')
+    non_returnable_reason = models.CharField(
+        max_length=30,
+        choices=NON_RETURNABLE_REASON_CHOICES,
+        blank=True,
+        null=True,
+        db_column='non_returnable_reason'
     )
 
     class Meta:
@@ -788,6 +815,15 @@ class VendorInvoice(models.Model):
     relate_number = models.CharField(max_length=20, unique=True, db_column='relate_number')
     settlement_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='settlement_amount')
     service_fee = models.DecimalField(max_digits=12, decimal_places=2, db_column='service_fee')
+
+    # service_fee 的呈現用分項拆解（純粹是給廠商看的明細說明，不是真實的兩筆金流）：
+    # platform_service_fee 對應「平台服務費」那一行，koc_commission_display 對應
+    # 「KOC 分潤（含處理費）」那一行，兩者加總會等於 service_fee。實際上平台只收
+    # service_fee 這一筆錢，不會真的把 koc_commission_display 轉給 KOC——KOC 真正
+    # 拿到的分潤是另一套 koc_commission_rate 機制算的，兩者無關。
+    platform_service_fee = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, db_column='platform_service_fee')
+    koc_commission_display = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, db_column='koc_commission_display')
+
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='tax_amount')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='total_amount')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status')
@@ -1256,10 +1292,20 @@ class Notification(models.Model):
     站內通知：系統/廠商/平台做了某件跟這個使用者有關的事，推播一則訊息給他看，
     跟 ChatRoom/SupportChatRoom/OrderChatRoom 那種「雙方對話」的 Message 不是同一件事
     （通知是單向的、沒有回覆）。
+
+    收件人是 user 或 vendor 兩者之一，never both：user 用於消費者/KOC（都是 User
+    model 的帳號），vendor 用於廠商——Vendor 是完全獨立的帳號系統，不是 User 的子類，
+    所以沒辦法共用同一個外鍵，只能兩個外鍵並存、各自 nullable，由建立時只填其中一個
+    來決定這則通知是要給誰看。category 沿用同一份選項，同樣的 category 字串在 user
+    收件跟 vendor 收件兩邊分開用，例如 'koc' 對 KOC 使用者代表「我的接案」相關通知，
+    對廠商則代表「有 KOC 申請/投稿」需要處理，語意不會混淆，因為查詢時一定會先用
+    user_id 或 vendor_id 篩過。
     """
     CATEGORY_CHOICES = [
         ('order', '訂單'),
         ('koc', 'KOC接案'),
+        ('return', '退貨'),
+        ('payout', '撥款'),
     ]
 
     notification_id = models.AutoField(primary_key=True)
@@ -1267,7 +1313,17 @@ class Notification(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='notifications',
-        db_column='user_id'
+        db_column='user_id',
+        null=True,
+        blank=True,
+    )
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_column='vendor_id',
+        null=True,
+        blank=True,
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_column='category')
     title = models.CharField(max_length=200, db_column='title')
@@ -1285,7 +1341,8 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Notification {self.notification_id} ({self.category}) for {self.user_id}"
+        recipient = f"user={self.user_id}" if self.user_id else f"vendor={self.vendor_id}"
+        return f"Notification {self.notification_id} ({self.category}) for {recipient}"
 
 
 # ==============================================================================

@@ -1089,7 +1089,19 @@ export default function AdminFinance() {
                               <div className="text-[9px] sm:text-[10px] text-[#8C8880] mt-0.5 sm:mt-1 font-mono">{invoice.relate_number || '—'}</div>
                             </td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#1A1A18]">NT$ {Number(invoice.settlement_amount || 0).toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#C8522A]">NT$ {Number(invoice.service_fee || 0).toLocaleString()}</td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              <div className="text-xs sm:text-sm font-bold text-[#C8522A]">NT$ {Number(invoice.service_fee || 0).toLocaleString()}</div>
+                              {(invoice.platform_service_fee != null || invoice.koc_commission_display != null) && (
+                                <div className="mt-1 space-y-0.5 text-[9px] sm:text-[10px] text-[#8C8880]">
+                                  {invoice.platform_service_fee != null && (
+                                    <div>平台服務費 10%：NT$ {Number(invoice.platform_service_fee).toLocaleString()}</div>
+                                  )}
+                                  {invoice.koc_commission_display != null && (
+                                    <div>KOC 分潤 5%（含處理費）：NT$ {Number(invoice.koc_commission_display).toLocaleString()}</div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">NT$ {Number(invoice.tax_amount || 0).toLocaleString()}</td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black text-[#1A1A18]">NT$ {Number(invoice.total_amount || 0).toLocaleString()}</td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4">

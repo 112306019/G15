@@ -728,6 +728,14 @@ def vendor_campaign_create(request):
 
 
     # 所有折扣驗證都在寫入資料庫前完成
+    if data["discount_value"] <= 0:
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "折扣數必須大於 0"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     if (
         data["discount_type"] == "fixed"
         and data["discount_value"] > product_price
@@ -792,9 +800,8 @@ def vendor_campaign_create(request):
                 product=product,
                 discount_type=data["discount_type"],
                 discount_value=data["discount_value"],
-                koc_commission_rate=data[
-                    "koc_commission_rate"
-                ]
+                # KOC 分潤比例改為平台統一固定 3%，不再採用廠商自訂的值
+                koc_commission_rate=Decimal("3")
             )
 
     except Exception as error:
@@ -919,6 +926,14 @@ def vendor_campaign_update(request):
 
         product_price = product_data["price"]
 
+
+    if data["discount_value"] <= 0:
+        return Response({
+            "success": False,
+            "err": {
+                "discount_value": "折扣數必須大於 0"
+            }
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     if (
         data["discount_type"] == "fixed"
@@ -1236,11 +1251,37 @@ def vendor_application_getlist(request):
 
         koc_violation_count = application.koc.total_violation_count if application.koc else 0
 
+        # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
+        # （stage 為 promoting 或 completed），用任務綁定的優惠碼
+        # 查出對應訂單，加總訂單金額後除以已完成任務數。
+        koc_avg_sales_amount = None
+        if application.koc_id:
+            completed_missions = KOCMissionNew.objects.filter(
+                koc_id=application.koc_id,
+                stage__in=["promoting", "completed"],
+            )
+            completed_count = completed_missions.count()
+
+            if completed_count > 0:
+                promo_codes = list(
+                    CouponNew.objects
+                    .filter(kocmission__in=completed_missions)
+                    .values_list("promotion_code", flat=True)
+                )
+                total_sales = (
+                    Order.objects
+                    .filter(promotion_code__in=promo_codes)
+                    .aggregate(total=Sum("total_amount"))
+                    .get("total") or 0
+                )
+                koc_avg_sales_amount = float(total_sales) / completed_count
+
         application_list.append({
             "application_id": application.application_id,
             "koc_id": application.koc_id,
             "koc_name": koc_name,
             "koc_violation_count": koc_violation_count,
+            "koc_avg_sales_amount": koc_avg_sales_amount,
             "campaign_id": str(
                 application.campaign.campaign_id
             ),
@@ -4000,6 +4041,8 @@ def get_vendor_finance_transactions(request):
             "amount": t.amount,
             "gross_amount": t.gross_amount,
             "fee_amount": t.fee_amount,
+            "platform_fee_display": t.platform_fee_display,
+            "koc_commission_fee_display": t.koc_commission_fee_display,
             "date": t.created_at.date().isoformat(),
             "dateLabel": date_label,
             "statusText": status_text,

@@ -11,7 +11,7 @@ from django.utils import timezone
 from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import calculate_order_commission, calculate_vendor_earning
-from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable
+from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable, PRODUCT_CATEGORY_CHOICES
 from payments.models import PaymentTransaction
 from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
@@ -106,6 +106,17 @@ def sync_auto_completed_orders():
             completed_count += 1
 
     return completed_count
+
+
+## 商品分類清單：給前端（廠商建立/編輯商品的分類下拉選單、消費者端的分類篩選）
+## 用同一份清單，之後要增減分類只要改 constants.py 的 PRODUCT_CATEGORY_CHOICES。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_product_categories(request):
+    return Response([
+        {'code': code, 'label': label}
+        for code, label in PRODUCT_CATEGORY_CHOICES
+    ], status=status.HTTP_200_OK)
 
 
 ## 商品查詢
@@ -1843,6 +1854,45 @@ def create_return_request(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 廠商可為個別商品標記「不適用七天鑑賞期退貨」（依消保法法定例外原因）；
+        # 只要這張訂單裡有任何一個商品不可退，就不能整張退，強制消費者改用
+        # 單品項退貨（那樣只要選到的那個商品本身可退就行，不受這張訂單其他商品影響）。
+        non_returnable_products = (
+            OrderItem.objects.filter(order=order, product__is_returnable=False)
+            .select_related('product')
+        )
+        if non_returnable_products.exists():
+            names = '、'.join(item.product.product_name for item in non_returnable_products)
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此訂單包含不適用七天鑑賞期退貨的商品（{names}），無法整張退貨，請改為選擇單一商品申請退貨'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
+        # 單品項退貨：只要檢查這個被選中的品項本身能不能退。
+        try:
+            target_item = OrderItem.objects.select_related('product').get(
+                order_item_id=order_item_id, order=order
+            )
+        except OrderItem.DoesNotExist:
+            return Response(
+                {'success': False, 'err': '找不到對應的訂單品項'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        if target_item.product and not target_item.product.is_returnable:
+            reason_label = dict(Product.NON_RETURNABLE_REASON_CHOICES).get(
+                target_item.product.non_returnable_reason, ''
+            )
+            return Response(
+                {
+                    'success': False,
+                    'err': f'此商品不適用七天鑑賞期退貨（原因：{reason_label}）'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     # 退貨期限用 delivered_at 起算，不看消費者有沒有點過「確認收貨」。
     if not order.delivered_at:
         return Response(
@@ -1939,6 +1989,31 @@ def create_return_request(request):
         requested_amount=final_amount,
         status='requested',
     )
+
+    # 通知廠商有新的退貨申請；通知寫入失敗不影響退貨申請本身成功與否。
+    try:
+        from api.notifications import create_notification
+
+        notify_vendor_id = None
+        if order_item_obj and order_item_obj.product:
+            notify_vendor_id = order_item_obj.product.vendor_id
+        else:
+            first_item = OrderItem.objects.filter(order=order).select_related('product').first()
+            if first_item and first_item.product:
+                notify_vendor_id = first_item.product.vendor_id
+
+        vendor_obj = Vendor.objects.filter(vendor_id=notify_vendor_id).first() if notify_vendor_id else None
+        if vendor_obj:
+            create_notification(
+                vendor=vendor_obj,
+                category='return',
+                title='有新的退貨申請',
+                body=f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。',
+                reference_type='vendor_return',
+                reference_id=str(return_request.return_id),
+            )
+    except Exception:
+        pass
 
     return Response({
         'success': True,

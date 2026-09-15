@@ -387,6 +387,14 @@ def calculate_vendor_earning(order):
             Decimal("1"), rounding=ROUND_HALF_UP
         )
 
+        # 呈現給廠商看的明細分項：跟平台開發票給廠商時同一套邏輯，固定拆成
+        # 10% 平台服務費 + 5% KOC 分潤（含處理費），兩者相加等於 platform_fee，
+        # 純粹是明細說明用，不是真實分開的兩筆金流。
+        platform_fee_display = (items_subtotal * Decimal("10") / Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        koc_commission_fee_display = platform_fee - platform_fee_display
+
         koc_deduction = Decimal("0")
         if vendor_id == commission_vendor_id:
             koc_deduction = Decimal(str(commission_amount))
@@ -418,6 +426,8 @@ def calculate_vendor_earning(order):
                 amount=net_amount,
                 gross_amount=int(items_subtotal),
                 fee_amount=int(platform_fee + koc_deduction),
+                platform_fee_display=int(platform_fee_display),
+                koc_commission_fee_display=int(koc_commission_fee_display),
                 reference_type="order",
                 reference_id=str(order.order_id)
             )
@@ -812,6 +822,15 @@ def admin_settle_vendor_earnings(request):
         service_fee = (vendor_settlement_amount * fee_rate / Decimal('100')).quantize(
             Decimal('1'), rounding=ROUND_HALF_UP
         )
+
+        # 呈現給廠商看的明細分項：目前只有 15% 這個情境，固定拆成
+        # 10% 平台服務費 + 5% KOC 分潤（含處理費），兩者相加等於 service_fee，
+        # 純粹是明細說明用，不是真實分開的兩筆金流。
+        platform_service_fee = (vendor_settlement_amount * Decimal('10') / Decimal('100')).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP
+        )
+        koc_commission_display = (service_fee - platform_service_fee)
+
         tax_amount = (service_fee * Decimal('0.05')).quantize(
             Decimal('1'), rounding=ROUND_HALF_UP
         )
@@ -824,6 +843,8 @@ def admin_settle_vendor_earnings(request):
             relate_number=relate_number,
             settlement_amount=vendor_settlement_amount,
             service_fee=service_fee,
+            platform_service_fee=platform_service_fee,
+            koc_commission_display=koc_commission_display,
             tax_amount=tax_amount,
             total_amount=grand_total,
             status='pending',
@@ -907,6 +928,8 @@ def admin_list_vendor_invoices(request):
             'relate_number': inv.relate_number,
             'settlement_amount': str(inv.settlement_amount),
             'service_fee': str(inv.service_fee),
+            'platform_service_fee': str(inv.platform_service_fee) if inv.platform_service_fee is not None else None,
+            'koc_commission_display': str(inv.koc_commission_display) if inv.koc_commission_display is not None else None,
             'tax_amount': str(inv.tax_amount),
             'total_amount': str(inv.total_amount),
             'status': inv.status,
@@ -3076,6 +3099,8 @@ def get_transactions(request):
             'Amount': t.amount,
             'Gross_amount': t.gross_amount,
             'Fee_amount': t.fee_amount,
+            'Platform_fee_display': t.platform_fee_display,
+            'Koc_commission_fee_display': t.koc_commission_fee_display,
             'Reference_type': t.reference_type,
             'Reference_id': t.reference_id,
             'created_at': t.created_at,

@@ -1,6 +1,7 @@
 import re
 from rest_framework import serializers
 from .models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions
+from .views.constants import PRODUCT_CATEGORY_CODES
 
 class VendorRegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,6 +91,23 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
     def validate_product_name(self, value):
         return validate_ecpay_goods_name(value)
 
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
+
+    def validate(self, data):
+        # 選「不可退」時，依消保法規定必須指定屬於法定例外情況的哪一種原因；
+        # 選「可退」時則不需要（也不該）帶原因，避免資料不一致。
+        is_returnable = data.get("is_returnable", True)
+        if not is_returnable and not data.get("non_returnable_reason"):
+            raise serializers.ValidationError(
+                {"non_returnable_reason": "選擇不適用七天鑑賞期退貨時，必須指定法定例外原因"}
+            )
+        if is_returnable:
+            data["non_returnable_reason"] = None
+        return data
+
     class Meta:
         model = Product
         fields = [
@@ -104,6 +122,8 @@ class VendorProductCreateSerializer(serializers.ModelSerializer):
             "ad_category",
             "image_url",
             "status",
+            "is_returnable",
+            "non_returnable_reason",
         ]
         read_only_fields = ["product_id"]
 
@@ -112,6 +132,23 @@ class VendorProductUpdateSerializer(serializers.ModelSerializer):
     def validate_product_name(self, value):
         return validate_ecpay_goods_name(value)
 
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
+
+    def validate(self, data):
+        is_returnable = data.get("is_returnable", getattr(self.instance, "is_returnable", True))
+        if not is_returnable and not data.get(
+            "non_returnable_reason", getattr(self.instance, "non_returnable_reason", None)
+        ):
+            raise serializers.ValidationError(
+                {"non_returnable_reason": "選擇不適用七天鑑賞期退貨時，必須指定法定例外原因"}
+            )
+        if is_returnable:
+            data["non_returnable_reason"] = None
+        return data
+
     class Meta:
         model = Product
         fields = [
@@ -126,6 +163,8 @@ class VendorProductUpdateSerializer(serializers.ModelSerializer):
             "ad_category",
             "image_url",
             "status",
+            "is_returnable",
+            "non_returnable_reason",
         ]
         read_only_fields = ["product_id", "vendor_id"]
 
@@ -167,6 +206,11 @@ class VendorCampaignProductSerializer(serializers.Serializer):
         allow_blank=True,
         allow_null=True
     )
+
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
 
     image_url = serializers.CharField(
         required=False,
@@ -213,11 +257,15 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         min_value=0
     )
 
+    # KOC 分潤比例改為平台統一固定 3%，廠商不能再自訂這個比例；
+    # 欄位保留 required=False 是為了向下相容舊的前端呼叫，
+    # 實際上不管前端傳什麼值，view 層都會強制覆蓋成 KOC_FIXED_COMMISSION_RATE。
     koc_commission_rate = serializers.DecimalField(
         max_digits=5,
         decimal_places=2,
         min_value=0,
-        max_value=100
+        max_value=100,
+        required=False
     )
 
     promo_days = serializers.IntegerField(

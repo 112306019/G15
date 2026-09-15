@@ -41,6 +41,7 @@ from .constants import (
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
     PLATFORM_SERVICE_FEE_RATE_PERCENT,
+    KOC_COMMISSION_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
     sync_expired_promoting_missions,
     sync_expired_koc_suspensions,
@@ -428,7 +429,20 @@ def apply_mission(request):
             campaign_id=campaign_id,
             status="pending"             
         )
-        
+
+        # 通知廠商有新的 KOC 申請等待審核；通知寫入失敗不影響申請本身成功與否。
+        if campaign_obj and campaign_obj.vendor_id:
+            from api.notifications import create_notification
+            koc_name = koc_profile.user.display_name or koc_profile.user.name if koc_profile.user else ''
+            create_notification(
+                vendor=campaign_obj.vendor,
+                category='koc',
+                title='有新的 KOC 申請案件',
+                body=f'{koc_name} 申請了案件「{campaign_obj.name}」，請盡快審核。',
+                reference_type='vendor_review',
+                reference_id=str(new_application.application_id),
+            )
+
         return Response({
             "success": True,
             "err": "",
@@ -534,6 +548,26 @@ def mission_submit(request):
         # 文案提交後，立刻從 writing 推進到 reviewing
         mission.stage = 'reviewing'
         mission.save()
+
+        # 通知廠商有新的文案需要審核；通知寫入失敗不影響提交本身成功與否。
+        try:
+            from api.notifications import create_notification
+            campaign = mission.application.campaign if mission.application else None
+            if campaign and campaign.vendor_id:
+                koc_name = (
+                    (mission.koc.user.display_name or mission.koc.user.name)
+                    if mission.koc and mission.koc.user else ''
+                )
+                create_notification(
+                    vendor=campaign.vendor,
+                    category='koc',
+                    title='有新的文案需要審核',
+                    body=f'{koc_name} 在案件「{campaign.name}」提交了文案，請盡快審核。',
+                    reference_type='vendor_review',
+                    reference_id=str(mission.kocmission_id),
+                )
+        except Exception:
+            pass
     elif submission_type_db == 'link':
         # 連結提交後，優惠碼立刻啟用(解法一：不等廠商審核)
         try:
@@ -1501,6 +1535,11 @@ def get_revenue_history(request):
             "earnings_no": str(earning.earnings_id).zfill(8),
             "date": None,
             "amount": earning.amount,
+            # 分潤比例：固定顯示 KOC_COMMISSION_RATE_PERCENT，不再讀
+            # CampaignProduct.koc_commission_rate——calculate_order_commission
+            # 已經改成不管廠商在活動商品上設定的值是多少，一律固定抽這個比例，
+            # 顯示廠商設定的舊值只會誤導 KOC（跟實際拿到的分潤金額對不上）。
+            "commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
             "campaign_name": earning.kocmission.application.campaign.name if earning.kocmission else None,
             "status": EARNINGS_STATUS_CODE_MAP[earning.status],

@@ -51,6 +51,7 @@ from .views.platform import (
 from .views.consumer import (
     get_products,
     get_product_detail,
+    get_product_categories,
     create_cart,
     add_cart_item,
     view_cart,
@@ -164,6 +165,7 @@ urlpatterns = [
     path('platform/taxForms/review', admin_review_tax_form, name='platform-tax-forms-review'),
     # consumer - 商品
     path('consumer/products', get_products, name='get-products'),
+    path('consumer/product/categories', get_product_categories, name='get-product-categories'),
     path('consumer/product/detail', get_product_detail, name='get-product-detail'),
     # consumer - 購物車
     path('consumer/cart/create', create_cart, name='create-cart'),
