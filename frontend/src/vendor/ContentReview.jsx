@@ -20,7 +20,7 @@ import {
 } from './mock'
 
 import { Avatar } from './components/ui'
-import { ADGUARD_API_URL } from '../config'
+import { ADGUARD_API_URL, API_BASE_URL } from '../config'
 import { cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
@@ -236,7 +236,7 @@ export default function ContentReview() {
       if (submissionId) {
         try {
           await fetch(
-            'http://127.0.0.1:8000/api/vendor/mission/submission/saveAiResult',
+            `${API_BASE_URL}/api/vendor/mission/submission/saveAiResult`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

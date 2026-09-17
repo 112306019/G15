@@ -65,7 +65,7 @@ export default function ProductDetailPage({
     if (userRole === 'guest' || !userId || !productDetail?.id) return;
 
     let cancelled = false;
-    fetch(`http://127.0.0.1:8000/api/consumer/wishlist/view?User_id=${userId}`)
+    fetch(`${API_BASE_URL}/api/consumer/wishlist/view?User_id=${userId}`)
       .then(res => res.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
@@ -227,7 +227,7 @@ export default function ProductDetailPage({
 
     try {
       if (!isFavorited) {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/add", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
@@ -235,7 +235,7 @@ export default function ProductDetailPage({
         setIsFavorited(true);
         showToast("✓ 已加入收藏清單");
       } else {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
