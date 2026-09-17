@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 import time
+import httpx
 import google.generativeai as genai
 from rules import detect_violations, applicable_groups, CATEGORY_NAMES
 
@@ -26,6 +27,9 @@ app.add_middleware(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+
+TAIDE_ENDPOINT = os.getenv("TAIDE_ENDPOINT", "")  # e.g. https://xxxx.ngrok-free.dev/api/generate
+TAIDE_MODEL = os.getenv("TAIDE_MODEL", "hf.co/ZoneTwelve/TAIDE-LX-7B-Chat-GGUF:Q4_K_M")
 
 
 class AnalyzeRequest(BaseModel):
@@ -133,10 +137,7 @@ def build_highlighted_segments(text, violations, gray_areas):
     return segments
 
 
-def call_llm(text, violations, category):
-    if not GEMINI_API_KEY:
-        return None, []
-
+def build_compliance_prompt(text, violations, category):
     cat_name = CATEGORY_NAMES.get(category, "食品")
     violation_summary = (
         f"規則引擎已偵測到的明確違規詞：{'、'.join(v['word'] for v in violations)}"
@@ -174,9 +175,15 @@ def call_llm(text, violations, category):
   "suggestions": ["具體修改建議1", "修改建議2", "修改建議3"],
   "compliant_alternatives": ["合規替代詞句1", "合規替代詞句2"]
 }}"""
+    return prompt
+
+
+def call_gemini(prompt):
+    if not GEMINI_API_KEY:
+        return None
 
     model = genai.GenerativeModel("gemini-flash-latest")
-
+    response = None
     for attempt in range(3):
         try:
             response = model.generate_content(
@@ -189,8 +196,48 @@ def call_llm(text, violations, category):
                 time.sleep(10)
                 continue
             raise
+    return response.text
 
-    raw = response.text
+
+def call_taide(prompt):
+    if not TAIDE_ENDPOINT:
+        return None
+
+    # 桌機/ngrok tunnel 可能斷線或跑得比較慢，timeout 抓寬一點
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(
+            TAIDE_ENDPOINT,
+            json={
+                "model": TAIDE_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.2},
+            },
+        )
+        resp.raise_for_status()
+        return resp.json().get("response", "")
+
+
+def call_llm(text, violations, category):
+    if not TAIDE_ENDPOINT and not GEMINI_API_KEY:
+        return None, []
+
+    prompt = build_compliance_prompt(text, violations, category)
+
+    raw = None
+    if TAIDE_ENDPOINT:
+        try:
+            raw = call_taide(prompt)
+        except Exception as e:
+            # TAIDE（桌機／tunnel）打不通時，退回 Gemini 當備援；沒設 Gemini key 就直接往上拋
+            print(f"TAIDE call failed, falling back to Gemini: {e}")
+            if not GEMINI_API_KEY:
+                raise
+    if raw is None:
+        raw = call_gemini(prompt)
+    if raw is None:
+        return None, []
+
     clean = raw.replace("```json", "").replace("```", "").strip()
     parsed = json.loads(clean)
 
@@ -222,7 +269,11 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "ai_enabled": bool(GEMINI_API_KEY)}
+    return {
+        "status": "ok",
+        "ai_enabled": bool(TAIDE_ENDPOINT or GEMINI_API_KEY),
+        "ai_provider": "taide" if TAIDE_ENDPOINT else ("gemini" if GEMINI_API_KEY else None),
+    }
 
 
 @app.get("/api/rules/{category}")
