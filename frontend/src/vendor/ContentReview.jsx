@@ -20,6 +20,7 @@ import {
 } from './mock'
 
 import { Avatar } from './components/ui'
+import { ADGUARD_API_URL } from '../config'
 import { cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
@@ -224,7 +225,7 @@ export default function ContentReview() {
     setAiLoading(true)
     setAiResult(null)
     try {
-      const res = await fetch('http://127.0.0.1:8001/api/analyze', {
+      const res = await fetch(`${ADGUARD_API_URL}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: caption, category })
