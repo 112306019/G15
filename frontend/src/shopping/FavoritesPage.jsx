@@ -171,8 +171,8 @@ export default function FavoritesPage({ onNavigate }) {
 
               {/* 商品圖片 */}
               <div
-                onClick={() => onNavigate?.('product_detail', product.raw)}
-                className={`relative flex aspect-square w-full items-center justify-center rounded-xl md:rounded-2xl overflow-hidden cursor-pointer ${product.isDelisted ? 'grayscale' : ''}`}
+                onClick={() => !product.isDelisted && onNavigate?.('product_detail', product.raw)}
+                className={`relative flex aspect-square w-full items-center justify-center rounded-xl md:rounded-2xl overflow-hidden ${product.isDelisted ? 'grayscale cursor-not-allowed' : 'cursor-pointer'}`}
                 style={product.imageUrl ? undefined : { background: product.gradient }}
               >
                 {product.imageUrl ? (
@@ -187,8 +187,10 @@ export default function FavoritesPage({ onNavigate }) {
               {/* 商品資訊 */}
               <div className="flex-1 flex flex-col px-0.5 md:px-1">
                 <div
-                  className="text-xs md:text-sm font-bold text-[#1A1A18] mb-1 line-clamp-2 cursor-pointer hover:text-[#C8522A] transition-colors leading-snug md:leading-normal"
-                  onClick={() => onNavigate?.('product_detail', product.raw)}
+                  className={`text-xs md:text-sm font-bold text-[#1A1A18] mb-1 line-clamp-2 transition-colors leading-snug md:leading-normal ${
+                    product.isDelisted ? 'cursor-not-allowed' : 'cursor-pointer hover:text-[#C8522A]'
+                  }`}
+                  onClick={() => !product.isDelisted && onNavigate?.('product_detail', product.raw)}
                 >
                   {product.name}
                 </div>
