@@ -18,8 +18,7 @@ app.add_middleware(
     allow_origins=[
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://adchecker.onrender.com",
-    "https://g15-frontend.onrender.com",],
+    "https://adchecker.onrender.com",],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -161,13 +160,28 @@ def build_compliance_prompt(text, violations, category):
 2. gray_areas：判讀「灰色地帶」。這些不是固定禁用詞，而是需要靠語意與舉證可能性判斷的踩線說法，例如「1瓶抵12瓶」這類無法舉證的誇大數字、「業界唯一」這類排他宣稱、「7天有感」這類時效宣稱、暗示性療效、見證式宣稱、體感變化描述（如代謝變快、體態改善、氣色變好）等。請盡可能寬鬆地判讀，只要片段本身缺乏具體舉證依據、帶有誇大或暗示效果的語氣，就應列為 gray_areas，即使同一句話裡也包含被規則引擎抓到的明確違規詞（兩者可以並存，不互斥，請針對句子中不同片段分別標註）。除非文案完全平鋪直敘、毫無任何主觀效果宣稱，否則 gray_areas 通常不應為空陣列。
 3. suggestions / compliant_alternatives：提供修改方向與合規替代詞句。
 
-請僅以 JSON 回覆（不要任何其他文字、不要 markdown）：
+【極重要規則】gray_areas 裡的 "phrase" 欄位，一定要是直接從上面【待審文案】中逐字複製出來的一小段真實文字，長度通常 2 到 15 個字。絕對禁止把下面 JSON 範例格式裡的說明文字（例如「從文案中擷取的原始片段」這幾個字）當作答案抄進去，那只是欄位說明，不是範例答案。如果你在文案裡找不到任何值得標記的片段，就把 gray_areas 設為空陣列 []，不要硬湊。
+
+舉例一：如果【待審文案】是「本產品三天有感，讓你代謝變快，體態更輕盈」，正確的 gray_areas 應該長這樣：
+[
+  {{"phrase": "三天有感", "label": "時效宣稱", "reason": "缺乏具體實驗數據佐證，屬於誇大時效宣稱", "law_ref": "食安法第28條第1項"}},
+  {{"phrase": "代謝變快", "label": "體感變化描述", "reason": "暗示生理機能改變，屬於誇大不實描述", "law_ref": "食安法第28條第1項"}}
+]
+
+舉例二：如果【待審文案】是「1瓶抵12瓶效果，業界唯一獨家配方，用過都說有感」，正確的 gray_areas 應該長這樣：
+[
+  {{"phrase": "1瓶抵12瓶效果", "label": "誇大數字宣稱", "reason": "以無法舉證的倍數效果誇大功效", "law_ref": "食安法第28條第1項"}},
+  {{"phrase": "業界唯一獨家配方", "label": "排他宣稱", "reason": "宣稱獨家但無法舉證，涉及不實比較", "law_ref": "食安法第28條第1項"}},
+  {{"phrase": "用過都說有感", "label": "見證宣稱", "reason": "以他人使用經驗暗示效果，屬於見證式宣稱，易誤導消費者", "law_ref": "食安法第28條第1項"}}
+]
+
+請僅以 JSON 回覆（不要任何其他文字、不要 markdown、不要重複輸出範例內容）：
 {{
   "overall_assessment": "整體評估（2-3句話）",
   "semantic_risks": ["明確違規的語意風險1", "語意風險2"],
   "gray_areas": [
     {{
-      "phrase": "從文案中擷取的原始片段（需與原文完全一致以便標註）",
+      "phrase": "（從【待審文案】逐字複製的真實片段）",
       "label": "風險類型（如：誇大數字宣稱／排他宣稱／時效宣稱／暗示療效／見證宣稱）",
       "reason": "為何屬於灰色地帶、有何開罰風險",
       "law_ref": "相關法規條文"
@@ -204,19 +218,32 @@ def call_taide(prompt):
     if not TAIDE_ENDPOINT:
         return None
 
+    # /api/generate 是純文字接龍模式；TAIDE 微調時用的是對話格式，
+    # 改用 /api/chat（同一個 ngrok/Ollama 服務，換個路徑）通常指令遵循度較好。
+    chat_endpoint = TAIDE_ENDPOINT.rsplit("/api/", 1)[0] + "/api/chat"
+
+    system_msg = (
+        "你是台灣衛生福利部食品藥物管理署的廣告法規合規專家。"
+        "請務必只回覆合法的 JSON，不要有任何其他文字、不要 markdown 標記、不要重複輸出範例內容。"
+    )
+
     # 桌機/ngrok tunnel 可能斷線或跑得比較慢，timeout 抓寬一點
     with httpx.Client(timeout=60.0) as client:
         resp = client.post(
-            TAIDE_ENDPOINT,
+            chat_endpoint,
             json={
                 "model": TAIDE_MODEL,
-                "prompt": prompt,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
                 "stream": False,
-                "options": {"temperature": 0.2},
+                "format": "json",
+                "options": {"temperature": 0.1},
             },
         )
         resp.raise_for_status()
-        return resp.json().get("response", "")
+        return resp.json().get("message", {}).get("content", "")
 
 
 def call_llm(text, violations, category):
@@ -244,7 +271,12 @@ def call_llm(text, violations, category):
 
     gray_areas = []
     for ga in parsed.get("gray_areas", []):
-        phrase = (ga.get("phrase") or "").strip()
+        phrase = (ga.get("phrase") or "").strip().strip("「」\"'")
+        # 防呆：小模型（如 TAIDE）有時會把範例說明文字當成答案吐出來，
+        # 這裡驗證 phrase 是否真的是原文的一部分，不是的話直接捨棄，
+        # 避免在畫面上出現「從文案中擷取的原始片段」這種假資料。
+        if not phrase or phrase not in text:
+            continue
         gray_areas.append({
             "phrase": phrase,
             "label": ga.get("label", "灰色地帶"),
