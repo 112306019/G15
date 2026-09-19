@@ -16,12 +16,24 @@ from rules import detect_violations, applicable_groups, CATEGORY_NAMES
 
 app = FastAPI(title="廣告文案品質檢測系統 API", version="1.1.0")
 
+# CORS 允許清單改用環境變數設定，避免之後修改這個檔案的其他部分時
+# 不小心又把正式前端網域蓋掉（這已經發生過兩次）。
+# CORS_ALLOWED_ORIGINS 用逗號分隔多個網域；沒設定時使用下面這組預設值。
+_default_cors_origins = (
+    "http://localhost:5173,"
+    "http://127.0.0.1:5173,"
+    "https://adchecker.onrender.com,"
+    "https://g15-frontend.onrender.com"
+)
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", _default_cors_origins).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://adchecker.onrender.com",],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
