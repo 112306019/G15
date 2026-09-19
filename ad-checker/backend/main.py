@@ -4,11 +4,14 @@ from pydantic import BaseModel
 from typing import Optional
 import json
 import os
+import re
 from dotenv import load_dotenv
 load_dotenv()
 import time
 import httpx
+import opencc
 import google.generativeai as genai
+import numpy as np
 from rules import detect_violations, applicable_groups, CATEGORY_NAMES
 
 app = FastAPI(title="廣告文案品質檢測系統 API", version="1.1.0")
@@ -18,8 +21,7 @@ app.add_middleware(
     allow_origins=[
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://adchecker.onrender.com",
-    "https://g15-frontend.onrender.com",],
+    "https://adchecker.onrender.com",],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,8 +31,93 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-TAIDE_ENDPOINT = os.getenv("TAIDE_ENDPOINT", "")  # e.g. https://xxxx.ngrok-free.dev/api/generate
-TAIDE_MODEL = os.getenv("TAIDE_MODEL", "hf.co/ZoneTwelve/TAIDE-LX-7B-Chat-GGUF:Q4_K_M")
+NGROK_ENDPOINT = os.getenv("NGROK_ENDPOINT", "")  # e.g. https://xxxx.ngrok-free.dev/api/generate
+QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5:7b-instruct-q4_K_M")
+
+# s2twp：簡體 → 繁體，並轉換成台灣慣用詞（軟件→軟體、信息→資訊 等）
+# 對已經是繁體的輸入（例如 TAIDE）基本上不會有作用，安全可以一律套用
+_s2twp = opencc.OpenCC("s2twp")
+
+EMBED_MODEL = "models/gemini-embedding-001"
+CASE_INDEX_PATH = os.path.join(os.path.dirname(__file__), "case_index.json")
+
+# ---------------------------------------------------------------------------
+# RAG：真實判決/函釋案例檢索
+# 服務啟動時載入一次（case_index.json 是離線用 build_case_index.py 產生的），
+# 之後每次請求只做向量相似度計算，不會重新呼叫 embedding API。
+# ---------------------------------------------------------------------------
+_case_bank = []          # list of case dict（不含 embedding，用來回傳內容）
+_case_vectors = None     # numpy array, shape (N, D)
+_case_categories = []    # list[str]，跟 _case_bank 對齊，用來篩選類別
+
+if os.path.exists(CASE_INDEX_PATH) and GEMINI_API_KEY:
+    try:
+        with open(CASE_INDEX_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+        _case_bank = [{k: v for k, v in c.items() if k != "embedding"} for c in raw]
+        _case_categories = [c["category"] for c in raw]
+        _case_vectors = np.array([c["embedding"] for c in raw], dtype=np.float32)
+        # 預先做 L2 normalize，之後算 cosine similarity 只需要做內積
+        norms = np.linalg.norm(_case_vectors, axis=1, keepdims=True)
+        norms[norms == 0] = 1e-8
+        _case_vectors = _case_vectors / norms
+        print(f"已載入 {len(_case_bank)} 筆實務案例索引")
+    except Exception as e:
+        print(f"案例索引載入失敗，將不使用 RAG 檢索: {e}")
+
+
+def _embed_query(text):
+    result = genai.embed_content(
+        model=EMBED_MODEL,
+        content=text,
+        task_type="RETRIEVAL_QUERY",
+    )
+    vec = np.array(result["embedding"], dtype=np.float32)
+    return vec / (np.linalg.norm(vec) + 1e-8)
+
+
+def retrieve_similar_cases(text, category, top_k=5):
+    """依語意相似度，從真實判決/函釋案例中找出跟目前文案最相關的幾筆，
+    只在同一個產品類別內比對（食品文案不會比對到藥品案例）。
+
+    文案通常一句話裡包含好幾個不同的宣稱（例如同時有時效宣稱、體感變化、
+    排他宣稱），如果整段文字只轉一個 embedding 去查，向量會被字數多的主題
+    「拉走」，少數的主張（例如短短一句「業界唯一」）訊號會被稀釋掉，導致
+    查不到對應案例。因此改成把文案拆成一句一句分別查，各自找出最相關的
+    案例後再合併、去重，確保每個獨立主張都有機會撈到對應的真實案例。"""
+    if _case_vectors is None or not GEMINI_API_KEY:
+        return []
+
+    # 用常見中文標點拆句，並濾掉空字串/太短的殘留片段
+    clauses = [c.strip() for c in re.split(r"[，。！？；、\n]", text) if len(c.strip()) >= 2]
+    if not clauses:
+        clauses = [text]
+
+    # 同一類別的候選案例先篩出來，避免每個子句都重算一次篩選
+    category_idx = [i for i in range(len(_case_bank)) if _case_categories[i] == category]
+    if not category_idx:
+        return []
+    category_vectors = _case_vectors[category_idx]
+
+    scored = {}  # case 在 _case_bank 中的 index -> 目前看過的最高相似度
+    for clause in clauses:
+        try:
+            query_vec = _embed_query(clause)
+        except Exception as e:
+            print(f"查詢 embedding 失敗（子句：{clause[:20]}...），略過: {e}")
+            continue
+
+        sims = category_vectors @ query_vec
+        # 每個子句只取最相關的 1-2 筆，避免同一句話霸佔掉所有名額
+        top_local = np.argsort(sims)[::-1][:2]
+        for local_i in top_local:
+            global_i = category_idx[local_i]
+            sim = float(sims[local_i])
+            if global_i not in scored or sim > scored[global_i]:
+                scored[global_i] = sim
+
+    ranked = sorted(scored.items(), key=lambda x: x[1], reverse=True)
+    return [_case_bank[i] for i, _ in ranked[:top_k]]
 
 
 class AnalyzeRequest(BaseModel):
@@ -138,12 +225,25 @@ def build_highlighted_segments(text, violations, gray_areas):
     return segments
 
 
-def build_compliance_prompt(text, violations, category):
+def build_compliance_prompt(text, violations, category, retrieved_cases=None):
     cat_name = CATEGORY_NAMES.get(category, "食品")
     violation_summary = (
         f"規則引擎已偵測到的明確違規詞：{'、'.join(v['word'] for v in violations)}"
         if violations else "規則引擎未偵測到明確違規詞。"
     )
+
+    cases_block = ""
+    if retrieved_cases:
+        case_lines = []
+        for c in retrieved_cases:
+            summary = c["summary"][:300]  # 避免單筆過長把 prompt 撐爆
+            case_lines.append(f"・（{c['type']}，{c['date']}）{summary}")
+        cases_block = (
+            "\n【相關實務案例參考（真實判決／函釋，非本次待審文案）】\n"
+            "以下是過去實際認定違規的判決或函釋摘要，供你判斷本次文案時參考類似的認定標準與法條引用方式，"
+            "不代表待審文案內容跟這些案例相同：\n"
+            + "\n".join(case_lines) + "\n"
+        )
 
     prompt = f"""你是台灣衛生福利部食品藥物管理署的廣告法規合規專家，精通《食品安全衛生管理法》《化粧品衛生安全管理法》《醫療器材管理法》《藥事法》及相關認定準則。
 
@@ -155,7 +255,7 @@ def build_compliance_prompt(text, violations, category):
 
 【規則引擎結果（僅供參考）】
 {violation_summary}
-
+{cases_block}
 你的任務分三部分：
 1. semantic_risks：找出語意層級「明確違規」的問題（即使規則引擎沒抓到字面詞）。
 2. gray_areas：判讀「灰色地帶」。這些不是固定禁用詞，而是需要靠語意與舉證可能性判斷的踩線說法，例如「1瓶抵12瓶」這類無法舉證的誇大數字、「業界唯一」這類排他宣稱、「7天有感」這類時效宣稱、暗示性療效、見證式宣稱、體感變化描述（如代謝變快、體態改善、氣色變好）等。請盡可能寬鬆地判讀，只要片段本身缺乏具體舉證依據、帶有誇大或暗示效果的語氣，就應列為 gray_areas，即使同一句話裡也包含被規則引擎抓到的明確違規詞（兩者可以並存，不互斥，請針對句子中不同片段分別標註）。除非文案完全平鋪直敘、毫無任何主觀效果宣稱，否則 gray_areas 通常不應為空陣列。
@@ -216,12 +316,12 @@ def call_gemini(prompt):
 
 
 def call_taide(prompt):
-    if not TAIDE_ENDPOINT:
+    if not NGROK_ENDPOINT:
         return None
 
     # /api/generate 是純文字接龍模式；TAIDE 微調時用的是對話格式，
     # 改用 /api/chat（同一個 ngrok/Ollama 服務，換個路徑）通常指令遵循度較好。
-    chat_endpoint = TAIDE_ENDPOINT.rsplit("/api/", 1)[0] + "/api/chat"
+    chat_endpoint = NGROK_ENDPOINT.rsplit("/api/", 1)[0] + "/api/chat"
 
     system_msg = (
         "你是台灣衛生福利部食品藥物管理署的廣告法規合規專家。"
@@ -233,7 +333,7 @@ def call_taide(prompt):
         resp = client.post(
             chat_endpoint,
             json={
-                "model": TAIDE_MODEL,
+                "model": QWEN_MODEL,
                 "messages": [
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt},
@@ -244,17 +344,23 @@ def call_taide(prompt):
             },
         )
         resp.raise_for_status()
-        return resp.json().get("message", {}).get("content", "")
+        raw = resp.json().get("message", {}).get("content", "")
+        # Qwen 等非繁中優化模型常會回簡體，這裡統一轉繁體＋台灣慣用詞
+        return _s2twp.convert(raw)
 
 
 def call_llm(text, violations, category):
-    if not TAIDE_ENDPOINT and not GEMINI_API_KEY:
+    if not NGROK_ENDPOINT and not GEMINI_API_KEY:
         return None, []
 
-    prompt = build_compliance_prompt(text, violations, category)
+    retrieved_cases = retrieve_similar_cases(text, category, top_k=4)
+    print(f"[RAG] 檢索到 {len(retrieved_cases)} 筆相關案例:")
+    for c in retrieved_cases:
+        print(f"  - ({c['type']}, {c['date']}) {c['summary'][:60]}...")
+    prompt = build_compliance_prompt(text, violations, category, retrieved_cases)
 
     raw = None
-    if TAIDE_ENDPOINT:
+    if NGROK_ENDPOINT:
         try:
             raw = call_taide(prompt)
         except Exception as e:
@@ -305,8 +411,8 @@ def root():
 def health():
     return {
         "status": "ok",
-        "ai_enabled": bool(TAIDE_ENDPOINT or GEMINI_API_KEY),
-        "ai_provider": "taide" if TAIDE_ENDPOINT else ("gemini" if GEMINI_API_KEY else None),
+        "ai_enabled": bool(NGROK_ENDPOINT or GEMINI_API_KEY),
+        "ai_provider": "qwen" if NGROK_ENDPOINT else ("gemini" if GEMINI_API_KEY else None),
     }
 
 
