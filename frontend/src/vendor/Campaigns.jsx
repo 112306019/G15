@@ -159,6 +159,22 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   const [form, setForm] = useState(defaultForm)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const [categoryOptions, setCategoryOptions] = useState([])
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/product/categories`)
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setCategoryOptions(data)
+        }
+      } catch (err) {
+        console.error('商品分類載入失敗', err)
+      }
+    }
+    loadCategories()
+  }, [])
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
@@ -553,6 +569,18 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 <Input label="商品售價 (NT$) *" type="number" disabled={locked} value={form.prodPrice} onChange={set('prodPrice')} placeholder="1200" />
                 <Input label="提供庫存 *" type="number" value={form.prodStock} onChange={set('prodStock')} placeholder="100" />
               </div>
+              <div className="flex flex-col gap-1.5 w-full">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">商品分類</label>
+                <select
+                  disabled={locked}
+                  value={form.prodCategory}
+                  onChange={set('prodCategory')}
+                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60"
+                >
+                  <option value="">選擇分類</option>
+                  {categoryOptions.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                </select>
+              </div>
             </>
           )}
         </>}
@@ -584,7 +612,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <Input
                 label={form.discountType === 'percentage' ? '折扣比例 (%) *' : '直接折價金額 (NT$) *'}
                 type="number"
-                min="0"
+                min="0.01"
                 max={form.discountType === 'percentage' ? '100' : originalPrice || undefined}
                 step="0.01"
                 disabled={locked}
@@ -694,7 +722,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
                   (step === 1 && !form.prodName) ||
-                  (step === 2 && (form.discountValue === '' || Number(form.discountValue) < 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
+                  (step === 2 && (form.discountValue === '' || form.kocCommissionRate === '' || Number(form.discountValue) <= 0 || Number(form.kocCommissionRate) < 0 || Number(form.kocCommissionRate) > 100 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
                   isSaving
                 }
                 className="gap-1.5 px-8 w-full sm:w-auto"
@@ -1028,7 +1056,7 @@ export default function Campaigns() {
   if (campaignLoading) {
     return (
       <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
-        任務資料載入中...
+        活動資料載入中...
       </div>
     )
   }
@@ -1039,7 +1067,7 @@ export default function Campaigns() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-8">
         <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18] flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
-          任務與商品總覽
+          推廣活動與商品總覽
         </h2>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">

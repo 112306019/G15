@@ -872,9 +872,35 @@ class CampaignParticipants(models.Model):
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
     koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    # amount：實際會匯入 KOC 銀行帳戶的淨額（財務對帳/CSV 匯出用的就是這個欄位）。
+    # 申請當下從錢包扣除的毛額 = amount + platform_fee。
     amount = models.IntegerField()
+    # 這筆撥款從毛額裡抽走的平台服務費（見 constants.PLATFORM_SERVICE_FEE_RATE_PERCENT），
+    # 只在撥款當下計算一次、之後不會再變動，純粹留存記錄／顯示用。
+    platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
+    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：撥款當下會先
+    # 自動呼叫綠界 B2C 電子發票 API 開立（見 request_payout、
+    # ecpay_invoice.issue_b2c_invoice）；如果自動開立失敗，這幾個欄位會
+    # 留空，改由後台 admin_koc_payout_upload_invoice 手動登打作為備援，
+    # 沿用同一組欄位，前端不用分辨這張發票是自動還是手動開的。
+    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
+    # B2C 電子發票專屬的 4 碼隨機碼，買受人（KOC）要憑「發票號碼＋開立日期＋
+    # 隨機碼」才能在財政部電子發票平台查到這張發票，B2B 發票沒有這個欄位。
+    # 手動登打的發票如果不是走 ECPay B2C（例如財務用別的系統開的）就會是空的。
+    random_number = models.CharField(max_length=10, blank=True, null=True, db_column='random_number')
+    invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
+    # 這張發票是不是我們自己呼叫綠界 B2C API 自動開立的（True）、還是後台
+    # 手動登打的（False，預設值）。只有自動開立的才知道一定是 ECPay 的
+    # B2C 發票，撥款後來被標記失敗時才能呼叫 ecpay_invoice.void_b2c_invoice
+    # 自動作廢；手動登打的可能是用別的系統開票，沒辦法透過我們的程式作廢，
+    # 只能請財務自己去原本開票的系統手動作廢。
+    invoice_issued_automatically = models.BooleanField(default=False, db_column='invoice_issued_automatically')
+    # 撥款後來被標記「匯款失敗」、且發票是自動開立的情況下，系統會自動呼叫
+    # 作廢 API，這裡記錄作廢時間；null 代表沒有被作廢過（不管是因為根本
+    # 沒失敗、還是失敗但發票是手動開的所以沒有自動作廢）。
+    invoice_voided_at = models.DateTimeField(null=True, blank=True, db_column='invoice_voided_at')
 
     class Meta:
         db_table = 'Payouts'
@@ -1266,10 +1292,20 @@ class Notification(models.Model):
     站內通知：系統/廠商/平台做了某件跟這個使用者有關的事，推播一則訊息給他看，
     跟 ChatRoom/SupportChatRoom/OrderChatRoom 那種「雙方對話」的 Message 不是同一件事
     （通知是單向的、沒有回覆）。
+
+    收件人是 user 或 vendor 兩者之一，never both：user 用於消費者/KOC（都是 User
+    model 的帳號），vendor 用於廠商——Vendor 是完全獨立的帳號系統，不是 User 的子類，
+    所以沒辦法共用同一個外鍵，只能兩個外鍵並存、各自 nullable，由建立時只填其中一個
+    來決定這則通知是要給誰看。category 沿用同一份選項，同樣的 category 字串在 user
+    收件跟 vendor 收件兩邊分開用，例如 'koc' 對 KOC 使用者代表「我的接案」相關通知，
+    對廠商則代表「有 KOC 申請/投稿」需要處理，語意不會混淆，因為查詢時一定會先用
+    user_id 或 vendor_id 篩過。
     """
     CATEGORY_CHOICES = [
         ('order', '訂單'),
         ('koc', 'KOC接案'),
+        ('return', '退貨'),
+        ('payout', '撥款'),
     ]
 
     notification_id = models.AutoField(primary_key=True)
@@ -1277,7 +1313,17 @@ class Notification(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name='notifications',
-        db_column='user_id'
+        db_column='user_id',
+        null=True,
+        blank=True,
+    )
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        db_column='vendor_id',
+        null=True,
+        blank=True,
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_column='category')
     title = models.CharField(max_length=200, db_column='title')
@@ -1295,7 +1341,8 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Notification {self.notification_id} ({self.category}) for {self.user_id}"
+        recipient = f"user={self.user_id}" if self.user_id else f"vendor={self.vendor_id}"
+        return f"Notification {self.notification_id} ({self.category}) for {recipient}"
 
 
 # ==============================================================================

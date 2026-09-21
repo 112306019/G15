@@ -37,6 +37,9 @@ from .views.platform import (
     admin_confirm_vendor_payout,
     admin_export_payout_transfers,
     admin_run_monthly_vendor_payouts,
+    admin_list_koc_payouts,
+    admin_confirm_koc_payout,
+    admin_koc_payout_upload_invoice,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
@@ -48,6 +51,7 @@ from .views.platform import (
 from .views.consumer import (
     get_products,
     get_product_detail,
+    get_product_categories,
     create_cart,
     add_cart_item,
     view_cart,
@@ -98,6 +102,7 @@ urlpatterns = [
     path('koc/application/remove/<int:application_id>', views.remove_application, name='koc-application-remove'),
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
+    path('koc/revenue/getPayoutRecords', views.get_payout_records, name='koc-revenue-get-payout-records'),
     path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
     path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
@@ -133,6 +138,9 @@ urlpatterns = [
     path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
     path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
     path('platform/vendor/run-monthly-payouts', admin_run_monthly_vendor_payouts, name='platform-vendor-run-monthly-payouts'),
+    path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
+    path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
+    path('platform/koc/payout/uploadInvoice', admin_koc_payout_upload_invoice, name='platform-koc-payout-upload-invoice'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
@@ -157,6 +165,7 @@ urlpatterns = [
     path('platform/taxForms/review', admin_review_tax_form, name='platform-tax-forms-review'),
     # consumer - 商品
     path('consumer/products', get_products, name='get-products'),
+    path('consumer/product/categories', get_product_categories, name='get-product-categories'),
     path('consumer/product/detail', get_product_detail, name='get-product-detail'),
     # consumer - 購物車
     path('consumer/cart/create', create_cart, name='create-cart'),

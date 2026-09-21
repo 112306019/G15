@@ -294,6 +294,37 @@ def verify_check_mac_value(params: dict) -> bool:
     return hmac.compare_digest(received.upper(), calculated)
 
 
+def _notify_vendors_new_order(order_id):
+    """
+    訂單付款成功後，通知每個有商品在這張訂單裡的廠商有新訂單進來。
+    同一張訂單可能同時有多個廠商的商品，逐一各發一則、不是整張訂單只發一則。
+    通知寫入失敗不影響付款結果本身的寫入，這裡吃掉例外只記 log。
+    """
+    try:
+        from api.models import OrderItem, Vendor
+        from api.notifications import create_notification
+
+        vendor_ids = set(
+            OrderItem.objects.filter(order_id=order_id)
+            .values_list('product__vendor_id', flat=True)
+        )
+        vendor_ids.discard(None)
+
+        for vendor_id in vendor_ids:
+            vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+            if vendor:
+                create_notification(
+                    vendor=vendor,
+                    category='order',
+                    title='有新訂單進來',
+                    body=f'訂單 {order_id} 已完成付款，請盡快準備出貨。',
+                    reference_type='vendor_order',
+                    reference_id=str(order_id),
+                )
+    except Exception:
+        logger.exception("通知廠商新訂單失敗：order_id=%s", order_id)
+
+
 def _apply_payment_result(payment: PaymentTransaction, *, ecpay_trade_no, raw_response, is_paid: bool) -> PaymentTransaction:
     """
     共用邏輯：把一筆「已經確認過的」付款結果寫回 PaymentTransaction，並同步 Order.payment_status。
@@ -308,7 +339,16 @@ def _apply_payment_result(payment: PaymentTransaction, *, ecpay_trade_no, raw_re
     payment.save(update_fields=["ecpay_trade_no", "raw_response", "status", "updated_at"])
 
     if payment.status == PaymentTransaction.STATUS_PAID:
-        Order.objects.filter(order_id=payment.order_id).update(payment_status="paid")
+        # exclude 已經是 paid 的訂單再 update：這支函式可能被 webhook 跟主動對帳
+        # 兩條路徑各呼叫一次，用 update 影響筆數當作「這是不是第一次變成 paid」的
+        # 判斷依據，確保通知只發一次，不會同一張訂單被兩邊都觸發各發一次。
+        newly_paid_count = (
+            Order.objects.filter(order_id=payment.order_id)
+            .exclude(payment_status="paid")
+            .update(payment_status="paid")
+        )
+        if newly_paid_count:
+            _notify_vendors_new_order(payment.order_id)
 
     return payment
 

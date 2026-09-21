@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, Headset } from 'lucide-react';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -10,6 +10,7 @@ import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
+import PayoutRecordsPage from './koc/PayoutRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
 import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
@@ -61,6 +62,7 @@ const VIEW_TO_PATH = {
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
   tax_form_records: '/earnings/tax-forms',
+  payout_records: '/earnings/payouts',
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
@@ -86,13 +88,12 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   const [expandedMenu, setExpandedMenu] = useState('home');
 
   const allMenuItems = [
-    { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
     { icon: <Briefcase size={18} />, label: '我的接案', view: 'home', role: 'koc' },
-    { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
-    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
-    { icon: <Headset size={18} />, label: '客服諮詢', view: 'support' },
+    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
+    { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
+    { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
 
@@ -100,7 +101,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     if (item.role === 'koc' && userRole !== 'koc') return false;
     if (item.role === 'shopper' && userRole !== 'shopper') return false;
     return true;
-  });
+  });      
 
   return (
     <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
@@ -433,7 +434,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
-      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -493,7 +494,7 @@ function MainSystem() {
 
   const getSidebarActiveView = () => {
     if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'tax_form_records'].includes(view)) return 'earnings';
+    if (['earnings', 'earnings_detail', 'tax_form_records', 'payout_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
@@ -656,7 +657,6 @@ function MainSystem() {
         <Route path="/tax-form-print" element={<TaxFormPrintView />} />
         <Route path="/tax-form-print/:formId" element={<TaxFormPrintView />} />
 
-        {/* 下面這些頁面共用左側 Sidebar 的殼 */}
         <Route path="/home" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <HomePage
@@ -724,6 +724,7 @@ function MainSystem() {
             <EarningsPage
               onDetail={() => handleNavigate('earnings_detail')}
               onTaxFormRecords={() => handleNavigate('tax_form_records')}
+              onPayoutRecords={() => handleNavigate('payout_records')}
             />
           </ShellLayout>
         } />
@@ -737,6 +738,12 @@ function MainSystem() {
         <Route path="/earnings/tax-forms" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <TaxFormRecordsPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/payouts" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <PayoutRecordsPage onBack={() => handleNavigate('earnings')} />
           </ShellLayout>
         } />
 
@@ -810,8 +817,6 @@ function MainSystem() {
   );
 }
 
-// 左側 Sidebar + 內容區的共用外殼
-// [RWD 優化] 將 padding 和 margin 改為響應式，手機版取消左側 margin，讓內容滿版
 function ShellLayout({ userRole, activeView, onNavigate, children }) {
   return (
     <div className="flex p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
