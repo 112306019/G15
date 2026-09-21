@@ -239,6 +239,36 @@ export default function OrdersPage({
 
   const userId = localStorage.getItem("userId");
 
+  // 已完成／已取消不像其他分類單純顯示總筆數，而是「有新的才顯示角標」：
+  // 用 localStorage 記住看過的訂單 id（依使用者區分），點進該分類就把
+  // 目前看到的全部記為已讀，角標會消失，之後只有新出現的訂單才會再冒出來。
+  const seenStorageKey = (category) => `orders_seen_${category}_${userId || "guest"}`;
+  const readSeenIds = (category) => {
+    try {
+      const raw = localStorage.getItem(seenStorageKey(category));
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+  const [seenIds, setSeenIds] = useState(() => ({
+    completed: readSeenIds("completed"),
+    cancelled: readSeenIds("cancelled"),
+  }));
+
+  const markCategorySeen = (category, ids) => {
+    setSeenIds((prev) => {
+      const merged = new Set(prev[category]);
+      ids.forEach((id) => merged.add(id));
+      try {
+        localStorage.setItem(seenStorageKey(category), JSON.stringify([...merged]));
+      } catch {
+        // localStorage 寫入失敗（例如無痕模式）不影響當前畫面顯示，忽略即可
+      }
+      return { ...prev, [category]: merged };
+    });
+  };
+
   useEffect(() => {
     const fetchOrders = async () => {
       try {
@@ -339,13 +369,23 @@ export default function OrdersPage({
     (o) => o.order_status === "cancelled" || o.payment_status === "refunded" || hasReturn(o)
   ).map(toHistoryItem);
 
+  const newCompletedCount = completedOrders.filter((o) => !seenIds.completed.has(o.id)).length;
+  const newCancelledCount = cancelledOrders.filter((o) => !seenIds.cancelled.has(o.id)).length;
+
   const ORDER_CATEGORIES = [
-    { key: "established", label: "已成立", icon: ClipboardCheck, list: establishedOrders, type: "active" },
-    { key: "preparing", label: "備貨中", icon: PackageSearch, list: preparingOrders, type: "active" },
-    { key: "shipped", label: "已出貨", icon: Truck, list: shippedOrders, type: "active" },
-    { key: "completed", label: "已完成", icon: CheckCircle2, list: completedOrders, type: "history" },
-    { key: "cancelled", label: "已取消", icon: XCircle, list: cancelledOrders, type: "history" },
+    { key: "established", label: "已成立", icon: ClipboardCheck, list: establishedOrders, type: "active", badgeCount: establishedOrders.length },
+    { key: "preparing", label: "備貨中", icon: PackageSearch, list: preparingOrders, type: "active", badgeCount: preparingOrders.length },
+    { key: "shipped", label: "已出貨", icon: Truck, list: shippedOrders, type: "active", badgeCount: shippedOrders.length },
+    { key: "completed", label: "已完成", icon: CheckCircle2, list: completedOrders, type: "history", badgeCount: newCompletedCount },
+    { key: "cancelled", label: "已取消", icon: XCircle, list: cancelledOrders, type: "history", badgeCount: newCancelledCount },
   ];
+
+  const handleSelectCategory = (category) => {
+    setActiveCategory(category.key);
+    if (category.key === "completed" || category.key === "cancelled") {
+      markCategorySeen(category.key, category.list.map((o) => o.id));
+    }
+  };
 
   if (loading) {
     return (
@@ -393,12 +433,12 @@ export default function OrdersPage({
               return (
                 <button
                   key={category.key}
-                  onClick={() => setActiveCategory(category.key)}
+                  onClick={() => handleSelectCategory(category)}
                   className={`flex-shrink-0 min-w-[90px] md:flex-1 md:min-w-[120px] flex flex-col items-center justify-center py-3 md:py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
                 >
-                  {category.list.length > 0 && (
+                  {category.badgeCount > 0 && (
                     <span className="absolute top-2 right-3 md:top-3 md:right-6 w-4 h-4 md:w-5 md:h-5 bg-[#C8522A] text-white text-[9px] md:text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
-                      {category.list.length}
+                      {category.badgeCount}
                     </span>
                   )}
                   <Icon size={18} className={`mb-1.5 md:mb-2 md:w-5 md:h-5 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
