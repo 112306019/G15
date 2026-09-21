@@ -2,11 +2,12 @@ import json
 import hashlib
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.utils import timezone
 from urllib.parse import urlencode, parse_qs, quote_plus
 from urllib.request import Request, urlopen
 
-from api.models import ShipmentInfo, OrderItem, Vendor
+from api.models import ShipmentInfo, OrderItem, Vendor, ReturnRequest
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -847,4 +848,128 @@ def query_ecpay_logistics_order(shipment):
             shipment.booking_note or "",
         "ecpay_response":
             response_data,
+    }
+
+
+def create_ecpay_return_logistics_order(return_request):
+    """
+    建立綠界 7-ELEVEN B2C 逆物流（退貨）訂單，取得退貨編號讓消費者拿去超商 ibon
+    操作寄件。目前只支援商品原訂單是 7-ELEVEN 取貨（CVS/UNIMARTC2C）的情況；
+    家宅宅配的退貨流程還沒有實作，呼叫端要先自行判斷再決定要不要呼叫這個函式。
+
+    成功時把 ecpay_return_trade_no / ecpay_return_order_no / return_ship_deadline
+    寫回 return_request 並回傳 dict；失敗時拋出 ValueError，呼叫端自行決定
+    要不要讓整個退貨申請流程失敗，或退回人工審核。
+    """
+    order = return_request.order
+
+    try:
+        shipment = ShipmentInfo.objects.get(order=order)
+    except ShipmentInfo.DoesNotExist:
+        raise ValueError("此訂單沒有物流資訊，無法建立退貨編號")
+
+    if shipment.logistics_type != "CVS" or shipment.logistics_sub_type != "UNIMARTC2C":
+        raise ValueError("目前僅支援 7-ELEVEN 取貨訂單的自動退貨流程")
+
+    if not settings.ECPAY_LOGISTICS_REPLY_URL:
+        raise ValueError("尚未設定 ECPAY_LOGISTICS_REPLY_URL")
+
+    # 退貨品項：單品項退貨只算那一項，整張訂單退貨則列出所有品項
+    if return_request.order_item:
+        order_items = [return_request.order_item]
+    else:
+        order_items = list(OrderItem.objects.filter(order=order).select_related("product"))
+
+    goods_names = [
+        sanitize_ecpay_goods_name(item.product.product_name)
+        for item in order_items
+    ]
+    goods_names = [name for name in goods_names if name]
+
+    if not goods_names:
+        raise ValueError("商品名稱清理後為空，無法建立退貨編號")
+
+    goods_name = truncate_ecpay_goods_name(",".join(goods_names), 50)
+
+    goods_amount = int(return_request.requested_amount)
+    if goods_amount <= 0 or goods_amount > 20000:
+        raise ValueError("退貨金額超出綠界逆物流可接受範圍（1~20000）")
+
+    merchant_trade_no = (
+        "RTN" + datetime.now().strftime("%y%m%d%H%M%S") + str(return_request.return_id)[:8]
+    )[:20]
+
+    # 逆物流的「寄件人」是原本的收件人（消費者本人要去超商寄退貨包裹），
+    # 「收件人」則是廠商——但綠界這支 API 不需要收件人資訊，貨物流向由
+    # 廠商後台在綠界系統上設定的退貨門市決定，這裡只需要消費者的寄件資訊。
+    sender_name = (order.address.recipient_name if order.address else "") or ""
+    sender_phone = (order.address.phone if order.address else "") or ""
+
+    if not sender_name or not is_valid_ecpay_cvs_receiver_name(sender_name):
+        raise ValueError(
+            "寄件人姓名格式不符合規定：中文需 2～5 個字，英文需 4～10 個半形英文字母"
+        )
+
+    if not sender_phone or not sender_phone.startswith("09") or not sender_phone.isdigit():
+        raise ValueError("寄件人手機必須為 09 開頭的 10 碼手機號碼")
+
+    params = {
+        "MerchantID": settings.ECPAY_LOGISTICS_MERCHANT_ID,
+        "MerchantTradeNo": merchant_trade_no,
+        "ServerReplyURL": settings.ECPAY_LOGISTICS_REPLY_URL,
+        "GoodsName": goods_name,
+        "GoodsAmount": goods_amount,
+        "CollectionAmount": 0,
+        "ServiceType": "4",
+        "SenderName": sender_name,
+        "SenderPhone": sender_phone,
+        "Remark": f"退貨申請 {return_request.return_id}",
+        "PlatformID": "",
+    }
+
+    params["CheckMacValue"] = generate_ecpay_check_mac_value(params)
+
+    encoded_data = urlencode(params).encode("utf-8")
+
+    request = Request(
+        settings.ECPAY_LOGISTICS_RETURN_CREATE_URL,
+        data=encoded_data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=30) as response:
+            raw_response = response.read().decode("utf-8")
+    except Exception as error:
+        raise ValueError(f"呼叫綠界逆物流 API 失敗：{error}")
+
+    # 逆物流回應格式（不是 1| 開頭）：
+    # 成功：RtnMerchantTradeNo|RtnOrderNo（第一段有值）
+    # 失敗：|ErrorMessage（第一段是空字串，第二段是錯誤訊息）
+    parts = raw_response.split("|")
+    if len(parts) < 2 or not parts[0]:
+        error_message = parts[1] if len(parts) >= 2 else raw_response
+        raise ValueError(f"綠界建立退貨編號失敗：{error_message}")
+
+    return_trade_no = parts[0]
+    return_order_no = parts[1]
+
+    now = timezone.now()
+    return_request.ecpay_return_trade_no = return_trade_no
+    return_request.ecpay_return_order_no = return_order_no
+    return_request.return_ship_deadline = now + timedelta(days=7)
+    return_request.return_ship_expired = False
+    return_request.save(update_fields=[
+        "ecpay_return_trade_no",
+        "ecpay_return_order_no",
+        "return_ship_deadline",
+        "return_ship_expired",
+    ])
+
+    return {
+        "success": True,
+        "ecpay_return_trade_no": return_trade_no,
+        "ecpay_return_order_no": return_order_no,
+        "return_ship_deadline": return_request.return_ship_deadline,
     }
