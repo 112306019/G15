@@ -2014,7 +2014,47 @@ def create_return_request(request):
         status='requested',
     )
 
+    # 自動退貨流程：商品本身可退貨（is_returnable=True）且訂單是 7-ELEVEN 取貨時，
+    # 不需要廠商審核，申請當下直接核准並呼叫綠界逆物流 API 產生退貨編號，
+    # 讓消費者拿去超商 ibon 操作寄件。其餘情況（家宅宅配、商品不可退貨）
+    # 維持現有的廠商人工審核流程，不受影響。
+    auto_return_info = None
+    is_eligible_for_auto_return = True
+
+    if order_item_obj:
+        is_eligible_for_auto_return = bool(
+            order_item_obj.product and order_item_obj.product.is_returnable
+        )
+    else:
+        # 整張訂單退貨：所有品項都要可退貨才能走自動流程
+        # （不可退貨商品早已在前面的檢查中被擋下，理論上不會進到這裡，
+        # 這裡是防禦性判斷，避免未來邏輯調整時遺漏）
+        is_eligible_for_auto_return = not OrderItem.objects.filter(
+            order=order, product__is_returnable=False
+        ).exists()
+
+    if is_eligible_for_auto_return:
+        from api.views.shipping import create_ecpay_return_logistics_order
+
+        try:
+            shipment = ShipmentInfo.objects.filter(order=order).first()
+            if shipment and shipment.logistics_type == 'CVS' and shipment.logistics_sub_type == 'UNIMARTC2C':
+                logistics_result = create_ecpay_return_logistics_order(return_request)
+                return_request.status = 'approved'
+                return_request.approved_at = timezone.now()
+                return_request.save(update_fields=['status', 'approved_at'])
+                auto_return_info = {
+                    'ecpay_return_trade_no': logistics_result['ecpay_return_trade_no'],
+                    'ecpay_return_order_no': logistics_result['ecpay_return_order_no'],
+                    'return_ship_deadline': logistics_result['return_ship_deadline'],
+                }
+        except Exception as e:
+            # 自動退貨流程失敗（例如綠界 API 掛掉、資料不齊全）不影響退貨申請本身
+            # 已經成功建立這件事，只是退回人工審核，廠商還是能在後台看到並手動處理。
+            print(f"自動退貨物流建立失敗（return_id={return_request.return_id}）: {e}")
+
     # 通知廠商有新的退貨申請；通知寫入失敗不影響退貨申請本身成功與否。
+    # 通知內容依是否已自動核准而有不同措辭，讓廠商一看就知道要不要處理。
     try:
         from api.notifications import create_notification
 
@@ -2028,11 +2068,22 @@ def create_return_request(request):
 
         vendor_obj = Vendor.objects.filter(vendor_id=notify_vendor_id).first() if notify_vendor_id else None
         if vendor_obj:
+            if auto_return_info:
+                notify_title = '有新的退貨申請（已自動核准）'
+                notify_body = (
+                    f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。'
+                    f'商品符合自動退貨資格，系統已自動核准並產生退貨編號，無需您手動審核。'
+                )
+            else:
+                notify_title = '有新的退貨申請'
+                notify_body = (
+                    f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。'
+                )
             create_notification(
                 vendor=vendor_obj,
                 category='return',
-                title='有新的退貨申請',
-                body=f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。',
+                title=notify_title,
+                body=notify_body,
                 reference_type='vendor_return',
                 reference_id=str(return_request.return_id),
             )
@@ -2046,6 +2097,7 @@ def create_return_request(request):
         'status': return_request.status,
         'refund_scope': refund_scope,
         'requested_amount': str(return_request.requested_amount),
+        'auto_return': auto_return_info,
     }, status=status.HTTP_201_CREATED)
 
 
