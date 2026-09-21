@@ -1450,6 +1450,16 @@ class ReturnRequest(models.Model):
     # 退成功，要看這個欄位有沒有值，不能只看 status='refunded'
     ecpay_refund_trade_no = models.CharField(max_length=50, blank=True, null=True)
 
+    # 自動退貨流程（商品 is_returnable=True 且訂單為 7-ELEVEN 取貨）：
+    # 申請當下直接呼叫綠界產生逆物流退貨編號，消費者拿這組編號去超商 ibon 操作。
+    # return_ship_deadline 是 7 天寄件期限，超過沒寄出就視為這組編號失效
+    # （return_ship_expired=True），但只要訂單還在鑑賞期內，消費者可以重新申請、
+    # 重新產生一組新的退貨編號。
+    ecpay_return_trade_no = models.CharField(max_length=30, blank=True, null=True, db_column='ecpay_return_trade_no')
+    ecpay_return_order_no = models.CharField(max_length=30, blank=True, null=True, db_column='ecpay_return_order_no')
+    return_ship_deadline = models.DateTimeField(null=True, blank=True, db_column='return_ship_deadline')
+    return_ship_expired = models.BooleanField(default=False, db_column='return_ship_expired')
+
     requested_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     rejected_at = models.DateTimeField(null=True, blank=True)

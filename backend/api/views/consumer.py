@@ -360,8 +360,19 @@ def view_cart(request):
         for v in Vendor.objects.filter(vendor_id__in=vendor_ids)
     }
 
+    # 一個商品只會綁一個活動：查出每個商品所屬活動的 status，
+    # 購物車顯示「是否下架」時，商品本身 status 和活動 status 都要看，
+    # 任一邊不是 active 就視為下架（不能再購買）。
+    product_ids = [item.product.product_id for item in items if item.product]
+    campaign_status_by_product_id = {
+        cp.product_id: cp.campaign.status
+        for cp in CampaignProduct.objects.filter(product_id__in=product_ids).select_related('campaign')
+    }
+
     result_items = []
     for item in items:
+        campaign_status = campaign_status_by_product_id.get(item.product.product_id)
+        is_active = item.product.status == 'active' and (campaign_status is None or campaign_status == 'active')
         result_items.append({
             'Cart_item_id': item.cart_item_id,
             'Product_id': item.product.product_id,
@@ -371,7 +382,7 @@ def view_cart(request):
             'subtotal': item.subtotal,
             'Vendor_id': item.product.vendor_id,
             'Vendor_name': vendor_name_by_id.get(item.product.vendor_id, item.product.vendor_id),
-            'product_status': item.product.status,
+            'product_status': 'active' if is_active else 'inactive',
         })
 
     return Response({
@@ -508,8 +519,20 @@ def view_wishlist(request):
         )
 
     wishlists = Wishlist.objects.filter(user=user).select_related('product')
+
+    # 一個商品只會綁一個活動：查出每個商品所屬活動的 status，
+    # 收藏頁面顯示「是否下架」時，商品本身 status 和活動 status 都要看，
+    # 任一邊不是 active 就視為下架。
+    product_ids = [w.product.product_id for w in wishlists if w.product]
+    campaign_status_by_product_id = {
+        cp.product_id: cp.campaign.status
+        for cp in CampaignProduct.objects.filter(product_id__in=product_ids).select_related('campaign')
+    }
+
     result = []
     for w in wishlists:
+        campaign_status = campaign_status_by_product_id.get(w.product.product_id)
+        is_active = w.product.status == 'active' and (campaign_status is None or campaign_status == 'active')
         result.append({
             'Wishlist_id': w.wishlist_id,
             'User_id': w.user.user_id,
@@ -518,6 +541,7 @@ def view_wishlist(request):
             'price': w.product.discounted_price or w.product.price,
             'image_url': w.product.image_url,
             'stock': w.product.stock,
+            'product_status': 'active' if is_active else 'inactive',
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -1990,7 +2014,47 @@ def create_return_request(request):
         status='requested',
     )
 
+    # 自動退貨流程：商品本身可退貨（is_returnable=True）且訂單是 7-ELEVEN 取貨時，
+    # 不需要廠商審核，申請當下直接核准並呼叫綠界逆物流 API 產生退貨編號，
+    # 讓消費者拿去超商 ibon 操作寄件。其餘情況（家宅宅配、商品不可退貨）
+    # 維持現有的廠商人工審核流程，不受影響。
+    auto_return_info = None
+    is_eligible_for_auto_return = True
+
+    if order_item_obj:
+        is_eligible_for_auto_return = bool(
+            order_item_obj.product and order_item_obj.product.is_returnable
+        )
+    else:
+        # 整張訂單退貨：所有品項都要可退貨才能走自動流程
+        # （不可退貨商品早已在前面的檢查中被擋下，理論上不會進到這裡，
+        # 這裡是防禦性判斷，避免未來邏輯調整時遺漏）
+        is_eligible_for_auto_return = not OrderItem.objects.filter(
+            order=order, product__is_returnable=False
+        ).exists()
+
+    if is_eligible_for_auto_return:
+        from api.views.shipping import create_ecpay_return_logistics_order
+
+        try:
+            shipment = ShipmentInfo.objects.filter(order=order).first()
+            if shipment and shipment.logistics_type == 'CVS' and shipment.logistics_sub_type == 'UNIMARTC2C':
+                logistics_result = create_ecpay_return_logistics_order(return_request)
+                return_request.status = 'approved'
+                return_request.approved_at = timezone.now()
+                return_request.save(update_fields=['status', 'approved_at'])
+                auto_return_info = {
+                    'ecpay_return_trade_no': logistics_result['ecpay_return_trade_no'],
+                    'ecpay_return_order_no': logistics_result['ecpay_return_order_no'],
+                    'return_ship_deadline': logistics_result['return_ship_deadline'],
+                }
+        except Exception as e:
+            # 自動退貨流程失敗（例如綠界 API 掛掉、資料不齊全）不影響退貨申請本身
+            # 已經成功建立這件事，只是退回人工審核，廠商還是能在後台看到並手動處理。
+            print(f"自動退貨物流建立失敗（return_id={return_request.return_id}）: {e}")
+
     # 通知廠商有新的退貨申請；通知寫入失敗不影響退貨申請本身成功與否。
+    # 通知內容依是否已自動核准而有不同措辭，讓廠商一看就知道要不要處理。
     try:
         from api.notifications import create_notification
 
@@ -2004,11 +2068,22 @@ def create_return_request(request):
 
         vendor_obj = Vendor.objects.filter(vendor_id=notify_vendor_id).first() if notify_vendor_id else None
         if vendor_obj:
+            if auto_return_info:
+                notify_title = '有新的退貨申請（已自動核准）'
+                notify_body = (
+                    f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。'
+                    f'商品符合自動退貨資格，系統已自動核准並產生退貨編號，無需您手動審核。'
+                )
+            else:
+                notify_title = '有新的退貨申請'
+                notify_body = (
+                    f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。'
+                )
             create_notification(
                 vendor=vendor_obj,
                 category='return',
-                title='有新的退貨申請',
-                body=f'訂單 {order.order_id} 提出了退貨申請，原因：{valid_reasons.get(reason, reason)}。',
+                title=notify_title,
+                body=notify_body,
                 reference_type='vendor_return',
                 reference_id=str(return_request.return_id),
             )
@@ -2022,6 +2097,7 @@ def create_return_request(request):
         'status': return_request.status,
         'refund_scope': refund_scope,
         'requested_amount': str(return_request.requested_amount),
+        'auto_return': auto_return_info,
     }, status=status.HTTP_201_CREATED)
 
 
