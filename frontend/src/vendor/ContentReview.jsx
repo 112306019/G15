@@ -246,6 +246,16 @@ export default function ContentReview() {
               })
             }
           )
+          // 存檔成功後同步更新列表裡對應那筆的 aiResult，
+          // 這樣關閉 Modal 重新打開（不刷新整頁）也能看到最新結果，
+          // 不會因為 submissions 陣列還是舊資料而顯示過期的審核結果。
+          setSubmissions(previous =>
+            previous.map(item =>
+              item.id === submissionId
+                ? { ...item, aiResult: data }
+                : item
+            )
+          )
         } catch (saveErr) {
           console.error('儲存 AI 審核結果失敗', saveErr)
         }
