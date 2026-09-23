@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, Copy, Check } from 'lucide-react';
 import api from '../api/index';
+import { buildPromoLink } from '../config';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
@@ -50,6 +51,13 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
+  const [copiedPromoCode, setCopiedPromoCode] = useState(null);
+
+  const handleCopyPromoLink = (promoCode) => {
+    navigator.clipboard.writeText(buildPromoLink(promoCode));
+    setCopiedPromoCode(promoCode);
+    setTimeout(() => setCopiedPromoCode((c) => (c === promoCode ? null : c)), 2000);
+  };
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
@@ -344,8 +352,16 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
             {task.promoCode && (
-              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 rounded-xl text-[10px] md:text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm">
+              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 px-3 rounded-xl text-[10px] md:text-xs font-bold flex items-center justify-center flex-wrap gap-1.5 shadow-sm">
                 <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleCopyPromoLink(task.promoCode); }}
+                  className="flex items-center gap-1 bg-white border border-[#C8522A]/30 px-2 py-0.5 rounded-full hover:border-[#C8522A] transition-all"
+                >
+                  {copiedPromoCode === task.promoCode ? <Check size={11} /> : <Copy size={11} />}
+                  {copiedPromoCode === task.promoCode ? '已複製' : '複製連結'}
+                </button>
               </div>
             )}
             <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
@@ -422,12 +438,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
         <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">接案管理</h2>
-        <button onClick={() => onNavigate('analysis')} className="w-full sm:w-auto justify-center bg-white border border-[#E2DDD4] text-[#1A1A18] px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-full font-bold text-xs md:text-sm hover:border-[#1A1A18] hover:shadow-md transition-all flex items-center gap-2 group">
-          <div className="w-5 h-5 md:w-6 md:h-6 bg-[#FDF0ED] rounded-full flex items-center justify-center group-hover:bg-[#C8522A] transition-colors">
-            <TrendingUp size={12} className="text-[#C8522A] group-hover:text-white transition-colors md:w-3.5 md:h-3.5" />
-          </div>
-          查看合作收益總覽
-        </button>
       </div>
 
       <div className="bg-[#1A1A18] rounded-2xl md:rounded-[2rem] p-5 md:p-8 mb-6 md:mb-10 flex items-center justify-between shadow-xl relative overflow-hidden border border-[#E2DDD4]">

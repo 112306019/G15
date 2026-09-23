@@ -462,11 +462,45 @@ class CouponNew(models.Model):
         db_column='usage_count'
     )
 
+    # 這組優惠碼的短連結（見 koc_link_redirect）被點擊的終身累積次數，
+    # 是戰報 EPC 的分母來源。只存一個累加欄位、不逐筆記錄，資料量固定不會膨脹；
+    # 近期走勢圖需要的每日拆分另外存在 KocLinkClickDaily。
+    click_count = models.IntegerField(
+        default=0,
+        db_column='click_count'
+    )
+
     class Meta:
         db_table = 'Coupon'
 
     def __str__(self):
         return self.promotion_code
+
+
+class KocLinkClickDaily(models.Model):
+    """
+    KOC 短連結點擊的每日聚合計數，只用來畫戰報的近期走勢圖（比照
+    get_analytics_detail 的 chart_data 用日期分組的做法）。終身總點擊數
+    已經有 CouponNew.click_count 頂著，所以這張表只保留近期資料即可，
+    定期由 cleanup_click_history 這支管理指令清掉超過
+    CLICK_DAILY_RETENTION_DAYS 天的舊資料，避免無限膨脹。
+    """
+    click_id = models.AutoField(primary_key=True, db_column='click_id')
+    coupon = models.ForeignKey(
+        CouponNew,
+        on_delete=models.CASCADE,
+        db_column='coupon_id',
+        related_name='daily_clicks'
+    )
+    click_date = models.DateField(db_column='click_date')
+    click_count = models.IntegerField(default=0, db_column='click_count')
+
+    class Meta:
+        db_table = 'Koc_Link_Click_Daily'
+        unique_together = ('coupon', 'click_date')
+
+    def __str__(self):
+        return f"{self.coupon_id} {self.click_date} x{self.click_count}"
 
 
 # ==============================================================================
@@ -873,34 +907,9 @@ class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
     koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
     # amount：實際會匯入 KOC 銀行帳戶的淨額（財務對帳/CSV 匯出用的就是這個欄位）。
-    # 申請當下從錢包扣除的毛額 = amount + platform_fee。
     amount = models.IntegerField()
-    # 這筆撥款從毛額裡抽走的平台服務費（見 constants.PLATFORM_SERVICE_FEE_RATE_PERCENT），
-    # 只在撥款當下計算一次、之後不會再變動，純粹留存記錄／顯示用。
-    platform_fee = models.IntegerField(default=0, db_column='platform_fee')
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
-    # 平台就 platform_fee 這筆金額開立給 KOC 的統一發票號碼：撥款當下會先
-    # 自動呼叫綠界 B2C 電子發票 API 開立（見 request_payout、
-    # ecpay_invoice.issue_b2c_invoice）；如果自動開立失敗，這幾個欄位會
-    # 留空，改由後台 admin_koc_payout_upload_invoice 手動登打作為備援，
-    # 沿用同一組欄位，前端不用分辨這張發票是自動還是手動開的。
-    invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
-    # B2C 電子發票專屬的 4 碼隨機碼，買受人（KOC）要憑「發票號碼＋開立日期＋
-    # 隨機碼」才能在財政部電子發票平台查到這張發票，B2B 發票沒有這個欄位。
-    # 手動登打的發票如果不是走 ECPay B2C（例如財務用別的系統開的）就會是空的。
-    random_number = models.CharField(max_length=10, blank=True, null=True, db_column='random_number')
-    invoice_uploaded_at = models.DateTimeField(null=True, blank=True, db_column='invoice_uploaded_at')
-    # 這張發票是不是我們自己呼叫綠界 B2C API 自動開立的（True）、還是後台
-    # 手動登打的（False，預設值）。只有自動開立的才知道一定是 ECPay 的
-    # B2C 發票，撥款後來被標記失敗時才能呼叫 ecpay_invoice.void_b2c_invoice
-    # 自動作廢；手動登打的可能是用別的系統開票，沒辦法透過我們的程式作廢，
-    # 只能請財務自己去原本開票的系統手動作廢。
-    invoice_issued_automatically = models.BooleanField(default=False, db_column='invoice_issued_automatically')
-    # 撥款後來被標記「匯款失敗」、且發票是自動開立的情況下，系統會自動呼叫
-    # 作廢 API，這裡記錄作廢時間；null 代表沒有被作廢過（不管是因為根本
-    # 沒失敗、還是失敗但發票是手動開的所以沒有自動作廢）。
-    invoice_voided_at = models.DateTimeField(null=True, blank=True, db_column='invoice_voided_at')
 
     class Meta:
         db_table = 'Payouts'

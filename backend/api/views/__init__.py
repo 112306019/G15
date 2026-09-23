@@ -20,6 +20,7 @@ from .koc import (
     request_payout,
     get_analytics_list,
     get_analytics_detail,
+    koc_link_redirect,
     save_draft,
     koc_apply,
     get_or_create_chat_room,

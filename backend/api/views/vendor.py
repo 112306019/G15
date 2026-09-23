@@ -3776,7 +3776,8 @@ def vendor_chatroom_send_message(request):
         chatroom = (
             ChatRoom.objects
             .select_related(
-                "kocmission__application__campaign"
+                "kocmission__application__campaign__vendor",
+                "kocmission__koc__user",
             )
             .get(room_id=room_id)
         )
@@ -3800,6 +3801,17 @@ def vendor_chatroom_send_message(request):
         sender_id=str(vendor_id),
         content=content,
         is_read=False
+    )
+
+    # 通知 KOC 有新訊息，reference_type='koc_chat' 帶 kocmission_id，前端點通知
+    # 直接跳去 /chat?mission=<id> 打開對應的聊天室（見 ChatPage.jsx）。
+    create_notification(
+        user=chatroom.kocmission.koc.user,
+        category="koc",
+        title=f"{campaign.vendor.company_name} 傳送了新訊息",
+        body=content,
+        reference_type="koc_chat",
+        reference_id=chatroom.kocmission_id,
     )
 
     return Response({

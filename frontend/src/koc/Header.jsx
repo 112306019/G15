@@ -31,7 +31,7 @@ export default function Header({
   });
 
   const getActiveKey = (tab) => {
-    if (['home', 'task_detail', 'review', 'analysis', 'sales_data'].includes(tab)) return 'home';
+    if (['home', 'task_detail', 'review'].includes(tab)) return 'home';
     if (['earnings', 'earnings_detail'].includes(tab)) return 'earnings';
     if (['shop', 'product_detail', 'cart', 'checkout'].includes(tab)) return 'shop';
     return '';
@@ -301,10 +301,10 @@ export default function Header({
                 <button
                   onClick={() => handleNavigate('home')}
                   className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                    ['home', 'task_detail', 'review', 'analysis', 'sales_data'].includes(activeTab) ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                    ['home', 'task_detail', 'review'].includes(activeTab) ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
                   }`}
                 >
-                  <Briefcase size={20} strokeWidth={2.5} className={['home', 'task_detail', 'review', 'analysis', 'sales_data'].includes(activeTab) ? 'text-[#C8522A]' : ''} />
+                  <Briefcase size={20} strokeWidth={2.5} className={['home', 'task_detail', 'review'].includes(activeTab) ? 'text-[#C8522A]' : ''} />
                   我的接案
                 </button>
 

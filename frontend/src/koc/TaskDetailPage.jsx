@@ -1,16 +1,125 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, User, Smile, Send, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle } from 'lucide-react';
 import api from '../api/index';
-import { getOrCreateChatRoom, getChatHistory, sendChatMessage } from '../api/koc';
+import { buildPromoLink } from '../config';
 
-function formatMessageTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+function StatTile({ label, value }) {
+  return (
+    <div className="bg-[#F5F0E8] rounded-xl p-3 xl:p-4 border border-[#E2DDD4]">
+      <p className="text-[10px] xl:text-xs font-bold text-[#8C8880] mb-1">{label}</p>
+      <p className="text-sm xl:text-lg font-black text-[#C8522A]">{value}</p>
+    </div>
+  );
+}
+
+function AnalyticsBarChart({ data, gradientClass }) {
+  const maxValue = Math.max(...data.map(d => d.y_value), 1);
+  return (
+    <div className="h-full w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-8 overflow-x-auto hide-scrollbar">
+      <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-1 text-[10px] text-[#8C8880] font-bold">
+        <span>{maxValue}</span>
+        <span>
+          {(() => {
+            const mid = Math.round(maxValue * 0.5);
+            return mid > 0 && mid < maxValue ? mid : '';
+          })()}
+        </span>
+        <span className="translate-y-2">0</span>
+      </div>
+      {data.map((item, idx) => (
+        <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px] md:min-w-[30px]">
+          <span className="text-[9px] md:text-[10px] text-[#1A1A18] font-bold mb-1">
+            {item.y_value}
+          </span>
+          <div
+            className={`w-2.5 md:w-3 ${gradientClass} rounded-t-full transition-all group-hover:scale-x-125`}
+            style={{ height: `${maxValue > 0 ? (item.y_value / maxValue) * 100 : 0}%` }}
+          />
+          <span className="text-[9px] text-[#8C8880] mt-3 font-bold rotate-45 origin-left whitespace-nowrap">
+            {item.x_label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 成效分析：推廣中／已完成的任務共用同一份區塊，資料來自 GET /koc/analytics/getDetail
+function AnalyticsSection({
+  usageCount, totalCommission, clickCount, epc,
+  chartData, clickChartData, chartPeriod, setChartPeriod, chartLoading,
+}) {
+  return (
+    <div className="mt-6 xl:mt-8 w-full">
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-4 xl:mb-6 gap-3 sm:gap-0">
+        <p className="text-[#1A1A18] font-black text-base xl:text-lg flex items-center gap-2 xl:gap-3">
+          <span className="hidden sm:block w-1.5 h-6 xl:w-2 xl:h-8 bg-[#1A1A18] rounded-full"></span>
+          推廣效益分析
+        </p>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setChartPeriod('week')}
+            className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
+              chartPeriod === 'week'
+                ? 'bg-[#1A1A18] text-white'
+                : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+            }`}
+          >
+            週
+          </button>
+          <button
+            onClick={() => setChartPeriod('month')}
+            className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
+              chartPeriod === 'month'
+                ? 'bg-[#1A1A18] text-white'
+                : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+            }`}
+          >
+            月
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 xl:gap-4 mb-4 xl:mb-6">
+        <StatTile label="成功帶貨數量" value={usageCount} />
+        <StatTile label="累積分潤" value={`NT$ ${totalCommission.toLocaleString()}`} />
+        <StatTile label="連結點擊次數" value={clickCount} />
+      </div>
+
+      <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl xl:rounded-2xl px-4 py-3 xl:px-6 xl:py-4 mb-4 xl:mb-6 text-center">
+        <p className="text-xs xl:text-sm font-bold text-[#1A1A18]">
+          你的連結每被點擊一次，平均就能幫你賺進 <span className="text-[#C8522A] font-black">NT$ {epc}</span> 元！
+        </p>
+      </div>
+
+      <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-4 xl:p-8 border border-[#E2DDD4] mb-4 xl:mb-6">
+        <p className="text-sm xl:text-base font-bold text-[#1A1A18] mb-3">銷量走勢</p>
+        <div className="h-64 md:h-72">
+          {chartLoading ? (
+            <div className="h-full flex items-center justify-center text-[#8C8880] font-bold text-sm">載入中...</div>
+          ) : (
+            <AnalyticsBarChart data={chartData} gradientClass="bg-gradient-to-t from-[#D6714E] to-[#C8522A]" />
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-4 xl:p-8 border border-[#E2DDD4]">
+        <p className="text-sm xl:text-base font-bold text-[#1A1A18] mb-3">點擊次數</p>
+        <div className="h-64 md:h-72">
+          {chartLoading ? (
+            <div className="h-full flex items-center justify-center text-[#8C8880] font-bold text-sm">載入中...</div>
+          ) : (
+            <AnalyticsBarChart data={clickChartData} gradientClass="bg-gradient-to-t from-[#D9C08F] to-[#B89B6A]" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function TaskDetailPage({ task, onBack }) {
+  const navigate = useNavigate();
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,23 +127,21 @@ export default function TaskDetailPage({ task, onBack }) {
   const [showModal, setShowModal] = useState(false);
   const [copyText, setCopyText] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  // 推廣中畫面用的成效數據（優惠碼使用次數 + 銷量圖表）
+  // 推廣中／已完成畫面用的成效分析數據（出單數、累積分潤、點擊數、EPC、銷量與點擊走勢圖）
   const [chartData, setChartData] = useState([]);
+  const [clickChartData, setClickChartData] = useState([]);
   const [usageCount, setUsageCount] = useState(0);
+  const [totalCommission, setTotalCommission] = useState(0);
+  const [clickCount, setClickCount] = useState(0);
+  const [epc, setEpc] = useState(0);
   const [chartPeriod, setChartPeriod] = useState('month');
   const [chartLoading, setChartLoading] = useState(true);
-
-  // 聊天室相關狀態
-  const [roomId, setRoomId] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const messagesEndRef = useRef(null);
 
   // 載入任務詳情
   useEffect(() => {
@@ -63,54 +170,9 @@ export default function TaskDetailPage({ task, onBack }) {
     fetchDetail();
   }, [task]);
 
-  // 建立/取得聊天室，並每 5 秒輪詢一次歷史訊息
+  // 推廣中（stage=3）或已完成（stage=4）都要撈成效分析：出單數、累積分潤、點擊數、EPC、兩張走勢圖
   useEffect(() => {
-    if (!task) return;
-    let intervalId;
-    let cancelled = false;
-
-    const fetchHistory = async (currentRoomId) => {
-      try {
-        const res = await getChatHistory(currentRoomId);
-        if (res.data.success && !cancelled) {
-          setMessages(res.data.messages);
-        }
-      } catch (err) {
-        console.error('載入聊天室訊息失敗', err);
-      }
-    };
-
-    const initChatRoom = async () => {
-      try {
-        const res = await getOrCreateChatRoom(task.id);
-        if (res.data.success && !cancelled) {
-          setRoomId(res.data.room_id);
-          await fetchHistory(res.data.room_id);
-          intervalId = setInterval(() => fetchHistory(res.data.room_id), 5000);
-        }
-      } catch (err) {
-        console.error('建立聊天室失敗', err);
-      }
-    };
-
-    setRoomId(null);
-    setMessages([]);
-    initChatRoom();
-
-    return () => {
-      cancelled = true;
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [task]);
-
-  // 有新訊息時自動捲到最下面
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // 推廣中（stage=3）才需要撈優惠碼使用次數與銷量圖表
-  useEffect(() => {
-    if (!task || detail?.stage !== 3) return;
+    if (!task || (detail?.stage !== 3 && detail?.stage !== 4)) return;
 
     let cancelled = false;
     const fetchAnalytics = async () => {
@@ -122,10 +184,14 @@ export default function TaskDetailPage({ task, onBack }) {
         if (cancelled) return;
         if (res.data.success) {
           setChartData(res.data.chart_data);
+          setClickChartData(res.data.click_chart_data || []);
           setUsageCount(res.data.usage_count);
+          setTotalCommission(res.data.total_commision);
+          setClickCount(res.data.click_count ?? 0);
+          setEpc(res.data.epc ?? 0);
         }
       } catch (err) {
-        if (!cancelled) console.error('載入銷售數據失敗', err);
+        if (!cancelled) console.error('載入成效分析失敗', err);
       } finally {
         if (!cancelled) setChartLoading(false);
       }
@@ -136,38 +202,6 @@ export default function TaskDetailPage({ task, onBack }) {
       cancelled = true;
     };
   }, [task, detail?.stage, chartPeriod]);
-
-  const handleSendMessage = async () => {
-    const content = chatInput.trim();
-    if (!content || !roomId || sendingMessage) return;
-    setSendingMessage(true);
-    try {
-      const res = await sendChatMessage({
-        room_id: roomId,
-        sender_role: 'koc',
-        sender_id: user_id,
-        content,
-      });
-      if (res.data.success) {
-        setMessages(prev => [...prev, res.data.message]);
-        setChatInput('');
-      } else {
-        alert(res.data.err || '傳送失敗');
-      }
-    } catch (err) {
-      console.error('傳送訊息失敗', err);
-      alert('傳送失敗，請稍後再試');
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
-  const handleChatKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
 
   if (!task) return null;
 
@@ -195,6 +229,13 @@ export default function TaskDetailPage({ task, onBack }) {
   const vendorFeedback = detail?.vendor_feedback;
   const draftContent = detail?.draft_content;
   const promoCode = detail?.promotion_code || task.promoCode || null;
+
+  const handleCopyPromoLink = () => {
+    if (!promoCode) return;
+    navigator.clipboard.writeText(buildPromoLink(promoCode));
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
   const deadline = task.deadline || detail?.deadline;
   const earningsTotal = detail?.earnings_total || 0;
 
@@ -204,9 +245,6 @@ export default function TaskDetailPage({ task, onBack }) {
   const isWaitUpload = stage === 'publishing';                                           // 上傳作品
   const isPromoting = stage === 'promoting';                                             // 推廣中
   const isCompleted = stage === 'completed';                                             // 已結案
-
-  // 推廣中圖表的 Y 軸最大值（動態調整）
-  const chartMaxValue = Math.max(...chartData.map(d => d.y_value), 1);
 
   // 儲存草稿
   const handleSaveDraft = async () => {
@@ -320,11 +358,10 @@ export default function TaskDetailPage({ task, onBack }) {
   };
 
   return (
-    <div className="flex flex-col xl:flex-row min-h-screen xl:h-[calc(100vh-80px)] max-w-[1400px] mx-auto animate-in fade-in duration-300 gap-6 xl:gap-8 p-4 xl:p-0 pb-12 xl:pb-8">
-      
-      {/* 左側：主要內容區 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
+    <div className="flex flex-col min-h-screen max-w-4xl mx-auto animate-in fade-in duration-300 gap-6 p-4 xl:p-0 pb-12 xl:pb-8">
+
+      <div className="flex flex-col">
+
         <button onClick={() => onBack(task.stage)} className="mb-4 xl:mb-6 flex items-center gap-1.5 xl:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs xl:text-sm group w-fit bg-white xl:bg-transparent px-3 xl:px-0 py-1.5 xl:py-0 rounded-full border border-[#E2DDD4] xl:border-transparent shadow-sm xl:shadow-none">
           <ArrowLeft size={16} className="xl:w-4 xl:h-4 transition-transform group-hover:-translate-x-1" />
           返回接案中心
@@ -359,7 +396,19 @@ export default function TaskDetailPage({ task, onBack }) {
               <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
               <div>
                 <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">專屬優惠碼</p>
-                <p className="font-mono text-sm xl:text-base font-black text-[#C8522A] tracking-wider">{promoCode || '無'}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-sm xl:text-base font-black text-[#C8522A] tracking-wider">{promoCode || '無'}</p>
+                  {promoCode && (
+                    <button
+                      type="button"
+                      onClick={handleCopyPromoLink}
+                      className="flex items-center gap-1 text-[10px] xl:text-xs font-bold text-[#F5F0E8] bg-[#C8522A] hover:bg-[#C8522A]/80 px-2 py-1 rounded-full transition-all"
+                    >
+                      {linkCopied ? <Check size={12} /> : <Copy size={12} />}
+                      {linkCopied ? '已複製' : '複製推廣連結'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
               <div className="col-span-2 md:col-span-1 border-t border-[#8C8880]/30 md:border-0 pt-3 md:pt-0">
@@ -370,8 +419,18 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
             </div>
           </div>
+
+          <div className="flex justify-end mt-3">
+            <button
+              onClick={() => navigate(`/chat?mission=${task.id}`)}
+              className="flex items-center gap-1.5 text-xs xl:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors bg-white border border-[#E2DDD4] px-4 py-2 rounded-full"
+            >
+              <MessageCircle size={14} />
+              發送訊息給廠商
+            </button>
+          </div>
         </div>
-        
+
         <div className="flex-1 bg-white rounded-2xl xl:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-6 xl:p-10 flex flex-col overflow-y-auto custom-scrollbar min-h-[400px]">
           
           {/* 情境 1：可以填寫/修改文案 */}
@@ -464,89 +523,57 @@ export default function TaskDetailPage({ task, onBack }) {
           {isPromoting && (
             <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
               <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
-              <p className="text-[11px] xl:text-sm text-[#8C8880] font-medium leading-relaxed mb-6 xl:mb-8 text-center">
+              <p className="text-[11px] xl:text-sm text-[#8C8880] font-medium leading-relaxed text-center">
                 活動截止日後，任務將自動結案並計算最終分潤
               </p>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between mb-4 xl:mb-6 gap-3 sm:gap-0">
-                <p className="text-[#1A1A18] font-black text-base xl:text-lg flex items-center gap-2 xl:gap-3">
-                  <span className="hidden sm:block w-1.5 h-6 xl:w-2 xl:h-8 bg-[#1A1A18] rounded-full"></span>
-                  優惠碼使用次數：<span className="text-[#C8522A]">{usageCount}</span>
-                </p>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => setChartPeriod('week')}
-                    className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                      chartPeriod === 'week'
-                        ? 'bg-[#1A1A18] text-white'
-                        : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
-                    }`}
-                  >
-                    週
-                  </button>
-                  <button
-                    onClick={() => setChartPeriod('month')}
-                    className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                      chartPeriod === 'month'
-                        ? 'bg-[#1A1A18] text-white'
-                        : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
-                    }`}
-                  >
-                    月
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-4 xl:p-8 border border-[#E2DDD4] flex-1 min-h-[240px]">
-                {chartLoading ? (
-                  <div className="h-full flex items-center justify-center text-[#8C8880] font-bold text-sm">
-                    載入中...
-                  </div>
-                ) : (
-                  <div className="h-full w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-8 pl-8 overflow-x-auto hide-scrollbar">
-                    <div className="absolute left-0 top-0 h-full flex flex-col justify-between py-1 text-[10px] text-[#8C8880] font-bold">
-                      <span>{chartMaxValue}</span>
-                      <span>
-                        {(() => {
-                          const mid = Math.round(chartMaxValue * 0.5);
-                          return mid > 0 && mid < chartMaxValue ? mid : '';
-                        })()}
-                      </span>
-                      <span className="translate-y-2">0</span>
-                    </div>
-                    {chartData.map((item, idx) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[20px] md:min-w-[30px]">
-                        <div
-                          className="w-2.5 md:w-3 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
-                          style={{ height: `${chartMaxValue > 0 ? (item.y_value / chartMaxValue) * 100 : 0}%` }}
-                        />
-                        <span className="text-[9px] text-[#8C8880] mt-3 font-bold rotate-45 origin-left whitespace-nowrap">
-                          {item.x_label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AnalyticsSection
+                usageCount={usageCount}
+                totalCommission={totalCommission}
+                clickCount={clickCount}
+                epc={epc}
+                chartData={chartData}
+                clickChartData={clickChartData}
+                chartPeriod={chartPeriod}
+                setChartPeriod={setChartPeriod}
+                chartLoading={chartLoading}
+              />
             </div>
           )}
 
           {/* 情境 5：已完成 */}
           {isCompleted && (
-            <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
-              <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#E2DDD4]">
-                <CheckCircle2 size={32} className="text-[#8C8880] xl:w-12 xl:h-12" />
+            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
+              <div className="flex flex-col items-center text-center max-w-md mx-auto">
+                <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#E2DDD4]">
+                  <CheckCircle2 size={32} className="text-[#8C8880] xl:w-12 xl:h-12" />
+                </div>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">任務已完成</h3>
+                <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed">
+                  感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
+                </p>
               </div>
-              <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">任務已完成</h3>
-              <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed mb-6 xl:mb-8">
-                感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
-              </p>
-              <button
-                onClick={() => onBack(task.stage)}
-                className="bg-[#1A1A18] text-[#F5F0E8] px-6 xl:px-8 py-3 xl:py-3.5 rounded-xl xl:rounded-2xl font-bold text-xs xl:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md w-full sm:w-auto"
-              >
-                返回接案中心
-              </button>
+
+              <AnalyticsSection
+                usageCount={usageCount}
+                totalCommission={totalCommission}
+                clickCount={clickCount}
+                epc={epc}
+                chartData={chartData}
+                clickChartData={clickChartData}
+                chartPeriod={chartPeriod}
+                setChartPeriod={setChartPeriod}
+                chartLoading={chartLoading}
+              />
+
+              <div className="flex justify-center mt-6 xl:mt-8">
+                <button
+                  onClick={() => onBack(task.stage)}
+                  className="bg-[#1A1A18] text-[#F5F0E8] px-6 xl:px-8 py-3 xl:py-3.5 rounded-xl xl:rounded-2xl font-bold text-xs xl:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md w-full sm:w-auto"
+                >
+                  返回接案中心
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -562,65 +589,6 @@ export default function TaskDetailPage({ task, onBack }) {
             </button>
           </div>
         )}
-      </div>
-
-      {/* 右側：聊天室 */}
-      <div className="w-full xl:w-[380px] h-[500px] xl:h-auto bg-[#F5F0E8] rounded-[2rem] p-3 xl:p-4 flex flex-col relative shrink-0 shadow-sm border border-[#E2DDD4]">
-        <div className="bg-white rounded-t-[1.5rem] p-4 xl:p-5 border-b border-[#E2DDD4] flex items-center gap-3 xl:gap-4 shadow-sm z-10 shrink-0">
-          <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center border border-[#E2DDD4]">
-            <User size={16} className="text-[#8C8880] xl:w-5 xl:h-5" />
-          </div>
-          <div>
-            <span className="font-bold text-[#1A1A18] block text-sm xl:text-base">{task.vendor || '廠商'}</span>
-            <span className="text-[10px] text-[#8C8880] font-bold">線上客服</span>
-          </div>
-        </div>
-        <div className="flex-1 bg-white p-4 xl:p-6 overflow-y-auto flex flex-col gap-3 custom-scrollbar">
-          {messages.length === 0 && (
-            <div className="text-center text-[11px] xl:text-xs text-[#8C8880] my-4 font-bold">您已加入聊天室，可隨時與廠商聯繫</div>
-          )}
-          {messages.map((msg) => (
-            <div
-              key={msg.message_id}
-              className={`flex flex-col ${msg.sender_role === 'koc' ? 'items-end' : 'items-start'}`}
-            >
-              <div
-                className={`max-w-[85%] xl:max-w-[80%] rounded-2xl px-3.5 py-2 xl:px-4 xl:py-2.5 text-[13px] xl:text-sm leading-relaxed break-words ${
-                  msg.sender_role === 'koc'
-                    ? 'bg-[#1A1A18] text-[#F5F0E8] rounded-br-md'
-                    : 'bg-[#F5F0E8] text-[#1A1A18] rounded-bl-md'
-                }`}
-              >
-                {msg.content}
-              </div>
-              <span className="text-[9px] xl:text-[10px] text-[#8C8880] font-bold mt-1 px-1">
-                {formatMessageTime(msg.created_at)}
-              </span>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="bg-[#F5F0E8] p-3 xl:p-4 rounded-b-[1.5rem] shrink-0">
-          <div className="bg-white rounded-full flex items-center px-3 xl:px-4 py-1.5 xl:py-2 gap-2 xl:gap-3 shadow-sm border border-[#E2DDD4] focus-within:border-[#1A1A18] transition-colors">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={handleChatKeyDown}
-              placeholder="傳送訊息..."
-              disabled={!roomId}
-              className="flex-1 bg-transparent outline-none text-[13px] xl:text-sm placeholder:text-[#8C8880] disabled:opacity-50 min-w-0"
-            />
-            <Smile size={18} className="text-[#8C8880] cursor-pointer hover:text-[#1A1A18] shrink-0" />
-            <button
-              onClick={handleSendMessage}
-              disabled={!roomId || !chatInput.trim() || sendingMessage}
-              className="bg-[#1A1A18] text-[#F5F0E8] p-1.5 xl:p-2 rounded-full hover:bg-[#C8522A] shadow-md disabled:opacity-50 shrink-0"
-            >
-              <Send size={14} className="xl:w-4 xl:h-4 ml-0.5" />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* 文案撰寫彈出視窗 */}
@@ -658,6 +626,18 @@ export default function TaskDetailPage({ task, onBack }) {
                       {promoCode || '無'}
                     </span>
                   </p>
+                  {promoCode && (
+                    <p className="flex flex-wrap items-center gap-1">• 或直接分享推廣連結：
+                      <button
+                        type="button"
+                        onClick={handleCopyPromoLink}
+                        className="flex items-center gap-1 text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4] hover:border-[#C8522A] transition-all"
+                      >
+                        {linkCopied ? <Check size={11} /> : <Copy size={11} />}
+                        {linkCopied ? '已複製' : '複製連結'}
+                      </button>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

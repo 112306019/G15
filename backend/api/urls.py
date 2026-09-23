@@ -39,7 +39,6 @@ from .views.platform import (
     admin_run_monthly_vendor_payouts,
     admin_list_koc_payouts,
     admin_confirm_koc_payout,
-    admin_koc_payout_upload_invoice,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
@@ -85,6 +84,12 @@ from .views import order_chat
 from .views import notifications as notification_views
 
 urlpatterns = [
+    # KOC 帶貨戰報短連結：故意用短路徑、公開不需驗證，因為這是要貼到社群
+    # 貼文裡的對外連結。api.urls 同時掛在 config/urls.py 的 '/api/' 跟根路徑
+    # ''，所以這條路由會同時在 /r/<code>/ 跟 /api/r/<code>/ 生效，
+    # 對外分享一律用短的 /r/<code>/。
+    path('r/<str:promotion_code>/', views.koc_link_redirect, name='koc-link-redirect'),
+
     # koc
     path('koc/profile/getProfile', views.get_koc_profile, name='koc-get-profile'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='koc-update-profile'),
@@ -140,7 +145,6 @@ urlpatterns = [
     path('platform/vendor/run-monthly-payouts', admin_run_monthly_vendor_payouts, name='platform-vendor-run-monthly-payouts'),
     path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
     path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
-    path('platform/koc/payout/uploadInvoice', admin_koc_payout_upload_invoice, name='platform-koc-payout-upload-invoice'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),

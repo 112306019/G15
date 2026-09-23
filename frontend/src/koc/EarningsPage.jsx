@@ -61,7 +61,6 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
   const [missingAmount, setMissingAmount] = useState(null);
   const [minPayoutAmount, setMinPayoutAmount] = useState(16);
   const [transferFee, setTransferFee] = useState(15);
-  const [serviceFeeRate, setServiceFeeRate] = useState(20);
 
   useEffect(() => {
     const fetchRevenue = async () => {
@@ -73,7 +72,6 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
           setWithdrawable(res.data.withdrawable_amount);
           if (res.data.min_payout_amount != null) setMinPayoutAmount(res.data.min_payout_amount);
           if (res.data.cross_bank_transfer_fee != null) setTransferFee(res.data.cross_bank_transfer_fee);
-          if (res.data.platform_service_fee_rate != null) setServiceFeeRate(res.data.platform_service_fee_rate);
         }
       } catch (err) {
         console.error('載入收益失敗', err);
@@ -116,13 +114,9 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
       }
 
       setWithdrawable(payoutRes.data.remaining_balance ?? 0);
-      const grossAmount = payoutRes.data.gross_amount || 0;
-      const platformFee = payoutRes.data.platform_fee || 0;
       const netAmount = payoutRes.data.amount || 0;
       setWithdrawSuccess(
-        `已送出提領申請，申請金額 NT$${grossAmount.toLocaleString()}，` +
-        `扣除平台服務費 NT$${platformFee.toLocaleString()} 後，` +
-        `實際撥款金額為 NT$${netAmount.toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`
+        `已送出提領申請，申請金額 NT$${netAmount.toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`
       );
     } catch (err) {
       setWithdrawError(extractApiError(err, '提領失敗，請稍後再試'));
@@ -170,8 +164,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl md:rounded-2xl px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
                 <span>
-                  注意事項：申請提領時將從提領金額中扣除 {serviceFeeRate}% 平台服務費，剩餘淨額才會實際撥款；
-                  跨行提領另需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
+                  注意事項：跨行提領需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
                 </span>
               </div>
 

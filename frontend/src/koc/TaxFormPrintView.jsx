@@ -16,21 +16,18 @@ const RESIDENT_WITHHOLDING_RATE = 0.1;
 const NON_RESIDENT_WITHHOLDING_RATE = 0.2;
 const NHI_SUPPLEMENT_RATE = 0.0211;
 
-function computeTaxes(amount, residency, platformServiceFeeRate) {
+function computeTaxes(amount, residency) {
   const reachedThreshold = amount >= WITHHOLDING_THRESHOLD;
 
   const withholdingRate = residency === 'non_resident'
     ? NON_RESIDENT_WITHHOLDING_RATE
     : RESIDENT_WITHHOLDING_RATE;
 
-  // 代扣所得稅、二代健保補充保費都是依「給付總金額」計算，不受平台服務費影響——
-  // 服務費是平台向 KOC 收取的服務費用，不是政府的扣繳項目，兩者是分開的兩筆扣項。
   const withholdingTax = reachedThreshold ? Math.round(amount * withholdingRate) : 0;
   const nhiSupplement = reachedThreshold ? Math.round(amount * NHI_SUPPLEMENT_RATE) : 0;
-  const platformServiceFee = Math.round(amount * (platformServiceFeeRate / 100));
-  const netAmount = amount - withholdingTax - nhiSupplement - platformServiceFee;
+  const netAmount = amount - withholdingTax - nhiSupplement;
 
-  return { withholdingTax, nhiSupplement, platformServiceFee, netAmount };
+  return { withholdingTax, nhiSupplement, netAmount };
 }
 
 function Field({ label, value, className = '', labelClass = '', valueClass = '' }) {
@@ -129,8 +126,7 @@ export default function TaxFormPrintView() {
   }
 
   const amount = data.amount || 0;
-  const platformServiceFeeRate = data.platform_service_fee_rate ?? 20;
-  const { withholdingTax, nhiSupplement, platformServiceFee, netAmount } = computeTaxes(amount, residency, platformServiceFeeRate);
+  const { withholdingTax, nhiSupplement, netAmount } = computeTaxes(amount, residency);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] p-4 md:py-10 md:px-4">
@@ -247,12 +243,6 @@ export default function TaxFormPrintView() {
                   {nhiSupplement.toLocaleString()} 元
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#8C8880] font-bold">平台服務費（{platformServiceFeeRate}%）</span>
-                <span className="font-bold text-[#1A1A18]">
-                  {platformServiceFee.toLocaleString()} 元
-                </span>
-              </div>
               <div className="border-t border-dashed border-[#E2DDD4] pt-2.5 flex justify-between">
                 <span className="text-[#1A1A18] font-bold">實際支付金額</span>
                 <span className="font-black text-[#C8522A] text-sm md:text-base print:text-base">
@@ -262,13 +252,9 @@ export default function TaxFormPrintView() {
             </div>
             {amount < WITHHOLDING_THRESHOLD && (
               <p className="mt-3 text-[9px] md:text-[10px] print:text-[10px] text-[#8C8880] leading-tight">
-                ※ 給付金額未達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元門檻，暫不扣繳所得稅及二代健保費（平台服務費不受此門檻影響，一律照比例收取）。
+                ※ 給付金額未達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元門檻，暫不扣繳所得稅及二代健保費。
               </p>
             )}
-            <p className="mt-3 text-[9px] md:text-[10px] print:text-[10px] text-[#8C8880] leading-tight">
-              ※ 平台服務費為平台向您收取的服務費用，平台將就此筆金額開立統一發票予您，
-              作為您次年度申報個人所得稅時可列報的成本費用憑證。
-            </p>
           </div>
 
           <div className="flex-1 border border-[#E2DDD4] rounded-2xl p-4 md:p-5 print:p-5">

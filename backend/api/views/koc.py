@@ -1,11 +1,13 @@
-from datetime import timedelta, datetime
+from datetime import timedelta
 
 import requests
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
+from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, F, Sum
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -24,9 +26,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
-from api.emails import send_platform_fee_invoice_email
-from api.ecpay_invoice import issue_b2c_invoice
+from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
     APPLICATION_STATUS_CODE_MAP,
@@ -40,9 +40,9 @@ from .constants import (
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
-    PLATFORM_SERVICE_FEE_RATE_PERCENT,
     KOC_COMMISSION_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
+    is_probably_bot_click,
     sync_expired_promoting_missions,
     sync_expired_koc_suspensions,
     record_koc_violation,
@@ -1054,7 +1054,6 @@ def get_tax_form_data(request):
         'service_content': REMUNERATION_SERVICE_CONTENT,
         'submitted_at': submitted_at.strftime('%Y-%m-%d') if submitted_at else None,
         'amount': amount,
-        'platform_service_fee_rate': PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1314,7 +1313,6 @@ def get_revenue_total(request):
         "hasBankAccount": has_bank_account,
         "min_payout_amount": MIN_PAYOUT_AMOUNT,
         "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
-        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1414,11 +1412,6 @@ def request_payout(request):
             "err": f"提領金額需達 NT$ {MIN_PAYOUT_AMOUNT} 以上才能申請（跨行提領需支付 NT$ {CROSS_BANK_TRANSFER_FEE} 手續費）"
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
-    # 平台服務費：從撥款毛額裡再抽一部分，實際匯入 KOC 銀行帳戶的只有淨額。
-    # 錢包扣的還是毛額（分潤本來就是這個金額），服務費只影響最後真正撥出去多少。
-    platform_fee = round(payout_amount * PLATFORM_SERVICE_FEE_RATE_PERCENT / 100)
-    net_payout_amount = payout_amount - platform_fee
-
     with transaction.atomic():
         wallet = KocWallet.objects.select_for_update().get(koc=koc)
         wallet.balance_available = wallet.balance_available - payout_amount
@@ -1426,8 +1419,7 @@ def request_payout(request):
 
         payout = Payouts.objects.create(
             koc=koc.user,
-            amount=net_payout_amount,
-            platform_fee=platform_fee,
+            amount=payout_amount,
             payout_date=timezone.localdate(),
             status='pending'
         )
@@ -1448,55 +1440,11 @@ def request_payout(request):
             earning.save(update_fields=['status'])
             remaining -= earning.amount
 
-    # 平台服務費自動開立 B2C 電子發票：呼叫外部 API，故意放在上面的
-    # transaction.atomic() 之外，不要讓一次慢速的網路請求卡住整筆撥款的
-    # DB 交易。開票失敗（或發生例外）不影響撥款申請本身已經成功，只是
-    # invoice_number 留空，之後由後台 admin_koc_payout_upload_invoice
-    # 手動登打作為備援。
-    if platform_fee > 0:
-        try:
-            relate_number = f"KOCPO{payout.payout_id}"[:20]
-            success, invoice_number, random_number, invoice_date, message = issue_b2c_invoice(
-                relate_number=relate_number,
-                item_name='平台服務費',
-                sales_amount=platform_fee,
-                buyer_name=koc.user.display_name or koc.user.name,
-                buyer_email=koc.user.email,
-            )
-            if success:
-                payout.invoice_number = invoice_number
-                payout.random_number = random_number
-                payout.invoice_issued_automatically = True
-                # 優先用綠界回傳的實際開立時間，萬一格式不如預期就退回用當下時間，
-                # 不能讓解析失敗連帶讓整個提領申請跟著出錯。
-                try:
-                    payout.invoice_uploaded_at = timezone.make_aware(
-                        datetime.strptime(invoice_date, '%Y-%m-%d %H:%M:%S')
-                    )
-                except (TypeError, ValueError):
-                    payout.invoice_uploaded_at = timezone.now()
-                payout.save(update_fields=[
-                    'invoice_number', 'random_number',
-                    'invoice_issued_automatically', 'invoice_uploaded_at',
-                ])
-                try:
-                    send_platform_fee_invoice_email(payout)
-                except Exception as e:
-                    print(f"平台服務費發票通知信寄送失敗（payout_id={payout.payout_id}）: {e}")
-            else:
-                print(f"平台服務費發票自動開立失敗（payout_id={payout.payout_id}）: {message}")
-        except Exception as e:
-            print(f"平台服務費發票自動開立發生例外（payout_id={payout.payout_id}）: {e}")
-
     return Response({
         "success": True,
         "err": "",
         "payout_id": payout.payout_id,
         "amount": payout.amount,
-        "gross_amount": payout_amount,
-        "platform_fee": payout.platform_fee,
-        "platform_service_fee_rate": PLATFORM_SERVICE_FEE_RATE_PERCENT,
-        "invoice_number": payout.invoice_number,
         "payout_date": payout.payout_date,
         "status": payout.status,
         "remaining_balance": wallet.balance_available,
@@ -1551,8 +1499,7 @@ def get_revenue_history(request):
         "history": result
     }, status=http_status.HTTP_200_OK)
 
-# 獲取撥款紀錄：每一筆申請提領的實付金額、扣了多少平台服務費、
-# 服務費的統一發票號碼（尚未登打就是 null）、目前狀態。
+# 獲取撥款紀錄：每一筆申請提領的實付金額、目前狀態。
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_payout_records(request):
@@ -1577,12 +1524,6 @@ def get_payout_records(request):
     result = [{
         "payout_id": p.payout_id,
         "amount": p.amount,
-        "platform_fee": p.platform_fee,
-        "gross_amount": p.amount + p.platform_fee,
-        "invoice_number": p.invoice_number,
-        "random_number": p.random_number,
-        "invoice_uploaded_at": p.invoice_uploaded_at,
-        "invoice_voided_at": p.invoice_voided_at,
         "payout_date": p.payout_date,
         "status": p.status,
     } for p in payouts]
@@ -1649,6 +1590,14 @@ def get_analytics_list(request):
         ).values_list('kocmission_id', flat=True)
     )
 
+    # 🔥 批次查出每個任務的累積分潤，用來算戰報 EPC，避免迴圈內逐一查詢
+    commission_map = {
+        row['kocmission_id']: row['total']
+        for row in Earnings.objects.filter(
+            kocmission_id__in=[m.kocmission_id for m in missions]
+        ).exclude(status='cancelled').values('kocmission_id').annotate(total=Sum('amount'))
+    }
+
     result = []
     for mission in missions:
         # 取得優惠碼(一個任務對應一個優惠碼)
@@ -1666,11 +1615,18 @@ def get_analytics_list(request):
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
 
+        # 戰報 EPC：這個任務累積分潤 / 短連結累積點擊數，見 koc_link_redirect
+        click_count = coupon.click_count or 0
+        commission = commission_map.get(mission.kocmission_id) or 0
+        epc = round(commission / click_count, 2) if click_count else 0
+
         result.append({
             "KOCMission_id": str(mission.kocmission_id),
             "campaign_image": campaign_image,
             "campaign_name": campaign.name,
             "usage_count": coupon.usage_count,
+            "click_count": click_count,
+            "epc": epc,
         })
 
     return Response({
@@ -1777,6 +1733,27 @@ def get_analytics_detail(request):
         kocmission=mission
     ).exclude(status='cancelled').aggregate(total=Sum('amount'))['total'] or 0
 
+    # 戰報 EPC = 這個任務累積分潤 / 短連結累積點擊數（見 koc_link_redirect）。
+    # click_count 是功能上線後才開始累積的終身計數，上線前的舊優惠碼一律是 0，
+    # 這裡顯示成 epc=0（而不是拿舊資料回溯估算），避免除以 0。
+    click_count = coupon.click_count or 0
+    epc = round(mission_commission / click_count, 2) if click_count else 0
+
+    # 點擊走勢圖：KocLinkClickDaily 本身已經是按日聚合過的資料，不用再
+    # TruncDate/annotate，直接照日期讀 click_count、比照 chart_data 補零即可。
+    daily_clicks = KocLinkClickDaily.objects.filter(
+        coupon=coupon,
+        click_date__gte=start_date.date(),
+    )
+    clicks_dict = {row.click_date: row.click_count for row in daily_clicks}
+    click_chart_data = []
+    for i in range((now - start_date).days + 1):
+        day = (start_date + timezone.timedelta(days=i)).date()
+        click_chart_data.append({
+            "x_label": day.strftime(label_format),
+            "y_value": clicks_dict.get(day, 0),
+        })
+
     return Response({
         "success": True,
         "err": "",
@@ -1785,7 +1762,58 @@ def get_analytics_detail(request):
         "usage_count": coupon.usage_count,
         "total_commision": mission_commission,
         "chart_data": chart_data,
+        "click_count": click_count,
+        "epc": epc,
+        "click_chart_data": click_chart_data,
     }, status=http_status.HTTP_200_OK)
+
+
+# 戰報短連結：KOC 分享這支連結取代純文字優惠碼，點擊會先在這裡被記錄
+# （終身累積寫進 coupon.click_count，近期走勢圖用的每日拆分寫進
+# KocLinkClickDaily），再 302 導去代表商品頁並帶上 koc_id。查無優惠碼、
+# 或活動查無商品時一律導去 /shop，不能讓這種公開分享的連結顯示 404/500。
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def koc_link_redirect(request, promotion_code):
+    fallback_url = f"{settings.FRONTEND_BASE_URL}/shop"
+
+    coupon = CouponNew.objects.select_related(
+        'kocmission__application__campaign'
+    ).filter(promotion_code=promotion_code).first()
+
+    if not coupon:
+        return HttpResponseRedirect(fallback_url)
+
+    campaign = coupon.kocmission.application.campaign
+    campaign_product = CampaignProduct.objects.filter(
+        campaign=campaign
+    ).select_related('product').first()
+
+    if not campaign_product:
+        return HttpResponseRedirect(fallback_url)
+
+    # 社群平台幫忙產生預覽圖的機器人請求：一樣正常導轉，但不計入點擊數，
+    # 避免 KOC 一貼出連結就被灌水一次點擊，拉低 EPC。
+    user_agent = request.META.get('HTTP_USER_AGENT', '')
+    if not is_probably_bot_click(user_agent):
+        coupon.click_count = (coupon.click_count or 0) + 1
+        coupon.save(update_fields=['click_count'])
+
+        today = timezone.localdate()
+        daily_row, _created = KocLinkClickDaily.objects.get_or_create(
+            coupon=coupon, click_date=today
+        )
+        # 同一天同一組優惠碼有機會被短時間內大量點擊（貼文爆紅），這裡用
+        # F() 做原子累加，避免 read-modify-write 在高並發下漏算。
+        KocLinkClickDaily.objects.filter(pk=daily_row.pk).update(
+            click_count=F('click_count') + 1
+        )
+
+    target_url = (
+        f"{settings.FRONTEND_BASE_URL}/product/{campaign_product.product_id}"
+        f"?koc_id={coupon.kocmission.koc_id}"
+    )
+    return HttpResponseRedirect(target_url)
 
 
 # 一般使用者申請成為koc
