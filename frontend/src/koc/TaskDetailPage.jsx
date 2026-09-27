@@ -524,7 +524,7 @@ export default function TaskDetailPage({ task, onBack }) {
             <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
               <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
               <p className="text-[11px] xl:text-sm text-[#8C8880] font-medium leading-relaxed text-center">
-                活動截止日後，任務將自動結案並計算最終分潤
+                活動截止日後，將自動結案並計算最終分潤
               </p>
 
               <AnalyticsSection

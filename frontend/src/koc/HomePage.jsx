@@ -546,7 +546,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         /* 未申請清單 */
         <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
           <div className="flex justify-between items-center bg-[#F8F9FA] border-b border-[#E2DDD4] px-4 md:px-10 py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880]">
-            <div>可申請的任務</div>
+            <div>可申請的案件</div>
             <div className="hidden sm:block">動作</div>
           </div>
           <div className="flex flex-col">
@@ -575,14 +575,14 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                       onClick={() => handleApply(campaign)}
                       className="w-full sm:w-auto bg-[#1A1A18] text-[#F5F0E8] px-4 md:px-8 py-2.5 md:py-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
                     >
-                      申請任務
+                      申請案件
                     </button>
                   </div>
                 </div>
               ))
             ) : (
               <div className="px-4 md:px-10 py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">
-                目前沒有可申請的任務
+                目前沒有可申請的案件
               </div>
             )}
           </div>
@@ -645,7 +645,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <div className="w-12 h-12 md:w-16 md:h-16 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-3 md:mb-4">
                 <CheckCircle2 size={20} className="md:w-6 md:h-6 text-[#8C8880]" />
               </div>
-              <p className="text-[#1A1A18] font-bold text-sm md:text-base">這個階段目前沒有任務喔！</p>
+              <p className="text-[#1A1A18] font-bold text-sm md:text-base">這個階段目前沒有案件喔！</p>
             </div>
           )}
         </div>
