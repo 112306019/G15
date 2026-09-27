@@ -46,7 +46,7 @@ from api.models import (
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT
-from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email, send_platform_fee_invoice_email
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 
@@ -1223,7 +1223,6 @@ def admin_confirm_vendor_payout(request):
 # KOC 撥款申請：後台處理（比照廠商那一套，補上原本缺的後台端點）
 # GET  /platform/koc/payouts              列出 KOC 撥款申請
 # POST /platform/koc/payout/confirm       把撥款申請標記為完成或失敗
-# POST /platform/koc/payout/uploadInvoice 登打平台服務費的統一發票號碼
 # ==============================================================================
 
 @api_view(['GET'])
@@ -1253,13 +1252,8 @@ def admin_list_koc_payouts(request):
                 if koc_profile and koc_profile.bank_account else '未設定'
             ),
             'Amount': p.amount,
-            'Platform_fee': p.platform_fee,
             'Payout_date': p.payout_date,
             'Status': p.status,
-            'Invoice_number': p.invoice_number,
-            'Random_number': p.random_number,
-            'Invoice_uploaded_at': p.invoice_uploaded_at,
-            'Invoice_voided_at': p.invoice_voided_at,
         })
 
     return Response(result, status=status.HTTP_200_OK)
@@ -1302,18 +1296,17 @@ def admin_confirm_koc_payout(request):
         payout.status = new_status
         payout.save(update_fields=['status'])
 
-        # 如果匯款失敗，錢要退回 KOC 的可提領餘額（退回撥款當時扣掉的毛額，
-        # 也就是 amount + platform_fee，不能讓錢憑空消失）。
+        # 如果匯款失敗，錢要退回 KOC 的可提領餘額（退回撥款當時扣掉的金額，
+        # 不能讓錢憑空消失）。
         if new_status == 'failed' and koc:
-            gross_amount = payout.amount + payout.platform_fee
             wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=koc)
-            wallet.balance_available = wallet.balance_available + gross_amount
+            wallet.balance_available = wallet.balance_available + payout.amount
             wallet.save(update_fields=['balance_available', 'updated_at'])
 
             Transactions.objects.create(
                 koc_wallet=wallet,
                 type="withdraw_failed_refund",
-                amount=gross_amount,
+                amount=payout.amount,
                 reference_type="payout",
                 reference_id=str(payout.payout_id)
             )
@@ -1327,98 +1320,11 @@ def admin_confirm_koc_payout(request):
             action_reason=action_reason or f'撥款申請 #{payout.payout_id}，金額 NT$ {payout.amount}，標記為「{new_status}」',
         )
 
-    # 撥款標記失敗、而且這張發票是我們自動開立的（不是後台手動登打、來源
-    # 不一定是 ECPay 的），才呼叫作廢 API——錢已經退回 KOC 錢包了，發票
-    # 不作廢的話會變成對應一筆「根本沒真的撥款成功」的有效稅務憑證。
-    # 放在上面的 transaction.atomic() 之外，避免外部 API 呼叫卡住 DB 交易；
-    # 作廢失敗只印出來，不影響撥款已經標記失敗、錢已經退回這件事本身。
-    if new_status == 'failed' and payout.invoice_number and payout.invoice_issued_automatically and not payout.invoice_voided_at:
-        from api.ecpay_invoice import void_b2c_invoice
-        try:
-            invoice_date_str = payout.invoice_uploaded_at.strftime('%Y-%m-%d') if payout.invoice_uploaded_at else ''
-            void_success, void_message = void_b2c_invoice(
-                invoice_no=payout.invoice_number,
-                invoice_date=invoice_date_str,
-                reason='撥款失敗作廢',
-            )
-            if void_success:
-                payout.invoice_voided_at = timezone.now()
-                payout.save(update_fields=['invoice_voided_at'])
-            else:
-                logger.error(f'平台服務費發票自動作廢失敗（payout_id={payout.payout_id}）: {void_message}')
-        except Exception as e:
-            logger.error(f'平台服務費發票自動作廢發生例外（payout_id={payout.payout_id}）: {e}')
-
     return Response({
         'success': True,
         'err': '',
         'payout_id': payout.payout_id,
         'status': payout.status,
-    }, status=status.HTTP_200_OK)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def admin_koc_payout_upload_invoice(request):
-    """
-    撥款申請時會先自動呼叫綠界 B2C 電子發票 API 開立平台服務費的發票
-    （見 koc.py request_payout）；這支是自動開立失敗時的備援手動流程——
-    財務在外部電子發票/會計系統開好票後，回來這裡登打發票號碼留存記錄，
-    並寄信通知 KOC。random_number 是選填，只有財務也是透過 ECPay B2C
-    介面手動開立時才會有這組查詢用的隨機碼，用別的系統開票就留空。
-
-    已經有發票號碼（不管是自動開立成功、還是先前手動登打過）的撥款
-    不能再次登打，避免誤觸把之前正確的發票號碼覆蓋掉。
-    """
-    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
-    if err:
-        return err
-
-    payout_id = request.data.get('payout_id')
-    invoice_number = request.data.get('invoice_number')
-    random_number = request.data.get('random_number', '')
-
-    if not payout_id or not invoice_number:
-        return Response({
-            'success': False,
-            'err': 'payout_id、invoice_number 為必填'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        payout = Payouts.objects.select_related('koc').get(payout_id=payout_id)
-    except Payouts.DoesNotExist:
-        return Response({
-            'success': False,
-            'err': '找不到這筆撥款申請'
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    if payout.platform_fee <= 0:
-        return Response({
-            'success': False,
-            'err': '這筆撥款沒有平台服務費，不需要開立發票'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if payout.invoice_number:
-        return Response({
-            'success': False,
-            'err': f'這筆撥款已經登記過發票號碼「{payout.invoice_number}」，不能重複登打'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    payout.invoice_number = invoice_number
-    payout.random_number = random_number or None
-    payout.invoice_uploaded_at = timezone.now()
-    payout.save(update_fields=['invoice_number', 'random_number', 'invoice_uploaded_at'])
-
-    try:
-        send_platform_fee_invoice_email(payout)
-    except Exception as e:
-        logger.error(f'平台服務費發票通知信寄送失敗（payout_id={payout.payout_id}）: {e}')
-
-    return Response({
-        'success': True,
-        'err': '',
-        'payout_id': payout.payout_id,
-        'invoice_number': payout.invoice_number,
     }, status=status.HTTP_200_OK)
 
 

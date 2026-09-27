@@ -6,13 +6,11 @@ import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, C
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
 import HomePage from './koc/HomePage';
-import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
 import PayoutRecordsPage from './koc/PayoutRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
-import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
 import KocIntroPage from './shopping/KocIntroPage';
@@ -53,8 +51,6 @@ const VIEW_TO_PATH = {
   checkout: '/checkout',
   chat: '/chat',
   home: '/home',
-  analysis: '/analysis',
-  sales_data: '/analysis/product',
   task_detail: '/task',
   profile: '/profile',
   security: '/security',
@@ -162,6 +158,17 @@ function ProductDetailRoute({ userRole, onAddToCart, onBuyNow, favorites, onTogg
   const navigate = useNavigate();
   const [product, setProduct] = useState(location.state?.product || null);
 
+  // KOC 短連結（見 backend koc_link_redirect）落地時會帶 ?koc_id=，這裡純粹
+  // 推一個 GA4 事件做行銷維度分析用（流量來源、裝置、地區），不影響戰報
+  // 上的點擊數/EPC——那是後端 CouponNew.click_count 算的，兩邊資料源分開。
+  useEffect(() => {
+    if (!window.dataLayer) return;
+    const kocId = new URLSearchParams(location.search).get('koc_id');
+    if (kocId) {
+      window.dataLayer.push({ event: 'koc_referral_landing', koc_id: kocId });
+    }
+  }, [location.search]);
+
   useEffect(() => {
     if (location.state?.product) {
       setProduct(location.state.product);
@@ -229,8 +236,8 @@ function OrderChatRoute() {
   return <OrderChatPage onBack={() => navigate('/orders')} orderId={id} />;
 }
 
-// 需要「整包資料」才能顯示、且沒有簡單 fetch-by-id API 的頁面（任務詳情、業績分析），
-// 一律靠路由 state 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
+// 任務詳情頁需要「整包資料」才能顯示、沒有簡單 fetch-by-id API，一律靠路由 state
+// 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
 function TaskDetailRoute({ onJumpHome }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -251,20 +258,6 @@ function TaskDetailRoute({ onJumpHome }) {
       }}
     />
   );
-}
-
-function SalesDataRoute() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const product = location.state?.product;
-
-  useEffect(() => {
-    if (!product) navigate('/analysis', { replace: true });
-  }, [product, navigate]);
-
-  if (!product) return null;
-
-  return <SalesDataPage product={product} onBack={() => navigate('/analysis')} />;
 }
 
 function MainSystem() {
@@ -363,6 +356,9 @@ function MainSystem() {
         break;
       case "order_chat":
         handleNavigate("order_chat", notification.reference_id);
+        break;
+      case "koc_chat":
+        handleNavigate("koc_chat", notification.reference_id);
         break;
       case "koc_home":
         handleNavigate("home");
@@ -465,19 +461,21 @@ function MainSystem() {
       return;
     }
 
+    // KOC 接案聊天室：帶 kocmission_id 讓 ChatPage 自動選中該任務的對話
+    if (targetView === 'koc_chat') {
+      navigate(`/chat?mission=${data}`);
+      return;
+    }
+
     // 通知頁：訂單通知／接案通知是分開的兩個頁面，category 直接進網址
     if (targetView === 'notifications') {
       navigate(`/notifications/${data || 'order'}`);
       return;
     }
 
-    // 任務詳情 / 業績分析：資料整包用路由 state 帶過去
+    // 任務詳情：資料整包用路由 state 帶過去
     if (targetView === 'task_detail' && data) {
       navigate('/task', { state: { task: data } });
-      return;
-    }
-    if (targetView === 'sales_data' && data) {
-      navigate('/analysis/product', { state: { product: data } });
       return;
     }
 
@@ -489,11 +487,11 @@ function MainSystem() {
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'profile',
     'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
-    'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
+    'review', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
-    if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
+    if (['home', 'review', 'task_detail'].includes(view)) return 'home';
     if (['earnings', 'earnings_detail', 'tax_form_records', 'payout_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
@@ -664,18 +662,6 @@ function MainSystem() {
               jumpToStage={homeJumpStage}
               onJumpHandled={() => setHomeJumpStage(null)}
             />
-          </ShellLayout>
-        } />
-
-        <Route path="/analysis" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />
-          </ShellLayout>
-        } />
-
-        <Route path="/analysis/product" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <SalesDataRoute />
           </ShellLayout>
         } />
 

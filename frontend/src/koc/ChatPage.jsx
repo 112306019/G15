@@ -5,6 +5,8 @@ import {
   useState
 } from 'react'
 
+import { useLocation } from 'react-router-dom'
+
 import {
   Send,
   Search,
@@ -170,6 +172,10 @@ export default function ChatPage() {
   const userId =
     localStorage.getItem('userId')
 
+  // 從別的頁面（接案詳情頁的「發送訊息給廠商」、站內通知）帶 ?mission=<kocmission_id>
+  // 過來時，載入完聊天室清單後直接選中該任務對應的房間，不用使用者自己再找一次。
+  const location = useLocation()
+
   const bottomRef = useRef(null)
 
   const [rooms, setRooms] =
@@ -289,7 +295,7 @@ export default function ChatPage() {
   useEffect(() => {
     loadChatrooms()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId])
+  }, [userId, location.search])
 
 
   useEffect(() => {
@@ -382,19 +388,36 @@ export default function ChatPage() {
 
       setRooms(mappedRooms)
 
-      const selectedRoomStillExists =
-        mappedRooms.some(
-          room =>
-            room.roomId ===
-            activeRoomId
-        )
+      const missionIdParam =
+        new URLSearchParams(location.search).get('mission')
 
-      // 避免手機版一進來就切到對話，只在有選擇房間時才切換。
-      // 在電腦版可能可以預設選中第一間，但在手機版最好停在列表頁。
-      // 所以如果原本有選中的房間且還存在，就保持；否則清空選擇（停在列表）。
-      if (!selectedRoomStillExists) {
-        setActiveVendorId(null)
-        setActiveRoomId(null)
+      const targetRoom =
+        missionIdParam
+          ? mappedRooms.find(
+              room =>
+                String(room.kocMissionId) === String(missionIdParam)
+            )
+          : null
+
+      if (targetRoom) {
+        // 帶 ?mission= 進來（來自接案詳情頁或站內通知），直接選中該任務的房間，
+        // 手機版也一起跳過列表頁直接進對話。
+        selectRoom(targetRoom)
+      } else {
+        const selectedRoomStillExists =
+          mappedRooms.some(
+            room =>
+              room.roomId ===
+              activeRoomId
+          )
+
+        // 避免手機版一進來就切到對話，只在有選擇房間時才切換。
+        // 在電腦版可能可以預設選中第一間，但在手機版最好停在列表頁。
+        // 所以如果原本有選中的房間且還存在，就保持；否則清空選擇（停在列表）。
+        if (!selectedRoomStillExists) {
+          setActiveVendorId(null)
+          setActiveRoomId(null)
+        }
       }
     } catch (requestError) {
       console.error(

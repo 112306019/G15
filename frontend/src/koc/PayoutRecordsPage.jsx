@@ -19,22 +19,8 @@ function PayoutRow({ payout }) {
   const badge = STATUS_BADGE[payout.status] || { label: payout.status, cls: 'bg-[#F5F0E8] text-[#8C8880]' };
 
   return (
-    <div className="grid grid-cols-5 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
+    <div className="grid grid-cols-3 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
       <div className="font-black text-[#C8522A]">NT$ {(payout.amount || 0).toLocaleString()}</div>
-      <div className="text-[#8C8880] font-medium">NT$ {(payout.platform_fee || 0).toLocaleString()}</div>
-      <div className={payout.invoice_number ? 'font-mono font-bold text-[#1A1A18]' : 'text-[#8C8880] font-medium'}>
-        {payout.invoice_number ? (
-          <span className={payout.invoice_voided_at ? 'line-through text-[#8C8880]' : ''}>{payout.invoice_number}</span>
-        ) : '尚未開立'}
-        {payout.invoice_voided_at && (
-          <span className="ml-1.5 text-[10px] font-bold text-[#C8522A]">已作廢</span>
-        )}
-        {payout.invoice_number && payout.random_number && !payout.invoice_voided_at && (
-          <span className="block text-[10px] font-mono font-medium text-[#8C8880] mt-0.5">
-            隨機碼 {payout.random_number}
-          </span>
-        )}
-      </div>
       <div>
         <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${badge.cls}`}>
           {badge.label}
@@ -79,19 +65,14 @@ export default function PayoutRecordsPage({ onBack }) {
         返回我的收益
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-4 text-[#1A1A18]">撥款紀錄</h2>
-      <p className="text-xs font-bold text-[#8C8880] mb-10">
-        ※ 平台服務費會就此筆金額開立統一發票給您，作為申報個人所得稅時可列報的成本費用憑證；發票開立後會另外寄信通知，號碼也會顯示在下面。
-      </p>
+      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">撥款紀錄</h2>
 
       {loading ? (
         <div className="py-16 text-center text-[#8C8880] font-bold">載入中...</div>
       ) : (
         <div className="w-full bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-          <div className="grid grid-cols-5 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+          <div className="grid grid-cols-3 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
             <span>實付金額</span>
-            <span>平台服務費</span>
-            <span>發票號碼</span>
             <span>狀態</span>
             <span>申請日期</span>
           </div>

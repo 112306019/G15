@@ -22,8 +22,6 @@ export default function AdminFinance() {
 
   const [kocPayouts, setKocPayouts] = useState([]);
   const [confirmingKocPayoutId, setConfirmingKocPayoutId] = useState(null);
-  const [kocInvoiceInputs, setKocInvoiceInputs] = useState({});
-  const [uploadingKocInvoiceId, setUploadingKocInvoiceId] = useState(null);
 
   const [returnDisputes, setReturnDisputes] = useState([]);
   const [loadingDisputes, setLoadingDisputes] = useState(false);
@@ -271,11 +269,8 @@ export default function AdminFinance() {
           kocName: p.Koc_name,
           bankDisplay: p.Bank_display,
           amount: p.Amount,
-          platformFee: p.Platform_fee,
           payoutDate: p.Payout_date,
           status: p.Status,
-          invoiceNumber: p.Invoice_number,
-          randomNumber: p.Random_number,
         })));
       }
     } catch (err) {
@@ -287,7 +282,7 @@ export default function AdminFinance() {
     if (!adminId) return;
     const confirmMsg = newStatus === 'completed'
       ? "確定已經完成匯款，把這筆申請標記為完成嗎？"
-      : "確定要標記這筆撥款失敗嗎？金額（含平台服務費）會退回 KOC 的可提領餘額。";
+      : "確定要標記這筆撥款失敗嗎？金額會退回 KOC 的可提領餘額。";
     if (!window.confirm(confirmMsg)) return;
 
     setConfirmingKocPayoutId(payoutId);
@@ -306,31 +301,6 @@ export default function AdminFinance() {
       alert("處理失敗，請稍後再試");
     } finally {
       setConfirmingKocPayoutId(null);
-    }
-  };
-
-  const handleUploadKocInvoice = async (payoutId) => {
-    if (!adminId) return;
-    const input = kocInvoiceInputs[payoutId] || {};
-    const invoiceNumber = (input.invoiceNumber || '').trim();
-    const randomNumber = (input.randomNumber || '').trim();
-    if (!invoiceNumber) { alert("請先輸入發票號碼"); return; }
-
-    setUploadingKocInvoiceId(payoutId);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/koc/payout/uploadInvoice`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ payout_id: payoutId, invoice_number: invoiceNumber, random_number: randomNumber, Admin_id: adminId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) { alert(data.err || "登打發票號碼失敗"); return; }
-
-      setKocPayouts(prev => prev.map(p => p.payoutId === payoutId ? { ...p, invoiceNumber: data.invoice_number, randomNumber } : p));
-    } catch {
-      alert("登打發票號碼失敗，請稍後再試");
-    } finally {
-      setUploadingKocInvoiceId(null);
     }
   };
 
@@ -664,7 +634,7 @@ export default function AdminFinance() {
               </>
             )}
 
-            {/* TAB: KOC 撥款與服務費發票 */}
+            {/* TAB: KOC 撥款 */}
             {activeTab === 'koc_payouts' && (
               <>
                 <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -673,7 +643,7 @@ export default function AdminFinance() {
                       <Download size={16} /> 匯出待撥款 CSV
                     </div>
                     <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                      財務拿去對照銀行批次匯款作業用，金額已經是扣除平台服務費後的淨額。
+                      財務拿去對照銀行批次匯款作業用。
                     </p>
                   </div>
                   <button
@@ -698,8 +668,7 @@ export default function AdminFinance() {
                               {p.kocName}（{p.kocUserId}） ・ 實付 NT$ {p.amount?.toLocaleString?.() ?? p.amount}
                             </div>
                             <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                              匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate} ・
-                              平台服務費 NT$ {p.platformFee?.toLocaleString?.() ?? p.platformFee}
+                              匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
                             </div>
                           </div>
                           <div className="flex flex-col sm:flex-row gap-2 sm:shrink-0">
@@ -720,47 +689,6 @@ export default function AdminFinance() {
                             </button>
                           </div>
                         </div>
-
-                        {p.platformFee > 0 && (
-                          <div className="border-t border-[#E2DDD4] pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                            <span className="text-[10px] sm:text-xs font-bold text-[#8C8880] shrink-0 flex items-center gap-1.5">
-                              <FileText size={14} /> 服務費統一發票：
-                            </span>
-                            {p.invoiceNumber ? (
-                              <span className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">
-                                {p.invoiceNumber}
-                                {p.randomNumber && <span className="text-[#8C8880] font-medium ml-2">（隨機碼 {p.randomNumber}）</span>}
-                              </span>
-                            ) : (
-                              <div className="flex flex-col sm:flex-row gap-2 flex-1">
-                                <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] sm:hidden">
-                                  自動開立失敗，請於外部系統開票後手動登打：
-                                </p>
-                                <input
-                                  type="text"
-                                  value={kocInvoiceInputs[p.payoutId]?.invoiceNumber || ''}
-                                  onChange={(e) => setKocInvoiceInputs(prev => ({ ...prev, [p.payoutId]: { ...prev[p.payoutId], invoiceNumber: e.target.value } }))}
-                                  placeholder="發票號碼（自動開立失敗，請手動登打）"
-                                  className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-lg px-3 py-1.5 text-xs sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-2 focus:ring-[#C8522A]/20 focus:border-[#C8522A]"
-                                />
-                                <input
-                                  type="text"
-                                  value={kocInvoiceInputs[p.payoutId]?.randomNumber || ''}
-                                  onChange={(e) => setKocInvoiceInputs(prev => ({ ...prev, [p.payoutId]: { ...prev[p.payoutId], randomNumber: e.target.value } }))}
-                                  placeholder="隨機碼（選填）"
-                                  className="w-full sm:w-32 shrink-0 bg-[#F8F9FA] border border-[#E2DDD4] rounded-lg px-3 py-1.5 text-xs sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-2 focus:ring-[#C8522A]/20 focus:border-[#C8522A]"
-                                />
-                                <button
-                                  onClick={() => handleUploadKocInvoice(p.payoutId)}
-                                  disabled={uploadingKocInvoiceId === p.payoutId}
-                                  className="shrink-0 bg-white border border-[#E2DDD4] text-[#1A1A18] px-4 py-1.5 rounded-lg text-xs sm:text-sm font-bold hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-40"
-                                >
-                                  {uploadingKocInvoiceId === p.payoutId ? '送出中...' : '登打號碼'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>

@@ -59,6 +59,30 @@ def is_mission_hidden(mission):
 
     return timezone.now() > campaign.end_date + timedelta(days=MISSION_HISTORY_VISIBLE_DAYS)
 
+
+# KocLinkClickDaily 的保留天數：終身總點擊數已經存在 CouponNew.click_count，
+# 這張表只是給戰報近期走勢圖用的每日拆分，而前端目前最長只會查 30 天
+# （period='month'），90 天已經是 3 倍安全邊界，超過的舊資料由
+# cleanup_click_history 這支排程指令定期清掉，避免資料表無限膨脹。
+CLICK_DAILY_RETENTION_DAYS = 90
+
+# 戰報短連結（koc_link_redirect）點擊計數要濾掉的機器人 User-Agent 關鍵字：
+# KOC 一把連結貼到社群平台，這些平台會立刻自己打一次連結去產生預覽圖，
+# 跟真人點擊無關，照算的話會系統性灌水點擊數、拉低 EPC。這只是「盡量準」
+# 的簡單過濾，不是安全機制，不用追求完整涵蓋所有爬蟲。
+CLICK_BOT_USER_AGENT_MARKERS = (
+    'facebookexternalhit', 'twitterbot', 'slackbot', 'telegrambot',
+    'linebot', 'whatsapp', 'discordbot', 'googlebot', 'bingbot',
+)
+
+
+def is_probably_bot_click(user_agent):
+    """判斷這次短連結點擊的 User-Agent 是不是社群平台的預覽圖機器人。"""
+    if not user_agent:
+        return False
+    ua_lower = user_agent.lower()
+    return any(marker in ua_lower for marker in CLICK_BOT_USER_AGENT_MARKERS)
+
 # KOC 提領：跨行轉帳銀行會收取的手續費，這筆錢不是平台賺的，只是告知用（實際扣款
 # 是銀行端處理，平台這邊的錢包/撥款金額不會扣掉這 15 元）。
 CROSS_BANK_TRANSFER_FEE = 15
@@ -359,11 +383,7 @@ EARNINGS_STATUS_CODE_MAP = {
 # KOC 分潤比例：固定抽「訂單總金額扣除運費」的這個百分比，不再依廠商在
 # CampaignProduct 設定的 koc_commission_rate 逐項計算（那個欄位保留給廠商端
 # 顯示/編輯用，但 calculate_order_commission 已經不會再讀它）。
-KOC_COMMISSION_RATE_PERCENT = 5
-
-# 平台服務費比例：KOC 申請撥款時，從撥款金額裡再抽這個百分比作為平台服務費，
-# 實際匯入 KOC 銀行帳戶的金額 = 撥款金額 - 平台服務費（見 koc.py request_payout）。
-PLATFORM_SERVICE_FEE_RATE_PERCENT = 20
+KOC_COMMISSION_RATE_PERCENT = 3
 
 # 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
 VENDOR_SETTLEMENT_HOLD_DAYS = 7
