@@ -3311,6 +3311,140 @@ def vendor_coupon_update_status(request):
         "status": coupon.status
     }, status=status.HTTP_200_OK)
 
+# ==============================================================================
+# KOC 合作成效：總帶貨 GMV / 淨營業額 / ROAS
+#
+# 歸屬規則跟 KOC 端爆款榜（koc_insights.py）一致：Order.promotion_code 對到
+# 這個廠商活動的 CouponNew，且只算該活動 CampaignProduct 裡、屬於這個廠商的商品。
+#
+# - GMV：曾經付款成功的訂單（paid / completed / refunded），含之後被取消或退款的部分
+# - 淨營業額：GMV 扣掉已取消（order_status='cancelled'）與已退款
+#   （payment_status='refunded' 或有 status='refunded' 的 ReturnRequest）的訂單
+# - 分潤：Earnings 排除 status='cancelled'（退款被收回的分潤不算成本）
+# - 平台費：淨營業額 × Vendor.platform_fee_rate，跟 calculate_vendor_earning() 同一個費率
+# - ROAS：淨營業額 ÷（分潤 + 平台費）；分母為 0 時回傳 None，前端顯示「—」
+# ==============================================================================
+KOC_GMV_PAYMENT_STATUSES = ["paid", "completed", "refunded"]
+
+
+def _vendor_koc_performance(vendor_id):
+    vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+    fee_rate = Decimal(str(vendor.platform_fee_rate or 0)) if vendor else Decimal("0")
+
+    coupon_rows = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    ).values_list(
+        "promotion_code",
+        "kocmission__application__campaign_id",
+    )
+    code_campaign = {code: cid for code, cid in coupon_rows}
+
+    campaign_names = dict(
+        Campaigns.objects.filter(vendor_id=vendor_id).values_list("campaign_id", "name")
+    )
+
+    campaign_products = {}
+    for cid, pid in CampaignProduct.objects.filter(
+        campaign__vendor_id=vendor_id
+    ).values_list("campaign_id", "product_id"):
+        campaign_products.setdefault(cid, set()).add(pid)
+
+    orders = {}
+    if code_campaign:
+        for row in Order.objects.filter(
+            promotion_code__in=list(code_campaign.keys()),
+            payment_status__in=KOC_GMV_PAYMENT_STATUSES,
+        ).values("order_id", "promotion_code", "order_status", "payment_status"):
+            orders[row["order_id"]] = row
+
+    refunded_order_ids = set(
+        ReturnRequest.objects.filter(
+            order_id__in=list(orders.keys()), status="refunded"
+        ).values_list("order_id", flat=True)
+    ) if orders else set()
+
+    stats = {}
+
+    def _bucket(cid):
+        return stats.setdefault(cid, {
+            "gmv": Decimal("0"),
+            "net_sales": Decimal("0"),
+            "orders": set(),
+            "net_orders": set(),
+            "commission": 0,
+        })
+
+    if orders:
+        items = OrderItem.objects.filter(
+            order_id__in=list(orders.keys()),
+            product__vendor_id=vendor_id,
+        ).values("order_id", "product_id", "subtotal")
+
+        for it in items:
+            order = orders[it["order_id"]]
+            cid = code_campaign.get(order["promotion_code"])
+            if cid is None or it["product_id"] not in campaign_products.get(cid, ()):
+                continue
+
+            amount = Decimal(str(it["subtotal"] or 0))
+            b = _bucket(cid)
+            b["gmv"] += amount
+            b["orders"].add(it["order_id"])
+
+            is_lost = (
+                order["order_status"] == "cancelled"
+                or order["payment_status"] == "refunded"
+                or it["order_id"] in refunded_order_ids
+            )
+            if not is_lost:
+                b["net_sales"] += amount
+                b["net_orders"].add(it["order_id"])
+
+    for row in (
+        Earnings.objects.filter(kocmission__application__campaign__vendor_id=vendor_id)
+        .exclude(status="cancelled")
+        .values("kocmission__application__campaign_id")
+        .annotate(total=Sum("amount"))
+    ):
+        _bucket(row["kocmission__application__campaign_id"])["commission"] = row["total"] or 0
+
+    def _summarize(gmv, net_sales, order_count, net_order_count, commission):
+        platform_fee = (net_sales * fee_rate / Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        cost = Decimal(str(commission)) + platform_fee
+        roas = round(float(net_sales / cost), 2) if cost > 0 else None
+        return {
+            "gmv": int(gmv.quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+            "net_sales": int(net_sales.quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
+            "order_count": order_count,
+            "net_order_count": net_order_count,
+            "commission": int(commission),
+            "platform_fee": int(platform_fee),
+            "roas": roas,
+        }
+
+    breakdown = []
+    for cid, b in stats.items():
+        row = _summarize(b["gmv"], b["net_sales"], len(b["orders"]), len(b["net_orders"]), b["commission"])
+        row["campaign_id"] = str(cid)
+        row["campaign_name"] = campaign_names.get(cid, "")
+        breakdown.append(row)
+    breakdown.sort(key=lambda r: (r["net_sales"], r["gmv"]), reverse=True)
+
+    all_orders = set().union(*(b["orders"] for b in stats.values())) if stats else set()
+    all_net_orders = set().union(*(b["net_orders"] for b in stats.values())) if stats else set()
+    total = _summarize(
+        sum((b["gmv"] for b in stats.values()), Decimal("0")),
+        sum((b["net_sales"] for b in stats.values()), Decimal("0")),
+        len(all_orders),
+        len(all_net_orders),
+        sum(b["commission"] for b in stats.values()),
+    )
+    total["platform_fee_rate"] = str(fee_rate)
+    return total, breakdown
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_analytics_overview(request):
@@ -3368,11 +3502,16 @@ def vendor_analytics_overview(request):
         kocmission__application__campaign__vendor_id=vendor_id
     ).count()
 
+    # 8. KOC 合作成效（GMV / 淨營業額 / ROAS）
+    koc_performance, campaign_breakdown = _vendor_koc_performance(vendor_id)
+
     return Response({
         "success": True,
         "err": "",
         "analytics": {
             "vendor_id": vendor_id,
+            "koc_performance": koc_performance,
+            "campaign_breakdown": campaign_breakdown,
             "total_campaigns": total_campaigns,
             "total_applications": total_applications,
             "total_submissions": total_submissions,
