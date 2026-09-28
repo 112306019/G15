@@ -30,6 +30,7 @@ import {
   getVendorCampaigns,
   getVendorProductPerformance
 } from '../api/vendor'
+import CouponFunnel from './CouponFunnel'
 
 import {
   formatCurrency,
@@ -462,6 +463,9 @@ export default function ProductAnalytics() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
+
+      {/* KOC 優惠碼電商漏斗（GA4） */}
+      <CouponFunnel />
 
       {/* 篩選區 */}
       <Card className="p-4 sm:p-5">
