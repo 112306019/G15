@@ -33,6 +33,11 @@ from .koc import (
 )
 # 有新寫的 function 就要補進來
 
+from .koc_insights import (
+    koc_top_products,
+    koc_recommended_products,
+)
+
 from .platform import (
     koc_approve, 
     koc_reject,

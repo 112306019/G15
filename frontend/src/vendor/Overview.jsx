@@ -11,10 +11,11 @@ import {
   Users,
   FileText,
   Ticket,
-  Wallet,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  Receipt
 } from 'lucide-react'
 
 import {
@@ -139,6 +140,13 @@ function MetricRow({
 }
 
 
+function formatRoas(roas) {
+  return roas === null || roas === undefined
+    ? '—'
+    : `${Number(roas).toFixed(2)}x`
+}
+
+
 export default function Overview() {
   const vendorId =
     localStorage.getItem('vendor_id')
@@ -215,7 +223,47 @@ export default function Overview() {
         totalCommission:
           Number(
             data.total_commission || 0
-          )
+          ),
+
+        // KOC 合作成效
+        kocGmv:
+          Number(
+            data.koc_performance?.gmv || 0
+          ),
+
+        kocNetSales:
+          Number(
+            data.koc_performance?.net_sales || 0
+          ),
+
+        kocOrderCount:
+          Number(
+            data.koc_performance?.order_count || 0
+          ),
+
+        kocCommission:
+          Number(
+            data.koc_performance?.commission || 0
+          ),
+
+        kocPlatformFee:
+          Number(
+            data.koc_performance?.platform_fee || 0
+          ),
+
+        // null 代表分母為 0（還沒有任何分潤與平台費），畫面顯示「—」
+        kocRoas:
+          data.koc_performance?.roas ?? null,
+
+        platformFeeRate:
+          Number(
+            data.koc_performance?.platform_fee_rate || 0
+          ),
+
+        campaignBreakdown:
+          Array.isArray(data.campaign_breakdown)
+            ? data.campaign_breakdown
+            : []
       })
     } catch (requestError) {
       console.error(
@@ -332,14 +380,25 @@ export default function Overview() {
     <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300 p-4 sm:p-0">
 
       {/* 主要營收 KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard
-          label="累積銷售額"
+          label="總帶貨 GMV"
           value={formatCurrency(
-            analytics?.totalRevenue || 0
+            analytics?.kocGmv || 0
           )}
-          sub="已付款(paid/completed)訂單的商品銷售小計"
+          sub={`KOC 優惠碼帶出的 ${(analytics?.kocOrderCount || 0).toLocaleString()} 張訂單總額（含之後退貨/取消）`}
           icon={DollarSign}
+        />
+
+        <StatCard
+          label="淨營業額"
+          value={formatCurrency(
+            analytics?.kocNetSales || 0
+          )}
+          sub={`GMV 扣除退貨/取消 ${formatCurrency(
+            Math.max(0, (analytics?.kocGmv || 0) - (analytics?.kocNetSales || 0))
+          )}`}
+          icon={Receipt}
           accent
         />
 
@@ -361,15 +420,91 @@ export default function Overview() {
           icon={Ticket}
         />
 
-        <StatCard
-          label="累積分潤"
-          value={formatCurrency(
-            analytics?.totalCommission || 0
-          )}
-          sub="優惠碼帶來的分潤"
-          icon={Wallet}
-        />
+        <div className="col-span-2 lg:col-span-1">
+          <StatCard
+            label="網紅合作 ROAS"
+            value={formatRoas(analytics?.kocRoas)}
+            sub={`淨營業額 ÷（分潤 ${formatCurrency(analytics?.kocCommission || 0)} + 平台費 ${formatCurrency(analytics?.kocPlatformFee || 0)}）`}
+            icon={TrendingUp}
+            accent={analytics?.kocRoas !== null && analytics?.kocRoas >= 1}
+          />
+        </div>
       </div>
+
+
+      {/* 各活動合作成效 */}
+      <Card className="p-4 sm:p-6">
+        <div className="mb-3 sm:mb-4">
+          <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+            各活動合作成效
+          </h2>
+
+          <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+            ROAS 大於 1 代表這檔合作帶來的淨營業額高於分潤與平台費（未計入商品成本）
+          </p>
+        </div>
+
+        {analytics?.campaignBreakdown.length === 0 ? (
+          <div className="py-8 text-center text-[12px] sm:text-sm text-[#8C8880]">
+            目前還沒有 KOC 優惠碼帶出的訂單
+          </div>
+        ) : (
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full min-w-[640px] text-[12px] sm:text-sm">
+              <thead>
+                <tr className="text-left text-[10px] sm:text-xs font-bold text-[#8C8880] border-b border-[#E2DDD4]">
+                  <th className="py-2.5 px-4 sm:px-2">活動</th>
+                  <th className="py-2.5 px-2 text-right">GMV</th>
+                  <th className="py-2.5 px-2 text-right">淨營業額</th>
+                  <th className="py-2.5 px-2 text-right">分潤</th>
+                  <th className="py-2.5 px-2 text-right">平台費</th>
+                  <th className="py-2.5 px-4 sm:px-2 text-right">ROAS</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {analytics?.campaignBreakdown.map((row) => (
+                  <tr
+                    key={row.campaign_id}
+                    className="border-b border-[#E2DDD4] last:border-b-0"
+                  >
+                    <td className="py-3 px-4 sm:px-2 font-bold text-[#1A1A18] max-w-[220px] truncate">
+                      {row.campaign_name || '（未命名活動）'}
+                      <div className="text-[10px] font-medium text-[#8C8880] mt-0.5">
+                        {row.order_count} 單，淨 {row.net_order_count} 單
+                      </div>
+                    </td>
+                    <td className="py-3 px-2 text-right text-[#1A1A18]">
+                      {formatCurrency(row.gmv)}
+                    </td>
+                    <td className="py-3 px-2 text-right font-bold text-[#1A1A18]">
+                      {formatCurrency(row.net_sales)}
+                    </td>
+                    <td className="py-3 px-2 text-right text-[#8C8880]">
+                      {formatCurrency(row.commission)}
+                    </td>
+                    <td className="py-3 px-2 text-right text-[#8C8880]">
+                      {formatCurrency(row.platform_fee)}
+                    </td>
+                    <td
+                      className={cn(
+                        'py-3 px-4 sm:px-2 text-right font-black',
+                        row.roas === null
+                          ? 'text-[#8C8880]'
+                          : row.roas >= 1
+                            ? 'text-[#C8522A]'
+                            : 'text-red-600'
+                      )}
+                    >
+                      {formatRoas(row.roas)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
 
       {/* 活動與 KOC 流程 KPI */}
@@ -423,7 +558,7 @@ export default function Overview() {
             value={formatCurrency(
               derivedMetrics.averageOrderValue
             )}
-            description="累積銷售額 ÷ 總訂單數"
+            description="所有已付款訂單的商品銷售額 ÷ 總訂單數"
           />
 
           <MetricRow
@@ -454,11 +589,11 @@ export default function Overview() {
           <div className="space-y-3 sm:space-y-4 text-[13px] sm:text-sm">
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
               <div className="font-bold text-[#1A1A18]">
-                銷售額
+                總帶貨 GMV / 淨營業額
               </div>
 
               <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
-                加總該廠商所有「已付款(paid/completed)」訂單商品的 subtotal（未付款、取消中的訂單不計入）
+                GMV 加總使用 KOC 優惠碼、曾付款成功的訂單中屬於該活動商品的 subtotal；淨營業額再扣除已取消與已退款的訂單
               </div>
             </div>
 
@@ -474,11 +609,11 @@ export default function Overview() {
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
               <div className="font-bold text-[#1A1A18]">
-                優惠碼成效
+                網紅合作 ROAS
               </div>
 
               <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
-                加總 Coupon 的使用次數與累積分潤
+                淨營業額 ÷（KOC 分潤 + 平台費）。分潤排除退貨後被收回的部分；平台費 = 淨營業額 × 目前費率 {analytics?.platformFeeRate || 0}%
               </div>
             </div>
           </div>

@@ -109,6 +109,167 @@ const GRADIENTS = [
   "linear-gradient(135deg,#BEC8C4,#9EA8A4)",
 ];
 
+// 🌟 KOC 專屬：個人熱銷爆款榜 + 智慧選品推薦（只有 userRole === "koc" 時顯示）
+function KocInsightsSection({ products, categories, onNavigate }) {
+  const [top, setTop] = useState(null);
+  const [recs, setRecs] = useState(null);
+  const [error, setError] = useState("");
+  const [showAllTop, setShowAllTop] = useState(false);
+
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      setError("找不到登入資訊，請重新登入後再查看帶貨成效");
+      return;
+    }
+    const load = async (path) => {
+      const res = await fetch(`${API_BASE_URL}/api/koc/insights/${path}?user_id=${encodeURIComponent(userId)}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.err || `載入失敗（HTTP ${res.status}）`);
+      }
+      return data;
+    };
+    load("topProducts")
+      .then(setTop)
+      .catch((err) => setError(`爆款榜載入失敗：${err.message}`));
+    load("recommendations")
+      .then(setRecs)
+      .catch((err) => setError((prev) => prev || `選品推薦載入失敗：${err.message}`));
+  }, []);
+
+  const categoryLabel = (code) =>
+    categories.find((c) => c.id === code)?.label || (code === "other" ? "其他" : code);
+
+  const goProduct = (productId) => {
+    const p = products.find((x) => String(x.Product_id) === String(productId));
+    if (p) onNavigate?.("product_detail", p);
+    else onNavigate?.("home");
+  };
+
+  if (error) {
+    return (
+      <div className="pb-12 md:pb-16 font-sans">
+        <div className="rounded-2xl border border-[#C8522A]/30 bg-[#FDF0ED] px-5 py-4 text-xs md:text-sm font-bold text-[#C8522A]">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!top || !recs) {
+    return (
+      <div className="pb-12 md:pb-16 font-sans">
+        <div className="h-40 rounded-2xl bg-[#E2DDD4]/40 animate-pulse" />
+      </div>
+    );
+  }
+
+  const topList = showAllTop ? top.top_products : top.top_products.slice(0, 5);
+  const best = top.best_category;
+
+  return (
+    <div className="pb-12 md:pb-16 font-sans grid gap-6 md:gap-8 md:grid-cols-5">
+      {/* 個人熱銷爆款榜 */}
+      <div className="md:col-span-2 rounded-2xl md:rounded-3xl bg-white border border-[#E2DDD4] p-5 md:p-7 shadow-sm">
+        <p className="text-[#C8522A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Top Converting Products</p>
+        <h2 className="font-serif text-xl md:text-2xl font-black text-[#1A1A18] mb-4">你的熱銷榜</h2>
+
+        {best && (
+          <div className="mb-5 rounded-xl bg-[#1A1A18] text-[#F5F0E8] px-4 py-3 text-xs md:text-sm leading-relaxed font-bold">
+            你的粉絲對「<span className="text-[#E8A27F]">{categoryLabel(best.category)}</span>」的購買力最高
+            <span className="text-gray-400 font-medium">（平均每檔任務帶出 {best.avg_orders_per_mission} 單）</span>！
+          </div>
+        )}
+
+        {top.top_products.length === 0 ? (
+          <p className="text-xs md:text-sm text-[#8C8880] leading-relaxed">
+            還沒有優惠碼成交紀錄。完成第一檔任務、粉絲用你的優惠碼下單後，這裡就會出現你的爆款榜。
+          </p>
+        ) : (
+          <>
+            <ol className="flex flex-col divide-y divide-[#E2DDD4]/70">
+              {topList.map((p) => (
+                <li
+                  key={p.product_id}
+                  onClick={() => goProduct(p.product_id)}
+                  className="flex items-center gap-3 py-3 cursor-pointer group"
+                >
+                  <span className={`w-6 shrink-0 text-center font-serif text-lg font-black ${p.rank <= 3 ? "text-[#C8522A]" : "text-[#8C8880]"}`}>
+                    {p.rank}
+                  </span>
+                  <div className="h-11 w-11 shrink-0 rounded-lg overflow-hidden bg-[#E2DDD4]/50">
+                    {p.image_url && <img src={p.image_url} alt={p.product_name} className="h-full w-full object-cover" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1 group-hover:text-[#C8522A] transition-colors">{p.product_name}</p>
+                    <p className="text-[11px] text-[#8C8880] mt-0.5">
+                      {categoryLabel(p.category)} · {p.order_count} 單 · {p.units_sold} 件
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs md:text-sm font-black text-[#1A1A18]">{formatNTD(p.commission)}</p>
+                    <p className="text-[10px] text-[#8C8880]">分潤</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {top.top_products.length > 5 && (
+              <button
+                onClick={() => setShowAllTop((v) => !v)}
+                className="mt-3 text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] underline underline-offset-4"
+              >
+                {showAllTop ? "收合" : `查看全部 ${top.top_products.length} 名`}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 智慧選品推薦 */}
+      <div className="md:col-span-3 rounded-2xl md:rounded-3xl bg-white border border-[#E2DDD4] p-5 md:p-7 shadow-sm">
+        <p className="text-[#B89B6A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Smart Picks For You</p>
+        <h2 className="font-serif text-xl md:text-2xl font-black text-[#1A1A18] mb-1">智慧選品推薦</h2>
+        <p className="text-[11px] md:text-xs text-[#8C8880] mb-5">
+          {recs.source === "similar"
+            ? `根據 ${recs.similar_koc_count} 位跟你粉絲群相似的 KOC，近 ${recs.recent_days} 天的實際分潤`
+            : `你的帶貨紀錄還不夠比對相似 KOC，先依全平台近 ${recs.recent_days} 天的實際分潤推薦`}
+        </p>
+
+        {recs.recommendations.length === 0 ? (
+          <p className="text-xs md:text-sm text-[#8C8880] leading-relaxed">目前沒有符合條件的進行中活動，之後再回來看看吧！</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+            {recs.recommendations.map((r) => (
+              <div key={r.product_id} className="flex gap-3 rounded-xl border border-[#E2DDD4] p-3 hover:border-[#1A1A18] transition-colors">
+                <div className="h-20 w-20 shrink-0 rounded-lg overflow-hidden bg-[#E2DDD4]/50">
+                  {r.image_url && <img src={r.image_url} alt={r.product_name} className="h-full w-full object-cover" />}
+                </div>
+                <div className="min-w-0 flex-1 flex flex-col">
+                  <p className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1">{r.product_name}</p>
+                  <p className="text-[11px] text-[#8C8880] leading-snug mt-1 line-clamp-3">
+                    {recs.source === "similar"
+                      ? `${r.koc_count} 位相似粉絲群的 KOC 近期推這款，平均賺了 `
+                      : `${r.koc_count} 位 KOC 近期推這款，平均賺了 `}
+                    <span className="font-black text-[#C8522A]">{formatNTD(r.avg_earning)}</span>
+                    ，要申請試試看嗎？
+                  </p>
+                  <button
+                    onClick={() => goProduct(r.product_id)}
+                    className="mt-auto pt-2 self-start text-[11px] md:text-xs font-bold text-[#1A1A18] hover:text-[#C8522A] transition-colors"
+                  >
+                    購買後即可申請代言 →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }) {
   const [toastMsg, setToastMsg] = useState("");
   const [search, setSearch] = useState("");
@@ -429,6 +590,11 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                 </div>
               </div>
             </div>
+
+            {/* KOC 專屬：熱銷爆款榜 + 智慧選品推薦 */}
+            {userRole === "koc" && (
+              <KocInsightsSection products={products} categories={categories} onNavigate={onNavigate} />
+            )}
 
             {/* 推薦商品 */}
             {featured.length > 0 && (
