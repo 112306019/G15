@@ -64,7 +64,8 @@ function StatCard({
   value,
   sub,
   icon: Icon,
-  accent = false
+  accent = false,
+  onDetail
 }) {
   return (
     <Card
@@ -114,6 +115,16 @@ function StatCard({
             {sub}
           </div>
         )}
+
+        {onDetail && (
+          <button
+            type="button"
+            onClick={onDetail}
+            className="mt-2 sm:mt-3 text-[10px] sm:text-xs font-bold text-[#C8522A] hover:underline"
+          >
+            詳細成效分析 →
+          </button>
+        )}
       </div>
     </Card>
   )
@@ -152,6 +163,8 @@ function CouponRateBadge({
 
 
 export default function ProductAnalytics() {
+  const [funnelOpen, setFunnelOpen] = useState(false)
+
   const vendorId =
     localStorage.getItem('vendor_id')
 
@@ -464,8 +477,11 @@ export default function ProductAnalytics() {
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
 
-      {/* KOC 優惠碼電商漏斗（GA4） */}
-      <CouponFunnel />
+      {/* 優惠碼流量轉換分析（彈窗，由「優惠碼訂單」卡片開啟） */}
+      <CouponFunnel
+        open={funnelOpen}
+        onClose={() => setFunnelOpen(false)}
+      />
 
       {/* 篩選區 */}
       <Card className="p-4 sm:p-5">
@@ -658,6 +674,7 @@ export default function ProductAnalytics() {
           value={totals.couponOrders.toLocaleString()}
           sub="使用推廣碼的商品訂單"
           icon={Ticket}
+          onDetail={() => setFunnelOpen(true)}
         />
 
         <StatCard

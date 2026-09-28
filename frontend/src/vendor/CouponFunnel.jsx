@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle, X } from 'lucide-react'
 import { getVendorAnalyticsFunnel } from '../api/vendor'
 
 const RANGE_OPTIONS = [
@@ -22,7 +22,7 @@ function StatCard({ label, value, hint }) {
   )
 }
 
-export default function CouponFunnel() {
+export default function CouponFunnel({ open, onClose }) {
   const vendorId = localStorage.getItem('vendor_id')
   const [range, setRange] = useState('30daysAgo')
   const [data, setData] = useState(null)
@@ -30,7 +30,7 @@ export default function CouponFunnel() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!vendorId) return
+    if (!vendorId || !open) return
     let cancelled = false
 
     const load = async () => {
@@ -60,16 +60,30 @@ export default function CouponFunnel() {
     return () => {
       cancelled = true
     }
-  }, [vendorId, range])
+  }, [vendorId, range, open])
 
   const summary = data?.summary
 
+  if (!open) return null
+
   return (
-    <div className="bg-white border border-[#E2DDD4] rounded-[2rem] shadow-sm p-5 sm:p-8 mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white border border-[#E2DDD4] rounded-[2rem] shadow-2xl p-5 sm:p-8">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 text-[#8C8880] hover:text-[#1A1A18] bg-[#F8F9FA] hover:bg-[#E2DDD4] rounded-full transition-colors"
+      >
+        <X size={18} />
+      </button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pr-12">
         <div>
           <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
-            KOC 優惠碼電商漏斗
+            優惠碼流量轉換分析
           </h2>
           <p className="text-xs text-[#8C8880] mt-1">
             追蹤消費者使用 KOC 優惠碼後的結帳表現（資料來源：Google Analytics）
@@ -171,6 +185,7 @@ export default function CouponFunnel() {
           </p>
         </>
       )}
+      </div>
     </div>
   )
 }
