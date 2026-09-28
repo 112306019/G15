@@ -242,6 +242,7 @@ urlpatterns = [
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
     path('vendor/order/respondCancelRequest', vendor.vendor_order_respond_cancel_request, name='vendor-order-respond-cancel-request'),
     path('vendor/order/uploadInvoice', vendor.vendor_order_upload_invoice, name='vendor-order-upload-invoice'),
+    path('vendor/analytics/funnel', vendor.vendor_analytics_funnel, name='vendor-analytics-funnel'),
 
     # Vendor 退貨退款 API
     path('vendor/return/getlist', vendor.vendor_return_getlist, name='vendor-return-getlist'),

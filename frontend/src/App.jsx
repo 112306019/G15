@@ -377,6 +377,17 @@ function MainSystem() {
   const [shopKey, setShopKey] = useState(0);
   const [roleSyncing, setRoleSyncing] = useState(true);
 
+  // GA4 頁面瀏覽追蹤：React Router 換頁不會觸發瀏覽器原生的 page_view，
+  // 所以每次路由變化時手動送出一次 page_view 事件給 GA4。
+  useEffect(() => {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_path: location.pathname + location.search,
+        page_title: document.title,
+      });
+    }
+  }, [location.pathname, location.search]);
+
   // 頁面載入時，重新確認 KOC 審核狀態是否有變化（例如剛被 Admin 核准）
   useEffect(() => {
     const syncUserRole = async () => {

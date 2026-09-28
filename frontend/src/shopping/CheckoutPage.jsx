@@ -591,6 +591,15 @@ export default function CheckoutPage({
           return;
         }
 
+        // GA4：消費者成功套用 KOC 優惠碼，視為「導流連結點擊/使用」事件
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'select_promotion', {
+            promotion_id: data.Promotion_code,
+            promotion_name: data.Campaign_name,
+            creative_slot: 'checkout_coupon_input',
+          });
+        }
+
         setAppliedCoupon({
           code: data.Promotion_code,
           couponId: data.Coupon_id,
@@ -801,6 +810,21 @@ export default function CheckoutPage({
       const orderId =
         orderData.Order_id ||
         orderData.orderId;
+
+      // GA4：訂單建立成功、即將進入付款流程，視為 begin_checkout
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'begin_checkout', {
+          currency: 'TWD',
+          value: grandTotal,
+          coupon: appliedCoupon ? appliedCoupon.code : undefined,
+          items: normalizedCartItems.map((item) => ({
+            item_id: String(item.productId ?? item.Product_id ?? item.product_id ?? item.id),
+            item_name: item.name ?? item.productName ?? '',
+            price: item.price ?? 0,
+            quantity: item.qty ?? item.quantity ?? item.Quantity ?? 1,
+          })),
+        });
+      }
 
       if (method === "card") {
         const paymentRes = await fetch(`${API_BASE_URL}/api/payments/create/`, {

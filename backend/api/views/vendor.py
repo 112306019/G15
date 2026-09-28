@@ -4087,3 +4087,52 @@ def vendor_request_payout(request):
         "success": False,
         "err": "撥款已改為每月自動結算，無法自行申請撥款，請留意每月撥款通知"
     }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_analytics_funnel(request):
+    """
+    廠商的 KOC 優惠碼電商漏斗（資料來源：GA4 Data API）。
+    URL: GET /vendor/analytics/funnel?vendor_id=...&start_date=...&end_date=...
+
+    只追蹤「KOC 優惠碼帶來的流量」：先查出這個廠商所有活動底下的優惠碼，
+    再用優惠碼去 GA4 篩選 select_promotion / begin_checkout / purchase 事件。
+    """
+    from api.ga4_client import get_coupon_funnel, GA4NotConfigured
+
+    vendor_id = request.GET.get("vendor_id")
+    start_date = request.GET.get("start_date") or "30daysAgo"
+    end_date = request.GET.get("end_date") or "today"
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    codes = list(
+        CouponNew.objects
+        .filter(kocmission__application__campaign__vendor_id=vendor_id)
+        .values_list("promotion_code", flat=True)
+    )
+
+    try:
+        funnel = get_coupon_funnel(codes, start_date, end_date)
+    except GA4NotConfigured as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": f"GA4 資料讀取失敗：{error}"
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "coupon_count": len(codes),
+        **funnel,
+    }, status=status.HTTP_200_OK)
