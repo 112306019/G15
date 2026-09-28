@@ -54,7 +54,7 @@ export default function EarningsDetailPage({ onBack }) {
           <span>匯款日期</span>
           <span>收款金額</span>
           <span>金流編號</span>
-          <span>任務</span>
+          <span>接案名稱</span>
           <span>分潤比例</span>
           <span>狀態</span>
         </div>

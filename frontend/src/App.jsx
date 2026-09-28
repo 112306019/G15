@@ -1,17 +1,16 @@
 import { API_BASE_URL } from './config';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, Headset } from 'lucide-react';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
 import HomePage from './koc/HomePage';
-import AnalysisPage from './koc/AnalysisPage';
 import TaskDetailPage from './koc/TaskDetailPage';
 import EarningsPage from './koc/EarningsPage';
 import TaxFormRecordsPage from './koc/TaxFormRecordsPage';
+import PayoutRecordsPage from './koc/PayoutRecordsPage';
 import EarningsDetailPage from './koc/EarningsDetailPage';
-import SalesDataPage from './koc/SalesDataPage';
 import ProductDetailPage from './koc/ProductDetailPage';
 import ApplyKOCPage from './koc/ApplyKOCPage';
 import KocIntroPage from './shopping/KocIntroPage';
@@ -52,8 +51,6 @@ const VIEW_TO_PATH = {
   checkout: '/checkout',
   chat: '/chat',
   home: '/home',
-  analysis: '/analysis',
-  sales_data: '/analysis/product',
   task_detail: '/task',
   profile: '/profile',
   security: '/security',
@@ -61,6 +58,7 @@ const VIEW_TO_PATH = {
   earnings: '/earnings',
   earnings_detail: '/earnings/detail',
   tax_form_records: '/earnings/tax-forms',
+  payout_records: '/earnings/payouts',
   favorites: '/favorites',
   support: '/support',
   applyKoc: '/apply-koc',
@@ -86,13 +84,12 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   const [expandedMenu, setExpandedMenu] = useState('home');
 
   const allMenuItems = [
-    { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
     { icon: <Briefcase size={18} />, label: '我的接案', view: 'home', role: 'koc' },
-    { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
-    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
-    { icon: <Headset size={18} />, label: '客服諮詢', view: 'support' },
+    { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
+    { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
+    { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
     { icon: <Lock size={18} />, label: '登入與安全', view: 'security' },
   ];
 
@@ -100,7 +97,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     if (item.role === 'koc' && userRole !== 'koc') return false;
     if (item.role === 'shopper' && userRole !== 'shopper') return false;
     return true;
-  });
+  });      
 
   return (
     <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
@@ -160,6 +157,17 @@ function ProductDetailRoute({ userRole, onAddToCart, onBuyNow, favorites, onTogg
   const location = useLocation();
   const navigate = useNavigate();
   const [product, setProduct] = useState(location.state?.product || null);
+
+  // KOC 短連結（見 backend koc_link_redirect）落地時會帶 ?koc_id=，這裡純粹
+  // 推一個 GA4 事件做行銷維度分析用（流量來源、裝置、地區），不影響戰報
+  // 上的點擊數/EPC——那是後端 CouponNew.click_count 算的，兩邊資料源分開。
+  useEffect(() => {
+    if (!window.dataLayer) return;
+    const kocId = new URLSearchParams(location.search).get('koc_id');
+    if (kocId) {
+      window.dataLayer.push({ event: 'koc_referral_landing', koc_id: kocId });
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (location.state?.product) {
@@ -228,8 +236,8 @@ function OrderChatRoute() {
   return <OrderChatPage onBack={() => navigate('/orders')} orderId={id} />;
 }
 
-// 需要「整包資料」才能顯示、且沒有簡單 fetch-by-id API 的頁面（任務詳情、業績分析），
-// 一律靠路由 state 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
+// 任務詳情頁需要「整包資料」才能顯示、沒有簡單 fetch-by-id API，一律靠路由 state
+// 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
 function TaskDetailRoute({ onJumpHome }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -250,20 +258,6 @@ function TaskDetailRoute({ onJumpHome }) {
       }}
     />
   );
-}
-
-function SalesDataRoute() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const product = location.state?.product;
-
-  useEffect(() => {
-    if (!product) navigate('/analysis', { replace: true });
-  }, [product, navigate]);
-
-  if (!product) return null;
-
-  return <SalesDataPage product={product} onBack={() => navigate('/analysis')} />;
 }
 
 function MainSystem() {
@@ -363,6 +357,9 @@ function MainSystem() {
       case "order_chat":
         handleNavigate("order_chat", notification.reference_id);
         break;
+      case "koc_chat":
+        handleNavigate("koc_chat", notification.reference_id);
+        break;
       case "koc_home":
         handleNavigate("home");
         break;
@@ -379,6 +376,17 @@ function MainSystem() {
   const [appToast, setAppToast] = useState("");
   const [shopKey, setShopKey] = useState(0);
   const [roleSyncing, setRoleSyncing] = useState(true);
+
+  // GA4 頁面瀏覽追蹤：React Router 換頁不會觸發瀏覽器原生的 page_view，
+  // 所以每次路由變化時手動送出一次 page_view 事件給 GA4。
+  useEffect(() => {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_path: location.pathname + location.search,
+        page_title: document.title,
+      });
+    }
+  }, [location.pathname, location.search]);
 
   // 頁面載入時，重新確認 KOC 審核狀態是否有變化（例如剛被 Admin 核准）
   useEffect(() => {
@@ -433,7 +441,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
-      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -464,19 +472,21 @@ function MainSystem() {
       return;
     }
 
+    // KOC 接案聊天室：帶 kocmission_id 讓 ChatPage 自動選中該任務的對話
+    if (targetView === 'koc_chat') {
+      navigate(`/chat?mission=${data}`);
+      return;
+    }
+
     // 通知頁：訂單通知／接案通知是分開的兩個頁面，category 直接進網址
     if (targetView === 'notifications') {
       navigate(`/notifications/${data || 'order'}`);
       return;
     }
 
-    // 任務詳情 / 業績分析：資料整包用路由 state 帶過去
+    // 任務詳情：資料整包用路由 state 帶過去
     if (targetView === 'task_detail' && data) {
       navigate('/task', { state: { task: data } });
-      return;
-    }
-    if (targetView === 'sales_data' && data) {
-      navigate('/analysis/product', { state: { product: data } });
       return;
     }
 
@@ -488,12 +498,12 @@ function MainSystem() {
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'profile',
     'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
-    'review', 'analysis', 'sales_data', 'task_detail', 'favorites'
+    'review', 'task_detail', 'favorites'
   ];
 
   const getSidebarActiveView = () => {
-    if (['home', 'review', 'analysis', 'sales_data', 'task_detail'].includes(view)) return 'home';
-    if (['earnings', 'earnings_detail', 'tax_form_records'].includes(view)) return 'earnings';
+    if (['home', 'review', 'task_detail'].includes(view)) return 'home';
+    if (['earnings', 'earnings_detail', 'tax_form_records', 'payout_records'].includes(view)) return 'earnings';
     if (['orders', 'order_detail', 'order_chat'].includes(view)) return 'orders';
     return view;
   };
@@ -656,7 +666,6 @@ function MainSystem() {
         <Route path="/tax-form-print" element={<TaxFormPrintView />} />
         <Route path="/tax-form-print/:formId" element={<TaxFormPrintView />} />
 
-        {/* 下面這些頁面共用左側 Sidebar 的殼 */}
         <Route path="/home" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <HomePage
@@ -664,18 +673,6 @@ function MainSystem() {
               jumpToStage={homeJumpStage}
               onJumpHandled={() => setHomeJumpStage(null)}
             />
-          </ShellLayout>
-        } />
-
-        <Route path="/analysis" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <AnalysisPage onBack={() => handleNavigate('home')} onViewData={(product) => handleNavigate('sales_data', product)} />
-          </ShellLayout>
-        } />
-
-        <Route path="/analysis/product" element={
-          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
-            <SalesDataRoute />
           </ShellLayout>
         } />
 
@@ -724,6 +721,7 @@ function MainSystem() {
             <EarningsPage
               onDetail={() => handleNavigate('earnings_detail')}
               onTaxFormRecords={() => handleNavigate('tax_form_records')}
+              onPayoutRecords={() => handleNavigate('payout_records')}
             />
           </ShellLayout>
         } />
@@ -737,6 +735,12 @@ function MainSystem() {
         <Route path="/earnings/tax-forms" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <TaxFormRecordsPage onBack={() => handleNavigate('earnings')} />
+          </ShellLayout>
+        } />
+
+        <Route path="/earnings/payouts" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <PayoutRecordsPage onBack={() => handleNavigate('earnings')} />
           </ShellLayout>
         } />
 
@@ -810,8 +814,6 @@ function MainSystem() {
   );
 }
 
-// 左側 Sidebar + 內容區的共用外殼
-// [RWD 優化] 將 padding 和 margin 改為響應式，手機版取消左側 margin，讓內容滿版
 function ShellLayout({ userRole, activeView, onNavigate, children }) {
   return (
     <div className="flex p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">

@@ -113,3 +113,5 @@ def issue_b2b_invoice(relate_number: str, buyer_tax_id: str, item_name: str, sal
 
     except Exception as e:
         return False, None, str(e)
+
+

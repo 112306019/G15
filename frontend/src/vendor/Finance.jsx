@@ -41,6 +41,8 @@ const mapTxn = t => ({
   orderId: t.order_id || '—',
   amount: fmt(t.gross_amount != null ? t.gross_amount : t.amount),
   fee: fmt(t.fee_amount != null ? t.fee_amount : 0),
+  platformFeeDisplay: t.platform_fee_display != null ? fmt(t.platform_fee_display) : null,
+  kocCommissionFeeDisplay: t.koc_commission_fee_display != null ? fmt(t.koc_commission_fee_display) : null,
   netAmount: fmt(t.amount),
   netAmountRaw: Number(t.amount || 0),
   date: t.date,
@@ -256,13 +258,25 @@ export default function Finance() {
                   {selectedTx.amount}
                 </span>
               </div>
-              <div className="flex justify-between items-center mb-4 pb-4 border-b border-[#E2DDD4] dashed">
-                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
-                  平台手續費
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-[#D93025]">
-                  - {selectedTx.fee}
-                </span>
+              <div className="mb-4 pb-4 border-b border-[#E2DDD4] dashed">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
+                    平台手續費
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-[#D93025]">
+                    - {selectedTx.fee}
+                  </span>
+                </div>
+                {(selectedTx.platformFeeDisplay || selectedTx.kocCommissionFeeDisplay) && (
+                  <div className="mt-2 space-y-0.5 text-[10px] sm:text-[11px] text-[#8C8880]">
+                    {selectedTx.platformFeeDisplay && (
+                      <div>平台服務費 10%：{selectedTx.platformFeeDisplay}</div>
+                    )}
+                    {selectedTx.kocCommissionFeeDisplay && (
+                      <div>KOC 分潤 5%（含處理費）：{selectedTx.kocCommissionFeeDisplay}</div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex justify-between items-end">
                 <span className="text-xs sm:text-sm font-bold text-[#1A1A18]">

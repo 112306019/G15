@@ -65,7 +65,7 @@ export default function ProductDetailPage({
     if (userRole === 'guest' || !userId || !productDetail?.id) return;
 
     let cancelled = false;
-    fetch(`http://127.0.0.1:8000/api/consumer/wishlist/view?User_id=${userId}`)
+    fetch(`${API_BASE_URL}/api/consumer/wishlist/view?User_id=${userId}`)
       .then(res => res.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
@@ -151,6 +151,20 @@ export default function ProductDetailPage({
       if (addRes.ok) {
         if (onAddToCart) onAddToCart();
         showToast("✓ 已成功加入購物車！");
+
+        // GA4：加入購物車事件，用於計算「有多少人對商品產生興趣」
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'add_to_cart', {
+            currency: 'TWD',
+            value: productDetail.rawPrice || 0,
+            items: [{
+              item_id: String(productDetail.id),
+              item_name: productDetail.name,
+              price: productDetail.rawPrice || 0,
+              quantity: 1,
+            }],
+          });
+        }
       } else {
         showToast("加入購物車失敗，請再試一次");
       }
@@ -227,7 +241,7 @@ export default function ProductDetailPage({
 
     try {
       if (!isFavorited) {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/add", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
@@ -235,7 +249,7 @@ export default function ProductDetailPage({
         setIsFavorited(true);
         showToast("✓ 已加入收藏清單");
       } else {
-        await fetch("http://127.0.0.1:8000/api/consumer/wishlist/delete", {
+        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),

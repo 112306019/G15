@@ -252,7 +252,7 @@ export default function TaxFormPrintView() {
             </div>
             {amount < WITHHOLDING_THRESHOLD && (
               <p className="mt-3 text-[9px] md:text-[10px] print:text-[10px] text-[#8C8880] leading-tight">
-                ※ 給付金額未達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元門檻，暫不扣繳。
+                ※ 給付金額未達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元門檻，暫不扣繳所得稅及二代健保費。
               </p>
             )}
           </div>

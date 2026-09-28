@@ -122,6 +122,12 @@ ECPAY_LOGISTICS_CREATE_URL = os.getenv(
     "https://logistics-stage.ecpay.com.tw/Express/Create"
 )
 
+# 逆物流（退貨）訂單建立網址：目前只做 7-ELEVEN B2C 逆物流
+ECPAY_LOGISTICS_RETURN_CREATE_URL = os.getenv(
+    "ECPAY_LOGISTICS_RETURN_CREATE_URL",
+    "https://logistics-stage.ecpay.com.tw/express/ReturnUniMartCVS"
+)
+
 ECPAY_LOGISTICS_SENDER_NAME = os.getenv(
     "ECPAY_LOGISTICS_SENDER_NAME",
     "測試人員"

@@ -59,6 +59,30 @@ def is_mission_hidden(mission):
 
     return timezone.now() > campaign.end_date + timedelta(days=MISSION_HISTORY_VISIBLE_DAYS)
 
+
+# KocLinkClickDaily 的保留天數：終身總點擊數已經存在 CouponNew.click_count，
+# 這張表只是給戰報近期走勢圖用的每日拆分，而前端目前最長只會查 30 天
+# （period='month'），90 天已經是 3 倍安全邊界，超過的舊資料由
+# cleanup_click_history 這支排程指令定期清掉，避免資料表無限膨脹。
+CLICK_DAILY_RETENTION_DAYS = 90
+
+# 戰報短連結（koc_link_redirect）點擊計數要濾掉的機器人 User-Agent 關鍵字：
+# KOC 一把連結貼到社群平台，這些平台會立刻自己打一次連結去產生預覽圖，
+# 跟真人點擊無關，照算的話會系統性灌水點擊數、拉低 EPC。這只是「盡量準」
+# 的簡單過濾，不是安全機制，不用追求完整涵蓋所有爬蟲。
+CLICK_BOT_USER_AGENT_MARKERS = (
+    'facebookexternalhit', 'twitterbot', 'slackbot', 'telegrambot',
+    'linebot', 'whatsapp', 'discordbot', 'googlebot', 'bingbot',
+)
+
+
+def is_probably_bot_click(user_agent):
+    """判斷這次短連結點擊的 User-Agent 是不是社群平台的預覽圖機器人。"""
+    if not user_agent:
+        return False
+    ua_lower = user_agent.lower()
+    return any(marker in ua_lower for marker in CLICK_BOT_USER_AGENT_MARKERS)
+
 # KOC 提領：跨行轉帳銀行會收取的手續費，這筆錢不是平台賺的，只是告知用（實際扣款
 # 是銀行端處理，平台這邊的錢包/撥款金額不會扣掉這 15 元）。
 CROSS_BANK_TRANSFER_FEE = 15
@@ -239,7 +263,8 @@ def sync_submission_deadline_reminders():
     Lazy-write：任務進入 writing（待交文案）或 publishing（待交作品連結）階段
     時，會設定 submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
     （見 vendor.py 建立任務／審核退回／文案審核通過的地方）。這裡檢查有沒有
-    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知。
+    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知
+    （publishing 階段額外寄一封提醒信，見 send_publishing_overdue_email）。
 
     submission_reminder_sent 確保同一次停留期間只提醒一次；重新進入
     writing/publishing（例如審核退回）會把它歸零，所以下一輪逾期還是會再提醒。
@@ -251,6 +276,7 @@ def sync_submission_deadline_reminders():
     from django.utils import timezone
     from api.models import KOCMissionNew
     from api.notifications import create_notification
+    from api.emails import send_publishing_overdue_email
 
     overdue_missions = list(
         KOCMissionNew.objects.filter(
@@ -280,6 +306,15 @@ def sync_submission_deadline_reminders():
             ),
             reference_type='koc_home',
         )
+
+        # publishing（待提交作品連結以開始推廣）階段逾期額外寄信提醒，
+        # writing（待交文案）階段沿用站內通知即可，不寄信。
+        if mission.stage == 'publishing':
+            try:
+                send_publishing_overdue_email(mission, SUBMISSION_REMINDER_DAYS)
+            except Exception:
+                pass
+
         mission.submission_reminder_sent = True
         mission.save(update_fields=['submission_reminder_sent'])
 
@@ -344,6 +379,11 @@ EARNINGS_STATUS_CODE_MAP = {
     'transferred': 1,    # 已撥款(已轉帳)
     'cancelled': 3,       # 新增：因退貨退款被取消
 }
+
+# KOC 分潤比例：固定抽「訂單總金額扣除運費」的這個百分比，不再依廠商在
+# CampaignProduct 設定的 koc_commission_rate 逐項計算（那個欄位保留給廠商端
+# 顯示/編輯用，但 calculate_order_commission 已經不會再讀它）。
+KOC_COMMISSION_RATE_PERCENT = 3
 
 # 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
 VENDOR_SETTLEMENT_HOLD_DAYS = 7

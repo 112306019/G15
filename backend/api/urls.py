@@ -37,6 +37,8 @@ from .views.platform import (
     admin_confirm_vendor_payout,
     admin_export_payout_transfers,
     admin_run_monthly_vendor_payouts,
+    admin_list_koc_payouts,
+    admin_confirm_koc_payout,
     admin_get_earnings,
     admin_list_settleable_campaigns,
     admin_list_return_disputes,
@@ -82,6 +84,12 @@ from .views import order_chat
 from .views import notifications as notification_views
 
 urlpatterns = [
+    # KOC 帶貨戰報短連結：故意用短路徑、公開不需驗證，因為這是要貼到社群
+    # 貼文裡的對外連結。api.urls 同時掛在 config/urls.py 的 '/api/' 跟根路徑
+    # ''，所以這條路由會同時在 /r/<code>/ 跟 /api/r/<code>/ 生效，
+    # 對外分享一律用短的 /r/<code>/。
+    path('r/<str:promotion_code>/', views.koc_link_redirect, name='koc-link-redirect'),
+
     # koc
     path('koc/profile/getProfile', views.get_koc_profile, name='koc-get-profile'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='koc-update-profile'),
@@ -99,6 +107,7 @@ urlpatterns = [
     path('koc/application/remove/<int:application_id>', views.remove_application, name='koc-application-remove'),
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
+    path('koc/revenue/getPayoutRecords', views.get_payout_records, name='koc-revenue-get-payout-records'),
     path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
     path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
@@ -136,6 +145,8 @@ urlpatterns = [
     path('platform/vendor/payouts', admin_list_vendor_payouts, name='platform-vendor-payouts'),
     path('platform/vendor/payout/confirm', admin_confirm_vendor_payout, name='platform-vendor-payout-confirm'),
     path('platform/vendor/run-monthly-payouts', admin_run_monthly_vendor_payouts, name='platform-vendor-run-monthly-payouts'),
+    path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
+    path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),
     path('platform/campaigns/settleable', admin_list_settleable_campaigns, name='platform-campaigns-settleable'),
@@ -233,6 +244,7 @@ urlpatterns = [
     path('vendor/order/updateShipping', vendor.vendor_order_update_shipping, name='vendor-order-update-shipping'),
     path('vendor/order/respondCancelRequest', vendor.vendor_order_respond_cancel_request, name='vendor-order-respond-cancel-request'),
     path('vendor/order/uploadInvoice', vendor.vendor_order_upload_invoice, name='vendor-order-upload-invoice'),
+    path('vendor/analytics/funnel', vendor.vendor_analytics_funnel, name='vendor-analytics-funnel'),
 
     # Vendor 退貨退款 API
     path('vendor/return/getlist', vendor.vendor_return_getlist, name='vendor-return-getlist'),

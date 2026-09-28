@@ -161,9 +161,25 @@ def get_payment_status(request):
     if not payment:
         return Response({"success": False, "err": "此訂單尚無付款紀錄"}, status=status.HTTP_404_NOT_FOUND)
 
+    # 付款成功時一併回傳金額與商品明細，讓前端能組出完整的 GA4 purchase 事件
+    items = []
+    if payment.status == "paid":
+        items = [
+            {
+                "product_id": item.product_id,
+                "product_name": item.product.product_name if item.product else "",
+                "price": float(item.unit_price),
+                "quantity": item.quantity,
+            }
+            for item in order.items.select_related("product").all()
+        ]
+
     return Response({
         "success": True,
         "order_id": str(order.order_id),
         "status": payment.status,
         "merchant_trade_no": payment.merchant_trade_no,
+        "total_amount": float(order.total_amount) if payment.status == "paid" else None,
+        "promotion_code": order.promotion_code if payment.status == "paid" else None,
+        "items": items,
     }, status=status.HTTP_200_OK)

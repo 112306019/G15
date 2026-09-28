@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
-import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle } from 'lucide-react';
+import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle, Receipt } from 'lucide-react';
 
 function extractApiError(err, fallback) {
   const apiError = err.response?.data?.err;
@@ -50,7 +50,7 @@ function MissingTaxFormModal({ amount, onClose, onGoFill }) {
   );
 }
 
-export default function EarningsPage({ onDetail, onTaxFormRecords }) {
+export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecords }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
   const [withdrawable, setWithdrawable] = useState(0);
@@ -114,7 +114,10 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
       }
 
       setWithdrawable(payoutRes.data.remaining_balance ?? 0);
-      setWithdrawSuccess(`已送出提領申請，金額 NT$${(payoutRes.data.amount || 0).toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`);
+      const netAmount = payoutRes.data.amount || 0;
+      setWithdrawSuccess(
+        `已送出提領申請，申請金額 NT$${netAmount.toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`
+      );
     } catch (err) {
       setWithdrawError(extractApiError(err, '提領失敗，請稍後再試'));
     } finally {
@@ -193,6 +196,13 @@ export default function EarningsPage({ onDetail, onTaxFormRecords }) {
                 >
                   <FileSignature size={16} className="md:w-[18px] md:h-[18px]" />
                   查看勞報單紀錄
+                </button>
+                <button
+                  onClick={onPayoutRecords}
+                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#F5F0E8] hover:-translate-y-1 transition-all active:translate-y-0 shadow-sm"
+                >
+                  <Receipt size={16} className="md:w-[18px] md:h-[18px]" />
+                  查看撥款紀錄
                 </button>
                 <button
                   onClick={onDetail}

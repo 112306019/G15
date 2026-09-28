@@ -32,7 +32,7 @@ function NotificationList({ items, onOpenNotification, emptyText }) {
             <button
               key={notification.notification_id}
               onClick={() => onOpenNotification?.(notification)}
-              className={`w-full flex items-start gap-3 px-6 py-5 text-left transition-colors hover:bg-[#F5F0E8] ${
+              className={`w-full flex items-start gap-3 px-4 md:px-6 py-4 md:py-5 text-left transition-colors hover:bg-[#F5F0E8] ${
                 notification.is_read ? '' : 'bg-[#FDF0ED]/40'
               }`}
             >
@@ -78,7 +78,7 @@ export default function NotificationsPage({
   const activeList = tab === 'unread' ? unreadList : readList;
 
   return (
-    <div className="max-w-3xl animate-in fade-in duration-500">
+    <div className="max-w-3xl px-4 md:px-0 animate-in fade-in duration-500">
       <button
         onClick={onBack}
         className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
@@ -87,7 +87,9 @@ export default function NotificationsPage({
         返回
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-8 text-[#1A1A18]">{CATEGORY_LABEL[category] || '通知'}</h2>
+      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-8 text-[#1A1A18]">
+        {CATEGORY_LABEL[category] || '通知'}
+      </h2>
 
       <div className="flex gap-2 mb-6">
         <button

@@ -308,3 +308,36 @@ def send_application_auto_rejected_email(application):
         recipient_list=[koc_user.email],
         fail_silently=False,
     )
+
+
+def send_publishing_overdue_email(mission, days):
+    """
+    任務進入 publishing（待提交作品連結以開始推廣）階段已超過指定天數、
+    KOC 仍未提交時寄信提醒，並告知過期未完成將被記錄違規次數。
+
+    寄信失敗不應該讓 lazy-write 的逾期檢查跟著失敗，呼叫端要自己包
+    try/except，這裡只負責寄信本身。
+    """
+    koc_user = mission.koc.user
+    campaign_name = (
+        mission.application.campaign.name
+        if mission.application and mission.application.campaign else ''
+    )
+
+    subject = "提醒：您有作品連結尚未提交"
+    message = (
+        f"{koc_user.display_name or koc_user.name} 您好，\n\n"
+        f"您參與的案件「{campaign_name}」已超過 {days} 天未提交作品連結，"
+        "尚無法開始推廣。\n\n"
+        "請盡快完成貼文並回到平台提交連結，若任務最終逾期未完成，"
+        "將會被記錄一次違規次數，累計達到上限將導致帳號被暫停接案資格。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[koc_user.email],
+        fail_silently=False,
+    )

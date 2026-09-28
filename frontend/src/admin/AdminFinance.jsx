@@ -20,6 +20,9 @@ export default function AdminFinance() {
   const [exportingPayouts, setExportingPayouts] = useState(null); // null | 'vendor' | 'koc'
   const [runningMonthlyPayouts, setRunningMonthlyPayouts] = useState(false);
 
+  const [kocPayouts, setKocPayouts] = useState([]);
+  const [confirmingKocPayoutId, setConfirmingKocPayoutId] = useState(null);
+
   const [returnDisputes, setReturnDisputes] = useState([]);
   const [loadingDisputes, setLoadingDisputes] = useState(false);
   const [resolvingReturnId, setResolvingReturnId] = useState(null);
@@ -252,6 +255,55 @@ export default function AdminFinance() {
     }
   };
 
+  const fetchKocPayouts = async () => {
+    if (!adminId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/koc/payouts?status=pending&Admin_id=${adminId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setKocPayouts(data.map((p) => ({
+          payoutId: p.Payout_id,
+          kocUserId: p.Koc_user_id,
+          kocName: p.Koc_name,
+          bankDisplay: p.Bank_display,
+          amount: p.Amount,
+          payoutDate: p.Payout_date,
+          status: p.Status,
+        })));
+      }
+    } catch (err) {
+      console.error("KOC 撥款資料載入失敗", err);
+    }
+  };
+
+  const handleConfirmKocPayout = async (payoutId, newStatus) => {
+    if (!adminId) return;
+    const confirmMsg = newStatus === 'completed'
+      ? "確定已經完成匯款，把這筆申請標記為完成嗎？"
+      : "確定要標記這筆撥款失敗嗎？金額會退回 KOC 的可提領餘額。";
+    if (!window.confirm(confirmMsg)) return;
+
+    setConfirmingKocPayoutId(payoutId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/koc/payout/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ payout_id: payoutId, status: newStatus, Admin_id: adminId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) { alert(data.err || "處理失敗"); return; }
+
+      setKocPayouts(prev => prev.filter(p => p.payoutId !== payoutId));
+      await fetchTransactions();
+    } catch {
+      alert("處理失敗，請稍後再試");
+    } finally {
+      setConfirmingKocPayoutId(null);
+    }
+  };
+
   const handleExportPayouts = async (exportType) => {
     if (!adminId) return;
     setExportingPayouts(exportType);
@@ -345,7 +397,7 @@ export default function AdminFinance() {
             date: p.created_at ? new Date(p.created_at).toLocaleString("zh-TW") : "-",
           })));
         }
-        await fetchTransactions(); await fetchEarningsData(); await fetchVendorFinanceData(); await fetchReturnDisputes(); await fetchVendorInvoices();
+        await fetchTransactions(); await fetchEarningsData(); await fetchVendorFinanceData(); await fetchReturnDisputes(); await fetchVendorInvoices(); await fetchKocPayouts();
       } catch (err) { console.error("財務資料載入失敗", err); } finally { setLoading(false); }
     };
     fetchAll();
@@ -418,6 +470,19 @@ export default function AdminFinance() {
           }`}
         >
           <DollarSign size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 收益
+        </button>
+        <button
+          onClick={() => { setActiveTab('koc_payouts'); fetchKocPayouts(); }}
+          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'koc_payouts' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+          }`}
+        >
+          <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 撥款
+          {kocPayouts.length > 0 && (
+            <span className="ml-1 min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#C8522A] text-white text-[10px]">
+              {kocPayouts.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('transactions')}
@@ -566,6 +631,68 @@ export default function AdminFinance() {
                     </tbody>
                   </table>
                 </div>
+              </>
+            )}
+
+            {/* TAB: KOC 撥款 */}
+            {activeTab === 'koc_payouts' && (
+              <>
+                <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18]">
+                      <Download size={16} /> 匯出待撥款 CSV
+                    </div>
+                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
+                      財務拿去對照銀行批次匯款作業用。
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleExportPayouts('koc')}
+                    disabled={!!exportingPayouts}
+                    className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
+                  >
+                    <Download size={16} />
+                    {exportingPayouts === 'koc' ? '匯出中...' : '匯出 CSV'}
+                  </button>
+                </div>
+
+                {kocPayouts.length === 0 ? (
+                  <div className="py-16 text-center text-xs sm:text-sm font-bold text-[#8C8880]">目前沒有待處理的 KOC 撥款申請</div>
+                ) : (
+                  <div className="p-4 sm:p-6 space-y-3">
+                    {kocPayouts.map((p) => (
+                      <div key={p.payoutId} className="flex flex-col gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div>
+                            <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
+                              {p.kocName}（{p.kocUserId}） ・ 實付 NT$ {p.amount?.toLocaleString?.() ?? p.amount}
+                            </div>
+                            <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
+                              匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
+                            </div>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:shrink-0">
+                            <button
+                              onClick={() => handleConfirmKocPayout(p.payoutId, 'failed')}
+                              disabled={confirmingKocPayoutId === p.payoutId}
+                              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:text-[#C8522A] hover:border-[#C8522A] transition-all disabled:opacity-40"
+                            >
+                              <XCircle size={14} /> 匯款失敗
+                            </button>
+                            <button
+                              onClick={() => handleConfirmKocPayout(p.payoutId, 'completed')}
+                              disabled={confirmingKocPayoutId === p.payoutId}
+                              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
+                            >
+                              <CheckCircle size={14} />
+                              {confirmingKocPayoutId === p.payoutId ? '處理中...' : '標記完成'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 

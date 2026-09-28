@@ -462,11 +462,45 @@ class CouponNew(models.Model):
         db_column='usage_count'
     )
 
+    # 這組優惠碼的短連結（見 koc_link_redirect）被點擊的終身累積次數，
+    # 是戰報 EPC 的分母來源。只存一個累加欄位、不逐筆記錄，資料量固定不會膨脹；
+    # 近期走勢圖需要的每日拆分另外存在 KocLinkClickDaily。
+    click_count = models.IntegerField(
+        default=0,
+        db_column='click_count'
+    )
+
     class Meta:
         db_table = 'Coupon'
 
     def __str__(self):
         return self.promotion_code
+
+
+class KocLinkClickDaily(models.Model):
+    """
+    KOC 短連結點擊的每日聚合計數，只用來畫戰報的近期走勢圖（比照
+    get_analytics_detail 的 chart_data 用日期分組的做法）。終身總點擊數
+    已經有 CouponNew.click_count 頂著，所以這張表只保留近期資料即可，
+    定期由 cleanup_click_history 這支管理指令清掉超過
+    CLICK_DAILY_RETENTION_DAYS 天的舊資料，避免無限膨脹。
+    """
+    click_id = models.AutoField(primary_key=True, db_column='click_id')
+    coupon = models.ForeignKey(
+        CouponNew,
+        on_delete=models.CASCADE,
+        db_column='coupon_id',
+        related_name='daily_clicks'
+    )
+    click_date = models.DateField(db_column='click_date')
+    click_count = models.IntegerField(default=0, db_column='click_count')
+
+    class Meta:
+        db_table = 'Koc_Link_Click_Daily'
+        unique_together = ('coupon', 'click_date')
+
+    def __str__(self):
+        return f"{self.coupon_id} {self.click_date} x{self.click_count}"
 
 
 # ==============================================================================
@@ -526,6 +560,13 @@ class Transactions(models.Model):
     # 純粹是為了明細頁能顯示分解，不參與餘額計算（餘額只認 amount）
     gross_amount = models.IntegerField(null=True, blank=True)
     fee_amount = models.IntegerField(null=True, blank=True)
+
+    # fee_amount 的呈現用分項拆解（純粹是給廠商看的明細說明，跟 VendorInvoice
+    # 的 platform_service_fee / koc_commission_display 是同一套設計思路）：
+    # platform_fee_display 對應「平台服務費」，koc_commission_fee_display
+    # 對應「KOC 分潤（含處理費）」，兩者加總等於 fee_amount。
+    platform_fee_display = models.IntegerField(null=True, blank=True)
+    koc_commission_fee_display = models.IntegerField(null=True, blank=True)
 
     # 關聯業務軌跡（例如：reference_type='order', reference_id='訂單UUID'）
     reference_type = models.CharField(max_length=50, blank=True, null=True)
@@ -865,6 +906,7 @@ class CampaignParticipants(models.Model):
 class Payouts(models.Model):
     payout_id = models.AutoField(primary_key=True)
     koc = models.ForeignKey(User, on_delete=models.CASCADE, db_column='koc_id')
+    # amount：實際會匯入 KOC 銀行帳戶的淨額（財務對帳/CSV 匯出用的就是這個欄位）。
     amount = models.IntegerField()
     payout_date = models.DateField()
     status = models.CharField(max_length=50)
@@ -1416,6 +1458,16 @@ class ReturnRequest(models.Model):
     # 綠界退款/退貨 API 回傳的交易編號，財務對帳用；退款是否真的透過金流商
     # 退成功，要看這個欄位有沒有值，不能只看 status='refunded'
     ecpay_refund_trade_no = models.CharField(max_length=50, blank=True, null=True)
+
+    # 自動退貨流程（商品 is_returnable=True 且訂單為 7-ELEVEN 取貨）：
+    # 申請當下直接呼叫綠界產生逆物流退貨編號，消費者拿這組編號去超商 ibon 操作。
+    # return_ship_deadline 是 7 天寄件期限，超過沒寄出就視為這組編號失效
+    # （return_ship_expired=True），但只要訂單還在鑑賞期內，消費者可以重新申請、
+    # 重新產生一組新的退貨編號。
+    ecpay_return_trade_no = models.CharField(max_length=30, blank=True, null=True, db_column='ecpay_return_trade_no')
+    ecpay_return_order_no = models.CharField(max_length=30, blank=True, null=True, db_column='ecpay_return_order_no')
+    return_ship_deadline = models.DateTimeField(null=True, blank=True, db_column='return_ship_deadline')
+    return_ship_expired = models.BooleanField(default=False, db_column='return_ship_expired')
 
     requested_at = models.DateTimeField(auto_now_add=True)
     approved_at = models.DateTimeField(null=True, blank=True)
