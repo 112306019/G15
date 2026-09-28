@@ -498,3 +498,19 @@ export const requestVendorPayout = (
     data
   )
 }
+
+// KOC 優惠碼電商漏斗（資料來源：GA4）
+export const getVendorAnalyticsFunnel = (
+  vendorId,
+  params = {}
+) => {
+  return api.get(
+    '/vendor/analytics/funnel',
+    {
+      params: {
+        vendor_id: vendorId,
+        ...params,
+      },
+    }
+  )
+}
