@@ -151,6 +151,20 @@ export default function ProductDetailPage({
       if (addRes.ok) {
         if (onAddToCart) onAddToCart();
         showToast("✓ 已成功加入購物車！");
+
+        // GA4：加入購物車事件，用於計算「有多少人對商品產生興趣」
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'add_to_cart', {
+            currency: 'TWD',
+            value: productDetail.rawPrice || 0,
+            items: [{
+              item_id: String(productDetail.id),
+              item_name: productDetail.name,
+              price: productDetail.rawPrice || 0,
+              quantity: 1,
+            }],
+          });
+        }
       } else {
         showToast("加入購物車失敗，請再試一次");
       }

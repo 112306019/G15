@@ -69,6 +69,22 @@ export default function PaymentResultPage({ onCartCleared }) {
 
         if (data.status === "paid") {
           setState("paid");
+
+          // GA4：付款確認成功，視為完成購買（purchase）
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'purchase', {
+              transaction_id: data.order_id,
+              currency: 'TWD',
+              value: data.total_amount || 0,
+              coupon: data.promotion_code || undefined,
+              items: (data.items || []).map((item) => ({
+                item_id: String(item.product_id),
+                item_name: item.product_name,
+                price: item.price,
+                quantity: item.quantity,
+              })),
+            });
+          }
           return;
         }
         if (data.status === "failed") {
