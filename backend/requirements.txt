@@ -10,3 +10,4 @@ python-dotenv==1.2.2
 boto3
 requests==2.34.2
 pycryptodome==3.23.0
+google-analytics-data==0.18.19
