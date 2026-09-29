@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List } from 'lucide-react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List, AlertCircle } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
@@ -609,17 +609,25 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 </select>
               </div>
 
-              <Input
-                label={form.discountType === 'percentage' ? '折扣比例 (%) *' : '直接折價金額 (NT$) *'}
-                type="number"
-                min="0.01"
-                max={form.discountType === 'percentage' ? '100' : originalPrice || undefined}
-                step="0.01"
-                disabled={locked}
-                value={form.discountValue}
-                onChange={set('discountValue')}
-                placeholder={form.discountType === 'percentage' ? '例：15' : '例：150'}
-              />
+              <div className="flex flex-col gap-1.5">
+                <Input
+                  label={form.discountType === 'percentage' ? '折扣比例 (%) *' : '直接折價金額 (NT$) *'}
+                  type="number"
+                  min="0.01"
+                  max={form.discountType === 'percentage' ? '100' : originalPrice || undefined}
+                  step="0.01"
+                  disabled={locked}
+                  value={form.discountValue}
+                  onChange={set('discountValue')}
+                  placeholder={form.discountType === 'percentage' ? '例：15' : '例：150'}
+                />
+                {form.discountValue !== '' && Number(form.discountValue) <= 0 && (
+                  <p className="flex items-center gap-1 text-[11px] font-bold text-red-600">
+                    <AlertCircle size={12} className="shrink-0" />
+                    {form.discountType === 'percentage' ? '折扣比例必須大於 0%' : '直接折價金額必須大於 0 元'}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5 w-full">
@@ -722,7 +730,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
                   (step === 1 && !form.prodName) ||
-                  (step === 2 && (form.discountValue === '' || form.kocCommissionRate === '' || Number(form.discountValue) <= 0 || Number(form.kocCommissionRate) < 0 || Number(form.kocCommissionRate) > 100 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > Number(form.prodPrice)))) ||
+                  (step === 2 && (form.discountValue === '' || Number(form.discountValue) <= 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > originalPrice))) ||
                   isSaving
                 }
                 className="gap-1.5 px-8 w-full sm:w-auto"
@@ -1092,14 +1100,14 @@ export default function Campaigns() {
           </div>
 
           <Button variant="brand" onClick={handleOpenWizard} className="gap-2 px-4 sm:px-6">
-            <Plus size={16} /> 發佈 KOC 任務
+            <Plus size={16} /> 發佈 KOC 推廣活動
           </Button>
         </div>
       </div>
 
       {items.length === 0 && (
         <div className="py-20 text-center text-sm font-bold text-[#8C8880]">
-          目前尚無任務，點擊右上角「發佈 KOC 任務」開始你的第一個活動
+          目前尚無任務，點擊右上角「發佈 KOC 推廣活動」開始你的第一個活動
         </div>
       )}
 

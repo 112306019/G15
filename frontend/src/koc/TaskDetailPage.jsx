@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle } from 'lucide-react';
 import api from '../api/index';
@@ -202,6 +202,17 @@ export default function TaskDetailPage({ task, onBack }) {
       cancelled = true;
     };
   }, [task, detail?.stage, chartPeriod]);
+
+  // 從商城熱銷榜點進來（task.openAnalytics）時，成效資料載完後自動捲到成效分析區塊，只捲一次
+  const analyticsRef = useRef(null);
+  const scrolledToAnalytics = useRef(false);
+  useEffect(() => {
+    if (!task?.openAnalytics || scrolledToAnalytics.current || chartLoading) return;
+    if (analyticsRef.current) {
+      analyticsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrolledToAnalytics.current = true;
+    }
+  }, [task, chartLoading]);
 
   if (!task) return null;
 
@@ -527,6 +538,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 活動截止日後，將自動結案並計算最終分潤
               </p>
 
+              <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection
                 usageCount={usageCount}
                 totalCommission={totalCommission}
@@ -554,6 +566,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 </p>
               </div>
 
+              <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection
                 usageCount={usageCount}
                 totalCommission={totalCommission}

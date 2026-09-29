@@ -141,10 +141,19 @@ function KocInsightsSection({ products, categories, onNavigate }) {
   const categoryLabel = (code) =>
     categories.find((c) => c.id === code)?.label || (code === "other" ? "其他" : code);
 
-  const goProduct = (productId) => {
-    const p = products.find((x) => String(x.Product_id) === String(productId));
-    if (p) onNavigate?.("product_detail", p);
-    else onNavigate?.("home");
+  // 跳到商品購買頁。優先用商城清單裡的商品物件；清單還沒載完或沒有這個商品時，
+  // 用後端回傳的 item.product（key 跟 /consumer/products 一樣）。
+  const goProduct = (item) => {
+    const p = products.find((x) => String(x.Product_id) === String(item.product_id));
+    const target = p || item.product;
+    if (target) onNavigate?.("product_detail", target);
+  };
+
+  // 熱銷榜：跳到這個商品最新一筆優惠碼所屬任務的成效分析；
+  // 沒有可看成效的任務（例如任務已取消）就退回商品頁。
+  const goAnalytics = (item) => {
+    if (item.latest_task) onNavigate?.("task_detail", item.latest_task);
+    else goProduct(item);
   };
 
   if (error) {
@@ -178,7 +187,11 @@ function KocInsightsSection({ products, categories, onNavigate }) {
         {best && (
           <div className="mb-5 rounded-xl bg-[#1A1A18] text-[#F5F0E8] px-4 py-3 text-xs md:text-sm leading-relaxed font-bold">
             你的粉絲對「<span className="text-[#E8A27F]">{categoryLabel(best.category)}</span>」的購買力最高
-            <span className="text-gray-400 font-medium">（平均每檔任務帶出 {best.avg_orders_per_mission} 單）</span>！
+            <span className="text-gray-400 font-medium">
+              {best.metric === "conversion_rate"
+                ? `（轉化率 ${best.conversion_rate}%，${best.click_count.toLocaleString()} 次點擊帶出 ${best.order_count} 單）`
+                : `（平均 ${best.avg_orders_per_mission} 單/任務）`}
+            </span>！
           </div>
         )}
 
@@ -192,7 +205,8 @@ function KocInsightsSection({ products, categories, onNavigate }) {
               {topList.map((p) => (
                 <li
                   key={p.product_id}
-                  onClick={() => goProduct(p.product_id)}
+                  onClick={() => goAnalytics(p)}
+                  title={p.latest_task ? "查看最新一筆優惠碼的成效分析" : "查看商品"}
                   className="flex items-center gap-3 py-3 cursor-pointer group"
                 >
                   <span className={`w-6 shrink-0 text-center font-serif text-lg font-black ${p.rank <= 3 ? "text-[#C8522A]" : "text-[#8C8880]"}`}>
@@ -205,7 +219,13 @@ function KocInsightsSection({ products, categories, onNavigate }) {
                     <p className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1 group-hover:text-[#C8522A] transition-colors">{p.product_name}</p>
                     <p className="text-[11px] text-[#8C8880] mt-0.5">
                       {categoryLabel(p.category)} · {p.order_count} 單 · {p.units_sold} 件
+                      {p.conversion_rate !== null && ` · 轉化率 ${p.conversion_rate}%`}
                     </p>
+                    {p.latest_task && (
+                      <p className="text-[10px] font-bold text-[#B89B6A] mt-0.5 group-hover:text-[#C8522A] transition-colors">
+                        查看成效分析 →
+                      </p>
+                    )}
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-xs md:text-sm font-black text-[#1A1A18]">{formatNTD(p.commission)}</p>
@@ -255,10 +275,10 @@ function KocInsightsSection({ products, categories, onNavigate }) {
                     ，要申請試試看嗎？
                   </p>
                   <button
-                    onClick={() => goProduct(r.product_id)}
+                    onClick={() => goProduct(r)}
                     className="mt-auto pt-2 self-start text-[11px] md:text-xs font-bold text-[#1A1A18] hover:text-[#C8522A] transition-colors"
                   >
-                    購買後即可申請代言 →
+                    前往購買，購買後即可申請代言 →
                   </button>
                 </div>
               </div>
