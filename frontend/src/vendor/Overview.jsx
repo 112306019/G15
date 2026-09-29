@@ -105,7 +105,7 @@ function StatCard({
         </div>
 
         {sub && (
-          <div className="text-[9px] sm:text-xs font-bold text-[#8C8880] mt-1 sm:mt-2 line-clamp-2 sm:truncate">
+          <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mt-1 sm:mt-2 leading-snug break-words">
             {sub}
           </div>
         )}
@@ -386,7 +386,6 @@ export default function Overview() {
           value={formatCurrency(
             analytics?.kocGmv || 0
           )}
-          sub={`KOC 優惠碼帶出的 ${(analytics?.kocOrderCount || 0).toLocaleString()} 張訂單總額（含之後退貨/取消）`}
           icon={DollarSign}
         />
 
@@ -395,9 +394,6 @@ export default function Overview() {
           value={formatCurrency(
             analytics?.kocNetSales || 0
           )}
-          sub={`GMV 扣除退貨/取消 ${formatCurrency(
-            Math.max(0, (analytics?.kocGmv || 0) - (analytics?.kocNetSales || 0))
-          )}`}
           icon={Receipt}
           accent
         />
@@ -407,7 +403,6 @@ export default function Overview() {
           value={(
             analytics?.totalOrders || 0
           ).toLocaleString()}
-          sub="含廠商商品且已付款的不重複訂單"
           icon={ShoppingBag}
         />
 
@@ -416,7 +411,6 @@ export default function Overview() {
           value={(
             analytics?.totalCouponUsage || 0
           ).toLocaleString()}
-          sub="所有 KOC 優惠碼累計"
           icon={Ticket}
         />
 
@@ -424,7 +418,6 @@ export default function Overview() {
           <StatCard
             label="網紅合作 ROAS"
             value={formatRoas(analytics?.kocRoas)}
-            sub={`淨營業額 ÷（分潤 ${formatCurrency(analytics?.kocCommission || 0)} + 平台費 ${formatCurrency(analytics?.kocPlatformFee || 0)}）`}
             icon={TrendingUp}
             accent={analytics?.kocRoas !== null && analytics?.kocRoas >= 1}
           />
@@ -593,7 +586,13 @@ export default function Overview() {
               </div>
 
               <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
-                GMV 加總使用 KOC 優惠碼、曾付款成功的訂單中屬於該活動商品的 subtotal；淨營業額再扣除已取消與已退款的訂單
+                GMV 加總使用 KOC 優惠碼、曾付款成功的訂單中屬於該活動商品的 subtotal（含之後退貨/取消）；淨營業額再扣除已取消與已退款的訂單
+              </div>
+
+              <div className="text-[11px] sm:text-xs font-bold text-[#1A1A18] mt-2">
+                目前共 {(analytics?.kocOrderCount || 0).toLocaleString()} 張 KOC 訂單，退貨/取消扣除 {formatCurrency(
+                  Math.max(0, (analytics?.kocGmv || 0) - (analytics?.kocNetSales || 0))
+                )}
               </div>
             </div>
 
@@ -609,11 +608,25 @@ export default function Overview() {
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
               <div className="font-bold text-[#1A1A18]">
+                優惠碼使用次數
+              </div>
+
+              <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+                加總所有 KOC 優惠碼的累計使用次數（訂單完成並產生分潤時才計入）
+              </div>
+            </div>
+
+            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
+              <div className="font-bold text-[#1A1A18]">
                 網紅合作 ROAS
               </div>
 
               <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
                 淨營業額 ÷（KOC 分潤 + 平台費）。分潤排除退貨後被收回的部分；平台費 = 淨營業額 × 目前費率 {analytics?.platformFeeRate || 0}%
+              </div>
+
+              <div className="text-[11px] sm:text-xs font-bold text-[#1A1A18] mt-2">
+                目前分潤 {formatCurrency(analytics?.kocCommission || 0)} + 平台費 {formatCurrency(analytics?.kocPlatformFee || 0)}
               </div>
             </div>
           </div>

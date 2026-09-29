@@ -31,9 +31,11 @@ from api.models import (
     CouponNew,
     CampaignProduct,
     Product,
+    Vendor,
     Application,
     Earnings,
 )
+from .constants import STAGE_CODE_MAP
 
 PAID_STATUSES = ["paid", "completed"]
 TOP_PRODUCTS_LIMIT = 10
@@ -145,7 +147,47 @@ def _attributed_items(code_ctx, since=None):
 # ==============================================================================
 # 1. 個人熱銷爆款榜
 # URL: GET /koc/insights/topProducts?user_id=xxx
+#
+# 轉化率 = 帶出的訂單數 ÷ 短連結點擊數（CouponNew.click_count）。
+# 點擊是記在優惠碼（任務）上，不是記在商品上，所以一個商品／分類的點擊數
+# = 推過它的那些任務的點擊數加總。點擊數低於 MIN_CLICKS_FOR_RATE 時不算轉化率，
+# 避免 1 次點擊 1 張訂單就變成 100%；這時頂部提示改用「平均每檔帶幾單」。
 # ==============================================================================
+MIN_CLICKS_FOR_RATE = 20
+ANALYTICS_STAGES = ["promoting", "completed"]   # 只有這兩個階段的任務頁有成效分析
+
+
+def _conversion_rate(orders, clicks):
+    return round(orders / clicks * 100, 1) if clicks else None
+
+
+def _product_payloads(product_ids):
+    """回傳 {product_id: dict}，key 跟 /consumer/products 一樣，前端可以直接丟給商品頁。"""
+    products = list(Product.objects.filter(product_id__in=list(product_ids)))
+    vendor_names = dict(
+        Vendor.objects.filter(
+            vendor_id__in={p.vendor_id for p in products}
+        ).values_list("vendor_id", "company_name")
+    )
+    return {
+        p.product_id: {
+            "Product_id": p.product_id,
+            "product_id": p.product_id,
+            "Product_name": p.product_name,
+            "price": p.price,
+            "discounted_price": p.discounted_price,
+            "stock": p.stock,
+            "category": p.category,
+            "image_url": p.image_url,
+            "description": p.description or "",
+            "status": p.status,
+            "Vendor_id": p.vendor_id,
+            "Vendor_name": vendor_names.get(p.vendor_id, ""),
+        }
+        for p in products
+    }
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def koc_top_products(request):
@@ -156,6 +198,43 @@ def koc_top_products(request):
     try:
         code_ctx = _coupon_context([koc.koc_id])
         items = _attributed_items(code_ctx)
+        cp_map = _campaign_product_map({ctx[2] for ctx in code_ctx.values()})
+
+        # --- 每個任務的點擊數，以及「商品 -> 最新一筆優惠碼的任務」---
+        coupons = list(
+            CouponNew.objects.filter(kocmission__koc=koc).values(
+                "coupon_id",
+                "promotion_code",
+                "click_count",
+                "kocmission_id",
+                "kocmission__stage",
+                "kocmission__application__campaign_id",
+                "kocmission__application__campaign__name",
+                "kocmission__application__campaign__end_date",
+                "kocmission__application__campaign__vendor__company_name",
+            )
+        )
+        mission_clicks = defaultdict(int)
+        for c in coupons:
+            mission_clicks[c["kocmission_id"]] += c["click_count"] or 0
+
+        latest_task_by_product = {}
+        for c in sorted(coupons, key=lambda c: c["coupon_id"], reverse=True):
+            if c["kocmission__stage"] not in ANALYTICS_STAGES:
+                continue
+            end_date = c["kocmission__application__campaign__end_date"]
+            # key 跟 HomePage 帶進 TaskDetailPage 的 task 物件一致
+            task = {
+                "id": str(c["kocmission_id"]),
+                "stage": STAGE_CODE_MAP[c["kocmission__stage"]],
+                "vendor": c["kocmission__application__campaign__vendor__company_name"],
+                "productName": c["kocmission__application__campaign__name"],
+                "deadline": end_date.strftime("%Y-%m-%d") if end_date else None,
+                "promoCode": c["promotion_code"],
+                "openAnalytics": True,
+            }
+            for pid in cp_map.get(c["kocmission__application__campaign_id"], ()):
+                latest_task_by_product.setdefault(pid, task)
 
         # --- 分潤：Earnings 是訂單層級，依該訂單內活動商品的小計比例分攤到各商品 ---
         earnings_by_order = dict(
@@ -189,29 +268,41 @@ def koc_top_products(request):
             p["sales"] += it["subtotal"]
             base = order_subtotal[it["order_id"]]
             if base > 0:
-                p["commission"] += (earnings_by_order.get(it["order_id"]) or 0) * it["subtotal"] / base
+                p["commission"] += float(earnings_by_order.get(it["order_id"]) or 0) * it["subtotal"] / base
+
+        # 商品的點擊數 = 推過這個商品的任務點擊數加總
+        product_missions = defaultdict(set)
+        for _, mission_id, campaign_id in code_ctx.values():
+            for pid in cp_map.get(campaign_id, ()):
+                product_missions[pid].add(mission_id)
 
         ranked = sorted(
             products.values(),
             key=lambda p: (len(p["orders"]), p["sales"]),
             reverse=True,
         )[:TOP_PRODUCTS_LIMIT]
+        payloads = _product_payloads(p["product_id"] for p in ranked)
 
-        top_products = [{
-            "rank": i + 1,
-            "product_id": p["product_id"],
-            "product_name": p["product_name"],
-            "category": p["category"],
-            "image_url": p["image_url"],
-            "order_count": len(p["orders"]),
-            "units_sold": p["units"],
-            "sales": round(p["sales"]),
-            "commission": round(p["commission"]),
-        } for i, p in enumerate(ranked)]
+        top_products = []
+        for i, p in enumerate(ranked):
+            clicks = sum(mission_clicks[m] for m in product_missions[p["product_id"]])
+            top_products.append({
+                "rank": i + 1,
+                "product_id": p["product_id"],
+                "product_name": p["product_name"],
+                "category": p["category"],
+                "image_url": p["image_url"],
+                "order_count": len(p["orders"]),
+                "units_sold": p["units"],
+                "sales": round(p["sales"]),
+                "commission": round(p["commission"]),
+                "click_count": clicks,
+                "conversion_rate": _conversion_rate(len(p["orders"]), clicks) if clicks >= MIN_CLICKS_FOR_RATE else None,
+                "latest_task": latest_task_by_product.get(p["product_id"]),
+                "product": payloads.get(p["product_id"]),
+            })
 
-        # --- 分類購買力：平均每檔任務帶出幾張訂單 ---
-        # 分母要包含「推了但一張都沒賣出」的任務，不然推一次剛好賣很好的分類會被高估。
-        cp_map = _campaign_product_map({ctx[2] for ctx in code_ctx.values()})
+        # --- 分類購買力 ---
         product_category = dict(
             Product.objects.filter(
                 product_id__in={pid for s in cp_map.values() for pid in s}
@@ -231,18 +322,32 @@ def koc_top_products(request):
         category_stats = []
         for cat, missions in missions_by_cat.items():
             n_orders = len(orders_by_cat.get(cat, ()))
+            clicks = sum(mission_clicks[m] for m in missions)
             category_stats.append({
                 "category": cat,
                 "mission_count": len(missions),
                 "order_count": n_orders,
+                "click_count": clicks,
+                "conversion_rate": _conversion_rate(n_orders, clicks) if clicks >= MIN_CLICKS_FOR_RATE else None,
                 "sales": round(sales_by_cat.get(cat, 0)),
                 "avg_orders_per_mission": round(n_orders / len(missions), 1),
             })
-        category_stats.sort(
-            key=lambda c: (c["avg_orders_per_mission"], c["order_count"]),
-            reverse=True,
-        )
-        best_category = next((c for c in category_stats if c["order_count"] > 0), None)
+
+        # 頂部提示：有足夠點擊數的分類用轉化率比；都不夠就退回平均每檔帶單數
+        with_rate = [c for c in category_stats if c["conversion_rate"] is not None and c["order_count"] > 0]
+        if with_rate:
+            best = max(with_rate, key=lambda c: (c["conversion_rate"], c["order_count"]))
+            best_category = {**best, "metric": "conversion_rate"}
+        else:
+            with_orders = [c for c in category_stats if c["order_count"] > 0]
+            best = max(
+                with_orders,
+                key=lambda c: (c["avg_orders_per_mission"], c["order_count"]),
+                default=None,
+            )
+            best_category = {**best, "metric": "orders_per_mission"} if best else None
+
+        category_stats.sort(key=lambda c: (c["order_count"], c["sales"]), reverse=True)
 
         return Response({
             "success": True,
@@ -250,6 +355,7 @@ def koc_top_products(request):
             "top_products": top_products,
             "category_stats": category_stats,
             "best_category": best_category,
+            "min_clicks_for_rate": MIN_CLICKS_FOR_RATE,
         }, status=http_status.HTTP_200_OK)
 
     except Exception as e:
@@ -257,7 +363,6 @@ def koc_top_products(request):
             {"success": False, "err": f"伺服器發生錯誤: {str(e)}"},
             status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
 
 # ==============================================================================
 # 2. 智慧選品推薦
@@ -267,7 +372,7 @@ def koc_top_products(request):
 #   a. 每位 KOC 用近 PROFILE_DAYS 天「各分類帶貨金額」組成向量，代表粉絲偏好
 #   b. 用 cosine similarity 找出跟自己最像的 KOC
 #   c. 看這些 KOC 近 RECENT_DAYS 天在各活動的實際分潤（Earnings），算每位 KOC 平均賺多少
-#   d. 只推「進行中、未額滿、有庫存、自己還沒申請過」的活動商品
+#   d. 只推「上架中、進行中、未額滿、有庫存、自己沒申請過也沒買過」的活動商品
 #   e. 自己還沒帶貨紀錄（冷啟動）或找不到相似 KOC 時，退回全平台近期平均分潤最高的
 # ==============================================================================
 def _cosine(a, b):
@@ -312,14 +417,25 @@ def koc_recommended_products(request):
         applied_campaign_ids = set(
             Application.objects.filter(koc=koc).values_list("campaign_id", flat=True)
         )
+        # KOC 自己買過的商品不再推薦（付款成功且未取消；退款的不算買過，可以再推）
+        purchased_product_ids = set(
+            OrderItem.objects.filter(
+                order__user_id=koc.user_id,
+                order__payment_status__in=PAID_STATUSES,
+            )
+            .exclude(order__order_status="cancelled")
+            .values_list("product_id", flat=True)
+        )
         running_cps = list(
             CampaignProduct.objects.filter(
                 campaign__status="active",
                 campaign__start_date__lte=now,
                 campaign__end_date__gte=now,
                 product__stock__gt=0,
+                product__status="active",   # 只推上架中的商品（廠商下架是 inactive）
             )
             .exclude(campaign_id__in=applied_campaign_ids)
+            .exclude(product_id__in=purchased_product_ids)
             .select_related("campaign", "product")
         )
         candidate_campaign_ids = {cp.campaign_id for cp in running_cps}
@@ -382,6 +498,7 @@ def koc_recommended_products(request):
                 "image_url": product.image_url,
                 "price": product.price,
                 "discounted_price": product.discounted_price,
+                "stock": product.stock,
                 "campaign_id": str(campaign.campaign_id),
                 "campaign_name": campaign.name,
                 "campaign_end_date": campaign.end_date,
@@ -400,13 +517,18 @@ def koc_recommended_products(request):
             reverse=True,
         )
 
+        recommendations = recommendations[:RECOMMEND_LIMIT]
+        payloads = _product_payloads(r["product_id"] for r in recommendations)
+        for r in recommendations:
+            r["product"] = payloads.get(r["product_id"])
+
         return Response({
             "success": True,
             "err": "",
             "source": source,              # similar：相似粉絲群 KOC；platform：全平台近期熱門
             "similar_koc_count": len(similar_ids),
             "recent_days": RECENT_DAYS,
-            "recommendations": recommendations[:RECOMMEND_LIMIT],
+            "recommendations": recommendations,
         }, status=http_status.HTTP_200_OK)
 
     except Exception as e:
