@@ -4,10 +4,26 @@ import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Lo
 import api from '../api/index';
 import { buildPromoLink } from '../config';
 
-function StatTile({ label, value }) {
+// 小問號圖示，滑鼠移上去顯示說明文字；用具名 group（group/tooltip）避免跟
+// 長條圖那邊既有的 group-hover（放大長條）互相干擾。
+function InfoTooltip({ text }) {
+  return (
+    <span className="relative inline-flex items-center group/tooltip">
+      <Info size={12} className="text-[#8C8880] cursor-help" />
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tooltip:block w-56 z-20 bg-[#1A1A18] text-[#F5F0E8] text-[10px] leading-relaxed font-medium rounded-lg px-3 py-2 shadow-lg text-left">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function StatTile({ label, value, tooltip }) {
   return (
     <div className="bg-[#F5F0E8] rounded-xl p-3 xl:p-4 border border-[#E2DDD4]">
-      <p className="text-[10px] xl:text-xs font-bold text-[#8C8880] mb-1">{label}</p>
+      <p className="text-[10px] xl:text-xs font-bold text-[#8C8880] mb-1 flex items-center gap-1">
+        {label}
+        {tooltip && <InfoTooltip text={tooltip} />}
+      </p>
       <p className="text-sm xl:text-lg font-black text-[#C8522A]">{value}</p>
     </div>
   );
@@ -82,7 +98,11 @@ function AnalyticsSection({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 xl:gap-4 mb-4 xl:mb-6">
-        <StatTile label="成功帶貨數量" value={usageCount} />
+        <StatTile
+          label="有效帶貨數量"
+          value={usageCount}
+          tooltip="有效帶貨數量：消費者已完成取貨且無退貨的有效訂單，分潤將以此數字進行計算。"
+        />
         <StatTile label="累積分潤" value={`NT$ ${totalCommission.toLocaleString()}`} />
         <StatTile label="連結點擊次數" value={clickCount} />
       </div>
@@ -94,7 +114,10 @@ function AnalyticsSection({
       </div>
 
       <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-4 xl:p-8 border border-[#E2DDD4] mb-4 xl:mb-6">
-        <p className="text-sm xl:text-base font-bold text-[#1A1A18] mb-3">銷量走勢</p>
+        <p className="text-sm xl:text-base font-bold text-[#1A1A18] mb-3 flex items-center gap-1.5">
+          下單量走勢
+          <InfoTooltip text="下單量走勢：粉絲使用專屬優惠碼成立訂單的即時趨勢（含處理中訂單）。" />
+        </p>
         <div className="h-64 md:h-72">
           {chartLoading ? (
             <div className="h-full flex items-center justify-center text-[#8C8880] font-bold text-sm">載入中...</div>
