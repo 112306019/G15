@@ -1590,13 +1590,20 @@ def get_analytics_list(request):
         ).values_list('kocmission_id', flat=True)
     )
 
-    # 🔥 批次查出每個任務的累積分潤，用來算戰報 EPC，避免迴圈內逐一查詢
-    commission_map = {
-        row['kocmission_id']: row['total']
-        for row in Earnings.objects.filter(
-            kocmission_id__in=[m.kocmission_id for m in missions]
-        ).exclude(status='cancelled').values('kocmission_id').annotate(total=Sum('amount'))
-    }
+    # 🔥 批次查出每個任務的累積分潤與「有效帶貨數量」，避免迴圈內逐一查詢。
+    # 有效帶貨數量＝這個任務底下還沒被 cancelled 的分潤筆數（退貨全額退款會把
+    # 對應的 Earnings 標成 cancelled，見 platform.py 的退貨處理），不是直接讀
+    # coupon.usage_count——那個欄位是終身累計、退貨也不會扣回去，廠商後台的
+    # 優惠碼統計還在用它，所以不能直接改那個欄位，只在這裡另外算一份給戰報用。
+    commission_map = {}
+    usage_count_map = {}
+    for row in Earnings.objects.filter(
+        kocmission_id__in=[m.kocmission_id for m in missions]
+    ).exclude(status='cancelled').values('kocmission_id').annotate(
+        total=Sum('amount'), count=Count('earnings_id')
+    ):
+        commission_map[row['kocmission_id']] = row['total']
+        usage_count_map[row['kocmission_id']] = row['count']
 
     result = []
     for mission in missions:
@@ -1624,7 +1631,7 @@ def get_analytics_list(request):
             "KOCMission_id": str(mission.kocmission_id),
             "campaign_image": campaign_image,
             "campaign_name": campaign.name,
-            "usage_count": coupon.usage_count,
+            "usage_count": usage_count_map.get(mission.kocmission_id, 0),
             "click_count": click_count,
             "epc": epc,
         })
@@ -1729,9 +1736,14 @@ def get_analytics_detail(request):
     # 不用 coupon.total_commission 這個快取計數欄位，避免兩邊資料不同步。
     # 要排除 status='cancelled'——這是訂單全額退款後被收回的分潤，
     # 不能算進 KOC 自己看到的總分潤裡，不然退貨後這個數字還是虛高。
-    mission_commission = Earnings.objects.filter(
+    # 同一支查詢順便算「有效帶貨數量」（未被 cancelled 的分潤筆數），
+    # 不用 coupon.usage_count——那個欄位是終身累計、退貨不會扣回去，
+    # 廠商後台的優惠碼統計還在用它，這裡只另外算一份給戰報用，不動原欄位。
+    earnings_summary = Earnings.objects.filter(
         kocmission=mission
-    ).exclude(status='cancelled').aggregate(total=Sum('amount'))['total'] or 0
+    ).exclude(status='cancelled').aggregate(total=Sum('amount'), count=Count('earnings_id'))
+    mission_commission = earnings_summary['total'] or 0
+    valid_usage_count = earnings_summary['count'] or 0
 
     # 戰報 EPC = 這個任務累積分潤 / 短連結累積點擊數（見 koc_link_redirect）。
     # click_count 是功能上線後才開始累積的終身計數，上線前的舊優惠碼一律是 0，
@@ -1759,7 +1771,7 @@ def get_analytics_detail(request):
         "err": "",
         "campaign_image": campaign_image,
         "campaign_name": campaign.name,
-        "usage_count": coupon.usage_count,
+        "usage_count": valid_usage_count,
         "total_commision": mission_commission,
         "chart_data": chart_data,
         "click_count": click_count,
