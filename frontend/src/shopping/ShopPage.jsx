@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import KOCVideo from '../assets/KOC_ad.mp4';
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -50,7 +51,7 @@ function ShoppingBagIcon() {
   );
 }
 
-// 🌟 乾淨的商品卡片
+// 商品卡片
 function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
   const isSoldOut = Number(stock) <= 0;
 
@@ -109,7 +110,7 @@ const GRADIENTS = [
   "linear-gradient(135deg,#BEC8C4,#9EA8A4)",
 ];
 
-// 🌟 KOC 專屬：個人熱銷爆款榜 + 智慧選品推薦（只有 userRole === "koc" 時顯示）
+// KOC 專屬：個人熱銷爆款榜 + 智慧選品推薦（只有 userRole === "koc" 時顯示）
 function KocInsightsSection({ products, categories, onNavigate }) {
   const [top, setTop] = useState(null);
   const [recs, setRecs] = useState(null);
@@ -602,11 +603,16 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                   </button>
                 </div>
                 
-                {/* 手機版隱藏圖標 */}
-                <div className="hidden md:flex relative z-10 w-full md:w-[35%] aspect-video bg-white/5 border border-white/10 rounded-2xl items-center justify-center backdrop-blur-md pointer-events-none group-hover:rotate-2 transition-transform duration-500">
-                  <svg className="h-16 w-16 text-white/20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+                {/* 影片區塊 (取代原本的手機版隱藏圖標 SVG) */}
+                <div className="hidden md:flex relative z-10 w-full md:w-[35%] aspect-video bg-black/20 border border-white/10 rounded-2xl items-center justify-center backdrop-blur-md overflow-hidden group-hover:rotate-2 transition-transform duration-500">
+                  <video 
+                    src={KOCVideo} 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline
+                    className="w-full h-full object-cover pointer-events-none"
+                  />
                 </div>
               </div>
             </div>
