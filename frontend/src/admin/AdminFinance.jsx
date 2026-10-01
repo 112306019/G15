@@ -1,558 +1,753 @@
-import { API_BASE_URL } from '../config';
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Search, Filter, CreditCard, DollarSign, Wallet,
-  ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download, FileText, PlayCircle
-} from 'lucide-react';
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Banknote,
+  CheckCircle2,
+  Clock3,
+  Download,
+  FileText,
+  Loader2,
+  RefreshCw,
+  ReceiptText,
+  XCircle,
+} from 'lucide-react'
+import {
+  getAdminVendorReceivables,
+  createVendorReceivablePayout,
+  confirmVendorReceivablePayout,
+  getSettleableVendors,
+  generateVendorSettlement,
+  getVendorSettlements,
+  confirmVendorSettlementPayment,
+  getVendorSettlementInvoices,
+  getAdminKocPayouts,
+  confirmAdminKocPayout,
+  exportKocPayoutTransfers,
+} from '../api/platform'
+
+const money = (value) =>
+  `NT$ ${Number(value || 0).toLocaleString('zh-TW', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`
+
+const dateText = (value) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const shortId = (value) => {
+  if (!value) return '—'
+  const text = String(value)
+  return text.length > 16 ? `${text.slice(0, 8)}...${text.slice(-5)}` : text
+}
+
+const RECEIVABLE_STATUS = {
+  pending: ['等待資格', 'bg-white border border-[#E2DDD4] text-[#8C8880]'],
+  eligible: ['可撥款', 'bg-[#F5F0E8] text-[#1A1A18]'],
+  payout_pending: ['撥款處理中', 'bg-[#FDF0ED] text-[#C8522A]'],
+  partially_paid: ['部分已撥', 'bg-[#FDF0ED] text-[#C8522A]'],
+  paid: ['已撥款', 'bg-[#EEF7F0] text-[#2F6F45]'],
+  refunded: ['已退款', 'bg-[#FFF0F0] text-[#D93025]'],
+  cancelled: ['已取消', 'bg-[#F8F9FA] text-[#8C8880]'],
+  adjusted: ['已調整', 'bg-[#F8F9FA] border border-[#E2DDD4] text-[#8C8880]'],
+}
+
+const SETTLEMENT_STATUS = {
+  draft: ['草稿', 'bg-white border border-[#E2DDD4] text-[#8C8880]'],
+  awaiting_payment: ['待繳款', 'bg-[#FDF0ED] text-[#C8522A]'],
+  partially_paid: ['部分已繳', 'bg-[#FDF0ED] text-[#C8522A]'],
+  paid: ['已繳清', 'bg-[#EEF7F0] text-[#2F6F45]'],
+  overdue: ['已逾期', 'bg-[#FFF0F0] text-[#D93025]'],
+  cancelled: ['已取消', 'bg-[#F8F9FA] text-[#8C8880]'],
+}
+
+function StatusBadge({ status, type = 'receivable' }) {
+  const map = type === 'settlement' ? SETTLEMENT_STATUS : RECEIVABLE_STATUS
+  const [label, style] = map[status] || [status || '未知', 'bg-[#F8F9FA] text-[#8C8880]']
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${style}`}>
+      {label}
+    </span>
+  )
+}
+
+function SummaryCard({ title, value, hint, icon: Icon, dark = false }) {
+  return (
+    <div className={`rounded-[1.5rem] border p-5 ${dark ? 'bg-[#1A1A18] border-[#1A1A18]' : 'bg-white border-[#E2DDD4]'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={`text-[10px] font-bold tracking-wider ${dark ? 'text-[#B8B4AC]' : 'text-[#8C8880]'}`}>{title}</p>
+          <p className={`mt-2 text-xl font-black ${dark ? 'text-[#F5F0E8]' : 'text-[#1A1A18]'}`}>{money(value)}</p>
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${dark ? 'bg-white/10 text-[#F5F0E8]' : 'bg-[#F5F0E8] text-[#B89B6A]'}`}>
+          <Icon size={18} />
+        </div>
+      </div>
+      {hint && <p className={`mt-3 text-[10px] leading-relaxed ${dark ? 'text-[#B8B4AC]' : 'text-[#8C8880]'}`}>{hint}</p>}
+    </div>
+  )
+}
+
+function EmptyState({ children }) {
+  return <div className="py-14 text-center text-xs font-bold text-[#8C8880]">{children}</div>
+}
+
+function ActionButton({ children, onClick, disabled, danger = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl px-3 py-2 text-[10px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        danger
+          ? 'border border-[#FFD7D2] bg-[#FFF0F0] text-[#D93025] hover:bg-[#D93025] hover:text-white'
+          : 'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F5F0E8]'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
 
 export default function AdminFinance() {
-  const [activeTab, setActiveTab] = useState('payments');
-  const [payments, setPayments] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [earnings, setEarnings] = useState([]);
-  const [settleableCampaigns, setSettleableCampaigns] = useState([]);
-  const [settlingId, setSettlingId] = useState(null);
+  const adminId = localStorage.getItem('admin_id')
+  const [activeTab, setActiveTab] = useState('goods')
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState('')
 
-  const [settleableVendors, setSettleableVendors] = useState([]);
-  const [settlingVendorId, setSettlingVendorId] = useState(null);
-  const [vendorPayouts, setVendorPayouts] = useState([]);
-  const [confirmingPayoutId, setConfirmingPayoutId] = useState(null);
-  const [exportingPayouts, setExportingPayouts] = useState(null); // null | 'vendor' | 'koc'
-  const [runningMonthlyPayouts, setRunningMonthlyPayouts] = useState(false);
+  const [receivables, setReceivables] = useState([])
+  const [settleableVendors, setSettleableVendors] = useState([])
+  const [settlements, setSettlements] = useState([])
+  const [kocPayouts, setKocPayouts] = useState([])
+  const [invoices, setInvoices] = useState([])
 
-  const [kocPayouts, setKocPayouts] = useState([]);
-  const [confirmingKocPayoutId, setConfirmingKocPayoutId] = useState(null);
+  const [processingKey, setProcessingKey] = useState('')
 
-  const [returnDisputes, setReturnDisputes] = useState([]);
-  const [loadingDisputes, setLoadingDisputes] = useState(false);
-  const [resolvingReturnId, setResolvingReturnId] = useState(null);
-  const [returnNotes, setReturnNotes] = useState({});
-
-  const [vendorInvoices, setVendorInvoices] = useState([]);
-  const [loadingInvoices, setLoadingInvoices] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-
-  const token = localStorage.getItem("admin_token");
-  const adminId = localStorage.getItem("admin_id");
-
-  const fetchEarningsData = async () => {
-    try {
-      const earnRes = await fetch(`${API_BASE_URL}/api/platform/earnings?Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const earnData = await earnRes.json();
-      if (Array.isArray(earnData)) {
-        setEarnings(earnData.map((e) => ({
-          earningId: e.Earnings_id,
-          kocMissionId: e.KOCMission_id,
-          influencerId: e.Influencer_name || e.Influencer_id,
-          campaignName: e.Campaign_name,
-          amount: e.amount,
-          payoutDate: e.status === 'transferred' && e.created_at
-            ? new Date(e.created_at).toLocaleDateString("zh-TW")
-            : null,
-          status: e.status === 'transferred' ? '已撥款'
-            : e.status === 'withdrawable' ? '可提領'
-              : '待定',
-        })));
-      } else if (!earnRes.ok) {
-        console.error("分潤資料載入失敗", earnData?.err || earnRes.status);
-      }
-
-      const settleRes = await fetch(`${API_BASE_URL}/api/platform/campaigns/settleable?Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const settleData = await settleRes.json();
-      if (Array.isArray(settleData)) {
-        setSettleableCampaigns(settleData.map((c) => ({
-          campaignId: c.Campaign_id,
-          campaignName: c.Campaign_name,
-          vendorName: c.Vendor_name,
-          eligibleAt: c.Settlement_eligible_at,
-          isEligible: c.Is_eligible,
-          pendingCount: c.Pending_count,
-          pendingAmount: c.Pending_amount,
-        })));
-      } else if (!settleRes.ok) {
-        console.error("待結算活動載入失敗", settleData?.err || settleRes.status);
-      }
-    } catch (err) {
-      console.error("收益資料載入失敗", err);
-    }
-  };
-
-  const handleSettle = async (campaignId) => {
+  const loadAll = useCallback(async (showMainLoader = true) => {
     if (!adminId) {
-      alert("找不到管理員登入資訊，請重新登入後再試一次");
-      return;
+      setError('找不到管理員登入資訊，請重新登入。')
+      setLoading(false)
+      return
     }
 
-    if (!window.confirm("確定要結算這個活動的所有可提領分潤，並匯入 KOC 錢包嗎？")) return;
+    if (showMainLoader) setLoading(true)
+    else setRefreshing(true)
+    setError('')
 
-    setSettlingId(campaignId);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/campaign/settle-earnings`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ Campaign_id: campaignId, Admin_id: adminId }),
-      });
-      const data = await res.json();
+      const [
+        receivableRes,
+        settleableRes,
+        settlementRes,
+        kocRes,
+        invoiceRes,
+      ] = await Promise.all([
+        getAdminVendorReceivables({ Admin_id: adminId }),
+        getSettleableVendors({ Admin_id: adminId }),
+        getVendorSettlements({ Admin_id: adminId }),
+        getAdminKocPayouts({ Admin_id: adminId, status: 'pending' }),
+        getVendorSettlementInvoices({ Admin_id: adminId }),
+      ])
 
-      if (!res.ok || data.success === false) {
-        alert(data.err || "結算失敗，請稍後再試");
-        return;
-      }
-
-      setSettleableCampaigns(prev => prev.filter(c => c.campaignId !== campaignId));
-      const settledEarningsIds = new Set((data.settled || []).map(s => s.earnings_id));
-      if (settledEarningsIds.size > 0) {
-        setEarnings(prev => prev.map(e => settledEarningsIds.has(e.earningId) ? { ...e, status: '可提領' } : e));
-      }
-
-      alert(`已結算 ${data.settled_count} 筆分潤，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
-      await fetchEarningsData();
+      setReceivables(receivableRes.data?.receivables || [])
+      setSettleableVendors(Array.isArray(settleableRes.data) ? settleableRes.data : [])
+      setSettlements(Array.isArray(settlementRes.data) ? settlementRes.data : [])
+      setKocPayouts(Array.isArray(kocRes.data) ? kocRes.data : [])
+      setInvoices(invoiceRes.data?.invoices || [])
     } catch (err) {
-      console.error("結算失敗", err);
-      alert("結算失敗，請稍後再試");
+      console.error('AdminFinance 載入失敗', err)
+      setError(err.response?.data?.err || '財務資料載入失敗，請稍後再試。')
     } finally {
-      setSettlingId(null);
+      setLoading(false)
+      setRefreshing(false)
     }
-  };
-
-  const fetchVendorInvoices = async () => {
-    setLoadingInvoices(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/invoices?Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.invoices)) {
-        setVendorInvoices(data.invoices);
-      }
-    } catch (err) {
-      console.error("發票紀錄載入失敗", err);
-    } finally {
-      setLoadingInvoices(false);
-    }
-  };
-
-  const fetchVendorFinanceData = async () => {
-    try {
-      const [settleRes, payoutRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/platform/vendors/settleable?Admin_id=${adminId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE_URL}/api/platform/vendor/payouts?status=pending&Admin_id=${adminId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      const settleData = await settleRes.json();
-      if (Array.isArray(settleData)) {
-        setSettleableVendors(settleData.map((v) => ({
-          vendorId: v.Vendor_id,
-          vendorName: v.Vendor_name,
-          eligibleCount: v.Eligible_count,
-          eligibleAmount: v.Eligible_amount,
-          notYetEligibleCount: v.Not_yet_eligible_count,
-          notYetEligibleAmount: v.Not_yet_eligible_amount,
-          earliestEligibleAt: v.Earliest_eligible_at,
-        })));
-      }
-
-      const payoutData = await payoutRes.json();
-      if (Array.isArray(payoutData)) {
-        setVendorPayouts(payoutData.map((p) => ({
-          payoutId: p.Payout_id,
-          vendorId: p.Vendor_id,
-          vendorName: p.Vendor_name,
-          bankDisplay: p.Bank_display,
-          amount: p.Amount,
-          payoutDate: p.Payout_date,
-          status: p.Status,
-        })));
-      }
-    } catch (err) {
-      console.error("廠商金流資料載入失敗", err);
-    }
-  };
-
-  const handleSettleVendor = async (vendorId) => {
-    if (!adminId) { alert("找不到管理員登入資訊"); return; }
-    if (!window.confirm("確定要把這個廠商已過鑑賞期的凍結餘額，結算成可提領餘額嗎？")) return;
-
-    setSettlingVendorId(vendorId);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/settle-earnings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ vendor_id: vendorId, Admin_id: adminId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) { alert(data.err || "結算失敗"); return; }
-
-      setSettleableVendors(prev => prev.filter(v => v.vendorId !== vendorId));
-      alert(`已結算 ${data.settled_count} 筆，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}`);
-      await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
-    } catch (err) {
-      alert("結算失敗，請稍後再試");
-    } finally {
-      setSettlingVendorId(null);
-    }
-  };
-
-  const handleConfirmPayout = async (payoutId, newStatus) => {
-    if (!adminId) return;
-    const confirmMsg = newStatus === 'completed'
-      ? "確定已經完成匯款，把這筆申請標記為完成嗎？"
-      : "確定要標記這筆撥款失敗嗎？金額會退回廠商的可提領餘額。";
-    if (!window.confirm(confirmMsg)) return;
-
-    setConfirmingPayoutId(payoutId);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/payout/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ payout_id: payoutId, status: newStatus, Admin_id: adminId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) { alert(data.err || "處理失敗"); return; }
-
-      setVendorPayouts(prev => prev.filter(p => p.payoutId !== payoutId));
-      await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
-    } catch (err) {
-      alert("處理失敗，請稍後再試");
-    } finally {
-      setConfirmingPayoutId(null);
-    }
-  };
-
-  const handleRunMonthlyPayouts = async () => {
-    if (!adminId) return;
-    if (!window.confirm("確定要立即執行月結撥款嗎？會幫所有有可提領餘額的廠商建立撥款單。")) return;
-
-    setRunningMonthlyPayouts(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/run-monthly-payouts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ Admin_id: adminId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) { alert(data.err || "執行失敗"); return; }
-
-      const skippedCount = data.skipped?.length || 0;
-      alert(`已產生 ${data.payouts_created?.length ?? 0} 筆撥款單，共 NT$ ${data.total_amount?.toLocaleString?.() ?? data.total_amount}` + (skippedCount > 0 ? `，另有 ${skippedCount} 個廠商因故略過` : ''));
-      await Promise.all([fetchVendorFinanceData(), fetchTransactions()]);
-    } catch (err) {
-      alert("執行失敗，請稍後再試");
-    } finally {
-      setRunningMonthlyPayouts(false);
-    }
-  };
-
-  const fetchKocPayouts = async () => {
-    if (!adminId) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/koc/payouts?status=pending&Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setKocPayouts(data.map((p) => ({
-          payoutId: p.Payout_id,
-          kocUserId: p.Koc_user_id,
-          kocName: p.Koc_name,
-          bankDisplay: p.Bank_display,
-          amount: p.Amount,
-          payoutDate: p.Payout_date,
-          status: p.Status,
-        })));
-      }
-    } catch (err) {
-      console.error("KOC 撥款資料載入失敗", err);
-    }
-  };
-
-  const handleConfirmKocPayout = async (payoutId, newStatus) => {
-    if (!adminId) return;
-    const confirmMsg = newStatus === 'completed'
-      ? "確定已經完成匯款，把這筆申請標記為完成嗎？"
-      : "確定要標記這筆撥款失敗嗎？金額會退回 KOC 的可提領餘額。";
-    if (!window.confirm(confirmMsg)) return;
-
-    setConfirmingKocPayoutId(payoutId);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/koc/payout/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ payout_id: payoutId, status: newStatus, Admin_id: adminId }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) { alert(data.err || "處理失敗"); return; }
-
-      setKocPayouts(prev => prev.filter(p => p.payoutId !== payoutId));
-      await fetchTransactions();
-    } catch {
-      alert("處理失敗，請稍後再試");
-    } finally {
-      setConfirmingKocPayoutId(null);
-    }
-  };
-
-  const handleExportPayouts = async (exportType) => {
-    if (!adminId) return;
-    setExportingPayouts(exportType);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/platform/payouts/export?type=${exportType}&status=pending&Admin_id=${adminId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        alert(errData?.err || "匯出失敗"); return;
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `payout_transfers_${exportType}_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("匯出失敗");
-    } finally {
-      setExportingPayouts(null);
-    }
-  };
-
-  const RETURN_REASON_LABELS = {
-    defective: '商品瑕疵', mismatched: '商品與描述不符', wrong_size: '尺寸不合',
-    no_longer_needed: '不符合需求', other: '其他',
-  };
-
-  const fetchReturnDisputes = async () => {
-    if (!adminId) return;
-    try {
-      setLoadingDisputes(true);
-      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes?Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.err || "退貨爭議載入失敗");
-      setReturnDisputes(Array.isArray(data) ? data.map(item => ({
-        returnId: item.Return_id, orderId: item.Order_id, userId: item.User_id,
-        reason: item.Reason, description: item.Description || "", requestedAmount: Number(item.Requested_amount || 0),
-        vendorNote: item.Vendor_note || "", requestedAt: item.Requested_at,
-      })) : []);
-    } catch (err) { alert(err.message); } finally { setLoadingDisputes(false); }
-  };
-
-  const handleResolveReturnDispute = async (item, decision) => {
-    const adminNote = (returnNotes[item.returnId] || "").trim();
-    if (!adminNote) { alert("請先填寫平台判定說明"); return; }
-    const isApprove = decision === "approve_refund";
-    if (!window.confirm(isApprove ? `確定核准退款 NT$ ${item.requestedAmount.toLocaleString()}？` : "確定維持廠商拒絕？")) return;
-
-    try {
-      setResolvingReturnId(item.returnId);
-      const res = await fetch(`${API_BASE_URL}/api/platform/returns/disputes/resolve`, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ Admin_id: adminId, Return_id: item.returnId, Decision: decision, Admin_note: adminNote }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) throw new Error(data?.err || "判定失敗");
-
-      setReturnDisputes(prev => prev.filter(row => row.returnId !== item.returnId));
-      setReturnNotes(prev => { const next = { ...prev }; delete next[item.returnId]; return next; });
-      alert(isApprove ? "已核准退款" : "已維持拒絕");
-      await Promise.all([fetchReturnDisputes(), fetchTransactions(), fetchEarningsData(), fetchVendorFinanceData()]);
-    } catch (err) { alert(err.message); } finally { setResolvingReturnId(null); }
-  };
-
-  const fetchTransactions = async () => {
-    try {
-      const txRes = await fetch(`${API_BASE_URL}/api/platform/transactions?Wallet_type=vendor&Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
-      const txData = await txRes.json();
-      if (Array.isArray(txData)) {
-        setTransactions(txData.map((t) => ({
-          transactionId: t.Transaction_ID, walletType: t.Wallet_type, ownerName: t.Owner_name, type: t.Type,
-          amount: t.Amount, grossAmount: t.Gross_amount, feeAmount: t.Fee_amount, referenceId: t.Reference_id || "-",
-          date: t.created_at ? new Date(t.created_at).toLocaleDateString("zh-TW") : "-",
-        })));
-      }
-    } catch (err) { console.error("交易紀錄載入失敗", err); }
-  };
+  }, [adminId])
 
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const payRes = await fetch(`${API_BASE_URL}/api/platform/payments?Admin_id=${adminId}`, { headers: { Authorization: `Bearer ${token}` } });
-        const payData = await payRes.json();
-        if (Array.isArray(payData)) {
-          setPayments(payData.map((p) => ({
-            orderId: p.Order_id, userId: p.User_id, amount: parseFloat(p.total_amount) || 0,
-            paymentMethod: p.payment_method || "-", paymentStatus: p.payment_status, orderStatus: p.order_status,
-            date: p.created_at ? new Date(p.created_at).toLocaleString("zh-TW") : "-",
-          })));
-        }
-        await fetchTransactions(); await fetchEarningsData(); await fetchVendorFinanceData(); await fetchReturnDisputes(); await fetchVendorInvoices(); await fetchKocPayouts();
-      } catch (err) { console.error("財務資料載入失敗", err); } finally { setLoading(false); }
-    };
-    fetchAll();
-  }, [adminId, token]);
+    loadAll(true)
+  }, [loadAll])
 
-  const adminRole = localStorage.getItem("admin_role");
-  const normalizedAdminRole = (adminRole || '').trim().toLowerCase().replace(/\s+/g, '_');
-  if (adminRole && !['super_admin', 'finance'].includes(normalizedAdminRole)) {
+  const receivableSummary = useMemo(() => {
+    return receivables.reduce(
+      (acc, item) => {
+        const due = Number(item.Amount_due || 0)
+        const paid = Number(item.Amount_paid || 0)
+        const outstanding = Number(item.Outstanding_amount || 0)
+
+        acc.totalDue += due
+        acc.totalPaid += paid
+        acc.outstanding += outstanding
+        if (item.Status === 'eligible') acc.eligible += outstanding
+        if (item.Status === 'payout_pending') acc.processing += outstanding
+        return acc
+      },
+      { totalDue: 0, totalPaid: 0, outstanding: 0, eligible: 0, processing: 0 }
+    )
+  }, [receivables])
+
+  const settlementSummary = useMemo(() => {
+    return settlements.reduce(
+      (acc, item) => {
+        acc.amountDue += Number(item.Amount_due || 0)
+        acc.amountPaid += Number(item.Amount_paid || 0)
+        acc.outstanding += Number(item.Outstanding_amount || 0)
+        if (item.Status === 'overdue') acc.overdue += Number(item.Outstanding_amount || 0)
+        return acc
+      },
+      { amountDue: 0, amountPaid: 0, outstanding: 0, overdue: 0 }
+    )
+  }, [settlements])
+
+  const pendingPayoutCount = useMemo(
+    () => receivables.reduce((count, r) => count + (r.Payouts || []).filter((p) => p.Status === 'pending').length, 0),
+    [receivables]
+  )
+
+  const handleCreateGoodsPayout = async (receivable) => {
+    if (!window.confirm(`確定要建立 ${receivable.Vendor_name} 的貨款撥款 ${money(receivable.Outstanding_amount)} 嗎？`)) return
+
+    const key = `create-receivable-${receivable.Receivable_id}`
+    setProcessingKey(key)
+    try {
+      const res = await createVendorReceivablePayout({
+        Admin_id: adminId,
+        receivable_id: receivable.Receivable_id,
+        amount: receivable.Outstanding_amount,
+        payout_method: 'bank_transfer',
+      })
+      if (res.data?.success === false) throw new Error(res.data.err || '建立撥款失敗')
+      alert(`已建立貨款撥款 #${res.data.payout_id}，請完成實際匯款後再確認。`)
+      await loadAll(false)
+    } catch (err) {
+      alert(err.response?.data?.err || err.message || '建立貨款撥款失敗')
+    } finally {
+      setProcessingKey('')
+    }
+  }
+
+  const handleConfirmGoodsPayout = async (payout, newStatus) => {
+    const success = newStatus === 'completed'
+    if (!window.confirm(success ? '確定這筆貨款已實際匯給廠商嗎？' : '確定要把這筆貨款撥款標記為失敗嗎？')) return
+
+    const reference = success ? window.prompt('可輸入銀行交易編號／匯款備註（可留空）', '') : ''
+    const key = `confirm-goods-${payout.Payout_id}`
+    setProcessingKey(key)
+
+    try {
+      const res = await confirmVendorReceivablePayout({
+        Admin_id: adminId,
+        payout_id: payout.Payout_id,
+        status: newStatus,
+        transaction_reference: reference || '',
+      })
+      if (res.data?.success === false) throw new Error(res.data.err || '處理失敗')
+      await loadAll(false)
+    } catch (err) {
+      alert(err.response?.data?.err || err.message || '貨款撥款處理失敗')
+    } finally {
+      setProcessingKey('')
+    }
+  }
+
+  const handleGenerateSettlement = async (vendor) => {
+    if (!window.confirm(`確定要為 ${vendor.Vendor_name} 產生 15% 平台服務費結算單嗎？\n可結算服務費：${money(vendor.Eligible_amount)}`)) return
+
+    const key = `generate-${vendor.Vendor_id}`
+    setProcessingKey(key)
+    try {
+      const res = await generateVendorSettlement({
+        Admin_id: adminId,
+        vendor_id: vendor.Vendor_id,
+      })
+      if (res.data?.success === false) throw new Error(res.data.err || '產生結算單失敗')
+      alert(`已產生結算單，應繳服務費共 ${money(res.data.total_amount)}。`)
+      await loadAll(false)
+    } catch (err) {
+      alert(err.response?.data?.err || err.message || '產生結算單失敗')
+    } finally {
+      setProcessingKey('')
+    }
+  }
+
+  const handleConfirmSettlement = async (settlement) => {
+    if (!window.confirm(`確定平台已收到 ${settlement.Vendor_name} 的服務費 ${money(settlement.Outstanding_amount)} 嗎？\n確認後，對應 KOC 分潤才會由 pending 轉為可提領。`)) return
+
+    const referenceNo = window.prompt('可輸入轉帳交易編號／收款備註（可留空）', '')
+    const key = `settlement-${settlement.Settlement_id}`
+    setProcessingKey(key)
+    try {
+      const res = await confirmVendorSettlementPayment({
+        Admin_id: adminId,
+        settlement_id: settlement.Settlement_id,
+        status: 'completed',
+        amount: settlement.Outstanding_amount,
+        payment_method: 'bank_transfer',
+        reference_no: referenceNo || '',
+      })
+      if (res.data?.success === false) throw new Error(res.data.err || '確認服務費失敗')
+      alert('已確認收到平台服務費。')
+      await loadAll(false)
+    } catch (err) {
+      alert(err.response?.data?.err || err.message || '確認廠商服務費失敗')
+    } finally {
+      setProcessingKey('')
+    }
+  }
+
+  const handleConfirmKocPayout = async (payout, newStatus) => {
+    const isComplete = newStatus === 'completed'
+    if (!window.confirm(isComplete ? '確定已完成這筆 KOC 匯款嗎？' : '確定要標記這筆 KOC 撥款失敗嗎？金額會退回可提領餘額。')) return
+
+    const key = `koc-${payout.Payout_id}`
+    setProcessingKey(key)
+    try {
+      const res = await confirmAdminKocPayout({
+        Admin_id: adminId,
+        payout_id: payout.Payout_id,
+        status: newStatus,
+      })
+      if (res.data?.success === false) throw new Error(res.data.err || '處理失敗')
+      await loadAll(false)
+    } catch (err) {
+      alert(err.response?.data?.err || err.message || 'KOC 撥款處理失敗')
+    } finally {
+      setProcessingKey('')
+    }
+  }
+
+  const handleExportKoc = async () => {
+    try {
+      const res = await exportKocPayoutTransfers({
+        Admin_id: adminId,
+        status: 'pending',
+      })
+      const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `koc_payouts_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(err.response?.data?.err || '匯出 KOC 撥款 CSV 失敗')
+    }
+  }
+
+  const tabs = [
+    { key: 'goods', label: '廠商貨款', icon: ArrowDownToLine },
+    { key: 'settlement', label: '服務費', icon: ArrowUpFromLine },
+    { key: 'koc', label: 'KOC 撥款', icon: Banknote },
+    { key: 'invoice', label: '服務費發票', icon: FileText },
+  ]
+
+  if (loading) {
     return (
-      <div className="max-w-2xl mx-auto py-24 text-center space-y-4">
-        <ShieldAlert size={40} className="mx-auto text-[#C8522A]" />
-        <h2 className="text-xl font-serif font-black text-[#1A1A18]">您沒有權限檢視此頁面</h2>
-        <p className="text-[#8C8880] font-medium">財務金流頁面僅開放給指定角色。</p>
+      <div className="min-h-[520px] flex flex-col items-center justify-center gap-3 text-[#8C8880]">
+        <Loader2 size={28} className="animate-spin text-[#C8522A]" />
+        <p className="text-sm font-bold">財務資料載入中...</p>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-10">
-
-      {/* 🟢 頂部標題 */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-4 gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-black text-[#1A1A18] tracking-tight">訂單與財務金流</h1>
-          <p className="text-[#8C8880] mt-1.5 md:mt-2 text-xs md:text-sm font-medium">檢視全站訂單、KOC 撥款進度與廠商錢包交易紀錄。</p>
+          <h1 className="text-xl sm:text-2xl font-serif font-black text-[#1A1A18]">平台財務管理</h1>
+          <p className="mt-2 max-w-3xl text-[11px] sm:text-xs leading-relaxed text-[#8C8880]">
+            廠商貨款與平台服務費採兩筆獨立金流：ShareBuy 先將貨款全額撥給廠商，廠商再依有效成交額支付 15% 平台服務費。KOC 5% 分潤由 ShareBuy 從平台收入中負擔。
+          </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880]" />
-            <input type="text" placeholder="搜尋訂單或交易編號..." className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-xs md:text-sm outline-none focus:border-[#C8522A] shadow-sm" />
-          </div>
-          <div className="flex gap-2 sm:gap-3">
-            <button className="flex items-center justify-center w-10 h-10 shrink-0 bg-white border border-[#E2DDD4] rounded-xl text-[#1A1A18] hover:bg-[#F8F9FA] transition-all shadow-sm">
-              <Filter size={16} />
-            </button>
-            <button
-              onClick={() => handleExportPayouts('vendor')}
-              disabled={!!exportingPayouts}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 h-10 bg-[#1A1A18] text-[#F5F0E8] rounded-xl text-xs md:text-sm font-bold hover:bg-[#C8522A] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
-            >
-              <Download size={14} className="sm:w-4 sm:h-4" />
-              {exportingPayouts === 'vendor' ? "匯出中..." : "匯出廠商"}
-            </button>
-            <button
-              onClick={() => handleExportPayouts('koc')}
-              disabled={!!exportingPayouts}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 h-10 bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-xl text-xs md:text-sm font-bold hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-50 whitespace-nowrap"
-            >
-              <Download size={14} className="sm:w-4 sm:h-4" />
-              {exportingPayouts === 'koc' ? "匯出中..." : "匯出KOC"}
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* 🟢 頁籤切換區 (橫向捲動適應手機版) */}
-      <div className="flex gap-2 sm:gap-4 border-b border-[#E2DDD4] pb-px overflow-x-auto custom-scrollbar">
         <button
-          onClick={() => setActiveTab('payments')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'payments' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
+          type="button"
+          onClick={() => loadAll(false)}
+          disabled={refreshing}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E2DDD4] bg-white px-4 py-2.5 text-xs font-bold text-[#1A1A18] hover:bg-[#F5F0E8] disabled:opacity-50"
         >
-          <CreditCard size={16} className="sm:w-[18px] sm:h-[18px]" /> 消費者訂單
-        </button>
-        <button
-          onClick={() => setActiveTab('earnings')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'earnings' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
-        >
-          <DollarSign size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 收益
-        </button>
-        <button
-          onClick={() => { setActiveTab('koc_payouts'); fetchKocPayouts(); }}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'koc_payouts' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
-        >
-          <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 撥款
-          {kocPayouts.length > 0 && (
-            <span className="ml-1 min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#C8522A] text-white text-[10px]">
-              {kocPayouts.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('transactions')}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'transactions' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
-        >
-          <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" /> 廠商交易
-        </button>
-        <button
-          onClick={() => { setActiveTab('returns'); fetchReturnDisputes(); }}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'returns' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
-        >
-          <ShieldAlert size={16} className="sm:w-[18px] sm:h-[18px]" /> 退貨爭議
-          {returnDisputes.length > 0 && (
-            <span className="ml-1 min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#C8522A] text-white text-[10px]">
-              {returnDisputes.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => { setActiveTab('invoices'); fetchVendorInvoices(); }}
-          className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap ${
-            activeTab === 'invoices' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
-          }`}
-        >
-          <FileText size={16} className="sm:w-[18px] sm:h-[18px]" /> 發票紀錄
+          <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+          重新整理
         </button>
       </div>
 
-      {/* 🟢 主要顯示區塊 */}
-      <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-        {loading ? (
-          <div className="py-20 text-center text-sm text-[#8C8880] font-bold">載入中...</div>
-        ) : (
-          <div>
+      {error && (
+        <div className="flex items-start gap-2 rounded-2xl border border-[#FFD7D2] bg-[#FFF0F0] p-4 text-xs font-bold text-[#D93025]">
+          <AlertCircle size={17} className="shrink-0" />
+          {error}
+        </div>
+      )}
 
-            {/* TAB 1: 訂單與付款 */}
-            {activeTab === 'payments' && (
-              <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
-                <table className="w-full text-left border-collapse whitespace-nowrap">
-                  <thead>
-                    <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">訂單編號 / 時間</th>
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">消費者 ID</th>
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">訂單總金額</th>
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">付款方式</th>
-                      <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">付款狀態</th>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-xs font-bold transition-all ${
+              activeTab === key
+                ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-sm'
+                : 'border border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18]'
+            }`}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'goods' && (
+        <section className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <SummaryCard title="平台應付貨款" value={receivableSummary.outstanding} hint={`${receivables.length} 筆貨款紀錄`} icon={Banknote} dark />
+            <SummaryCard title="目前可撥貨款" value={receivableSummary.eligible} hint="已過退貨風險期且無未解決退貨" icon={CheckCircle2} />
+            <SummaryCard title="撥款處理中" value={receivableSummary.processing} hint={`${pendingPayoutCount} 筆待確認匯款`} icon={Clock3} />
+            <SummaryCard title="累計已撥貨款" value={receivableSummary.totalPaid} hint="Admin 已確認完成匯款" icon={ArrowDownToLine} />
+          </div>
+
+          <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden">
+            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+              <h2 className="text-sm font-black text-[#1A1A18]">平台 → 廠商 貨款</h2>
+              <p className="mt-1 text-[10px] text-[#8C8880]">這裡只處理平台代收後要全額撥給廠商的貨款，不會扣除 15% 服務費。</p>
+            </div>
+
+            {receivables.length === 0 ? (
+              <EmptyState>目前沒有廠商貨款紀錄</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1180px]">
+                  <thead className="border-b border-[#E2DDD4]">
+                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <th className="px-5 py-3">廠商</th>
+                      <th className="px-5 py-3">訂單</th>
+                      <th className="px-5 py-3">應撥貨款</th>
+                      <th className="px-5 py-3">已撥</th>
+                      <th className="px-5 py-3">待撥</th>
+                      <th className="px-5 py-3">收款帳戶</th>
+                      <th className="px-5 py-3">狀態</th>
+                      <th className="px-5 py-3">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2DDD4]">
-                    {payments.length === 0 ? (
-                      <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有付款資料</td></tr>
-                    ) : payments.map((pay, idx) => (
-                      <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                        <td className="px-4 sm:px-6 py-3 sm:py-4">
-                          <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{pay.orderId}</div>
-                          <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">{pay.date}</div>
+                    {receivables.map((item) => {
+                      const pendingPayouts = (item.Payouts || []).filter((p) => p.Status === 'pending')
+                      const canCreate = ['eligible', 'partially_paid', 'adjusted'].includes(item.Status) && Number(item.Outstanding_amount || 0) > 0 && pendingPayouts.length === 0
+
+                      return (
+                        <React.Fragment key={item.Receivable_id}>
+                          <tr className="hover:bg-[#F8F9FA]/70">
+                            <td className="px-5 py-4">
+                              <p className="text-xs font-black text-[#1A1A18]">{item.Vendor_name}</p>
+                              <p className="mt-1 text-[10px] text-[#8C8880]">{item.Vendor_id}</p>
+                            </td>
+                            <td className="px-5 py-4 text-[11px] font-bold text-[#1A1A18]">{shortId(item.Order_id)}</td>
+                            <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">{money(item.Amount_due)}</td>
+                            <td className="px-5 py-4 text-xs font-bold text-[#2F6F45]">{money(item.Amount_paid)}</td>
+                            <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(item.Outstanding_amount)}</td>
+                            <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                              {item.Bank_code ? `${item.Bank_code} ****${item.Bank_account_last4}` : '未設定'}
+                              <div className="mt-1">{item.Bank_account_name || '—'}</div>
+                            </td>
+                            <td className="px-5 py-4"><StatusBadge status={item.Status} /></td>
+                            <td className="px-5 py-4">
+                              {canCreate ? (
+                                <ActionButton
+                                  disabled={processingKey === `create-receivable-${item.Receivable_id}` || !item.Bank_code}
+                                  onClick={() => handleCreateGoodsPayout(item)}
+                                >
+                                  {processingKey === `create-receivable-${item.Receivable_id}` ? '建立中...' : '建立撥款'}
+                                </ActionButton>
+                              ) : item.Status === 'pending' ? (
+                                <span className="text-[10px] text-[#8C8880]">{dateText(item.Eligible_at)} 後可處理</span>
+                              ) : !item.Bank_code && Number(item.Outstanding_amount || 0) > 0 ? (
+                                <span className="text-[10px] font-bold text-[#D93025]">廠商未設銀行帳戶</span>
+                              ) : (
+                                <span className="text-[10px] text-[#8C8880]">—</span>
+                              )}
+                            </td>
+                          </tr>
+
+                          {pendingPayouts.map((payout) => (
+                            <tr key={`payout-${payout.Payout_id}`} className="bg-[#F8F9FA]">
+                              <td className="px-5 py-3 text-[10px] font-bold text-[#8C8880]" colSpan={2}>
+                                撥款 #{payout.Payout_id}
+                              </td>
+                              <td className="px-5 py-3 text-xs font-black text-[#1A1A18]">{money(payout.Amount)}</td>
+                              <td className="px-5 py-3 text-[10px] text-[#8C8880]" colSpan={2}>
+                                建立：{dateText(payout.Created_at)}
+                              </td>
+                              <td className="px-5 py-3 text-[10px] text-[#8C8880]">
+                                {payout.Destination_bank_code} ****{payout.Destination_account_last4}
+                              </td>
+                              <td className="px-5 py-3"><StatusBadge status="payout_pending" /></td>
+                              <td className="px-5 py-3">
+                                <div className="flex gap-2">
+                                  <ActionButton
+                                    disabled={processingKey === `confirm-goods-${payout.Payout_id}`}
+                                    onClick={() => handleConfirmGoodsPayout(payout, 'completed')}
+                                  >
+                                    確認已匯款
+                                  </ActionButton>
+                                  <ActionButton
+                                    danger
+                                    disabled={processingKey === `confirm-goods-${payout.Payout_id}`}
+                                    onClick={() => handleConfirmGoodsPayout(payout, 'failed')}
+                                  >
+                                    匯款失敗
+                                  </ActionButton>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'settlement' && (
+        <section className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <SummaryCard title="廠商尚待繳服務費" value={settlementSummary.outstanding} hint="Vendor → ShareBuy 的 15% 服務費" icon={ReceiptText} dark />
+            <SummaryCard title="累計已收服務費" value={settlementSummary.amountPaid} hint="平台已確認收款" icon={CheckCircle2} />
+            <SummaryCard title="逾期未繳" value={settlementSummary.overdue} hint="需後續追蹤廠商" icon={AlertCircle} />
+            <SummaryCard title="待產生結算服務費" value={settleableVendors.reduce((s, v) => s + Number(v.Eligible_amount || 0), 0)} hint={`${settleableVendors.filter((v) => Number(v.Eligible_count || 0) > 0).length} 個廠商可結算`} icon={Clock3} />
+          </div>
+
+          <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden">
+            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+              <h2 className="text-sm font-black text-[#1A1A18]">可產生服務費結算單</h2>
+              <p className="mt-1 text-[10px] text-[#8C8880]">只會把已過退貨風險期、無未解決退款的貨款納入結算。</p>
+            </div>
+
+            {settleableVendors.filter((v) => Number(v.Eligible_count || 0) > 0).length === 0 ? (
+              <EmptyState>目前沒有可產生結算單的廠商</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px]">
+                  <thead className="border-b border-[#E2DDD4]">
+                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <th className="px-5 py-3">廠商</th>
+                      <th className="px-5 py-3">可結算訂單</th>
+                      <th className="px-5 py-3">有效成交額</th>
+                      <th className="px-5 py-3">15% 服務費</th>
+                      <th className="px-5 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {settleableVendors
+                      .filter((v) => Number(v.Eligible_count || 0) > 0)
+                      .map((vendor) => (
+                        <tr key={vendor.Vendor_id}>
+                          <td className="px-5 py-4">
+                            <p className="text-xs font-black text-[#1A1A18]">{vendor.Vendor_name}</p>
+                            <p className="mt-1 text-[10px] text-[#8C8880]">{vendor.Vendor_id}</p>
+                          </td>
+                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">{vendor.Eligible_count}</td>
+                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">{money(vendor.Eligible_sales)}</td>
+                          <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(vendor.Eligible_amount)}</td>
+                          <td className="px-5 py-4">
+                            <ActionButton
+                              disabled={processingKey === `generate-${vendor.Vendor_id}`}
+                              onClick={() => handleGenerateSettlement(vendor)}
+                            >
+                              {processingKey === `generate-${vendor.Vendor_id}` ? '產生中...' : '產生結算單'}
+                            </ActionButton>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden">
+            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+              <h2 className="text-sm font-black text-[#1A1A18]">平台服務費結算單</h2>
+              <p className="mt-1 text-[10px] text-[#8C8880]">確認平台收到服務費後，系統才會釋放對應 KOC 5% 分潤。</p>
+            </div>
+
+            {settlements.length === 0 ? (
+              <EmptyState>目前沒有平台服務費結算單</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1000px]">
+                  <thead className="border-b border-[#E2DDD4]">
+                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <th className="px-5 py-3">結算單</th>
+                      <th className="px-5 py-3">廠商</th>
+                      <th className="px-5 py-3">有效成交額</th>
+                      <th className="px-5 py-3">應繳</th>
+                      <th className="px-5 py-3">已繳</th>
+                      <th className="px-5 py-3">未繳</th>
+                      <th className="px-5 py-3">到期日</th>
+                      <th className="px-5 py-3">狀態</th>
+                      <th className="px-5 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {settlements.map((item) => (
+                      <tr key={item.Settlement_id}>
+                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">#{item.Settlement_id}</td>
+                        <td className="px-5 py-4">
+                          <p className="text-xs font-black text-[#1A1A18]">{item.Vendor_name}</p>
+                          <p className="mt-1 text-[10px] text-[#8C8880]">{item.Vendor_id}</p>
                         </td>
-                        <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{pay.userId}</td>
-                        <td className="px-4 sm:px-6 py-3 sm:py-4 font-black text-[#1A1A18] text-xs sm:text-sm">NT$ {pay.amount.toLocaleString()}</td>
-                        <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-[#1A1A18]">{pay.paymentMethod}</td>
-                        <td className="px-4 sm:px-6 py-3 sm:py-4">
-                          <span className={`inline-flex items-center gap-1 text-[10px] sm:text-[10px] font-bold px-2 sm:px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                            pay.paymentStatus === 'paid' ? 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20' : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4]'
-                          }`}>
-                            {pay.paymentStatus === 'paid' ? <CheckCircle size={12} /> : <Clock size={12} />}
-                            {pay.paymentStatus === 'paid' ? '已付款' : '未付款'}
+                        <td className="px-5 py-4 text-xs font-bold">{money(item.Gross_sales)}</td>
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(item.Amount_due)}</td>
+                        <td className="px-5 py-4 text-xs font-bold text-[#2F6F45]">{money(item.Amount_paid)}</td>
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(item.Outstanding_amount)}</td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">{dateText(item.Due_date)}</td>
+                        <td className="px-5 py-4"><StatusBadge type="settlement" status={item.Status} /></td>
+                        <td className="px-5 py-4">
+                          {item.Status !== 'paid' && Number(item.Outstanding_amount || 0) > 0 ? (
+                            <ActionButton
+                              disabled={processingKey === `settlement-${item.Settlement_id}`}
+                              onClick={() => handleConfirmSettlement(item)}
+                            >
+                              確認收到款項
+                            </ActionButton>
+                          ) : (
+                            <span className="text-[10px] font-bold text-[#2F6F45]">已完成</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'koc' && (
+        <section className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5">
+            <div>
+              <h2 className="text-sm font-black text-[#1A1A18]">KOC 分潤撥款</h2>
+              <p className="mt-1 text-[10px] leading-relaxed text-[#8C8880]"> 15% 服務費確認入帳後，對應 KOC Earnings 才會變成可提領。這裡只處理 KOC 已提出的撥款申請。</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportKoc}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1A18] px-4 py-2.5 text-xs font-bold text-[#F5F0E8] hover:bg-[#C8522A]"
+            >
+              <Download size={14} />
+              匯出待撥 CSV
+            </button>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden">
+            {kocPayouts.length === 0 ? (
+              <EmptyState>目前沒有待處理的 KOC 撥款申請</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[850px]">
+                  <thead className="border-b border-[#E2DDD4] bg-[#F8F9FA]">
+                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <th className="px-5 py-3">撥款單</th>
+                      <th className="px-5 py-3">KOC</th>
+                      <th className="px-5 py-3">銀行帳戶</th>
+                      <th className="px-5 py-3">金額</th>
+                      <th className="px-5 py-3">申請時間</th>
+                      <th className="px-5 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {kocPayouts.map((payout) => (
+                      <tr key={payout.Payout_id}>
+                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">#{payout.Payout_id}</td>
+                        <td className="px-5 py-4">
+                          <p className="text-xs font-black text-[#1A1A18]">{payout.Koc_name}</p>
+                          <p className="mt-1 text-[10px] text-[#8C8880]">{payout.Koc_user_id}</p>
+                        </td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">{payout.Bank_display}</td>
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(payout.Amount)}</td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">{dateText(payout.Payout_date)}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex gap-2">
+                            <ActionButton disabled={processingKey === `koc-${payout.Payout_id}`} onClick={() => handleConfirmKocPayout(payout, 'completed')}>
+                              已完成匯款
+                            </ActionButton>
+                            <ActionButton danger disabled={processingKey === `koc-${payout.Payout_id}`} onClick={() => handleConfirmKocPayout(payout, 'failed')}>
+                              匯款失敗
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'invoice' && (
+        <section className="space-y-5">
+          <div className="rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-4 text-[10px] sm:text-xs leading-relaxed text-[#8C8880]">
+            <p className="font-bold text-[#1A1A18]">服務費發票</p>
+            <p className="mt-1">這裡的發票是 ShareBuy 就廠商支付的 15% 平台服務費開立的 B2B 發票，不是消費者購買商品的銷售發票。</p>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden">
+            {invoices.length === 0 ? (
+              <EmptyState>目前沒有平台服務費發票紀錄</EmptyState>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px]">
+                  <thead className="border-b border-[#E2DDD4] bg-[#F8F9FA]">
+                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <th className="px-5 py-3">發票紀錄</th>
+                      <th className="px-5 py-3">廠商</th>
+                      <th className="px-5 py-3">結算單</th>
+                      <th className="px-5 py-3">服務費</th>
+                      <th className="px-5 py-3">稅額</th>
+                      <th className="px-5 py-3">發票總額</th>
+                      <th className="px-5 py-3">發票號碼</th>
+                      <th className="px-5 py-3">狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E2DDD4]">
+                    {invoices.map((invoice) => (
+                      <tr key={invoice.invoice_id}>
+                        <td className="px-5 py-4">
+                          <p className="text-xs font-black text-[#1A1A18]">#{invoice.invoice_id}</p>
+                          <p className="mt-1 text-[10px] text-[#8C8880]">{dateText(invoice.created_at)}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="text-xs font-black text-[#1A1A18]">{invoice.vendor_name}</p>
+                          <p className="mt-1 text-[10px] text-[#8C8880]">{invoice.vendor_id}</p>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-bold">{invoice.settlement_id ? `#${invoice.settlement_id}` : '—'}</td>
+                        <td className="px-5 py-4 text-xs font-bold">{money(invoice.service_fee)}</td>
+                        <td className="px-5 py-4 text-xs font-bold">{money(invoice.tax_amount)}</td>
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">{money(invoice.total_amount)}</td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">{invoice.invoice_number || '尚未開立'}</td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${invoice.status === 'issued' ? 'bg-[#EEF7F0] text-[#2F6F45]' : invoice.status === 'failed' ? 'bg-[#FFF0F0] text-[#D93025]' : 'bg-[#F8F9FA] text-[#8C8880]'}`}>
+                            {invoice.status === 'issued' ? '已開立' : invoice.status === 'failed' ? '開立失敗' : '待開立'}
                           </span>
                         </td>
                       </tr>
@@ -561,507 +756,9 @@ export default function AdminFinance() {
                 </table>
               </div>
             )}
-
-            {/* TAB 2: KOC 收益與撥款 */}
-            {activeTab === 'earnings' && (
-              <>
-                {settleableCampaigns.length > 0 && (
-                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
-                      <Landmark size={16} /> 待結算活動
-                    </div>
-                    {settleableCampaigns.map((c) => (
-                      <div key={c.campaignId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                        <div>
-                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{c.campaignName}</div>
-                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1 leading-relaxed">
-                            {c.vendorName} <br className="sm:hidden" />
-                            <span className="hidden sm:inline"> ・ </span>{c.pendingCount} 筆可提領分潤 ・ NT$ {c.pendingAmount?.toLocaleString?.() ?? c.pendingAmount}
-                          </div>
-                          {!c.isEligible && (
-                            <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-1">
-                              優惠碼效期至 {new Date(c.eligibleAt).toLocaleDateString("zh-TW")} 才能結算
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleSettle(c.campaignId)}
-                          disabled={!c.isEligible || settlingId === c.campaignId}
-                          className="w-full md:w-auto shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                        >
-                          {settlingId === c.campaignId ? '結算中...' : '結算分潤'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
-                  <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead>
-                      <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">收益編號 / 任務 ID</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">KOC</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">撥款日期</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">收益狀態</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E2DDD4]">
-                      {earnings.length === 0 ? (
-                        <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有收益資料</td></tr>
-                      ) : earnings.map((earn, idx) => (
-                        <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                          <td className="px-4 sm:px-6 py-3 sm:py-4">
-                            <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{earn.earningId}</div>
-                            <div className="text-[10px] sm:text-xs font-bold text-[#B89B6A] mt-0.5 sm:mt-1">{earn.kocMissionId}</div>
-                          </td>
-                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{earn.influencerId}</td>
-                          <td className="px-4 sm:px-6 py-3 sm:py-4 font-black text-[#1A1A18] text-xs sm:text-sm">NT$ {earn.amount?.toLocaleString()}</td>
-                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-[#1A1A18]">{earn.payoutDate || '-'}</td>
-                          <td className="px-4 sm:px-6 py-3 sm:py-4">
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 sm:px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                              earn.status === '已撥款' ? 'bg-white border-[#E2DDD4] text-[#1A1A18]' : 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/20'
-                            }`}>
-                              {earn.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {/* TAB: KOC 撥款 */}
-            {activeTab === 'koc_payouts' && (
-              <>
-                <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18]">
-                      <Download size={16} /> 匯出待撥款 CSV
-                    </div>
-                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                      財務拿去對照銀行批次匯款作業用。
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleExportPayouts('koc')}
-                    disabled={!!exportingPayouts}
-                    className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                  >
-                    <Download size={16} />
-                    {exportingPayouts === 'koc' ? '匯出中...' : '匯出 CSV'}
-                  </button>
-                </div>
-
-                {kocPayouts.length === 0 ? (
-                  <div className="py-16 text-center text-xs sm:text-sm font-bold text-[#8C8880]">目前沒有待處理的 KOC 撥款申請</div>
-                ) : (
-                  <div className="p-4 sm:p-6 space-y-3">
-                    {kocPayouts.map((p) => (
-                      <div key={p.payoutId} className="flex flex-col gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                          <div>
-                            <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
-                              {p.kocName}（{p.kocUserId}） ・ 實付 NT$ {p.amount?.toLocaleString?.() ?? p.amount}
-                            </div>
-                            <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                              匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
-                            </div>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-2 sm:shrink-0">
-                            <button
-                              onClick={() => handleConfirmKocPayout(p.payoutId, 'failed')}
-                              disabled={confirmingKocPayoutId === p.payoutId}
-                              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:text-[#C8522A] hover:border-[#C8522A] transition-all disabled:opacity-40"
-                            >
-                              <XCircle size={14} /> 匯款失敗
-                            </button>
-                            <button
-                              onClick={() => handleConfirmKocPayout(p.payoutId, 'completed')}
-                              disabled={confirmingKocPayoutId === p.payoutId}
-                              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                            >
-                              <CheckCircle size={14} />
-                              {confirmingKocPayoutId === p.payoutId ? '處理中...' : '標記完成'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* TAB 3: 廠商交易與錢包 */}
-            {activeTab === 'transactions' && (
-              <>
-                {settleableVendors.length > 0 && (
-                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] space-y-3">
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
-                      <Landmark size={16} /> 待結算廠商
-                    </div>
-                    {settleableVendors.map((v) => (
-                      <div key={v.vendorId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                        <div>
-                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{v.vendorName}</div>
-                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1 leading-relaxed">
-                            可結算 {v.eligibleCount} 筆 ・ NT$ {v.eligibleAmount?.toLocaleString?.() ?? v.eligibleAmount}
-                            {v.notYetEligibleCount > 0 && (
-                              <span className="block sm:inline sm:ml-2 text-[#B89B6A]">
-                                （另有 {v.notYetEligibleCount} 筆共 NT$ {v.notYetEligibleAmount?.toLocaleString?.() ?? v.notYetEligibleAmount} 鑑賞期內）
-                              </span>
-                            )}
-                          </div>
-                          {v.eligibleAmount === 0 && v.earliestEligibleAt && (
-                            <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-1">
-                              最快 {new Date(v.earliestEligibleAt).toLocaleDateString("zh-TW")} 才有款項可結算
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => handleSettleVendor(v.vendorId)}
-                          disabled={v.eligibleAmount === 0 || settlingVendorId === v.vendorId}
-                          className="w-full md:w-auto shrink-0 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                        >
-                          {settlingVendorId === v.vendorId ? '結算中...' : '結算'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#F8F9FA] flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18]">
-                      <PlayCircle size={16} /> 月結撥款
-                    </div>
-                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                      正常由排程自動於每月固定日期執行；給忘記設排程或需要補跑時手動觸發。
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleRunMonthlyPayouts}
-                    disabled={runningMonthlyPayouts}
-                    className="w-full md:w-auto shrink-0 flex items-center justify-center gap-2 bg-[#1A1A18] text-[#F5F0E8] px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                  >
-                    <PlayCircle size={16} />
-                    {runningMonthlyPayouts ? '執行中...' : '立即執行月結撥款'}
-                  </button>
-                </div>
-
-                {vendorPayouts.length > 0 && (
-                  <div className="p-4 sm:p-6 border-b border-[#E2DDD4] bg-[#FDF0ED]/40 space-y-3">
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1A1A18] mb-1">
-                      <Wallet size={16} /> 待處理撥款（本期月結批次）
-                    </div>
-                    {vendorPayouts.map((p) => (
-                      <div key={p.payoutId} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                        <div>
-                          <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
-                            {p.vendorName} ・ NT$ {p.amount?.toLocaleString?.() ?? p.amount}
-                          </div>
-                          <div className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-1">
-                            匯款帳戶：{p.bankDisplay} ・ 撥款日 {p.payoutDate}
-                          </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2 sm:shrink-0">
-                          <button
-                            onClick={() => handleConfirmPayout(p.payoutId, 'failed')}
-                            disabled={confirmingPayoutId === p.payoutId}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-white border border-[#E2DDD4] text-[#8C8880] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:text-[#C8522A] hover:border-[#C8522A] transition-all disabled:opacity-40"
-                          >
-                            <XCircle size={14} /> 匯款失敗
-                          </button>
-                          <button
-                            onClick={() => handleConfirmPayout(p.payoutId, 'completed')}
-                            disabled={confirmingPayoutId === p.payoutId}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-40"
-                          >
-                            <CheckCircle size={14} />
-                            {confirmingPayoutId === p.payoutId ? '處理中...' : '標記完成'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
-                  <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead>
-                      <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易編號 / 廠商</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易類型</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易金額</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">參照編號</th>
-                        <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">交易日期</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#E2DDD4]">
-                      {transactions.length === 0 ? (
-                        <tr><td colSpan={5} className="py-12 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有交易紀錄</td></tr>
-                      ) : transactions.map((tx, idx) => {
-                        const isOutflow = tx.type === 'withdraw' || tx.type === 'return_deduction';
-                        const displayAmount = Math.abs(Number(tx.amount || 0));
-                        return (
-                          <tr key={idx} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{tx.transactionId}</div>
-                              <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">{tx.ownerName}</div>
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <span className="text-[10px] sm:text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] px-2 py-1 rounded-md">
-                                {tx.type}
-                              </span>
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <div className={`font-black text-xs sm:text-sm flex items-center gap-1 ${isOutflow ? 'text-[#C8522A]' : 'text-[#B89B6A]'}`}>
-                                {isOutflow ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-                                {isOutflow ? '-' : '+'}{displayAmount.toLocaleString()}
-                              </div>
-                              {tx.grossAmount != null && (
-                                <div className="text-[9px] sm:text-[10px] text-[#8C8880] mt-0.5 sm:mt-1">
-                                  訂單 NT$ {tx.grossAmount?.toLocaleString()} － 手續費 NT$ {tx.feeAmount?.toLocaleString()}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#8C8880]">{tx.referenceId}</td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-medium text-[#1A1A18]">{tx.date}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {/* TAB 4: 退貨爭議 */}
-            {activeTab === 'returns' && (
-              <div className="p-4 sm:p-6 bg-[#F8F9FA]">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 sm:mb-6">
-                  <div>
-                    <h2 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18]">
-                      退貨爭議處理
-                    </h2>
-                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
-                      顯示廠商拒絕後，由消費者提出爭議、等待平台判定的案件。
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={fetchReturnDisputes}
-                    disabled={loadingDisputes}
-                    className="w-full md:w-auto px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
-                  >
-                    {loadingDisputes ? '重新整理中...' : '重新整理'}
-                  </button>
-                </div>
-
-                {loadingDisputes ? (
-                  <div className="py-20 text-center text-xs sm:text-sm text-[#8C8880] font-bold">
-                    退貨爭議載入中...
-                  </div>
-                ) : returnDisputes.length === 0 ? (
-                  <div className="py-20 text-center">
-                    <CheckCircle size={34} className="mx-auto text-green-600 mb-3" />
-                    <div className="font-bold text-sm text-[#1A1A18]">
-                      目前沒有待處理的退貨爭議
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-[#8C8880] mt-2">
-                      消費者提出爭議後，案件會顯示在這裡。
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {returnDisputes.map(item => (
-                      <div key={item.returnId} className="rounded-2xl sm:rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden shadow-sm">
-                        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-                          <div>
-                            <div className="text-[10px] sm:text-xs text-[#8C8880] font-bold">訂單編號</div>
-                            <div className="mt-0.5 sm:mt-1 font-mono text-xs sm:text-sm font-black text-[#1A1A18] break-all">
-                              {item.orderId}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-full bg-[#FDF0ED] text-[#C8522A] text-[10px] sm:text-xs font-bold">
-                              爭議處理中
-                            </span>
-                            <span className="px-2.5 py-1 sm:py-1.5 rounded-md sm:rounded-full bg-[#F5F0E8] text-[#1A1A18] text-[10px] sm:text-xs font-black">
-                              NT$ {item.requestedAmount.toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <div>
-                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者</div>
-                              <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">{item.userId || '—'}</div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者退貨原因</div>
-                              <div className="rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18]">
-                                {RETURN_REASON_LABELS[item.reason] || item.reason || '—'}
-                              </div>
-                            </div>
-                            {item.description && (
-                              <div>
-                                <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">消費者說明／爭議補充</div>
-                                <div className="rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm leading-relaxed text-[#1A1A18] whitespace-pre-line">
-                                  {item.description}
-                                </div>
-                              </div>
-                            )}
-                            <div>
-                              <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">廠商拒絕理由</div>
-                              <div className="rounded-xl bg-[#FFF8E7] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm leading-relaxed text-[#9A6700] whitespace-pre-line">
-                                {item.vendorNote || '廠商未留下拒絕理由'}
-                              </div>
-                            </div>
-                            <div className="text-[10px] sm:text-xs text-[#8C8880]">
-                              申請時間：{item.requestedAt ? new Date(item.requestedAt).toLocaleString('zh-TW') : '—'}
-                            </div>
-                          </div>
-
-                          <div className="border-t border-[#E2DDD4] lg:border-t-0 pt-4 lg:pt-0">
-                            <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-2">
-                              平台判定說明 <span className="text-[#C8522A] ml-1">*</span>
-                            </div>
-                            <textarea
-                              rows={5}
-                              value={returnNotes[item.returnId] || ''}
-                              onChange={event => setReturnNotes(prev => ({ ...prev, [item.returnId]: event.target.value }))}
-                              placeholder="請填寫平台判定依據，例如：經確認此商品不屬於排除七日解除權之商品，因此核准退款。"
-                              className="w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm outline-none focus:border-[#C8522A]"
-                            />
-                            <div className="mt-2 sm:mt-3 rounded-xl bg-[#F5F0E8] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs leading-relaxed text-[#8C8880]">
-                              平台應依訂單資料、消費者說明與廠商拒絕理由進行判定。
-                            </div>
-                            <div className="mt-4 sm:mt-5 flex gap-2.5 sm:gap-3">
-                              <button
-                                type="button"
-                                onClick={() => handleResolveReturnDispute(item, 'reject')}
-                                disabled={resolvingReturnId === item.returnId || !(returnNotes[item.returnId] || '').trim()}
-                                className="flex-1 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#C8522A] hover:text-[#C8522A] transition-all disabled:opacity-40 shadow-sm"
-                              >
-                                {resolvingReturnId === item.returnId ? '處理中...' : '維持拒絕'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleResolveReturnDispute(item, 'approve_refund')}
-                                disabled={resolvingReturnId === item.returnId || !(returnNotes[item.returnId] || '').trim()}
-                                className="flex-1 px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-full bg-[#1A1A18] text-[#F5F0E8] text-xs sm:text-sm font-bold hover:bg-[#C8522A] transition-all disabled:opacity-40 shadow-md"
-                              >
-                                {resolvingReturnId === item.returnId ? '處理中...' : '核准退款'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 5: 發票紀錄 */}
-            {activeTab === 'invoices' && (
-              <div>
-                <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">廠商發票紀錄</h2>
-                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">檢視平台開立給廠商的 B2B 服務費發票。</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={fetchVendorInvoices}
-                    disabled={loadingInvoices}
-                    className="w-full md:w-auto px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full border border-[#E2DDD4] bg-white text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-all disabled:opacity-50"
-                  >
-                    {loadingInvoices ? '重新整理中...' : '重新整理'}
-                  </button>
-                </div>
-
-                {loadingInvoices ? (
-                  <div className="py-20 text-center text-xs sm:text-sm text-[#8C8880] font-bold">發票紀錄載入中...</div>
-                ) : (
-                  <div className="overflow-x-auto custom-scrollbar pb-2 md:pb-0">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
-                      <thead>
-                        <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">廠商 / 紀錄編號</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">結算金額</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">服務費</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">稅額</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票總額</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票號碼</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">狀態</th>
-                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">建立時間</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#E2DDD4]">
-                        {vendorInvoices.length === 0 ? (
-                          <tr><td colSpan={8} className="py-16 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有發票紀錄</td></tr>
-                        ) : vendorInvoices.map((invoice) => (
-                          <tr key={invoice.invoice_id} className="hover:bg-[#FDF0ED]/30 transition-colors">
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{invoice.vendor_name || '—'}</div>
-                              <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1">#{invoice.invoice_id}</div>
-                              <div className="text-[9px] sm:text-[10px] text-[#8C8880] mt-0.5 sm:mt-1 font-mono">{invoice.relate_number || '—'}</div>
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-bold text-[#1A1A18]">NT$ {Number(invoice.settlement_amount || 0).toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <div className="text-xs sm:text-sm font-bold text-[#C8522A]">NT$ {Number(invoice.service_fee || 0).toLocaleString()}</div>
-                              {(invoice.platform_service_fee != null || invoice.koc_commission_display != null) && (
-                                <div className="mt-1 space-y-0.5 text-[9px] sm:text-[10px] text-[#8C8880]">
-                                  {invoice.platform_service_fee != null && (
-                                    <div>平台服務費 10%：NT$ {Number(invoice.platform_service_fee).toLocaleString()}</div>
-                                  )}
-                                  {invoice.koc_commission_display != null && (
-                                    <div>KOC 分潤 5%（含處理費）：NT$ {Number(invoice.koc_commission_display).toLocaleString()}</div>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">NT$ {Number(invoice.tax_amount || 0).toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-black text-[#1A1A18]">NT$ {Number(invoice.total_amount || 0).toLocaleString()}</td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <div className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">{invoice.invoice_number || '尚未取得'}</div>
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4">
-                              <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full text-[9px] sm:text-[10px] font-bold ${
-                                invoice.status === 'issued' ? 'bg-green-50 text-green-700' : invoice.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-[#F5F0E8] text-[#8C8880]'
-                              }`}>
-                                {invoice.status === 'issued' ? '已開立' : invoice.status === 'failed' ? '開立失敗' : invoice.status || '處理中'}
-                              </span>
-                              {invoice.error_message && (
-                                <div className="text-[9px] text-red-600 mt-1 sm:mt-2 max-w-[150px] sm:max-w-[220px] truncate" title={invoice.error_message}>
-                                  {invoice.error_message}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">
-                              {invoice.created_at ? new Date(invoice.created_at).toLocaleString('zh-TW') : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
           </div>
-        )}
-      </div>
+        </section>
+      )}
     </div>
-  );
+  )
 }
