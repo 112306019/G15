@@ -481,6 +481,12 @@ export default function ProductAnalytics() {
       <CouponFunnel
         open={funnelOpen}
         onClose={() => setFunnelOpen(false)}
+        campaignId={selectedCampaign}
+        campaignName={
+          selectedCampaign
+            ? campaigns.find(c => String(c.campaignId) === String(selectedCampaign))?.name
+            : ''
+        }
       />
 
       {/* 篩選區 */}

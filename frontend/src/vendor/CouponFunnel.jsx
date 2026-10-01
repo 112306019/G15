@@ -22,7 +22,7 @@ function StatCard({ label, value, hint }) {
   )
 }
 
-export default function CouponFunnel({ open, onClose }) {
+export default function CouponFunnel({ open, onClose, campaignId, campaignName }) {
   const vendorId = localStorage.getItem('vendor_id')
   const [range, setRange] = useState('30daysAgo')
   const [data, setData] = useState(null)
@@ -40,6 +40,7 @@ export default function CouponFunnel({ open, onClose }) {
         const response = await getVendorAnalyticsFunnel(vendorId, {
           start_date: range,
           end_date: 'today',
+          campaign_id: campaignId || undefined,
         })
         if (cancelled) return
         if (response.data?.success === false) {
@@ -60,7 +61,7 @@ export default function CouponFunnel({ open, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [vendorId, range, open])
+  }, [vendorId, range, open, campaignId])
 
   const summary = data?.summary
 
@@ -86,7 +87,8 @@ export default function CouponFunnel({ open, onClose }) {
             優惠碼流量轉換分析
           </h2>
           <p className="text-xs text-[#8C8880] mt-1">
-            追蹤消費者使用 KOC 優惠碼後的結帳表現（資料來源：Google Analytics）
+            {campaignName ? `目前檢視活動：${campaignName}` : '目前檢視：全部活動'}
+            {' '}｜ 追蹤消費者使用 KOC 優惠碼後的結帳表現（資料來源：Google Analytics）
           </p>
         </div>
 
