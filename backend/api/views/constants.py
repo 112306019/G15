@@ -380,22 +380,28 @@ EARNINGS_STATUS_CODE_MAP = {
     'cancelled': 3,       # 新增：因退貨退款被取消
 }
 
-# KOC 分潤比例：固定抽「訂單總金額扣除運費」的這個百分比，不再依廠商在
-# CampaignProduct 設定的 koc_commission_rate 逐項計算（那個欄位保留給廠商端
-# 顯示/編輯用，但 calculate_order_commission 已經不會再讀它）。
-KOC_COMMISSION_RATE_PERCENT = 3
+# ==============================================================================
+# ShareBuy 新制結算比例
+# ==============================================================================
+# KOC 分潤比例：固定為符合 KOC 歸因之有效商品成交額的 5%。
+# 不含運費；實際建立 Earnings 的條件仍由 calculate_order_commission 判斷，
+# 沒有有效 KOC 優惠碼／任務歸因的訂單不會憑空產生 KOC 分潤。
+KOC_COMMISSION_RATE_PERCENT = 5
 
-# 廠商鑑賞期天數：訂單 delivered_at 之後要等這麼多天，凍結餘額才能結算成可提領餘額
-VENDOR_SETTLEMENT_HOLD_DAYS = 7
+# Vendor 應支付給 ShareBuy 的平台推廣／服務費率。
+# 新制度是「消費者商品款由 Vendor 取得，Vendor 再依有效成交額支付 15% 給平台」，
+# 不再把 Vendor 商品收入先存進 VendorWallet 後由平台撥款給 Vendor。
+VENDOR_SETTLEMENT_RATE_PERCENT = 15
 
-# 消費者可以申請退貨退款的期限（天數，從 Order.delivered_at 起算，不是
-# order_status 變成 completed 的時間——見 models.py Order.completed_at 的註解）。
-#
-# 這裡故意跟 VENDOR_SETTLEMENT_HOLD_DAYS 分開定義一個獨立常數，即使現在兩者
-# 剛好都是 7 天：前者回答「消費者還能不能申請退貨」，後者回答「廠商的錢還
-# 能不能從凍結轉可提領」，是兩個不同角色會問的不同問題。之後如果只想調整
-# 退貨期限、不想動鑑賞期（或反過來），兩個常數分開才不會被迫綁在一起改。
+# 消費者可以申請退貨退款的期限（天數），從 Order.delivered_at 起算。
+# VendorSettlementItem 在這段期間內仍應維持 pending；期限結束且沒有未完成退貨案件後，
+# 才能轉為 eligible 並納入 VendorSettlement。
 RETURN_REQUEST_WINDOW_DAYS = 7
+
+# 舊 VendorWallet 結算程式仍會 import 這個名稱。
+# 第 3 步先保留相容性，避免 platform.py 在下一步改寫前因 ImportError 無法啟動。
+# 新 VendorSettlement 流程不要再使用此常數；待舊 VendorWallet 流程完全移除後可刪除。
+VENDOR_SETTLEMENT_HOLD_DAYS = 7
 
 # ReturnRequest.status: 資料庫字串 <-> API 對外 integer
 RETURN_REQUEST_STATUS_CODE_MAP = {
@@ -441,8 +447,8 @@ def is_return_window_open(order):
 
 
 # 退貨申請還沒走到「這件事已經有結論」的狀態集合。只要訂單還卡在這些狀態，
-# 不管廠商鑑賞期或退貨期限的天數到了沒，KOC 分潤/廠商淨額都不能結算成
-# 可提領——正在審核退貨的同時錢被領走，退貨核准後會沒有東西可扣回。
+# KOC 分潤不能轉為可提領，對應 VendorSettlementItem 也不能納入正式結算單。
+# 這樣可避免退貨仍在處理時就先完成平台／KOC 結算。
 # 'rejected'（廠商拒絕退貨,沒有進一步爭議）、'refunded'（已經退款完成，
 # 對應分潤應該已經在退款流程裡被收回/取消了）、'cancelled'（消費者自己
 # 撤回申請）三個才算有結論，不在這個集合裡。
@@ -455,9 +461,8 @@ def has_unresolved_return_request(order):
     """
     這張訂單是否有還在處理中、尚未有結論的退貨申請。
 
-    給 admin_settle_vendor_earnings / admin_settle_campaign_earnings 這類
-    結算函式用，即使天數上的鑑賞期/退貨期已經過了，只要這張訂單還有一筆
-    退貨申請卡在中間狀態，就不能放行結算。
+    給 VendorSettlement 與 KOC 分潤放行邏輯使用。即使時間上的退貨期限已經過了，
+    只要這張訂單還有一筆退貨申請卡在中間狀態，就不能放行結算。
     """
     from api.models import ReturnRequest
 
@@ -472,7 +477,7 @@ def is_order_auto_completable(order):
     訂單是否已符合「送達滿 RETURN_REQUEST_WINDOW_DAYS 後自動完成」條件。
 
     這支只負責判斷，不直接修改 Order，也不處理分潤；
-    真正完成訂單時必須走跟手動完成相同的 KOC / Vendor 帳務流程。
+    真正完成訂單時必須走跟手動完成相同的 KOC Earnings / VendorSettlementItem 流程。
     """
     from datetime import timedelta
     from django.utils import timezone
