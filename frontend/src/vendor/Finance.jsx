@@ -48,6 +48,23 @@ const dateText = value => {
     return String(value)
   }
 
+  return date.toLocaleDateString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+}
+
+
+const dateTimeText = value => {
+  if (!value) return '—'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+
   return date.toLocaleString('zh-TW', {
     year: 'numeric',
     month: '2-digit',
@@ -58,40 +75,74 @@ const dateText = value => {
 }
 
 
-const shortId = value => {
+const monthLabel = value => {
   if (!value) return '—'
 
-  const text = String(value)
+  const [year, month] =
+    String(value).split('-')
 
-  if (text.length <= 14) {
-    return text
+  if (!year || !month) {
+    return String(value)
   }
 
-  return `${text.slice(0, 8)}...${text.slice(-5)}`
+  return `${year} 年 ${Number(month)} 月`
+}
+
+
+const BATCH_STATUS = {
+  draft: {
+    label: '月結建立中',
+    style:
+      'bg-[#F8F9FA] text-[#8C8880]',
+  },
+
+  ready: {
+    label: '待撥款',
+    style:
+      'bg-[#F5F0E8] text-[#8A6734]',
+  },
+
+  paid: {
+    label: '已撥款',
+    style:
+      'bg-[#EEF7F0] text-[#2F6F45]',
+  },
+
+  failed: {
+    label: '撥款失敗',
+    style:
+      'bg-[#FFF0F0] text-[#D93025]',
+  },
+
+  cancelled: {
+    label: '已取消',
+    style:
+      'bg-[#F8F9FA] text-[#8C8880]',
+  },
+
+  adjusted: {
+    label: '已調整',
+    style:
+      'bg-[#F8F9FA] text-[#8C8880]',
+  },
 }
 
 
 const RECEIVABLE_STATUS = {
   pending: {
-    label: '等待撥款資格',
+    label: '等待結算資格',
     style:
       'bg-white border border-[#E2DDD4] text-[#8C8880]',
   },
 
   eligible: {
-    label: '可撥款',
+    label: '等待月結',
     style:
-      'bg-[#F5F0E8] text-[#1A1A18]',
+      'bg-[#F5F0E8] text-[#8A6734]',
   },
 
-  payout_pending: {
-    label: '撥款處理中',
-    style:
-      'bg-[#FDF0ED] text-[#C8522A]',
-  },
-
-  partially_paid: {
-    label: '部分已撥',
+  included: {
+    label: '已納入月結',
     style:
       'bg-[#FDF0ED] text-[#C8522A]',
   },
@@ -111,22 +162,22 @@ const RECEIVABLE_STATUS = {
   cancelled: {
     label: '已取消',
     style:
-      'bg-[#FFF0F0] text-[#D93025]',
+      'bg-[#F8F9FA] text-[#8C8880]',
   },
 
   adjusted: {
-    label: '金額已調整',
+    label: '已調整',
     style:
-      'bg-[#F8F9FA] border border-[#E2DDD4] text-[#8C8880]',
+      'bg-[#F8F9FA] text-[#8C8880]',
   },
 }
 
 
 const SETTLEMENT_STATUS = {
   draft: {
-    label: '草稿',
+    label: '月結建立中',
     style:
-      'bg-white border border-[#E2DDD4] text-[#8C8880]',
+      'bg-[#F8F9FA] text-[#8C8880]',
   },
 
   awaiting_payment: {
@@ -136,7 +187,7 @@ const SETTLEMENT_STATUS = {
   },
 
   partially_paid: {
-    label: '部分付款',
+    label: '部分已繳',
     style:
       'bg-[#FDF0ED] text-[#C8522A]',
   },
@@ -163,15 +214,20 @@ const SETTLEMENT_STATUS = {
 
 function Badge({
   status,
-  type = 'receivable',
+  type = 'batch',
 }) {
-  const config =
-    type === 'settlement'
-      ? SETTLEMENT_STATUS[status]
-      : RECEIVABLE_STATUS[status]
+  let map = BATCH_STATUS
 
-  const display =
-    config || {
+  if (type === 'receivable') {
+    map = RECEIVABLE_STATUS
+  }
+
+  if (type === 'settlement') {
+    map = SETTLEMENT_STATUS
+  }
+
+  const config =
+    map[status] || {
       label: status || '未知',
       style:
         'bg-[#F8F9FA] text-[#8C8880]',
@@ -179,9 +235,9 @@ function Badge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] sm:text-[11px] font-bold whitespace-nowrap ${display.style}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold whitespace-nowrap ${config.style}`}
     >
-      {display.label}
+      {config.label}
     </span>
   )
 }
@@ -196,32 +252,19 @@ function SummaryCard({
 }) {
   return (
     <div
-      className={`rounded-[1.5rem] border p-5 sm:p-6 ${
+      className={`rounded-[1.5rem] border p-5 ${
         emphasis
-          ? 'bg-[#1A1A18] border-[#1A1A18]'
-          : 'bg-white border-[#E2DDD4]'
+          ? 'border-[#DED6C8] bg-[#F5F0E8]'
+          : 'border-[#E2DDD4] bg-white'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-
         <div>
-          <p
-            className={`text-[10px] sm:text-xs font-bold tracking-wider ${
-              emphasis
-                ? 'text-[#D8D1C5]'
-                : 'text-[#8C8880]'
-            }`}
-          >
+          <p className="text-[10px] font-bold tracking-wider text-[#8C8880] sm:text-xs">
             {label}
           </p>
 
-          <p
-            className={`mt-2 text-xl sm:text-2xl font-black ${
-              emphasis
-                ? 'text-[#F5F0E8]'
-                : 'text-[#1A1A18]'
-            }`}
-          >
+          <p className="mt-2 text-xl font-black text-[#1A1A18] sm:text-2xl">
             {money(value)}
           </p>
         </div>
@@ -229,23 +272,16 @@ function SummaryCard({
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             emphasis
-              ? 'bg-white/10 text-[#F5F0E8]'
+              ? 'bg-white text-[#C8522A]'
               : 'bg-[#F5F0E8] text-[#B89B6A]'
           }`}
         >
           <Icon size={18} />
         </div>
-
       </div>
 
       {hint && (
-        <p
-          className={`mt-3 text-[10px] sm:text-[11px] leading-relaxed ${
-            emphasis
-              ? 'text-[#B8B4AC]'
-              : 'text-[#8C8880]'
-          }`}
-        >
+        <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880] sm:text-[11px]">
           {hint}
         </p>
       )}
@@ -261,24 +297,21 @@ function SectionTitle({
   direction,
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
-
-        <div className="h-10 w-10 shrink-0 rounded-xl bg-[#F5F0E8] flex items-center justify-center text-[#C8522A]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F5F0E8] text-[#C8522A]">
           <Icon size={18} />
         </div>
 
         <div>
-          <h2 className="text-base sm:text-lg font-serif font-black text-[#1A1A18]">
+          <h2 className="text-base font-serif font-black text-[#1A1A18] sm:text-lg">
             {title}
           </h2>
 
-          <p className="mt-1 text-[11px] sm:text-xs text-[#8C8880] leading-relaxed">
+          <p className="mt-1 text-[11px] leading-relaxed text-[#8C8880] sm:text-xs">
             {description}
           </p>
         </div>
-
       </div>
 
       {direction && (
@@ -286,7 +319,6 @@ function SectionTitle({
           {direction}
         </span>
       )}
-
     </div>
   )
 }
@@ -294,7 +326,7 @@ function SectionTitle({
 
 function EmptyState({ text }) {
   return (
-    <div className="py-12 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+    <div className="py-12 text-center text-xs font-bold text-[#8C8880] sm:text-sm">
       {text}
     </div>
   )
@@ -319,15 +351,15 @@ export default function Finance() {
     payout_pending_amount: 0,
     paid_goods_amount: 0,
 
-    pending_count: 0,
-    eligible_count: 0,
-    payout_pending_count: 0,
+    latest_batch_month: null,
+    latest_batch_status: null,
+    latest_batch_amount: 0,
+    latest_scheduled_payout_date: null,
 
     hasBankAccount: false,
     bank_display: '未設定',
     bank_account_name: '',
   })
-
 
   const [
     settlementOverview,
@@ -339,37 +371,36 @@ export default function Finance() {
     paid_amount: 0,
     overdue_amount: 0,
 
-    awaiting_count: 0,
-    overdue_count: 0,
-
     next_due_date: null,
     settlement_rate: 15,
+
+    latest_settlement_month: null,
+    latest_settlement_status: null,
+    latest_settlement_amount: 0,
   })
 
+  const [batches, setBatches] =
+    useState([])
 
   const [
-    receivables,
-    setReceivables,
+    unbatchedReceivables,
+    setUnbatchedReceivables,
   ] = useState([])
-
 
   const [
     settlements,
     setSettlements,
   ] = useState([])
 
-
   const [
     pendingSettlementItems,
     setPendingSettlementItems,
   ] = useState([])
 
-
   const [
-    selectedReceivable,
-    setSelectedReceivable,
+    selectedBatch,
+    setSelectedBatch,
   ] = useState(null)
-
 
   const [
     selectedSettlement,
@@ -379,9 +410,7 @@ export default function Finance() {
 
   const loadData =
     useCallback(async () => {
-      if (!vendorId) {
-        return
-      }
+      if (!vendorId) return
 
       setLoading(true)
 
@@ -409,25 +438,29 @@ export default function Finance() {
           ),
         ])
 
-
         if (
-          receivableOverviewRes.data?.success
+          receivableOverviewRes.data
+            ?.success
         ) {
           setReceivableOverview(
             receivableOverviewRes.data
           )
         }
 
-
         if (
-          receivableListRes.data?.success
+          receivableListRes.data
+            ?.success
         ) {
-          setReceivables(
+          setBatches(
+            receivableListRes.data
+              .batches || []
+          )
+
+          setUnbatchedReceivables(
             receivableListRes.data
               .receivables || []
           )
         }
-
 
         if (
           settlementOverviewRes.data
@@ -437,7 +470,6 @@ export default function Finance() {
             settlementOverviewRes.data
           )
         }
-
 
         if (
           settlementListRes.data
@@ -453,25 +485,20 @@ export default function Finance() {
               .pending_items || []
           )
         }
-
       } catch (err) {
         console.error(
-          '載入廠商金流資料失敗',
+          '載入廠商財務資料失敗',
           err
         )
 
         toast.error(
           err.response?.data?.err ||
-          '讀取金流資料失敗，請稍後再試'
+            '讀取財務資料失敗，請稍後再試'
         )
-
       } finally {
         setLoading(false)
       }
-    }, [
-      vendorId,
-      toast,
-    ])
+    }, [vendorId, toast])
 
 
   useEffect(() => {
@@ -479,7 +506,7 @@ export default function Finance() {
   }, [loadData])
 
 
-  const receivableTotal =
+  const pendingGoodsTotal =
     useMemo(() => {
       return (
         Number(
@@ -489,30 +516,42 @@ export default function Finance() {
         Number(
           receivableOverview
             .eligible_goods_amount || 0
-        ) +
-        Number(
-          receivableOverview
-            .payout_pending_amount || 0
         )
       )
     }, [receivableOverview])
 
 
+  const currentGoodsBatch =
+    useMemo(() => {
+      if (!batches.length) {
+        return null
+      }
+
+      return batches[0]
+    }, [batches])
+
+
+  const currentSettlement =
+    useMemo(() => {
+      if (!settlements.length) {
+        return null
+      }
+
+      return settlements[0]
+    }, [settlements])
+
+
   if (!vendorId) {
     return (
       <div className="p-4 sm:p-0">
-
-        <div className="flex items-center gap-2 text-sm font-bold text-[#D93025] bg-[#FFF0F0] rounded-2xl p-4 sm:p-5 border border-[#FFD7D2]">
-
+        <div className="flex items-center gap-2 rounded-2xl border border-[#FFD7D2] bg-[#FFF0F0] p-4 text-sm font-bold text-[#D93025] sm:p-5">
           <AlertCircle
             size={18}
             className="shrink-0"
           />
 
           找不到廠商登入資訊，請重新登入後再試一次。
-
         </div>
-
       </div>
     )
   }
@@ -520,204 +559,263 @@ export default function Finance() {
 
   if (loading) {
     return (
-      <div className="min-h-[420px] flex flex-col items-center justify-center gap-3 text-[#8C8880]">
-
+      <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 text-[#8C8880]">
         <Loader2
           size={28}
           className="animate-spin text-[#C8522A]"
         />
 
         <p className="text-sm font-bold">
-          金流資料載入中...
+          財務資料載入中...
         </p>
-
       </div>
     )
   }
 
 
   return (
-    <div className="space-y-8 sm:space-y-10 animate-in fade-in duration-300 p-4 sm:p-0">
+    <div className="relative space-y-6 p-4 animate-in fade-in duration-300 sm:space-y-8 sm:p-0">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-serif font-black text-[#1A1A18] sm:text-2xl">
+          財務中心
+        </h1>
 
-      {/* ======================================================
-          Page Header
-      ====================================================== */}
-
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-
-        <div>
-
-          <h1 className="text-xl sm:text-2xl font-serif font-black text-[#1A1A18]">
-            金流管理
-          </h1>
-
-          <p className="mt-2 max-w-3xl text-[11px] sm:text-xs text-[#8C8880] leading-relaxed">
-            ShareBuy 代收消費者貨款後，
-            符合條件的貨款會全額撥付給廠商；
-            平台 15% 服務費則另外產生結算單，
-            不會直接從貨款中扣除。
-          </p>
-
-        </div>
-
-
-        <div className="rounded-2xl border border-[#E2DDD4] bg-white px-4 py-3">
-
-          <p className="text-[10px] font-bold text-[#8C8880]">
-            收款帳戶
-          </p>
-
-          <p className="mt-1 text-xs sm:text-sm font-black text-[#1A1A18]">
-            {receivableOverview
-              .bank_display ||
-              '未設定'}
-          </p>
-
-          {receivableOverview
-            .bank_account_name && (
-            <p className="mt-0.5 text-[10px] text-[#8C8880]">
-              {
-                receivableOverview
-                  .bank_account_name
-              }
-            </p>
-          )}
-
-        </div>
-
+        <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-[#8C8880] sm:text-xs">
+          貨款與平台服務費採兩筆獨立月結。ShareBuy
+          每月依貨款月結單將應撥貨款全額匯入您的收款帳戶；您再依同月份有效成交額支付
+          15% 平台服務費。
+        </p>
       </div>
 
 
-      {!receivableOverview
-        .hasBankAccount && (
-        <div className="flex items-start gap-3 rounded-2xl border border-[#F1D2C8] bg-[#FDF0ED] p-4 sm:p-5">
-
-          <AlertCircle
-            size={18}
-            className="shrink-0 text-[#C8522A] mt-0.5"
-          />
-
-          <div>
-
-            <p className="text-xs sm:text-sm font-bold text-[#1A1A18]">
-              尚未設定貨款收款帳戶
-            </p>
-
-            <p className="mt-1 text-[10px] sm:text-xs text-[#8C8880] leading-relaxed">
-              請至設定頁完成銀行帳戶資料。
-              平台建立貨款撥款時會使用該帳戶。
-            </p>
-
-          </div>
-
-        </div>
-      )}
-
-
-      {/* ======================================================
-          A. ShareBuy → Vendor
-      ====================================================== */}
-
-      <section className="space-y-5 sm:space-y-6">
-
+      {/* ==================================================
+          A. 貨款
+      ================================================== */}
+      <section className="space-y-5">
         <SectionTitle
           icon={ArrowDownLeft}
           title="貨款"
-          description="消費者支付的貨款由 ShareBuy 代收，符合撥款條件後，平台將折扣後貨款成交額全額撥付給您。"
-          direction="ShareBuy → Vendor"
+          description="ShareBuy 依月結單將符合資格的訂單貨款全額撥付給您，不會直接從貨款中扣除 15% 服務費。"
+          direction="ShareBuy → 廠商"
         />
 
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
-            label="待進入撥款資格"
-            value={
-              receivableOverview
-                .pending_goods_amount
-            }
-            hint={`${receivableOverview.pending_count || 0} 筆貨款仍在等待撥款條件`}
+            label="尚待月結貨款"
+            value={pendingGoodsTotal}
+            hint="包含仍在退貨風險期及已取得資格、等待納入月結的貨款"
             icon={Clock3}
           />
 
           <SummaryCard
-            label="目前可撥貨款"
+            label="已產生待撥貨款"
             value={
               receivableOverview
-                .eligible_goods_amount
+                .payout_pending_amount
             }
-            hint={`${receivableOverview.eligible_count || 0} 筆已符合平台撥款條件`}
+            hint={
+              currentGoodsBatch
+                ? `${monthLabel(
+                    currentGoodsBatch.month
+                  )}目前狀態：${
+                    BATCH_STATUS[
+                      currentGoodsBatch.status
+                    ]?.label ||
+                    currentGoodsBatch.status
+                  }`
+                : '目前尚無待撥月結單'
+            }
             icon={WalletCards}
             emphasis
           />
 
           <SummaryCard
-            label="撥款處理中"
-            value={
-              receivableOverview
-                .payout_pending_amount
-            }
-            hint={`${receivableOverview.payout_pending_count || 0} 筆正在處理`}
-            icon={CalendarClock}
-          />
-
-          <SummaryCard
-            label="累計已收貨款"
+            label="累計已撥貨款"
             value={
               receivableOverview
                 .paid_goods_amount
             }
-            hint="已由平台確認完成匯款的貨款"
+            hint="平台已完成撥付的貨款"
             icon={CheckCircle2}
           />
 
+          <SummaryCard
+            label="收款帳戶"
+            value={0}
+            hint={
+              receivableOverview
+                .hasBankAccount
+                ? `${receivableOverview.bank_display}${
+                    receivableOverview
+                      .bank_account_name
+                      ? `｜${receivableOverview.bank_account_name}`
+                      : ''
+                  }`
+                : '尚未設定收款帳戶，請先至設定頁補充銀行資料'
+            }
+            icon={Landmark}
+          />
         </div>
 
 
-        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] bg-white overflow-hidden">
+        {/* 貨款月結列表 */}
+        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
+          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+            <h3 className="text-sm font-black text-[#1A1A18]">
+              貨款月結紀錄
+            </h3>
 
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-4 sm:px-6 py-4">
-
-            <div className="flex items-center justify-between gap-3">
-
-              <div>
-
-                <h3 className="text-sm sm:text-base font-black text-[#1A1A18]">
-                  貨款明細
-                </h3>
-
-                <p className="mt-1 text-[10px] sm:text-xs text-[#8C8880]">
-                  目前待收貨款總額：
-                  <span className="font-bold text-[#1A1A18] ml-1">
-                    {money(
-                      receivableTotal
-                    )}
-                  </span>
-                </p>
-
-              </div>
-
-              <span className="rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-[10px] font-bold text-[#8C8880]">
-                {receivables.length} 筆
-              </span>
-
-            </div>
-
+            <p className="mt-1 text-[10px] text-[#8C8880]">
+              每個月份會產生一張貨款月結單，點擊「查看明細」可查看本期包含的訂單。
+            </p>
           </div>
 
-
-          {receivables.length === 0 ? (
-            <EmptyState text="目前沒有貨款紀錄" />
+          {batches.length === 0 ? (
+            <EmptyState
+              text="目前尚無貨款月結紀錄"
+            />
           ) : (
-
             <div className="overflow-x-auto">
-
-              <table className="w-full min-w-[900px]">
-
-                <thead className="bg-white border-b border-[#E2DDD4]">
-
+              <table className="w-full min-w-[880px]">
+                <thead className="border-b border-[#E2DDD4]">
                   <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                    <th className="px-5 py-3">
+                      月份
+                    </th>
 
+                    <th className="px-5 py-3">
+                      訂單數
+                    </th>
+
+                    <th className="px-5 py-3">
+                      本期貨款
+                    </th>
+
+                    <th className="px-5 py-3">
+                      預計撥款日
+                    </th>
+
+                    <th className="px-5 py-3">
+                      狀態
+                    </th>
+
+                    <th className="px-5 py-3">
+                      實際撥款
+                    </th>
+
+                    <th className="px-5 py-3">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-[#E2DDD4]">
+                  {batches.map(batch => (
+                    <tr
+                      key={batch.batch_id}
+                    >
+                      <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                        {monthLabel(
+                          batch.month
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                        {
+                          batch.receivable_count
+                        }{' '}
+                        筆
+                      </td>
+
+                      <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                        {money(
+                          batch.amount_due
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                        {dateText(
+                          batch.scheduled_payout_date
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <Badge
+                          status={
+                            batch.status
+                          }
+                        />
+                      </td>
+
+                      <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                        {batch.status ===
+                        'paid' ? (
+                          <>
+                            <p>
+                              {dateTimeText(
+                                batch.paid_at
+                              )}
+                            </p>
+
+                            {batch.transaction_reference && (
+                              <p className="mt-1">
+                                交易編號：
+                                {
+                                  batch.transaction_reference
+                                }
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedBatch(
+                              batch
+                            )
+                          }
+                          className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8]"
+                        >
+                          查看明細
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+
+        {/* 尚未納入月結 */}
+        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
+          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+            <h3 className="text-sm font-black text-[#1A1A18]">
+              尚未納入月結
+            </h3>
+
+            <p className="mt-1 text-[10px] text-[#8C8880]">
+              這些訂單尚在退貨風險期，或已取得資格、等待下一次月結產生。
+            </p>
+          </div>
+
+          {unbatchedReceivables.length ===
+          0 ? (
+            <EmptyState
+              text="目前沒有等待月結的貨款"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px]">
+                <thead className="border-b border-[#E2DDD4]">
+                  <tr className="text-left text-[10px] font-bold text-[#8C8880]">
                     <th className="px-5 py-3">
                       訂單
                     </th>
@@ -727,165 +825,101 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      已撥
-                    </th>
-
-                    <th className="px-5 py-3">
-                      尚待撥付
-                    </th>
-
-                    <th className="px-5 py-3">
-                      可撥時間
+                      可結算時間
                     </th>
 
                     <th className="px-5 py-3">
                       狀態
                     </th>
-
-                    <th className="px-5 py-3 text-right">
-                      操作
-                    </th>
-
                   </tr>
-
                 </thead>
 
-
                 <tbody className="divide-y divide-[#E2DDD4]">
-
-                  {receivables.map(item => (
-
-                    <tr
-                      key={
-                        item.receivable_id
-                      }
-                      className="hover:bg-[#F8F9FA]/70 transition-colors"
-                    >
-
-                      <td className="px-5 py-4">
-
-                        <p className="text-xs font-black text-[#1A1A18]">
-                          {shortId(
+                  {unbatchedReceivables.map(
+                    item => (
+                      <tr
+                        key={
+                          item.receivable_id
+                        }
+                      >
+                        <td className="px-5 py-4 text-[10px] font-bold text-[#1A1A18]">
+                          {String(
                             item.order_id
                           )}
-                        </p>
+                        </td>
 
-                        <p className="mt-1 text-[10px] text-[#8C8880]">
-                          應收編號 #
-                          {
-                            item.receivable_id
-                          }
-                        </p>
+                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                          {money(
+                            item.amount_due
+                          )}
+                        </td>
 
-                      </td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                          {dateTimeText(
+                            item.eligible_at
+                          )}
+                        </td>
 
-
-                      <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
-                        {money(
-                          item.goods_amount
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4 text-xs font-bold text-[#2F6F45]">
-                        {money(
-                          item.amount_paid
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
-                        {money(
-                          item.outstanding_amount
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4 text-[11px] text-[#8C8880]">
-                        {dateText(
-                          item.eligible_at
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4">
-
-                        <Badge
-                          status={
-                            item.status
-                          }
-                        />
-
-                      </td>
-
-
-                      <td className="px-5 py-4 text-right">
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedReceivable(
-                              item
-                            )
-                          }
-                          className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8] transition-colors"
-                        >
-                          查看明細
-                        </button>
-
-                      </td>
-
-                    </tr>
-
-                  ))}
-
+                        <td className="px-5 py-4">
+                          <Badge
+                            status={
+                              item.status
+                            }
+                            type="receivable"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
-
               </table>
-
             </div>
-
           )}
-
         </div>
-
       </section>
 
 
-      {/* ======================================================
-          B. Vendor → ShareBuy
-      ====================================================== */}
-
-      <section className="space-y-5 sm:space-y-6">
-
+      {/* ==================================================
+          B. 服務費
+      ================================================== */}
+      <section className="space-y-5">
         <SectionTitle
           icon={ArrowUpRight}
-          title="應繳服務費"
-          description={`依有效商品成交額計算 ${settlementOverview.settlement_rate || 15}% 平台服務費。KOC 5% 分潤由 ShareBuy 從平台服務費收入中負擔，不會再向廠商額外收取。`}
-          direction="Vendor → ShareBuy"
+          title="平台服務費"
+          description="每月依符合結算資格的有效成交額計算 15% 平台服務費。此筆款項與貨款撥付分開處理，不直接從貨款中扣除。"
+          direction="廠商 → ShareBuy"
         />
 
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="待繳平台服務費"
             value={
               settlementOverview
                 .outstanding_amount
             }
-            hint={`${settlementOverview.awaiting_count || 0} 張結算單尚未繳清`}
+            hint={
+              settlementOverview
+                .next_due_date
+                ? `最近付款期限：${dateText(
+                    settlementOverview
+                      .next_due_date
+                  )}`
+                : '目前沒有待付款月結單'
+            }
             icon={ReceiptText}
             emphasis
           />
 
           <SummaryCard
-            label="待產生結算金額"
+            label="等待產生月結"
             value={
               settlementOverview
                 .pending_settlement_amount
             }
-            hint="已符合條件、尚未彙整成正式結算單"
+            hint={`尚未月結的有效成交額 ${money(
+              settlementOverview
+                .pending_sales_amount
+            )}`}
             icon={Clock3}
           />
 
@@ -895,7 +929,7 @@ export default function Finance() {
               settlementOverview
                 .paid_amount
             }
-            hint="平台已確認收到的服務費"
+            hint="平台已確認收款的服務費"
             icon={CheckCircle2}
           />
 
@@ -905,102 +939,42 @@ export default function Finance() {
               settlementOverview
                 .overdue_amount
             }
-            hint={`${settlementOverview.overdue_count || 0} 張逾期結算單`}
+            hint={
+              Number(
+                settlementOverview
+                  .overdue_amount || 0
+              ) > 0
+                ? '請儘速完成付款'
+                : '目前沒有逾期服務費'
+            }
             icon={AlertCircle}
           />
-
         </div>
 
 
-        <div className="rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-4 sm:p-5">
+        {/* 服務費月結列表 */}
+        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
+          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+            <h3 className="text-sm font-black text-[#1A1A18]">
+              服務費月結紀錄
+            </h3>
 
-          <div className="flex items-start gap-3">
-
-            <ReceiptText
-              size={18}
-              className="shrink-0 text-[#B89B6A] mt-0.5"
-            />
-
-            <div>
-
-              <p className="text-xs sm:text-sm font-bold text-[#1A1A18]">
-                平台服務費與貨款是兩筆獨立金流
-              </p>
-
-              <p className="mt-1 text-[10px] sm:text-xs leading-relaxed text-[#8C8880]">
-                ShareBuy 會先將貨款全額撥付給廠商；
-                廠商再依結算單另外支付 15% 平台服務費。
-                平台不會直接從應撥貨款扣除服務費。
-              </p>
-
-              {settlementOverview
-                .next_due_date && (
-
-                <p className="mt-2 text-[10px] font-bold text-[#C8522A]">
-                  最近付款期限：
-                  {' '}
-                  {dateText(
-                    settlementOverview
-                      .next_due_date
-                  )}
-                </p>
-
-              )}
-
-            </div>
-
+            <p className="mt-1 text-[10px] text-[#8C8880]">
+              每張月結單會列出本期有效成交額、15% 服務費與付款狀態。
+            </p>
           </div>
-
-        </div>
-
-
-        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] bg-white overflow-hidden">
-
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-4 sm:px-6 py-4">
-
-            <div className="flex items-center justify-between gap-3">
-
-              <div>
-
-                <h3 className="text-sm sm:text-base font-black text-[#1A1A18]">
-                  服務費結算單
-                </h3>
-
-                <p className="mt-1 text-[10px] sm:text-xs text-[#8C8880]">
-                  每張結算單彙整符合條件的訂單服務費
-                </p>
-
-              </div>
-
-              <span className="rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-[10px] font-bold text-[#8C8880]">
-                {settlements.length} 張
-              </span>
-
-            </div>
-
-          </div>
-
 
           {settlements.length === 0 ? (
-
-            <EmptyState text="目前沒有服務費結算單" />
-
+            <EmptyState
+              text="目前尚無服務費月結紀錄"
+            />
           ) : (
-
             <div className="overflow-x-auto">
-
-              <table className="w-full min-w-[980px]">
-
+              <table className="w-full min-w-[940px]">
                 <thead className="border-b border-[#E2DDD4]">
-
                   <tr className="text-left text-[10px] font-bold text-[#8C8880]">
-
                     <th className="px-5 py-3">
-                      結算單
-                    </th>
-
-                    <th className="px-5 py-3">
-                      結算期間
+                      月份
                     </th>
 
                     <th className="px-5 py-3">
@@ -1008,7 +982,7 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      應繳服務費
+                      15% 服務費
                     </th>
 
                     <th className="px-5 py-3">
@@ -1016,174 +990,111 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      到期日
+                      付款期限
                     </th>
 
                     <th className="px-5 py-3">
                       狀態
                     </th>
 
-                    <th className="px-5 py-3 text-right">
+                    <th className="px-5 py-3">
                       操作
                     </th>
-
                   </tr>
-
                 </thead>
 
-
                 <tbody className="divide-y divide-[#E2DDD4]">
-
                   {settlements.map(
                     settlement => (
-
-                    <tr
-                      key={
-                        settlement.settlement_id
-                      }
-                      className="hover:bg-[#F8F9FA]/70 transition-colors"
-                    >
-
-                      <td className="px-5 py-4">
-
-                        <p className="text-xs font-black text-[#1A1A18]">
-                          #
-                          {
-                            settlement.settlement_id
-                          }
-                        </p>
-
-                      </td>
-
-
-                      <td className="px-5 py-4 text-[11px] text-[#8C8880]">
-
-                        <p>
-                          {dateText(
-                            settlement.period_start
+                      <tr
+                        key={
+                          settlement.settlement_id
+                        }
+                      >
+                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                          {monthLabel(
+                            settlement.month
                           )}
-                        </p>
+                        </td>
 
-                        <p className="mt-1">
-                          至
-                          {' '}
-                          {dateText(
-                            settlement.period_end
+                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          {money(
+                            settlement.gross_sales
                           )}
-                        </p>
+                        </td>
 
-                      </td>
-
-
-                      <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
-                        {money(
-                          settlement.gross_sales
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4">
-
-                        <p className="text-xs font-black text-[#C8522A]">
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
                           {money(
                             settlement.amount_due
                           )}
-                        </p>
+                        </td>
 
-                        <p className="mt-1 text-[10px] text-[#8C8880]">
-                          {
-                            settlement.settlement_rate ||
-                            15
-                          }%
-                        </p>
+                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          {money(
+                            settlement.paid_amount
+                          )}
+                        </td>
 
-                      </td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                          {dateText(
+                            settlement.due_date
+                          )}
+                        </td>
 
+                        <td className="px-5 py-4">
+                          <Badge
+                            status={
+                              settlement.status
+                            }
+                            type="settlement"
+                          />
+                        </td>
 
-                      <td className="px-5 py-4 text-xs font-bold text-[#2F6F45]">
-                        {money(
-                          settlement.paid_amount
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4 text-[11px] text-[#8C8880]">
-                        {dateText(
-                          settlement.due_date
-                        )}
-                      </td>
-
-
-                      <td className="px-5 py-4">
-
-                        <Badge
-                          type="settlement"
-                          status={
-                            settlement.status
-                          }
-                        />
-
-                      </td>
-
-
-                      <td className="px-5 py-4 text-right">
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedSettlement(
-                              settlement
-                            )
-                          }
-                          className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8] transition-colors"
-                        >
-                          查看明細
-                        </button>
-
-                      </td>
-
-                    </tr>
-
-                  ))}
-
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedSettlement(
+                                settlement
+                              )
+                            }
+                            className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8]"
+                          >
+                            查看明細
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
-
               </table>
-
             </div>
-
           )}
-
         </div>
 
 
-        {/* 尚未彙整的服務費 */}
+        {/* 尚未納入服務費月結 */}
+        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
+          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
+            <h3 className="text-sm font-black text-[#1A1A18]">
+              尚未納入服務費月結
+            </h3>
 
-        {pendingSettlementItems.length > 0 && (
+            <p className="mt-1 text-[10px] text-[#8C8880]">
+              顯示目前尚未被加入月結單的訂單服務費明細。
+            </p>
+          </div>
 
-          <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] bg-white overflow-hidden">
-
-            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-4 sm:px-6 py-4">
-
-              <h3 className="text-sm sm:text-base font-black text-[#1A1A18]">
-                尚未產生結算單的訂單
-              </h3>
-
-              <p className="mt-1 text-[10px] sm:text-xs text-[#8C8880]">
-                這些訂單已建立服務費明細，等待平台彙整成正式結算單
-              </p>
-
-            </div>
-
-
+          {pendingSettlementItems.length ===
+          0 ? (
+            <EmptyState
+              text="目前沒有等待月結的服務費"
+            />
+          ) : (
             <div className="overflow-x-auto">
-
-              <table className="w-full min-w-[720px]">
-
+              <table className="w-full min-w-[820px]">
                 <thead className="border-b border-[#E2DDD4]">
-
                   <tr className="text-left text-[10px] font-bold text-[#8C8880]">
-
                     <th className="px-5 py-3">
                       訂單
                     </th>
@@ -1193,7 +1104,7 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      服務費
+                      15% 服務費
                     </th>
 
                     <th className="px-5 py-3">
@@ -1203,372 +1114,280 @@ export default function Finance() {
                     <th className="px-5 py-3">
                       狀態
                     </th>
-
                   </tr>
-
                 </thead>
 
-
                 <tbody className="divide-y divide-[#E2DDD4]">
-
                   {pendingSettlementItems.map(
                     item => (
+                      <tr
+                        key={
+                          item.settlement_item_id
+                        }
+                      >
+                        <td className="px-5 py-4 text-[10px] font-bold text-[#1A1A18]">
+                          {String(
+                            item.order_id
+                          )}
+                        </td>
 
-                    <tr
-                      key={
-                        item.settlement_item_id
-                      }
-                    >
+                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          {money(
+                            item.sales_amount
+                          )}
+                        </td>
 
-                      <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
-                        {shortId(
-                          item.order_id
-                        )}
-                      </td>
+                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                          {money(
+                            item.settlement_amount
+                          )}
+                        </td>
 
-                      <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
-                        {money(
-                          item.sales_amount
-                        )}
-                      </td>
+                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                          {dateTimeText(
+                            item.eligible_at
+                          )}
+                        </td>
 
-                      <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
-                        {money(
-                          item.settlement_amount
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 text-[11px] text-[#8C8880]">
-                        {dateText(
-                          item.eligible_at
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <Badge
-                          type="settlement"
-                          status={
-                            item.status
-                          }
-                        />
-                      </td>
-
-                    </tr>
-
-                  ))}
-
+                        <td className="px-5 py-4">
+                          <Badge
+                            status={
+                              item.status
+                            }
+                            type="receivable"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
-
               </table>
-
             </div>
+          )}
+        </div>
 
+
+        {/* 說明 */}
+        <div className="rounded-[1.5rem] border border-[#DED6C8] bg-[#F5F0E8] p-5">
+          <div className="flex gap-3">
+            <CalendarClock
+              size={18}
+              className="mt-0.5 shrink-0 text-[#C8522A]"
+            />
+
+            <div className="text-[10px] leading-relaxed text-[#6F6A61] sm:text-[11px]">
+              <p className="font-black text-[#1A1A18]">
+                月結說明
+              </p>
+
+              <p className="mt-1">
+                貨款與平台服務費皆按月結算，但屬於兩筆獨立金流。平台會依貨款月結單將應撥貨款全額匯給廠商；廠商再依服務費月結單另行支付 15% 平台服務費。
+              </p>
+            </div>
           </div>
-
-        )}
-
+        </div>
       </section>
 
 
-      {/* ======================================================
-          Receivable Modal
-      ====================================================== */}
-
-      {selectedReceivable && (
-
+      {/* ==================================================
+          貨款月結明細 Modal
+      ================================================== */}
+      {selectedBatch && (
         <div
-          className="fixed inset-0 z-[100] bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm"
           onClick={() =>
-            setSelectedReceivable(
-              null
-            )
+            setSelectedBatch(null)
           }
         >
-
           <div
-            className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-[#E2DDD4] bg-white p-6 sm:p-8 shadow-2xl"
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-[#E2DDD4] bg-white"
             onClick={event =>
               event.stopPropagation()
             }
           >
-
-            <div className="flex items-start justify-between gap-4">
-
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E2DDD4] bg-white px-5 py-4">
               <div>
-
-                <p className="text-[10px] font-bold tracking-wider text-[#8C8880]">
-                  貨款應收明細
+                <p className="text-[10px] font-bold text-[#8C8880]">
+                  貨款月結
                 </p>
 
                 <h3 className="mt-1 text-lg font-black text-[#1A1A18]">
-                  #
-                  {
-                    selectedReceivable
-                      .receivable_id
-                  }
+                  {monthLabel(
+                    selectedBatch.month
+                  )}
                 </h3>
-
               </div>
-
 
               <button
                 type="button"
                 onClick={() =>
-                  setSelectedReceivable(
-                    null
-                  )
+                  setSelectedBatch(null)
                 }
-                className="h-9 w-9 rounded-full border border-[#E2DDD4] flex items-center justify-center text-[#8C8880] hover:bg-[#F8F9FA]"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F8F9FA]"
               >
                 <X size={17} />
               </button>
-
             </div>
 
+            <div className="space-y-5 p-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    本期貨款
+                  </p>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {money(
+                      selectedBatch.amount_due
+                    )}
+                  </p>
+                </div>
 
-              <DetailItem
-                label="折扣後貨款"
-                value={money(
-                  selectedReceivable
-                    .goods_amount
-                )}
-              />
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    訂單數
+                  </p>
 
-              <DetailItem
-                label="運費"
-                value={money(
-                  selectedReceivable
-                    .shipping_amount
-                )}
-              />
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {
+                      selectedBatch.receivable_count
+                    }{' '}
+                    筆
+                  </p>
+                </div>
 
-              <DetailItem
-                label="調整金額"
-                value={money(
-                  selectedReceivable
-                    .adjustment_amount
-                )}
-              />
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    預計撥款
+                  </p>
 
-              <DetailItem
-                label="應撥總額"
-                value={money(
-                  selectedReceivable
-                    .amount_due
-                )}
-                strong
-              />
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {dateText(
+                      selectedBatch.scheduled_payout_date
+                    )}
+                  </p>
+                </div>
 
-              <DetailItem
-                label="已撥金額"
-                value={money(
-                  selectedReceivable
-                    .amount_paid
-                )}
-              />
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    狀態
+                  </p>
 
-              <DetailItem
-                label="尚待撥付"
-                value={money(
-                  selectedReceivable
-                    .outstanding_amount
-                )}
-                strong
-              />
-
-            </div>
-
-
-            <div className="mt-6 rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-4">
-
-              <p className="text-xs font-bold text-[#1A1A18]">
-                訂單
-              </p>
-
-              <p className="mt-1 break-all text-[11px] text-[#8C8880]">
-                {
-                  selectedReceivable
-                    .order_id
-                }
-              </p>
-
-              <div className="mt-3">
-                <Badge
-                  status={
-                    selectedReceivable
-                      .status
-                  }
-                />
+                  <div className="mt-1">
+                    <Badge
+                      status={
+                        selectedBatch.status
+                      }
+                    />
+                  </div>
+                </div>
               </div>
 
-            </div>
-
-
-            <div className="mt-6">
-
-              <h4 className="text-sm font-black text-[#1A1A18]">
-                撥款紀錄
-              </h4>
-
-
-              {(
-                selectedReceivable
-                  .payouts || []
-              ).length === 0 ? (
-
-                <p className="mt-4 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
-                  尚無撥款紀錄
+              <div className="rounded-xl border border-[#E2DDD4] p-4">
+                <p className="text-xs font-black text-[#1A1A18]">
+                  收款帳戶
                 </p>
 
-              ) : (
+                <p className="mt-2 text-[10px] leading-relaxed text-[#8C8880]">
+                  {
+                    selectedBatch.bank_code ||
+                    '—'
+                  }{' '}
+                  ****
+                  {
+                    selectedBatch.bank_account_last4 ||
+                    '—'
+                  }
+                  <br />
+                  戶名：
+                  {
+                    selectedBatch.bank_account_name ||
+                    '—'
+                  }
+                </p>
+              </div>
 
-                <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-xs font-black text-[#1A1A18]">
+                  本期訂單明細
+                </p>
 
-                  {selectedReceivable
-                    .payouts.map(
-                      payout => (
+                {selectedBatch
+                  .receivables?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedBatch.receivables.map(
+                      item => (
+                        <div
+                          key={
+                            item.receivable_id
+                          }
+                          className="flex items-center justify-between gap-4 rounded-xl border border-[#E2DDD4] p-4"
+                        >
+                          <div>
+                            <p className="text-[10px] font-bold text-[#1A1A18]">
+                              訂單{' '}
+                              {
+                                item.order_id
+                              }
+                            </p>
 
-                    <div
-                      key={
-                        payout.payout_id
-                      }
-                      className="rounded-xl border border-[#E2DDD4] p-4"
-                    >
-
-                      <div className="flex justify-between gap-3">
-
-                        <div>
+                            <p className="mt-1 text-[9px] text-[#8C8880]">
+                              取得資格：
+                              {dateTimeText(
+                                item.eligible_at
+                              )}
+                            </p>
+                          </div>
 
                           <p className="text-xs font-black text-[#1A1A18]">
                             {money(
-                              payout.amount
+                              item.amount_due
                             )}
                           </p>
-
-                          <p className="mt-1 text-[10px] text-[#8C8880]">
-                            撥款編號 #
-                            {
-                              payout.payout_id
-                            }
-                          </p>
-
                         </div>
-
-                        <Badge
-                          status={
-                            payout.status ===
-                            'confirmed'
-                              ? 'paid'
-                              : payout.status ===
-                                'pending'
-                              ? 'payout_pending'
-                              : payout.status
-                          }
-                        />
-
-                      </div>
-
-
-                      <div className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
-
-                        <p>
-                          銀行：
-                          {
-                            payout.destination_bank_code ||
-                            '—'
-                          }
-                          {' '}
-                          ****
-                          {
-                            payout.destination_account_last4 ||
-                            '—'
-                          }
-                        </p>
-
-                        <p>
-                          戶名：
-                          {
-                            payout.destination_account_name ||
-                            '—'
-                          }
-                        </p>
-
-                        <p>
-                          交易編號：
-                          {
-                            payout.transaction_reference ||
-                            '—'
-                          }
-                        </p>
-
-                        <p>
-                          撥款時間：
-                          {dateText(
-                            payout.payout_at
-                          )}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              )}
-
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                    尚無訂單明細
+                  </p>
+                )}
+              </div>
             </div>
-
           </div>
-
         </div>
-
       )}
 
 
-      {/* ======================================================
-          Settlement Modal
-      ====================================================== */}
-
+      {/* ==================================================
+          服務費月結明細 Modal
+      ================================================== */}
       {selectedSettlement && (
-
         <div
-          className="fixed inset-0 z-[100] bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm"
           onClick={() =>
-            setSelectedSettlement(
-              null
-            )
+            setSelectedSettlement(null)
           }
         >
-
           <div
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[2rem] border border-[#E2DDD4] bg-white p-6 sm:p-8 shadow-2xl"
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-[#E2DDD4] bg-white"
             onClick={event =>
               event.stopPropagation()
             }
           >
-
-            <div className="flex items-start justify-between gap-4">
-
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E2DDD4] bg-white px-5 py-4">
               <div>
-
-                <p className="text-[10px] font-bold tracking-wider text-[#8C8880]">
-                  平台服務費結算單
+                <p className="text-[10px] font-bold text-[#8C8880]">
+                  平台服務費月結
                 </p>
 
                 <h3 className="mt-1 text-lg font-black text-[#1A1A18]">
-                  #
-                  {
-                    selectedSettlement
-                      .settlement_id
-                  }
+                  {monthLabel(
+                    selectedSettlement.month
+                  )}
                 </h3>
-
               </div>
-
 
               <button
                 type="button"
@@ -1577,313 +1396,197 @@ export default function Finance() {
                     null
                   )
                 }
-                className="h-9 w-9 rounded-full border border-[#E2DDD4] flex items-center justify-center text-[#8C8880] hover:bg-[#F8F9FA]"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F8F9FA]"
               >
                 <X size={17} />
               </button>
-
             </div>
 
+            <div className="space-y-5 p-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    有效成交額
+                  </p>
 
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
-
-              <DetailItem
-                label="有效成交額"
-                value={money(
-                  selectedSettlement
-                    .gross_sales
-                )}
-              />
-
-              <DetailItem
-                label="服務費率"
-                value={`${
-                  selectedSettlement
-                    .settlement_rate ||
-                  15
-                }%`}
-              />
-
-              <DetailItem
-                label="應繳服務費"
-                value={money(
-                  selectedSettlement
-                    .amount_due
-                )}
-                strong
-              />
-
-              <DetailItem
-                label="已繳金額"
-                value={money(
-                  selectedSettlement
-                    .paid_amount
-                )}
-              />
-
-              <DetailItem
-                label="尚未繳清"
-                value={money(
-                  selectedSettlement
-                    .outstanding_amount
-                )}
-                strong
-              />
-
-              <DetailItem
-                label="調整金額"
-                value={money(
-                  selectedSettlement
-                    .adjustment_amount
-                )}
-              />
-
-            </div>
-
-
-            <div className="mt-5 rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-4">
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-[#8C8880]">
-
-                <p>
-                  結算期間：
-                  <span className="font-bold text-[#1A1A18] ml-1">
-                    {dateText(
-                      selectedSettlement
-                        .period_start
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {money(
+                      selectedSettlement.gross_sales
                     )}
-                    {' ～ '}
-                    {dateText(
-                      selectedSettlement
-                        .period_end
-                    )}
-                  </span>
-                </p>
-
-                <p>
-                  到期日：
-                  <span className="font-bold text-[#1A1A18] ml-1">
-                    {dateText(
-                      selectedSettlement
-                        .due_date
-                    )}
-                  </span>
-                </p>
-
-              </div>
-
-
-              <div className="mt-3">
-                <Badge
-                  type="settlement"
-                  status={
-                    selectedSettlement
-                      .status
-                  }
-                />
-              </div>
-
-            </div>
-
-
-            {(
-              selectedSettlement.items ||
-              []
-            ).length > 0 && (
-
-              <div className="mt-6">
-
-                <h4 className="text-sm font-black text-[#1A1A18]">
-                  結算訂單
-                </h4>
-
-                <div className="mt-3 space-y-2">
-
-                  {selectedSettlement
-                    .items.map(
-                      item => (
-
-                    <div
-                      key={
-                        item.settlement_item_id ||
-                        item.order_id
-                      }
-                      className="rounded-xl border border-[#E2DDD4] p-3 flex justify-between gap-4"
-                    >
-
-                      <div>
-
-                        <p className="text-[11px] font-bold text-[#1A1A18]">
-                          {shortId(
-                            item.order_id
-                          )}
-                        </p>
-
-                        <p className="mt-1 text-[10px] text-[#8C8880]">
-                          成交額
-                          {' '}
-                          {money(
-                            item.sales_amount
-                          )}
-                        </p>
-
-                      </div>
-
-                      <p className="text-xs font-black text-[#C8522A]">
-                        {money(
-                          item.settlement_amount
-                        )}
-                      </p>
-
-                    </div>
-
-                  ))}
-
+                  </p>
                 </div>
 
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    15% 服務費
+                  </p>
+
+                  <p className="mt-1 text-sm font-black text-[#C8522A]">
+                    {money(
+                      selectedSettlement.amount_due
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    已繳
+                  </p>
+
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {money(
+                      selectedSettlement.paid_amount
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-[#F8F9FA] p-3">
+                  <p className="text-[9px] font-bold text-[#8C8880]">
+                    付款期限
+                  </p>
+
+                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                    {dateText(
+                      selectedSettlement.due_date
+                    )}
+                  </p>
+                </div>
               </div>
 
-            )}
+              <div className="rounded-xl border border-[#E2DDD4] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-black text-[#1A1A18]">
+                    狀態
+                  </p>
 
+                  <Badge
+                    status={
+                      selectedSettlement.status
+                    }
+                    type="settlement"
+                  />
+                </div>
 
-            <div className="mt-6">
+                <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
+                  此服務費為 Vendor → ShareBuy
+                  的獨立付款，不會直接從貨款中扣除。
+                </p>
+              </div>
 
-              <h4 className="text-sm font-black text-[#1A1A18]">
-                付款紀錄
-              </h4>
-
-
-              {(
-                selectedSettlement
-                  .payments || []
-              ).length === 0 ? (
-
-                <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
-                  尚無付款紀錄
+              <div>
+                <p className="text-xs font-black text-[#1A1A18]">
+                  本期訂單明細
                 </p>
 
-              ) : (
+                {selectedSettlement
+                  .items?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedSettlement.items.map(
+                      item => (
+                        <div
+                          key={
+                            item.settlement_item_id
+                          }
+                          className="rounded-xl border border-[#E2DDD4] p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[10px] font-bold text-[#1A1A18]">
+                              訂單{' '}
+                              {
+                                item.order_id
+                              }
+                            </p>
 
-                <div className="mt-3 space-y-3">
+                            <p className="text-xs font-black text-[#C8522A]">
+                              {money(
+                                item.settlement_amount
+                              )}
+                            </p>
+                          </div>
 
-                  {selectedSettlement
-                    .payments.map(
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[9px] text-[#8C8880]">
+                            <p>
+                              有效成交額：
+                              {money(
+                                item.sales_amount
+                              )}
+                            </p>
+
+                            <p>
+                              費率：
+                              {
+                                item.settlement_rate
+                              }
+                              %
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                    尚無訂單明細
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-black text-[#1A1A18]">
+                  付款紀錄
+                </p>
+
+                {selectedSettlement
+                  .payments?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {selectedSettlement.payments.map(
                       payment => (
+                        <div
+                          key={
+                            payment.payment_id
+                          }
+                          className="rounded-xl border border-[#E2DDD4] p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-black text-[#1A1A18]">
+                              {money(
+                                payment.amount
+                              )}
+                            </p>
 
-                    <div
-                      key={
-                        payment.payment_id
-                      }
-                      className="rounded-xl border border-[#E2DDD4] p-4"
-                    >
+                            <span className="text-[10px] font-bold text-[#8C8880]">
+                              {
+                                payment.status
+                              }
+                            </span>
+                          </div>
 
-                      <div className="flex items-start justify-between gap-3">
-
-                        <div>
-
-                          <p className="text-xs font-black text-[#1A1A18]">
-                            {money(
-                              payment.amount
+                          <p className="mt-2 text-[9px] leading-relaxed text-[#8C8880]">
+                            交易編號：
+                            {
+                              payment.reference_no ||
+                              '—'
+                            }
+                            <br />
+                            付款時間：
+                            {dateTimeText(
+                              payment.paid_at
                             )}
                           </p>
-
-                          <p className="mt-1 text-[10px] text-[#8C8880]">
-                            付款紀錄 #
-                            {
-                              payment.payment_id
-                            }
-                          </p>
-
                         </div>
-
-                        <Badge
-                          type="settlement"
-                          status={
-                            payment.status ===
-                            'confirmed'
-                              ? 'paid'
-                              : payment.status ===
-                                'pending'
-                              ? 'awaiting_payment'
-                              : payment.status
-                          }
-                        />
-
-                      </div>
-
-
-                      <p className="mt-3 text-[10px] text-[#8C8880]">
-                        交易編號：
-                        {
-                          payment.transaction_reference ||
-                          payment.reference_no ||
-                          '—'
-                        }
-                      </p>
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              )}
-
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                    尚無付款紀錄
+                  </p>
+                )}
+              </div>
             </div>
-
-
-            <div className="mt-6 rounded-2xl bg-[#F5F0E8] p-4 text-[10px] sm:text-xs leading-relaxed text-[#8C8880]">
-
-              <p className="font-bold text-[#1A1A18]">
-                費用說明
-              </p>
-
-              <p className="mt-1">
-                廠商只需支付本結算單所列的
-                {' '}
-                {selectedSettlement
-                  .settlement_rate ||
-                  15}
-                % 平台服務費。
-                KOC 5% 分潤由 ShareBuy 從平台收入中支付，
-                不會再向廠商額外收取。
-              </p>
-
-            </div>
-
           </div>
-
         </div>
-
       )}
-
-    </div>
-  )
-}
-
-
-function DetailItem({
-  label,
-  value,
-  strong = false,
-}) {
-  return (
-    <div className="rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] p-3">
-
-      <p className="text-[10px] font-bold text-[#8C8880]">
-        {label}
-      </p>
-
-      <p
-        className={`mt-1 text-xs sm:text-sm ${
-          strong
-            ? 'font-black text-[#C8522A]'
-            : 'font-bold text-[#1A1A18]'
-        }`}
-      >
-        {value}
-      </p>
-
     </div>
   )
 }
