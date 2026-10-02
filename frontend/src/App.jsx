@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import { captureKocRef } from './kocRef';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
@@ -158,14 +159,17 @@ function ProductDetailRoute({ userRole, onAddToCart, onBuyNow, favorites, onTogg
   const navigate = useNavigate();
   const [product, setProduct] = useState(location.state?.product || null);
 
-  // KOC 短連結（見 backend koc_link_redirect）落地時會帶 ?koc_id=，這裡純粹
-  // 推一個 GA4 事件做行銷維度分析用（流量來源、裝置、地區），不影響戰報
-  // 上的點擊數/EPC——那是後端 CouponNew.click_count 算的，兩邊資料源分開。
+  // KOC 短連結（見 backend koc_link_redirect）落地時會帶 ?koc_id=&ref=<優惠碼>，
+  // 這裡記下連結歸因並送 GA4 落地事件，做行銷維度分析用（流量來源、裝置、地區），
+  // 不影響戰報上的點擊數/EPC——那是後端 CouponNew.click_count 算的，兩邊資料源分開。
+  // 注意要用 gtag()：直接 dataLayer.push 物件只有 GTM 看得懂，gtag.js 不會送出。
   useEffect(() => {
-    if (!window.dataLayer) return;
-    const kocId = new URLSearchParams(location.search).get('koc_id');
-    if (kocId) {
-      window.dataLayer.push({ event: 'koc_referral_landing', koc_id: kocId });
+    const ref = captureKocRef(location.search);
+    if (ref && typeof window.gtag === 'function') {
+      window.gtag('event', 'koc_link_landing', {
+        promotion_id: ref.code,
+        koc_id: ref.kocId,
+      });
     }
   }, [location.search]);
 

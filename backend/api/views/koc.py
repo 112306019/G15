@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 import requests
 from django.conf import settings
@@ -1818,9 +1819,19 @@ def koc_link_redirect(request, promotion_code):
             click_count=F('click_count') + 1
         )
 
+    # ref：前端落地時記下是哪組優惠碼的連結，後續結帳/購買事件帶給 GA4 做歸因；
+    # utm_*：讓 GA4 的流量來源報表也能直接看出是 KOC 推廣連結帶來的工作階段。
+    query = urlencode({
+        'koc_id': coupon.kocmission.koc_id,
+        'ref': coupon.promotion_code,
+        'utm_source': 'koc',
+        'utm_medium': 'promo_link',
+        'utm_campaign': campaign.campaign_id,
+        'utm_content': coupon.promotion_code,
+    })
     target_url = (
         f"{settings.FRONTEND_BASE_URL}/product/{campaign_product.product_id}"
-        f"?koc_id={coupon.kocmission.koc_id}"
+        f"?{query}"
     )
     return HttpResponseRedirect(target_url)
 

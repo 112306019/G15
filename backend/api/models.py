@@ -835,25 +835,25 @@ class Vendor(models.Model):
 class VendorInvoice(models.Model):
     """
     平台開給廠商的 B2B 電子發票紀錄（平台服務費/抽成）。
-
-    金流改成平台代收後，結算只負責把全額（含服務費）轉去廠商可提領餘額，
-    不會再先扣款——廠商要自己把服務費匯款回平台，後台確認收到匯款後才會
-    呼叫綠界 B2B 電子發票 API 開立。狀態流程：
-    awaiting_remittance（結算完成，等廠商回報匯款）
-      → remittance_reported（廠商已回報，等後台確認）
-      → issued（後台確認後開票成功）/ failed（開票失敗）
-      → 或 rejected（後台覺得回報有問題，退回去等廠商重新回報）
+    每次廠商結算完成後，依 platform_fee_rate 計算服務費金額，
+    呼叫綠界 B2B 電子發票 API 開立，並把結果存下來。
     """
     STATUS_CHOICES = [
-        ('awaiting_remittance', '待廠商匯款'),
-        ('remittance_reported', '廠商已回報，待確認'),
+        ('pending', '待開立'),
         ('issued', '開立成功'),
-        ('rejected', '匯款回報已退回'),
         ('failed', '開立失敗'),
     ]
 
     invoice_id = models.AutoField(primary_key=True)
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='invoices')
+    settlement = models.ForeignKey(
+        'VendorSettlement',
+        on_delete=models.SET_NULL,
+        db_column='settlement_id',
+        related_name='invoices',
+        null=True,
+        blank=True
+    )
     relate_number = models.CharField(max_length=20, unique=True, db_column='relate_number')
     settlement_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='settlement_amount')
     service_fee = models.DecimalField(max_digits=12, decimal_places=2, db_column='service_fee')
@@ -868,24 +868,691 @@ class VendorInvoice(models.Model):
 
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='tax_amount')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='total_amount')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='awaiting_remittance', db_column='status')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status')
     invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
     error_message = models.TextField(blank=True, null=True, db_column='error_message')
     created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
-
-    # 廠商回報匯款時填的資訊，審核通過後才會觸發 issue_b2b_invoice。
-    remittance_amount = models.IntegerField(null=True, blank=True, db_column='remittance_amount')
-    remittance_account_last5 = models.CharField(max_length=5, blank=True, null=True, db_column='remittance_account_last5')
-    remittance_date = models.DateField(null=True, blank=True, db_column='remittance_date')
-    remittance_reported_at = models.DateTimeField(null=True, blank=True, db_column='remittance_reported_at')
-    remittance_confirmed_at = models.DateTimeField(null=True, blank=True, db_column='remittance_confirmed_at')
-    remittance_reject_reason = models.TextField(blank=True, null=True, db_column='remittance_reject_reason')
 
     class Meta:
         db_table = 'Vendor_Invoice'
 
     def __str__(self):
         return f"Invoice {self.invoice_id} for {self.vendor_id} ({self.status})"
+
+
+# ==============================================================================
+# Vendor 商品款應收 / 平台撥款
+#
+# 金流 A：
+# Consumer -> ShareBuy（平台代收）
+# ShareBuy -> Vendor（商品款 100% 撥付）
+#
+# 這一組 Model 只處理「平台欠 Vendor 的商品款」，與下面的
+# VendorSettlement（Vendor -> ShareBuy 的 15% 平台服務費）完全分開。
+# ==============================================================================
+
+
+class VendorReceivable(models.Model):
+    """
+    平台代收後，應撥付給 Vendor 的商品款。
+
+    一張 Order 若有多個 Vendor，會依 Vendor 各建立一筆。
+    商品款與 15% 平台服務費分開記帳，不在此直接扣除服務費。
+
+    amount_due = goods_amount + shipping_amount + adjustment_amount
+    """
+
+    STATUS_CHOICES = [
+        ('pending', '等待撥款資格'),
+        ('eligible', '可撥款'),
+        ('payout_pending', '撥款處理中'),
+        ('partially_paid', '部分撥款'),
+        ('paid', '已全額撥款'),
+        ('refunded', '已退款'),
+        ('cancelled', '已取消'),
+        ('adjusted', '已調整'),
+    ]
+
+    receivable_id = models.AutoField(primary_key=True)
+
+    vendor = models.ForeignKey(
+        'Vendor',
+        on_delete=models.PROTECT,
+        db_column='vendor_id',
+        related_name='receivables'
+    )
+
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.PROTECT,
+        db_column='order_id',
+        related_name='vendor_receivables'
+    )
+
+    # 此 Vendor 在這張訂單中的商品成交額。
+    # 後續會依實際折扣歸屬計算；平台服務費不在此扣除。
+    goods_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='goods_amount'
+    )
+
+    # 若未來採「運費一併撥給 Vendor」，可記錄分攤後的運費。
+    # 目前先保留欄位，預設 0，不影響商品款流程。
+    shipping_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='shipping_amount'
+    )
+
+    # 退款、補款或人工調整。可為負數。
+    adjustment_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='adjustment_amount'
+    )
+
+    # 平台實際應撥付金額。
+    # 不扣 15% 平台服務費；服務費由 VendorSettlement 另行收取。
+    amount_due = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='amount_due'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
+
+    # 退貨/退款風險期結束後才可撥款。
+    eligible_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='eligible_at'
+    )
+
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='paid_at'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+
+    class Meta:
+        db_table = 'Vendor_Receivable'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['vendor', 'order'],
+                name='uniq_vendor_order_receivable'
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=['vendor', 'status'],
+                name='idx_vr_vendor_status'
+            ),
+            models.Index(
+                fields=['status', 'eligible_at'],
+                name='idx_vr_status_eligible'
+            ),
+        ]
+
+    @property
+    def amount_paid(self):
+        return sum(
+            payout.amount
+            for payout in self.payouts.filter(status='confirmed')
+        )
+
+    @property
+    def outstanding_amount(self):
+        return max(
+            Decimal('0.00'),
+            self.amount_due - self.amount_paid
+        )
+
+    def __str__(self):
+        return (
+            f"VendorReceivable {self.receivable_id} "
+            f"order={self.order_id} vendor={self.vendor_id}"
+        )
+
+
+class VendorReceivablePayout(models.Model):
+    """
+    ShareBuy 實際撥付商品款給 Vendor 的紀錄。
+
+    可支援部分撥款；只有 status='confirmed' 的金額才算已實際撥出。
+    """
+
+    STATUS_CHOICES = [
+        ('pending', '待確認'),
+        ('confirmed', '已確認撥款'),
+        ('failed', '撥款失敗'),
+        ('cancelled', '已取消'),
+    ]
+
+    PAYOUT_METHOD_CHOICES = [
+        ('bank_transfer', '銀行轉帳'),
+        ('manual', '人工撥款'),
+        ('other', '其他'),
+    ]
+
+    payout_id = models.AutoField(primary_key=True)
+
+    receivable = models.ForeignKey(
+        VendorReceivable,
+        on_delete=models.PROTECT,
+        db_column='receivable_id',
+        related_name='payouts'
+    )
+
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='amount'
+    )
+
+    payout_method = models.CharField(
+        max_length=30,
+        choices=PAYOUT_METHOD_CHOICES,
+        default='bank_transfer',
+        db_column='payout_method'
+    )
+
+    # 留存當次撥款目的帳戶的最低必要稽核資訊。
+    destination_bank_code = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        db_column='destination_bank_code'
+    )
+    destination_account_last4 = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+        db_column='destination_account_last4'
+    )
+    destination_account_name = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_column='destination_account_name'
+    )
+
+    transaction_reference = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_column='transaction_reference'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
+
+    payout_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='payout_at'
+    )
+
+    confirmed_by = models.ForeignKey(
+        'Admins',
+        on_delete=models.SET_NULL,
+        db_column='confirmed_by_admin_id',
+        related_name='confirmed_vendor_receivable_payouts',
+        null=True,
+        blank=True
+    )
+
+    confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='confirmed_at'
+    )
+
+    note = models.TextField(
+        null=True,
+        blank=True,
+        db_column='note'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+
+    class Meta:
+        db_table = 'Vendor_Receivable_Payout'
+        indexes = [
+            models.Index(
+                fields=['receivable', 'status'],
+                name='idx_vrp_recv_status'
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"VendorReceivablePayout {self.payout_id} "
+            f"receivable={self.receivable_id} {self.status}"
+        )
+
+
+# ==============================================================================
+# Vendor 新制結算
+#
+# 金流 B：
+# Vendor -> ShareBuy：依有效成交額支付 15% 平台服務費。
+# 其中實際 KOC 分潤由 Earnings 計算，通常為 5%。
+#
+# 注意：平台 -> Vendor 的 100% 商品款撥付由上方 VendorReceivable /
+# VendorReceivablePayout 負責；兩條金流不可互相抵銷或混為同一筆。
+#
+# 舊 VendorWallet / VendorPayouts 暫時只保留舊資料相容。
+# ==============================================================================
+
+
+class VendorSettlement(models.Model):
+    """
+    廠商週期結算單。
+
+    一張結算單代表某 Vendor 在一段期間內應支付給 ShareBuy 的平台服務費。
+
+    例如：
+        本期有效成交額：100,000
+        結算費率：15%
+        應繳金額：15,000
+
+    koc_amount：
+        本期實際產生的 KOC 分潤總額。
+
+    platform_amount：
+        amount_due - koc_amount
+
+    因此有 KOC 歸因的訂單通常會接近：
+        10% 平台 + 5% KOC
+
+    沒有產生 KOC Earnings 的訂單則不硬塞一筆不存在的 KOC 分潤。
+    """
+
+    STATUS_CHOICES = [
+        ('draft', '結算中'),
+        ('awaiting_payment', '待繳款'),
+        ('partially_paid', '部分繳款'),
+        ('paid', '已繳清'),
+        ('overdue', '已逾期'),
+        ('cancelled', '已取消'),
+    ]
+
+    settlement_id = models.AutoField(primary_key=True)
+
+    vendor = models.ForeignKey(
+        'Vendor',
+        on_delete=models.PROTECT,
+        db_column='vendor_id',
+        related_name='settlements'
+    )
+
+    period_start = models.DateField(db_column='period_start')
+    period_end = models.DateField(db_column='period_end')
+
+    # 本期納入結算的有效商品成交額，不含運費。
+    gross_sales = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='gross_sales'
+    )
+
+    # 退款、人工調帳等造成的增減，可為負數。
+    adjustment_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='adjustment_amount'
+    )
+
+    # Vendor 應支付給 ShareBuy 的總比例。
+    settlement_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('15.00'),
+        db_column='settlement_rate'
+    )
+
+    # Vendor 本期實際應支付金額。
+    amount_due = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='amount_due'
+    )
+
+    # 本期真正產生的 KOC Earnings 加總。
+    koc_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='koc_amount'
+    )
+
+    # 平台最終保留的服務收入：amount_due - koc_amount。
+    platform_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='platform_amount'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='draft',
+        db_column='status'
+    )
+
+    due_date = models.DateField(
+        null=True,
+        blank=True,
+        db_column='due_date'
+    )
+
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='paid_at'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+
+    class Meta:
+        db_table = 'Vendor_Settlement'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['vendor', 'period_start', 'period_end'],
+                name='uniq_vendor_settle_period'
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=['vendor', 'status'],
+                name='idx_vendor_settle_status'
+            ),
+            models.Index(
+                fields=['period_start', 'period_end'],
+                name='idx_vendor_settle_period'
+            ),
+        ]
+
+    @property
+    def amount_paid(self):
+        """已確認收款的金額。"""
+        return sum(
+            payment.amount
+            for payment in self.payments.filter(status='confirmed')
+        )
+
+    @property
+    def outstanding_amount(self):
+        """尚未繳清金額。"""
+        return max(
+            Decimal('0.00'),
+            self.amount_due - self.amount_paid
+        )
+
+    def __str__(self):
+        return (
+            f"VendorSettlement {self.settlement_id} "
+            f"{self.vendor_id} "
+            f"{self.period_start}~{self.period_end}"
+        )
+
+
+class VendorSettlementItem(models.Model):
+    """
+    Vendor 結算明細。
+
+    一張 Order 如果涉及多個 Vendor，
+    每個 Vendor 各有自己一筆 VendorSettlementItem。
+
+    訂單完成時先建立 item，但此時可以尚未加入月結單：
+        settlement = NULL
+        status = pending
+
+    等退貨期限結束、且沒有未完成退貨案件後，
+    才可以變成 eligible，再被月結批次納入 VendorSettlement。
+    """
+
+    STATUS_CHOICES = [
+        ('pending', '等待結算資格'),
+        ('eligible', '可納入結算'),
+        ('included', '已納入結算'),
+        ('refunded', '已退款'),
+        ('cancelled', '已取消'),
+        ('adjusted', '已調整'),
+    ]
+
+    settlement_item_id = models.AutoField(primary_key=True)
+
+    settlement = models.ForeignKey(
+        VendorSettlement,
+        on_delete=models.SET_NULL,
+        db_column='settlement_id',
+        related_name='items',
+        null=True,
+        blank=True
+    )
+
+    vendor = models.ForeignKey(
+        'Vendor',
+        on_delete=models.PROTECT,
+        db_column='vendor_id',
+        related_name='settlement_items'
+    )
+
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.PROTECT,
+        db_column='order_id',
+        related_name='vendor_settlement_items'
+    )
+
+    # 此 Vendor 在這張訂單中的商品成交額，不含運費。
+    sales_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='sales_amount'
+    )
+
+    settlement_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('15.00'),
+        db_column='settlement_rate'
+    )
+
+    # sales_amount × 15%。
+    settlement_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='settlement_amount'
+    )
+
+    # 這張訂單真正建立出來的 KOC Earnings。
+    koc_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='koc_amount'
+    )
+
+    # settlement_amount - koc_amount。
+    platform_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='platform_amount'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
+
+    # 這筆訂單最早什麼時候可以進月結。
+    eligible_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='eligible_at'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+
+    class Meta:
+        db_table = 'Vendor_Settlement_Item'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['vendor', 'order'],
+                name='uniq_vendor_order_settle'
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=['vendor', 'status'],
+                name='idx_vsi_vendor_status'
+            ),
+            models.Index(
+                fields=['status', 'eligible_at'],
+                name='idx_vsi_status_eligible'
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"VendorSettlementItem {self.settlement_item_id} "
+            f"order={self.order_id} vendor={self.vendor_id}"
+        )
+
+
+class VendorSettlementPayment(models.Model):
+    """
+    Vendor 實際付款給 ShareBuy 的紀錄。
+
+    新制度不是平台撥款給 Vendor，而是 Vendor 需要繳平台結算款。
+    """
+
+    STATUS_CHOICES = [
+        ('pending', '待確認'),
+        ('confirmed', '已確認'),
+        ('rejected', '已退回'),
+        ('failed', '入帳失敗'),
+        ('cancelled', '已取消'),
+    ]
+
+    PAYMENT_METHOD_CHOICES = [
+        ('bank_transfer', '銀行轉帳'),
+        ('manual', '人工入帳'),
+        ('other', '其他'),
+    ]
+
+    payment_id = models.AutoField(primary_key=True)
+
+    settlement = models.ForeignKey(
+        VendorSettlement,
+        on_delete=models.PROTECT,
+        db_column='settlement_id',
+        related_name='payments'
+    )
+
+    amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        db_column='amount'
+    )
+
+    payment_method = models.CharField(
+        max_length=30,
+        choices=PAYMENT_METHOD_CHOICES,
+        default='bank_transfer',
+        db_column='payment_method'
+    )
+
+    reference_no = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_column='reference_no'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_column='status'
+    )
+
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='paid_at'
+    )
+
+    confirmed_by = models.ForeignKey(
+        'Admins',
+        on_delete=models.SET_NULL,
+        db_column='confirmed_by_admin_id',
+        related_name='confirmed_vendor_settlement_payments',
+        null=True,
+        blank=True
+    )
+
+    confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='confirmed_at'
+    )
+
+    note = models.TextField(
+        null=True,
+        blank=True,
+        db_column='note'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+
+    class Meta:
+        db_table = 'Vendor_Settlement_Payment'
+        indexes = [
+            models.Index(
+                fields=['settlement', 'status'],
+                name='idx_vsp_settle_status'
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"VendorSettlementPayment {self.payment_id} "
+            f"settlement={self.settlement_id}"
+        )
 
 
 class VendorEmailVerificationCode(models.Model):

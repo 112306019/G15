@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config';
+import { getKocRef } from '../kocRef';
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
@@ -77,6 +78,7 @@ export default function PaymentResultPage({ onCartCleared }) {
               currency: 'TWD',
               value: data.total_amount || 0,
               coupon: data.promotion_code || undefined,
+              link_ref: getKocRef(),
               items: (data.items || []).map((item) => ({
                 item_id: String(item.product_id),
                 item_name: item.product_name,

@@ -10,7 +10,11 @@ from django.db import transaction
 from django.utils import timezone
 from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
-from .platform import calculate_order_commission, calculate_vendor_earning
+from .platform import (
+    calculate_order_commission,
+    create_vendor_settlement_items,
+    create_vendor_receivables,
+)
 from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable, PRODUCT_CATEGORY_CHOICES
 from payments.models import PaymentTransaction
 from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
@@ -36,42 +40,57 @@ def _is_campaign_promo_expired(campaign):
 def _complete_order_with_finance(order):
     """
     用同一套流程完成訂單，確保「手動完成」與「7 天後自動完成」都會：
-    1. 寫入 order_status / completed_at
-    2. 建立 KOC 分潤
-    3. 建立 Vendor 凍結收入
+    1. 寫入 order_status / completed_at。
+    2. 建立 KOC 5% pending 分潤，先進 KOC 凍結餘額。
+    3. 建立 VendorSettlementItem：Vendor → ShareBuy 的 15% 平台服務費。
+    4. 建立 VendorReceivable：ShareBuy → Vendor 的 100% 折扣後商品款。
 
-    回傳 (commission_result, vendor_result, changed)。
-    changed=False 代表這張訂單本來就已經 completed。
+    回傳：
+    (commission_result, settlement_result, receivable_result, changed)
+
+    三條帳都放在同一個 transaction.atomic() 中：
+    若真正的資料庫寫入發生錯誤，整張訂單的 completed 與財務資料一起 rollback，
+    避免出現「訂單已完成但少一條帳」的狀況。
     """
     with transaction.atomic():
-        locked_order = Order.objects.select_for_update().get(order_id=order.order_id)
+        locked_order = (
+            Order.objects
+            .select_for_update()
+            .get(order_id=order.order_id)
+        )
 
         if locked_order.order_status == 'completed':
-            return None, None, False
+            return None, None, None, False
 
         locked_order.order_status = 'completed'
         if not locked_order.completed_at:
             locked_order.completed_at = timezone.now()
-        locked_order.save(update_fields=['order_status', 'completed_at'])
 
-        try:
-            commission_result = calculate_order_commission(locked_order)
-        except ValueError as commission_error:
-            commission_result = {
-                'created': False,
-                'commission_amount': 0,
-                'message': str(commission_error),
-            }
+        locked_order.save(
+            update_fields=['order_status', 'completed_at']
+        )
 
-        try:
-            vendor_result = calculate_vendor_earning(locked_order)
-        except Exception as vendor_error:
-            vendor_result = [{
-                'created': False,
-                'message': str(vendor_error),
-            }]
+        # 1. KOC 5% pending Earnings
+        commission_result = calculate_order_commission(
+            locked_order
+        )
 
-    return commission_result, vendor_result, True
+        # 2. Vendor → ShareBuy 15% 平台服務費
+        settlement_result = create_vendor_settlement_items(
+            locked_order
+        )
+
+        # 3. ShareBuy → Vendor 100% 商品款
+        receivable_result = create_vendor_receivables(
+            locked_order
+        )
+
+    return (
+        commission_result,
+        settlement_result,
+        receivable_result,
+        True,
+    )
 
 
 def sync_auto_completed_orders():
@@ -79,7 +98,8 @@ def sync_auto_completed_orders():
     Lazy sync：把已送達超過 7 天、沒有未結案退貨申請的訂單自動完成。
 
     不能用 QuerySet.update() 直接改狀態，因為完成訂單同時是建立
-    KOC 分潤與 Vendor 凍結收入的觸發點；因此逐筆走 _complete_order_with_finance。
+    KOC pending 分潤、VendorSettlementItem 與 VendorReceivable 的觸發點；因此逐筆走
+    _complete_order_with_finance。
     """
     cutoff = timezone.now() - timedelta(days=RETURN_REQUEST_WINDOW_DAYS)
 
@@ -101,7 +121,7 @@ def sync_auto_completed_orders():
         if not is_order_auto_completable(order):
             continue
 
-        _commission, _vendor, changed = _complete_order_with_finance(order)
+        _commission, _settlement, _receivable, changed = _complete_order_with_finance(order)
         if changed:
             completed_count += 1
 
@@ -1575,7 +1595,8 @@ def update_order_status(request):
         )
 
     commission_result = None
-    vendor_result = None
+    settlement_result = None
+    receivable_result = None
 
     # 「完成訂單」是分潤唯一的觸發點，需要額外驗證，
     # 避免商品送達前、或已取消/退款的訂單被算進分潤。
@@ -1610,7 +1631,7 @@ def update_order_status(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        commission_result, vendor_result, changed = _complete_order_with_finance(order)
+        commission_result, settlement_result, receivable_result, changed = _complete_order_with_finance(order)
 
         # 重新抓一次，讓 response 裡的 completed_at / order_status 是最新資料。
         order.refresh_from_db(fields=['order_status', 'completed_at'])
@@ -1628,8 +1649,11 @@ def update_order_status(request):
     if commission_result:
         response_data['commission'] = commission_result
 
-    if vendor_result:
-        response_data['vendor_earning'] = vendor_result
+    if settlement_result:
+        response_data['vendor_settlement'] = settlement_result
+
+    if receivable_result:
+        response_data['vendor_receivable'] = receivable_result
 
     return Response(response_data, status=status.HTTP_200_OK)
 
