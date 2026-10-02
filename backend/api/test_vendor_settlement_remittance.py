@@ -126,7 +126,8 @@ class VendorSettlementRemittanceFlowTest(TestCase):
 
         # ── 2) 後台產生結算單 ──
         req = self._post_json('/platform/vendor/settlement/generate',
-                               {'vendor_id': self.vendor.vendor_id, 'Admin_id': self.admin.admin_id})
+                               {'vendor_id': self.vendor.vendor_id, 'Admin_id': self.admin.admin_id,
+                                'month': item.eligible_at.strftime('%Y-%m')})
         resp = admin_generate_vendor_settlement(req)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['settled_count'], 1)

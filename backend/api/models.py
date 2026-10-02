@@ -881,31 +881,32 @@ class VendorInvoice(models.Model):
 
 
 # ==============================================================================
-# Vendor 商品款應收 / 平台撥款
+# Vendor 貨款應收 / 平台撥款
 #
 # 金流 A：
 # Consumer -> ShareBuy（平台代收）
-# ShareBuy -> Vendor（商品款 100% 撥付）
+# ShareBuy -> Vendor（貨款 100% 撥付）
 #
-# 這一組 Model 只處理「平台欠 Vendor 的商品款」，與下面的
+# 這一組 Model 只處理「平台欠 Vendor 的貨款」，與下面的
 # VendorSettlement（Vendor -> ShareBuy 的 15% 平台服務費）完全分開。
 # ==============================================================================
 
 
 class VendorReceivable(models.Model):
     """
-    平台代收後，應撥付給 Vendor 的商品款。
+    平台代收後，應撥付給 Vendor 的貨款。
 
     一張 Order 若有多個 Vendor，會依 Vendor 各建立一筆。
-    商品款與 15% 平台服務費分開記帳，不在此直接扣除服務費。
+    貨款與 15% 平台服務費分開記帳，不在此直接扣除服務費。
 
     amount_due = goods_amount + shipping_amount + adjustment_amount
     """
 
     STATUS_CHOICES = [
         ('pending', '等待撥款資格'),
-        ('eligible', '可撥款'),
-        ('payout_pending', '撥款處理中'),
+        ('eligible', '可納入月結'),
+        ('included', '已納入月結'),
+        ('payout_pending', '月結撥款處理中'),
         ('partially_paid', '部分撥款'),
         ('paid', '已全額撥款'),
         ('refunded', '已退款'),
@@ -929,6 +930,18 @@ class VendorReceivable(models.Model):
         related_name='vendor_receivables'
     )
 
+    # 所屬貨款月結批次。
+    # 訂單剛完成／仍在退貨風險期時為 NULL；
+    # 符合資格後，由次月月結程序納入 VendorPayoutBatch。
+    payout_batch = models.ForeignKey(
+        'VendorPayoutBatch',
+        on_delete=models.SET_NULL,
+        db_column='payout_batch_id',
+        related_name='receivables',
+        null=True,
+        blank=True
+    )
+
     # 此 Vendor 在這張訂單中的商品成交額。
     # 後續會依實際折扣歸屬計算；平台服務費不在此扣除。
     goods_amount = models.DecimalField(
@@ -939,7 +952,7 @@ class VendorReceivable(models.Model):
     )
 
     # 若未來採「運費一併撥給 Vendor」，可記錄分攤後的運費。
-    # 目前先保留欄位，預設 0，不影響商品款流程。
+    # 目前先保留欄位，預設 0，不影響貨款流程。
     shipping_amount = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -1004,14 +1017,36 @@ class VendorReceivable(models.Model):
                 fields=['status', 'eligible_at'],
                 name='idx_vr_status_eligible'
             ),
+            models.Index(
+                fields=['payout_batch', 'status'],
+                name='idx_vr_batch_status'
+            ),
         ]
 
     @property
     def amount_paid(self):
-        return sum(
+        """
+        相容舊單筆撥款與新月結制。
+
+        舊資料：
+            沿用 VendorReceivablePayout confirmed 金額。
+
+        新月結：
+            所屬 VendorPayoutBatch 狀態為 paid 時，
+            視為此筆貨款已全額撥付。
+        """
+        legacy_paid = sum(
             payout.amount
             for payout in self.payouts.filter(status='confirmed')
         )
+
+        if legacy_paid > 0:
+            return min(self.amount_due, legacy_paid)
+
+        if self.payout_batch_id and self.payout_batch.status == 'paid':
+            return self.amount_due
+
+        return Decimal('0.00')
 
     @property
     def outstanding_amount(self):
@@ -1029,9 +1064,10 @@ class VendorReceivable(models.Model):
 
 class VendorReceivablePayout(models.Model):
     """
-    ShareBuy 實際撥付商品款給 Vendor 的紀錄。
+    舊制單筆貨款撥款紀錄（保留相容既有資料）。
 
-    可支援部分撥款；只有 status='confirmed' 的金額才算已實際撥出。
+    月結制上線後，新貨款不再逐筆建立此紀錄，
+    改由 VendorPayoutBatch 處理。
     """
 
     STATUS_CHOICES = [
@@ -1150,6 +1186,226 @@ class VendorReceivablePayout(models.Model):
         )
 
 
+
+# ==============================================================================
+# Vendor 貨款月結批次
+#
+# 金流 A（月結制）：
+# Consumer -> ShareBuy（平台代收）
+# ShareBuy -> Vendor（每月彙整後一次撥付）
+#
+# VendorReceivable 仍保留「每個 Vendor / 每張 Order」的貨款明細；
+# VendorPayoutBatch 則把某月份取得結算資格的多筆明細彙整成一張貨款月結單。
+#
+# 月結月份以 eligible_at 落在哪一個月份為準，而不是單純看 Order 建立月份。
+# 例如：
+#   9/28 訂單完成、10/5 才取得撥款資格 -> 納入 10 月結算，而不是 9 月。
+# ==============================================================================
+
+
+class VendorPayoutBatch(models.Model):
+    """
+    ShareBuy 應撥給 Vendor 的貨款月結單。
+
+    每個 Vendor 在同一結算期間最多一張。
+    月結單直接保存本期應撥金額、收款帳戶快照與實際匯款結果，
+    不另外建立 Payment 子表，讓畢專流程保持簡單。
+
+    注意：
+    - 這裡是 ShareBuy -> Vendor 的貨款。
+    - Vendor -> ShareBuy 的 15% 平台服務費仍由 VendorSettlement 處理。
+    - 兩筆金流不互相抵銷。
+    """
+
+    STATUS_CHOICES = [
+        ('draft', '月結建立中'),
+        ('ready', '待撥款'),
+        ('paid', '已完成撥款'),
+        ('failed', '撥款失敗'),
+        ('cancelled', '已取消'),
+        ('adjusted', '已調整'),
+    ]
+
+    BATCH_TYPE_CHOICES = [
+        ('regular', '正式月結'),
+        ('supplemental', '補結算'),
+    ]
+
+    PAYOUT_METHOD_CHOICES = [
+        ('bank_transfer', '銀行轉帳'),
+        ('manual', '人工撥款'),
+        ('other', '其他'),
+    ]
+
+    batch_id = models.AutoField(primary_key=True)
+
+    vendor = models.ForeignKey(
+        'Vendor',
+        on_delete=models.PROTECT,
+        db_column='vendor_id',
+        related_name='payout_batches'
+    )
+
+    period_start = models.DateField(db_column='period_start')
+    period_end = models.DateField(db_column='period_end')
+
+    batch_type = models.CharField(
+        max_length=20,
+        choices=BATCH_TYPE_CHOICES,
+        default='regular',
+        db_column='batch_type'
+    )
+
+    sequence = models.PositiveIntegerField(
+        default=1,
+        db_column='sequence'
+    )
+
+    goods_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='goods_amount'
+    )
+
+    shipping_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='shipping_amount'
+    )
+
+    adjustment_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='adjustment_amount'
+    )
+
+    # ShareBuy 本期應實際撥給 Vendor 的總額。
+    # 不扣除 15% 平台服務費。
+    amount_due = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='amount_due'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default='draft',
+        db_column='status'
+    )
+
+    payout_method = models.CharField(
+        max_length=30,
+        choices=PAYOUT_METHOD_CHOICES,
+        default='bank_transfer',
+        db_column='payout_method'
+    )
+
+    # 建立月結單時保存 Vendor 當下銀行帳戶快照。
+    destination_bank_code = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        db_column='destination_bank_code'
+    )
+
+    destination_account_last4 = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+        db_column='destination_account_last4'
+    )
+
+    destination_account_name = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_column='destination_account_name'
+    )
+
+    transaction_reference = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_column='transaction_reference'
+    )
+
+    scheduled_payout_date = models.DateField(
+        null=True,
+        blank=True,
+        db_column='scheduled_payout_date'
+    )
+
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_column='paid_at'
+    )
+
+    confirmed_by = models.ForeignKey(
+        'Admins',
+        on_delete=models.SET_NULL,
+        db_column='confirmed_by_admin_id',
+        related_name='confirmed_vendor_payout_batches',
+        null=True,
+        blank=True
+    )
+
+    note = models.TextField(
+        null=True,
+        blank=True,
+        db_column='note'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_column='created_at'
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        db_column='updated_at'
+    )
+
+    class Meta:
+        db_table = 'Vendor_Payout_Batch'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['vendor', 'period_start', 'period_end', 'batch_type', 'sequence'],
+                name='uniq_vendor_payout_period_type_seq'
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=['vendor', 'status'],
+                name='idx_vpb_vendor_status'
+            ),
+            models.Index(
+                fields=['period_start', 'period_end'],
+                name='idx_vpb_period'
+            ),
+        ]
+
+    @property
+    def amount_paid(self):
+        return self.amount_due if self.status == 'paid' else Decimal('0.00')
+
+    @property
+    def outstanding_amount(self):
+        return Decimal('0.00') if self.status == 'paid' else self.amount_due
+
+    def __str__(self):
+        return (
+            f"VendorPayoutBatch {self.batch_id} "
+            f"{self.vendor_id} "
+            f"{self.period_start}~{self.period_end}"
+        )
+
+
 # ==============================================================================
 # Vendor 新制結算
 #
@@ -1196,6 +1452,11 @@ class VendorSettlement(models.Model):
         ('cancelled', '已取消'),
     ]
 
+    SETTLEMENT_TYPE_CHOICES = [
+        ('regular', '正式月結'),
+        ('supplemental', '補結算'),
+    ]
+
     settlement_id = models.AutoField(primary_key=True)
 
     vendor = models.ForeignKey(
@@ -1207,6 +1468,18 @@ class VendorSettlement(models.Model):
 
     period_start = models.DateField(db_column='period_start')
     period_end = models.DateField(db_column='period_end')
+
+    settlement_type = models.CharField(
+        max_length=20,
+        choices=SETTLEMENT_TYPE_CHOICES,
+        default='regular',
+        db_column='settlement_type'
+    )
+
+    sequence = models.PositiveIntegerField(
+        default=1,
+        db_column='sequence'
+    )
 
     # 本期納入結算的有效商品成交額，不含運費。
     gross_sales = models.DecimalField(
@@ -1282,8 +1555,8 @@ class VendorSettlement(models.Model):
         db_table = 'Vendor_Settlement'
         constraints = [
             models.UniqueConstraint(
-                fields=['vendor', 'period_start', 'period_end'],
-                name='uniq_vendor_settle_period'
+                fields=['vendor', 'period_start', 'period_end', 'settlement_type', 'sequence'],
+                name='uniq_vendor_settle_period_type_seq'
             )
         ]
         indexes = [

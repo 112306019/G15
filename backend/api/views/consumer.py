@@ -37,6 +37,40 @@ def _is_campaign_promo_expired(campaign):
     return timezone.now() > deadline
 
 
+def _get_coupon_owner_user_id(coupon):
+    """
+    取得優惠碼所屬 KOC 的 User.user_id。
+
+    CouponNew -> KOCMissionNew -> KOC -> User
+
+    若舊資料關聯不完整，回傳 None，避免檢查本身造成 500。
+    """
+    try:
+        mission = coupon.kocmission
+        koc = mission.koc if mission else None
+
+        if not koc:
+            return None
+
+        return str(koc.user_id) if koc.user_id else None
+
+    except Exception:
+        return None
+
+
+def _is_own_koc_coupon(coupon, user_id):
+    """目前登入會員是否就是這張優惠碼所屬 KOC。"""
+    if not user_id:
+        return False
+
+    owner_user_id = _get_coupon_owner_user_id(coupon)
+
+    return (
+        owner_user_id is not None
+        and str(owner_user_id) == str(user_id)
+    )
+
+
 def _complete_order_with_finance(order):
     """
     用同一套流程完成訂單，確保「手動完成」與「7 天後自動完成」都會：
@@ -620,7 +654,14 @@ def verify_coupon(request):
         )
 
     try:
-        coupon = CouponNew.objects.get(promotion_code=promotion_code)
+        coupon = (
+            CouponNew.objects
+            .select_related(
+                'kocmission__koc__user',
+                'kocmission__application__campaign'
+            )
+            .get(promotion_code=promotion_code)
+        )
     except CouponNew.DoesNotExist:
         return Response(
             {'success': False, 'err': '優惠碼不存在'},
@@ -630,6 +671,13 @@ def verify_coupon(request):
     if coupon.status != 'active':
         return Response(
             {'success': False, 'err': '優惠碼未啟用或已失效'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # 第一層：輸入優惠碼時就擋掉 KOC 自己的推廣碼。
+    if _is_own_koc_coupon(coupon, user_id):
+        return Response(
+            {'success': False, 'err': '不可使用自己的推廣優惠碼'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -968,9 +1016,17 @@ def create_order(request):
     # 優惠碼
     # ============================
     if promotion_code:
-        coupon = CouponNew.objects.filter(
-            promotion_code=promotion_code
-        ).first()
+        coupon = (
+            CouponNew.objects
+            .select_related(
+                'kocmission__koc__user',
+                'kocmission__application__campaign'
+            )
+            .filter(
+                promotion_code=promotion_code
+            )
+            .first()
+        )
 
         if not coupon:
             return Response(
@@ -986,6 +1042,17 @@ def create_order(request):
                 {
                     'success': False,
                     'err': '優惠碼未啟用或已失效'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 第二層：即使繞過 verify_coupon 直接打 create_order，
+        # 也禁止 KOC 用自己的優惠碼建立訂單。
+        if _is_own_koc_coupon(coupon, user_id):
+            return Response(
+                {
+                    'success': False,
+                    'err': '不可使用自己的推廣優惠碼'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
