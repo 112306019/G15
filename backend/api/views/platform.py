@@ -319,6 +319,13 @@ def calculate_vendor_earning(order):
     訂單付款完成後，把錢分帳給訂單裡涉及的每一個廠商（同一張訂單可能有多個廠商的商品）。
     這筆錢先進 VendorWallet.balance_frozen（鑑賞期內不可提領），
     等 admin_settle_vendor_earnings 結算後才會轉進 balance_available。
+
+    金流改成平台代收後，這裡入帳給廠商的是「全額」（只扣掉已經真的付給 KOC
+    的分潤，平台服務費不扣）——廠商之後要自己把服務費匯款回平台，平台收到
+    匯款確認後才開發票，見 admin_settle_vendor_earnings 與
+    vendor.vendor_report_remittance。platform_fee 這裡只是算出來存進
+    Transactions.fee_amount 當作「廠商欠多少服務費」的紀錄，不會真的從
+    net_amount 扣掉。
     """
 
     order_items = (
@@ -399,8 +406,10 @@ def calculate_vendor_earning(order):
         if vendor_id == commission_vendor_id:
             koc_deduction = Decimal(str(commission_amount))
 
+        # 只扣真的已經付給 KOC 的分潤；平台服務費不扣，全額入帳給廠商，
+        # 廠商之後要自己把服務費匯款回平台（見檔案頂端 docstring）。
         net_amount = int(
-            (items_subtotal - platform_fee - koc_deduction).quantize(
+            (items_subtotal - koc_deduction).quantize(
                 Decimal("1"), rounding=ROUND_HALF_UP
             )
         )
@@ -425,7 +434,9 @@ def calculate_vendor_earning(order):
                 type="order_income",
                 amount=net_amount,
                 gross_amount=int(items_subtotal),
-                fee_amount=int(platform_fee + koc_deduction),
+                # fee_amount 只記廠商還欠平台的服務費，不含 koc_deduction——
+                # 那筆已經是真的從這筆入帳金額扣除的錢，不是「欠款」。
+                fee_amount=int(platform_fee),
                 platform_fee_display=int(platform_fee_display),
                 koc_commission_fee_display=int(koc_commission_fee_display),
                 reference_type="order",
@@ -775,7 +786,13 @@ def admin_settle_vendor_earnings(request):
         settled.append({
             'vendor_id': wallet.vendor_id,
             'order_id': txn.reference_id,
-            'amount': txn.amount
+            'amount': txn.amount,
+            # 這幾個欄位是這筆訂單原本 order_income 時就存好的服務費拆解，
+            # 結算後直接加總這些真實數字來開發票，不要再拿結算後的淨額
+            # 反推一次服務費（反推會因為淨額已經是扣過的金額而兜不起來）。
+            'fee_amount': txn.fee_amount or 0,
+            'platform_fee_display': txn.platform_fee_display or 0,
+            'koc_commission_fee_display': txn.koc_commission_fee_display or 0,
         })
 
     total_amount = sum(s['amount'] for s in settled)
@@ -797,12 +814,23 @@ def admin_settle_vendor_earnings(request):
 
     from decimal import Decimal, ROUND_HALF_UP
     from api.models import VendorInvoice
-    from api.ecpay_invoice import issue_b2b_invoice
+    from api.notifications import create_notification
 
+    # 加總每個廠商這批結算的「真實」服務費拆解（來自 order_income 當下存好的
+    # fee_amount／display 欄位），不要用結算後的淨額反推——淨額已經是全額
+    # （改成全額入帳後 = gross - koc_deduction），拿去乘 fee_rate 兜不出
+    # 正確的服務費數字。
     settled_amount_by_vendor = {}
+    fee_amount_by_vendor = {}
+    platform_fee_display_by_vendor = {}
+    koc_fee_display_by_vendor = {}
     for s in settled:
-        settled_amount_by_vendor.setdefault(s['vendor_id'], Decimal('0'))
-        settled_amount_by_vendor[s['vendor_id']] += Decimal(str(s['amount']))
+        v_id = s['vendor_id']
+        settled_amount_by_vendor.setdefault(v_id, Decimal('0'))
+        settled_amount_by_vendor[v_id] += Decimal(str(s['amount']))
+        fee_amount_by_vendor[v_id] = fee_amount_by_vendor.get(v_id, 0) + s['fee_amount']
+        platform_fee_display_by_vendor[v_id] = platform_fee_display_by_vendor.get(v_id, 0) + s['platform_fee_display']
+        koc_fee_display_by_vendor[v_id] = koc_fee_display_by_vendor.get(v_id, 0) + s['koc_commission_fee_display']
 
     invoices = []
     for v_id, vendor_settlement_amount in settled_amount_by_vendor.items():
@@ -811,25 +839,16 @@ def admin_settle_vendor_earnings(request):
             invoices.append({
                 'vendor_id': v_id,
                 'status': 'failed',
-                'error': '廠商無統一編號，無法開立發票'
+                'error': '廠商無統一編號，無法建立服務費紀錄'
             })
             continue
 
-        fee_rate = vendor_obj.platform_fee_rate or Decimal('0.00')
-        if fee_rate <= 0:
+        service_fee = Decimal(str(fee_amount_by_vendor.get(v_id, 0)))
+        if service_fee <= 0:
             continue
 
-        service_fee = (vendor_settlement_amount * fee_rate / Decimal('100')).quantize(
-            Decimal('1'), rounding=ROUND_HALF_UP
-        )
-
-        # 呈現給廠商看的明細分項：目前只有 15% 這個情境，固定拆成
-        # 10% 平台服務費 + 5% KOC 分潤（含處理費），兩者相加等於 service_fee，
-        # 純粹是明細說明用，不是真實分開的兩筆金流。
-        platform_service_fee = (vendor_settlement_amount * Decimal('10') / Decimal('100')).quantize(
-            Decimal('1'), rounding=ROUND_HALF_UP
-        )
-        koc_commission_display = (service_fee - platform_service_fee)
+        platform_service_fee = Decimal(str(platform_fee_display_by_vendor.get(v_id, 0)))
+        koc_commission_display = Decimal(str(koc_fee_display_by_vendor.get(v_id, 0)))
 
         tax_amount = (service_fee * Decimal('0.05')).quantize(
             Decimal('1'), rounding=ROUND_HALF_UP
@@ -838,6 +857,8 @@ def admin_settle_vendor_earnings(request):
 
         relate_number = f"INV{int(timezone.now().timestamp())}{v_id}"[:20]
 
+        # 只建立「待廠商匯款」的紀錄，不在這裡開票——開票要等廠商回報匯款、
+        # 後台確認收到之後，由 admin_confirm_vendor_remittance 觸發。
         invoice_record = VendorInvoice.objects.create(
             vendor=vendor_obj,
             relate_number=relate_number,
@@ -847,41 +868,28 @@ def admin_settle_vendor_earnings(request):
             koc_commission_display=koc_commission_display,
             tax_amount=tax_amount,
             total_amount=grand_total,
-            status='pending',
+            status='awaiting_remittance',
         )
 
-        try:
-            success, invoice_number, message = issue_b2b_invoice(
-                relate_number=relate_number,
-                buyer_tax_id=vendor_obj.tax_id,
-                item_name='平台服務費',
-                sales_amount=int(service_fee),
-                tax_amount=int(tax_amount),
-            )
-            if success:
-                invoice_record.status = 'issued'
-                invoice_record.invoice_number = invoice_number
-            else:
-                invoice_record.status = 'failed'
-                invoice_record.error_message = message
-            invoice_record.save()
+        invoices.append({
+            'vendor_id': v_id,
+            'invoice_id': invoice_record.invoice_id,
+            'status': invoice_record.status,
+            'service_fee': str(service_fee),
+            'total_amount': str(grand_total),
+        })
 
-            invoices.append({
-                'vendor_id': v_id,
-                'status': invoice_record.status,
-                'invoice_number': invoice_record.invoice_number,
-                'service_fee': str(service_fee),
-                'error': invoice_record.error_message,
-            })
+        try:
+            create_notification(
+                vendor=vendor_obj,
+                category='payout',
+                title='本次結算有服務費待匯款',
+                body=f'本次結算需匯款 NT$ {grand_total} 服務費給平台，請至財務頁面回報匯款資訊。',
+                reference_type='vendor_finance',
+                reference_id=str(invoice_record.invoice_id),
+            )
         except Exception as e:
-            invoice_record.status = 'failed'
-            invoice_record.error_message = str(e)
-            invoice_record.save()
-            invoices.append({
-                'vendor_id': v_id,
-                'status': 'failed',
-                'error': str(e)
-            })
+            logger.error(f'服務費待匯款通知寄送失敗（invoice_id={invoice_record.invoice_id}）: {e}')
 
     return Response({
         'success': True,
@@ -914,10 +922,13 @@ def admin_list_vendor_invoices(request):
     from api.models import VendorInvoice
 
     vendor_id = request.query_params.get('vendor_id')
+    status_filter = request.query_params.get('status')
 
     invoices_qs = VendorInvoice.objects.select_related('vendor').order_by('-created_at')
     if vendor_id:
         invoices_qs = invoices_qs.filter(vendor_id=vendor_id)
+    if status_filter:
+        invoices_qs = invoices_qs.filter(status=status_filter)
 
     result = []
     for inv in invoices_qs[:200]:
@@ -935,6 +946,11 @@ def admin_list_vendor_invoices(request):
             'status': inv.status,
             'invoice_number': inv.invoice_number,
             'error_message': inv.error_message,
+            'remittance_amount': inv.remittance_amount,
+            'remittance_account_last5': inv.remittance_account_last5,
+            'remittance_date': inv.remittance_date,
+            'remittance_reported_at': inv.remittance_reported_at,
+            'remittance_reject_reason': inv.remittance_reject_reason,
             'created_at': inv.created_at,
         })
 
@@ -942,6 +958,113 @@ def admin_list_vendor_invoices(request):
         'success': True,
         'err': '',
         'invoices': result,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 後台確認廠商匯款回報：廠商回報匯款後，後台這裡「確認收到」才真的呼叫
+# 綠界 B2B 電子發票 API 開票；「退回」則讓廠商可以重新回報。
+# POST /platform/vendor/remittance/confirm
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_confirm_vendor_remittance(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    from api.models import VendorInvoice
+    from api.notifications import create_notification
+
+    invoice_id = request.data.get('invoice_id')
+    action = request.data.get('action')  # 'confirm' 或 'reject'
+    action_reason = request.data.get('Action_reason')
+
+    if action not in ('confirm', 'reject'):
+        return Response({'success': False, 'err': "action 必須是 'confirm' 或 'reject'"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        invoice = VendorInvoice.objects.select_related('vendor').get(invoice_id=invoice_id)
+    except VendorInvoice.DoesNotExist:
+        return Response({'success': False, 'err': '找不到這筆發票紀錄'}, status=status.HTTP_404_NOT_FOUND)
+
+    if invoice.status != 'remittance_reported':
+        return Response({'success': False, 'err': f'這筆發票紀錄已經是「{invoice.get_status_display()}」狀態，不能重複處理'}, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_obj = invoice.vendor
+
+    if action == 'reject':
+        with transaction.atomic():
+            invoice.status = 'rejected'
+            invoice.remittance_reject_reason = action_reason or '匯款資訊有誤，請重新回報'
+            invoice.save(update_fields=['status', 'remittance_reject_reason'])
+
+            AdminAuditLogs.objects.create(
+                admin_id=admin_obj,
+                action_type='confirm_vendor_remittance_rejected',
+                tasks_id=str(invoice.invoice_id), vendor=vendor_obj,
+                action_reason=action_reason or f'退回廠商匯款回報 #{invoice.invoice_id}',
+            )
+
+        try:
+            create_notification(
+                vendor=vendor_obj, category='payout', title='匯款回報已被退回',
+                body=f'您回報的匯款資訊未通過確認：{invoice.remittance_reject_reason}，請重新回報。',
+                reference_type='vendor_finance', reference_id=str(invoice.invoice_id),
+            )
+        except Exception as e:
+            logger.error(f'匯款退回通知寄送失敗（invoice_id={invoice.invoice_id}）: {e}')
+
+        return Response({'success': True, 'err': '', 'invoice_id': invoice.invoice_id, 'status': invoice.status}, status=status.HTTP_200_OK)
+
+    from api.ecpay_invoice import issue_b2b_invoice
+
+    issue_success, invoice_number, issue_message = issue_b2b_invoice(
+        relate_number=invoice.relate_number,
+        buyer_tax_id=vendor_obj.tax_id,
+        item_name='平台服務費',
+        sales_amount=int(invoice.service_fee),
+        tax_amount=int(invoice.tax_amount),
+    )
+
+    with transaction.atomic():
+        invoice.remittance_confirmed_at = timezone.now()
+        if issue_success:
+            invoice.status = 'issued'
+            invoice.invoice_number = invoice_number
+            invoice.error_message = None
+        else:
+            invoice.status = 'failed'
+            invoice.error_message = issue_message
+        invoice.save(update_fields=['status', 'invoice_number', 'error_message', 'remittance_confirmed_at'])
+
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='confirm_vendor_remittance_issued' if issue_success else 'confirm_vendor_remittance_failed',
+            tasks_id=str(invoice.invoice_id), vendor=vendor_obj,
+            action_reason=action_reason or f'確認收到廠商匯款，發票 #{invoice.invoice_id}，{"開票成功" if issue_success else f"開票失敗：{issue_message}"}',
+        )
+
+    try:
+        if issue_success:
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費發票已開立',
+                body=f'平台已確認收到匯款並開立服務費發票（發票號碼：{invoice_number}）。',
+                reference_type='vendor_finance', reference_id=str(invoice.invoice_id),
+            )
+        else:
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費發票開立失敗',
+                body=f'平台已確認收到匯款，但開立發票時發生錯誤：{issue_message}，將由平台人員協助處理。',
+                reference_type='vendor_finance', reference_id=str(invoice.invoice_id),
+            )
+    except Exception as e:
+        logger.error(f'匯款確認通知寄送失敗（invoice_id={invoice.invoice_id}）: {e}')
+
+    return Response({
+        'success': True, 'err': '', 'invoice_id': invoice.invoice_id,
+        'status': invoice.status, 'invoice_number': invoice.invoice_number,
     }, status=status.HTTP_200_OK)
 
 

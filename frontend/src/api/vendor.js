@@ -499,6 +499,30 @@ export const requestVendorPayout = (
   )
 }
 
+// 服務費發票／匯款紀錄列表
+export const getVendorInvoices = (
+  vendorId
+) => {
+  return api.get(
+    '/vendor/invoices',
+    {
+      params: {
+        vendor_id: vendorId,
+      },
+    }
+  )
+}
+
+// 回報服務費匯款
+export const reportVendorRemittance = (
+  data
+) => {
+  return api.post(
+    '/vendor/invoice/reportRemittance',
+    data
+  )
+}
+
 // KOC 優惠碼電商漏斗（資料來源：GA4）
 export const getVendorAnalyticsFunnel = (
   vendorId,

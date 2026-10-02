@@ -5,6 +5,13 @@ import {
   ArrowUpRight, ArrowDownRight, CheckCircle, Clock, Landmark, XCircle, ShieldAlert, Download, FileText, PlayCircle
 } from 'lucide-react';
 
+const INVOICE_STATUS_FILTERS = [
+  { key: 'awaiting_remittance', label: '待廠商匯款', match: (s) => s === 'awaiting_remittance' },
+  { key: 'remittance_reported', label: '匯款待確認', match: (s) => s === 'remittance_reported' },
+  { key: 'issued', label: '已確認', match: (s) => s === 'issued' },
+  { key: 'rejected', label: '已退回', match: (s) => s === 'rejected' || s === 'failed' },
+];
+
 export default function AdminFinance() {
   const [activeTab, setActiveTab] = useState('payments');
   const [payments, setPayments] = useState([]);
@@ -30,6 +37,8 @@ export default function AdminFinance() {
 
   const [vendorInvoices, setVendorInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [confirmingInvoiceId, setConfirmingInvoiceId] = useState(null);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('awaiting_remittance');
 
   const [loading, setLoading] = useState(true);
 
@@ -137,6 +146,36 @@ export default function AdminFinance() {
       console.error("發票紀錄載入失敗", err);
     } finally {
       setLoadingInvoices(false);
+    }
+  };
+
+  const handleConfirmVendorRemittance = async (invoiceId, action) => {
+    if (!adminId) return;
+
+    let actionReason = null;
+    if (action === 'reject') {
+      actionReason = window.prompt("請輸入退回原因（會顯示給廠商看）：");
+      if (actionReason === null) return;
+    } else {
+      const confirmMsg = "確定已經收到這筆匯款，要確認並開立服務費發票嗎？";
+      if (!window.confirm(confirmMsg)) return;
+    }
+
+    setConfirmingInvoiceId(invoiceId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/platform/vendor/remittance/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ invoice_id: invoiceId, action, Admin_id: adminId, Action_reason: actionReason }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) { alert(data.err || "處理失敗"); return; }
+
+      await fetchVendorInvoices();
+    } catch {
+      alert("處理失敗，請稍後再試");
+    } finally {
+      setConfirmingInvoiceId(null);
     }
   };
 
@@ -415,6 +454,9 @@ export default function AdminFinance() {
     );
   }
 
+  const activeInvoiceFilter = INVOICE_STATUS_FILTERS.find(f => f.key === invoiceStatusFilter) || INVOICE_STATUS_FILTERS[0];
+  const filteredVendorInvoices = vendorInvoices.filter(invoice => activeInvoiceFilter.match(invoice.status));
+
   return (
     <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-10">
 
@@ -511,7 +553,7 @@ export default function AdminFinance() {
             activeTab === 'invoices' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
           }`}
         >
-          <FileText size={16} className="sm:w-[18px] sm:h-[18px]" /> 發票紀錄
+          <FileText size={16} className="sm:w-[18px] sm:h-[18px]" /> 廠商服務費與發票
         </button>
       </div>
 
@@ -971,13 +1013,13 @@ export default function AdminFinance() {
               </div>
             )}
 
-            {/* TAB 5: 發票紀錄 */}
+            {/* TAB 5: 廠商服務費與發票 */}
             {activeTab === 'invoices' && (
               <div>
                 <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#E2DDD4] flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">廠商發票紀錄</h2>
-                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">檢視平台開立給廠商的 B2B 服務費發票。</p>
+                    <h2 className="text-lg font-serif font-black text-[#1A1A18]">廠商服務費與發票</h2>
+                    <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">檢視廠商應付的平台服務費匯款回報，以及平台開立給廠商的 B2B 服務費發票。</p>
                   </div>
                   <button
                     type="button"
@@ -987,6 +1029,25 @@ export default function AdminFinance() {
                   >
                     {loadingInvoices ? '重新整理中...' : '重新整理'}
                   </button>
+                </div>
+
+                <div className="px-4 sm:px-6 pt-4 sm:pt-5">
+                  <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
+                    {INVOICE_STATUS_FILTERS.map(filter => (
+                      <button
+                        key={filter.key}
+                        type="button"
+                        onClick={() => setInvoiceStatusFilter(filter.key)}
+                        className={`px-4 sm:px-5 py-2 rounded-full text-[13px] sm:text-sm font-bold whitespace-nowrap transition-all ${
+                          invoiceStatusFilter === filter.key
+                            ? 'bg-[#1A1A18] text-white shadow-sm'
+                            : 'text-[#8C8880] hover:text-[#1A1A18]'
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {loadingInvoices ? (
@@ -1003,13 +1064,15 @@ export default function AdminFinance() {
                           <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票總額</th>
                           <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">發票號碼</th>
                           <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">狀態</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">廠商匯款回報</th>
                           <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">建立時間</th>
+                          <th className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#E2DDD4]">
-                        {vendorInvoices.length === 0 ? (
-                          <tr><td colSpan={8} className="py-16 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有發票紀錄</td></tr>
-                        ) : vendorInvoices.map((invoice) => (
+                        {filteredVendorInvoices.length === 0 ? (
+                          <tr><td colSpan={10} className="py-16 text-center text-xs sm:text-sm text-[#8C8880]">目前沒有「{activeInvoiceFilter.label}」的紀錄</td></tr>
+                        ) : filteredVendorInvoices.map((invoice) => (
                           <tr key={invoice.invoice_id} className="hover:bg-[#FDF0ED]/30 transition-colors">
                             <td className="px-4 sm:px-6 py-3 sm:py-4">
                               <div className="font-bold text-[#1A1A18] text-xs sm:text-sm">{invoice.vendor_name || '—'}</div>
@@ -1037,18 +1100,63 @@ export default function AdminFinance() {
                             </td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4">
                               <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-full text-[9px] sm:text-[10px] font-bold ${
-                                invoice.status === 'issued' ? 'bg-green-50 text-green-700' : invoice.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-[#F5F0E8] text-[#8C8880]'
+                                invoice.status === 'issued' ? 'bg-green-50 text-green-700'
+                                  : invoice.status === 'failed' || invoice.status === 'rejected' ? 'bg-red-50 text-red-700'
+                                  : invoice.status === 'remittance_reported' ? 'bg-[#FDF0ED] text-[#C8522A]'
+                                  : 'bg-[#F5F0E8] text-[#8C8880]'
                               }`}>
-                                {invoice.status === 'issued' ? '已開立' : invoice.status === 'failed' ? '開立失敗' : invoice.status || '處理中'}
+                                {{
+                                  awaiting_remittance: '待廠商匯款',
+                                  remittance_reported: '已回報，待確認',
+                                  issued: '已開立',
+                                  rejected: '回報已退回',
+                                  failed: '開立失敗',
+                                }[invoice.status] || invoice.status || '處理中'}
                               </span>
                               {invoice.error_message && (
                                 <div className="text-[9px] text-red-600 mt-1 sm:mt-2 max-w-[150px] sm:max-w-[220px] truncate" title={invoice.error_message}>
                                   {invoice.error_message}
                                 </div>
                               )}
+                              {invoice.status === 'rejected' && invoice.remittance_reject_reason && (
+                                <div className="text-[9px] text-red-600 mt-1 sm:mt-2 max-w-[150px] sm:max-w-[220px] truncate" title={invoice.remittance_reject_reason}>
+                                  退回原因：{invoice.remittance_reject_reason}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">
+                              {invoice.remittance_reported_at ? (
+                                <div className="space-y-0.5">
+                                  <div>金額：NT$ {Number(invoice.remittance_amount || 0).toLocaleString()}</div>
+                                  <div>帳號後5碼：{invoice.remittance_account_last5 || '—'}</div>
+                                  <div>匯款日期：{invoice.remittance_date || '—'}</div>
+                                </div>
+                              ) : '—'}
                             </td>
                             <td className="px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-xs text-[#8C8880]">
                               {invoice.created_at ? new Date(invoice.created_at).toLocaleString('zh-TW') : '—'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 sm:py-4">
+                              {invoice.status === 'remittance_reported' ? (
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmVendorRemittance(invoice.invoice_id, 'reject')}
+                                    disabled={confirmingInvoiceId === invoice.invoice_id}
+                                    className="px-3 py-1.5 rounded-full border border-[#E2DDD4] bg-white text-[10px] sm:text-xs font-bold text-[#8C8880] hover:border-red-400 hover:text-red-600 transition-all disabled:opacity-50"
+                                  >
+                                    退回
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmVendorRemittance(invoice.invoice_id, 'confirm')}
+                                    disabled={confirmingInvoiceId === invoice.invoice_id}
+                                    className="px-3 py-1.5 rounded-full bg-[#C8522A] text-white text-[10px] sm:text-xs font-bold hover:bg-[#B04A24] transition-all disabled:opacity-50"
+                                  >
+                                    {confirmingInvoiceId === invoice.invoice_id ? '處理中...' : '確認收到'}
+                                  </button>
+                                </div>
+                              ) : '—'}
                             </td>
                           </tr>
                         ))}

@@ -835,12 +835,20 @@ class Vendor(models.Model):
 class VendorInvoice(models.Model):
     """
     平台開給廠商的 B2B 電子發票紀錄（平台服務費/抽成）。
-    每次廠商結算完成後，依 platform_fee_rate 計算服務費金額，
-    呼叫綠界 B2B 電子發票 API 開立，並把結果存下來。
+
+    金流改成平台代收後，結算只負責把全額（含服務費）轉去廠商可提領餘額，
+    不會再先扣款——廠商要自己把服務費匯款回平台，後台確認收到匯款後才會
+    呼叫綠界 B2B 電子發票 API 開立。狀態流程：
+    awaiting_remittance（結算完成，等廠商回報匯款）
+      → remittance_reported（廠商已回報，等後台確認）
+      → issued（後台確認後開票成功）/ failed（開票失敗）
+      → 或 rejected（後台覺得回報有問題，退回去等廠商重新回報）
     """
     STATUS_CHOICES = [
-        ('pending', '待開立'),
+        ('awaiting_remittance', '待廠商匯款'),
+        ('remittance_reported', '廠商已回報，待確認'),
         ('issued', '開立成功'),
+        ('rejected', '匯款回報已退回'),
         ('failed', '開立失敗'),
     ]
 
@@ -860,10 +868,18 @@ class VendorInvoice(models.Model):
 
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='tax_amount')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, db_column='total_amount')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_column='status')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='awaiting_remittance', db_column='status')
     invoice_number = models.CharField(max_length=20, blank=True, null=True, db_column='invoice_number')
     error_message = models.TextField(blank=True, null=True, db_column='error_message')
     created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+
+    # 廠商回報匯款時填的資訊，審核通過後才會觸發 issue_b2b_invoice。
+    remittance_amount = models.IntegerField(null=True, blank=True, db_column='remittance_amount')
+    remittance_account_last5 = models.CharField(max_length=5, blank=True, null=True, db_column='remittance_account_last5')
+    remittance_date = models.DateField(null=True, blank=True, db_column='remittance_date')
+    remittance_reported_at = models.DateTimeField(null=True, blank=True, db_column='remittance_reported_at')
+    remittance_confirmed_at = models.DateTimeField(null=True, blank=True, db_column='remittance_confirmed_at')
+    remittance_reject_reason = models.TextField(blank=True, null=True, db_column='remittance_reject_reason')
 
     class Meta:
         db_table = 'Vendor_Invoice'

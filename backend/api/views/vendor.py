@@ -8,11 +8,11 @@ from django.utils import timezone
 from datetime import datetime, time, timedelta
 from django.db import transaction
 from django.db.models import Sum, Count
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import STAGE_ALLOWED_SUBMISSION_TYPE, sync_expired_promoting_missions, restore_order_stock, SUBMISSION_REMINDER_DAYS
-from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest
+from api.models import Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew, Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message, Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorWallet, VendorPayouts, Transactions, ReturnRequest, VendorInvoice
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
@@ -3115,6 +3115,121 @@ def vendor_order_upload_invoice(request):
         "err": "",
         "order_id": str(order.order_id),
         "invoice_number": order.invoice_number
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_list_invoices(request):
+    """
+    廠商自己查看平台服務費發票/匯款紀錄（VendorInvoice），只能看自己的，
+    不需要後台權限檢查。對應後台的 admin_list_vendor_invoices。
+    URL: /vendor/invoices?vendor_id=xxx
+    """
+    vendor_id = request.query_params.get("vendor_id")
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    invoices = VendorInvoice.objects.filter(vendor_id=vendor_id).order_by("-created_at")[:200]
+
+    result = [{
+        "invoice_id": inv.invoice_id,
+        "relate_number": inv.relate_number,
+        "settlement_amount": str(inv.settlement_amount),
+        "service_fee": str(inv.service_fee),
+        "platform_service_fee": str(inv.platform_service_fee) if inv.platform_service_fee is not None else None,
+        "koc_commission_display": str(inv.koc_commission_display) if inv.koc_commission_display is not None else None,
+        "tax_amount": str(inv.tax_amount),
+        "total_amount": str(inv.total_amount),
+        "status": inv.status,
+        "invoice_number": inv.invoice_number,
+        "error_message": inv.error_message,
+        "remittance_amount": inv.remittance_amount,
+        "remittance_account_last5": inv.remittance_account_last5,
+        "remittance_date": inv.remittance_date,
+        "remittance_reported_at": inv.remittance_reported_at,
+        "remittance_reject_reason": inv.remittance_reject_reason,
+        "created_at": inv.created_at,
+    } for inv in invoices]
+
+    return Response({
+        "success": True,
+        "err": "",
+        "invoices": result,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_report_remittance(request):
+    """
+    廠商回報已經把服務費匯款給平台（金額＋匯款帳號後5碼＋匯款日期）。
+    回報後狀態變成 remittance_reported，平台本身不會自動開票，要等後台
+    confirm（見 admin_confirm_vendor_remittance）確認收到款項後才真的
+    呼叫 issue_b2b_invoice。
+    URL: /vendor/invoice/reportRemittance
+    """
+    vendor_id = request.data.get("vendor_id")
+    invoice_id = request.data.get("invoice_id")
+    amount = request.data.get("amount")
+    account_last5 = (request.data.get("account_last5") or "").strip()
+    transfer_date = request.data.get("transfer_date")
+
+    if not vendor_id or not invoice_id or not amount or not account_last5 or not transfer_date:
+        return Response({
+            "success": False,
+            "err": "vendor_id、invoice_id、amount、account_last5、transfer_date 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        invoice = VendorInvoice.objects.get(invoice_id=invoice_id)
+    except VendorInvoice.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的發票紀錄"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if str(invoice.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "這筆發票紀錄不屬於這個廠商"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    # 待匯款、或上次被後台退回，都可以（重新）回報；已經回報待確認/已開票
+    # 的不能再回報，避免覆蓋掉正在審核中或已經成立的紀錄。
+    if invoice.status not in ("awaiting_remittance", "rejected"):
+        return Response({
+            "success": False,
+            "err": f"這筆發票目前狀態是「{invoice.get_status_display()}」，不能回報匯款"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        amount = int(Decimal(str(amount)))
+    except (InvalidOperation, ValueError, TypeError):
+        return Response({
+            "success": False,
+            "err": "amount 必須是數字"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    invoice.remittance_amount = amount
+    invoice.remittance_account_last5 = account_last5
+    invoice.remittance_date = transfer_date
+    invoice.remittance_reported_at = timezone.now()
+    invoice.remittance_reject_reason = None
+    invoice.status = "remittance_reported"
+    invoice.save(update_fields=[
+        "remittance_amount", "remittance_account_last5", "remittance_date",
+        "remittance_reported_at", "remittance_reject_reason", "status",
+    ])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "invoice_id": invoice.invoice_id,
+        "status": invoice.status,
     }, status=status.HTTP_200_OK)
 
 
