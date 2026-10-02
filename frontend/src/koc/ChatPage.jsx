@@ -24,6 +24,7 @@ import {
   sendChatMessage,
   markKocChatroomRead
 } from '../api/koc'
+import { getErrorMessage } from '../errorMessage'
 
 
 function cn(...classes) {
@@ -425,16 +426,9 @@ export default function ChatPage() {
         requestError
       )
 
-      const apiError =
-        requestError.response?.data?.err
 
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '聊天室清單載入失敗'
+        getErrorMessage(requestError, '聊天室清單載入失敗')
       )
     } finally {
       setRoomLoading(false)
@@ -501,16 +495,9 @@ export default function ChatPage() {
         requestError
       )
 
-      const apiError =
-        requestError.response?.data?.err
 
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '聊天室訊息載入失敗'
+        getErrorMessage(requestError, '聊天室訊息載入失敗')
       )
     } finally {
       setMessageLoading(false)
@@ -675,16 +662,9 @@ export default function ChatPage() {
         requestError
       )
 
-      const apiError =
-        requestError.response?.data?.err
 
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '訊息發送失敗'
+        getErrorMessage(requestError, '訊息發送失敗')
       )
     } finally {
       setSending(false)

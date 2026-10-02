@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import KOCVideo from '../assets/KOC_ad.mp4';
+import { getErrorMessage } from '../errorMessage';
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -133,10 +134,10 @@ function KocInsightsSection({ products, categories, onNavigate }) {
     };
     load("topProducts")
       .then(setTop)
-      .catch((err) => setError(`爆款榜載入失敗：${err.message}`));
+      .catch((err) => setError(getErrorMessage(err, '爆款榜載入失敗')));
     load("recommendations")
       .then(setRecs)
-      .catch((err) => setError((prev) => prev || `選品推薦載入失敗：${err.message}`));
+      .catch((err) => setError((prev) => prev || getErrorMessage(err, '選品推薦載入失敗')));
   }, []);
 
   const categoryLabel = (code) =>

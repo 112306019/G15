@@ -19,6 +19,7 @@ import {
 
 import LogoIcon from '../assets/logo.jpg'
 import LogoText from '../assets/ShareBuy.png'
+import { getErrorMessage } from '../errorMessage'
 
 export default function VendorLogin() {
   const navigate = useNavigate()
@@ -150,12 +151,8 @@ export default function VendorLogin() {
         // 才有辦法直接開驗證彈窗（不用另外請使用者輸入一次信箱）
         setError(typeof apiError === 'string' ? apiError : '請先完成 Email 驗證')
         openVerifyModal(err.response.data.email || '')
-      } else if (typeof apiError === 'string') {
-        setError(apiError)
-      } else if (apiError) {
-        setError(JSON.stringify(apiError))
       } else {
-        setError(err.message || '操作失敗，請稍後再試')
+        setError(getErrorMessage(err, '操作失敗，請稍後再試'))
       }
     } finally {
       setLoading(false)

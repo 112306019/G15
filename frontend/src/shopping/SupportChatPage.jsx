@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config';
 import React, { useEffect, useRef, useState } from 'react';
 import { Headset, Loader2, Send } from 'lucide-react';
+import { getErrorMessage } from '../errorMessage';
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -58,7 +59,7 @@ export default function SupportChatPage({ onBack }) {
 
       setMessages(data.messages || []);
     } catch (err) {
-      setLoadError(err.message || '客服訊息載入失敗');
+      setLoadError(getErrorMessage(err, '客服訊息載入失敗'));
     } finally {
       setLoading(false);
     }
@@ -86,7 +87,7 @@ export default function SupportChatPage({ onBack }) {
       setMessages((prev) => [...prev, data.message]);
       setInput('');
     } catch (err) {
-      setSendError(err.message || '訊息送出失敗');
+      setSendError(getErrorMessage(err, '訊息送出失敗'));
     } finally {
       setSending(false);
     }

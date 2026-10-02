@@ -32,6 +32,7 @@ import {
   confirmAdminKocPayout,
   exportKocPayoutTransfers,
 } from '../api/platform'
+import { getErrorMessage } from '../errorMessage'
 
 
 // ======================================================
@@ -667,9 +668,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '產生貨款月結單失敗'
+          getErrorMessage(err, '產生貨款月結單失敗')
         )
       } finally {
         setProcessingKey('')
@@ -727,9 +726,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '批次產生貨款月結單失敗'
+          getErrorMessage(err, '批次產生貨款月結單失敗')
         )
       } finally {
         setProcessingKey('')
@@ -798,9 +795,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '處理貨款月結失敗'
+          getErrorMessage(err, '處理貨款月結失敗')
         )
       } finally {
         setProcessingKey('')
@@ -866,9 +861,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '產生服務費月結單失敗'
+          getErrorMessage(err, '產生服務費月結單失敗')
         )
       } finally {
         setProcessingKey('')
@@ -918,9 +911,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '批次產生服務費月結單失敗'
+          getErrorMessage(err, '批次產生服務費月結單失敗')
         )
       } finally {
         setProcessingKey('')
@@ -996,9 +987,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            '確認廠商服務費失敗'
+          getErrorMessage(err, '確認廠商服務費失敗')
         )
       } finally {
         setProcessingKey('')
@@ -1061,9 +1050,7 @@ export default function AdminFinance() {
         await loadAll(false)
       } catch (err) {
         alert(
-          err.response?.data?.err ||
-            err.message ||
-            'KOC 撥款處理失敗'
+          getErrorMessage(err, 'KOC 撥款處理失敗')
         )
       } finally {
         setProcessingKey('')

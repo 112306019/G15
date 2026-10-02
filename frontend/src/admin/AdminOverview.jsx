@@ -8,6 +8,7 @@ import {
   getAdminOverview,
   getAdminPerformance,
 } from '../api/platform';
+import { getErrorMessage } from '../errorMessage';
 
 function InputField({ label, ...props }) {
   return (
@@ -85,9 +86,7 @@ export default function AdminOverview({ currentRole }) {
         console.error('取得平台總覽失敗：', err);
 
         setError(
-          err.response?.data?.err ||
-            err.message ||
-            '取得平台總覽失敗'
+          getErrorMessage(err, '取得平台總覽失敗')
         );
       } finally {
         setLoading(false);

@@ -24,6 +24,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from api.error_messages import internal_error_message
 from api.models import (
     KOC,
     Order,
@@ -358,9 +359,9 @@ def koc_top_products(request):
             "min_clicks_for_rate": MIN_CLICKS_FOR_RATE,
         }, status=http_status.HTTP_200_OK)
 
-    except Exception as e:
+    except Exception:
         return Response(
-            {"success": False, "err": f"伺服器發生錯誤: {str(e)}"},
+            {"success": False, "err": internal_error_message("爆款榜讀取失敗")},
             status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -531,8 +532,8 @@ def koc_recommended_products(request):
             "recommendations": recommendations,
         }, status=http_status.HTTP_200_OK)
 
-    except Exception as e:
+    except Exception:
         return Response(
-            {"success": False, "err": f"伺服器發生錯誤: {str(e)}"},
+            {"success": False, "err": internal_error_message("選品推薦讀取失敗")},
             status=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

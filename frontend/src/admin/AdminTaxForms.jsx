@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, CheckCircle2, XCircle, Loader2, FileText, Calendar, DollarSign } from 'lucide-react';
 import { getAdminTaxForms, reviewAdminTaxForm } from '../api/platform';
+import { getErrorMessage } from '../errorMessage';
 
 const STATUS_TABS = [
   { value: '', label: '全部' },
@@ -58,13 +59,8 @@ export default function AdminTaxForms() {
 
       setForms(res.data?.forms || []);
     } catch (err) {
-      const apiError = err.response?.data?.err;
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : err.message || '勞報單列表載入失敗'
+        getErrorMessage(err, '勞報單列表載入失敗')
       );
     } finally {
       setLoading(false);
@@ -89,8 +85,7 @@ export default function AdminTaxForms() {
 
       loadForms(statusFilter);
     } catch (err) {
-      const apiError = err.response?.data?.err;
-      alert(typeof apiError === 'string' ? apiError : apiError ? JSON.stringify(apiError) : err.message || '審核失敗');
+      alert(getErrorMessage(err, '審核失敗'));
     } finally {
       setProcessingFormId(null);
     }
@@ -127,9 +122,8 @@ export default function AdminTaxForms() {
       setRejectingForm(null);
       loadForms(statusFilter);
     } catch (err) {
-      const apiError = err.response?.data?.err;
       setRejectError(
-        typeof apiError === 'string' ? apiError : apiError ? JSON.stringify(apiError) : err.message || '退回失敗'
+        getErrorMessage(err, '退回失敗')
       );
     } finally {
       setProcessingFormId(null);

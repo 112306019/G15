@@ -25,6 +25,7 @@ import { Avatar } from './components/ui'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
 import { formatCurrency, cn } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 const couponStatusFilters = ['all', 'active', 'inactive', 'disabled']
 
@@ -437,13 +438,8 @@ export default function KocManagement() {
         )
       } catch (error) {
         console.error('優惠碼資料載入失敗：', error)
-        const apiError = error.response?.data?.err
         setError(
-          typeof apiError === 'string'
-            ? apiError
-            : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '優惠碼資料載入失敗'
+          getErrorMessage(error, '優惠碼資料載入失敗')
         )
       } finally {
         setLoading(false)
@@ -578,13 +574,8 @@ export default function KocManagement() {
 
       toast.success(`優惠碼已${actionLabel}`)
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '優惠碼狀態更新失敗'
+        getErrorMessage(error, '優惠碼狀態更新失敗')
       )
     } finally {
       setUpdating(false)

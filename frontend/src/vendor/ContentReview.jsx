@@ -31,6 +31,7 @@ import {
   getVendorSubmissions,
   reviewVendorSubmission
 } from '../api/vendor'
+import { getErrorMessage } from '../errorMessage'
 
 // ─── 共用 UI 元件 ─────────────────────────────────────────────
 
@@ -307,13 +308,8 @@ export default function ContentReview() {
         )
       } catch (error) {
         console.error('接案申請載入失敗：', error)
-        const apiError = error.response?.data?.err
         setApplicationError(
-          typeof apiError === 'string'
-            ? apiError
-            : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '接案申請載入失敗'
+          getErrorMessage(error, '接案申請載入失敗')
         )
       } finally {
         setApplicationLoading(false)
@@ -369,13 +365,8 @@ export default function ContentReview() {
         )
       } catch (error) {
         console.error('文案投稿載入失敗：', error)
-        const apiError = error.response?.data?.err
         setSubmissionError(
-          typeof apiError === 'string'
-            ? apiError
-            : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '文案投稿載入失敗'
+          getErrorMessage(error, '文案投稿載入失敗')
         )
       } finally {
         setSubmissionLoading(false)
@@ -572,13 +563,8 @@ export default function ContentReview() {
       setQualificationNote('')
     } catch (error) {
       console.error('接案申請審核失敗：', error)
-      const apiError = error.response?.data?.err
       setApplicationError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '接案申請審核失敗'
+        getErrorMessage(error, '接案申請審核失敗')
       )
     } finally {
       setReviewingApplicationId(null)
@@ -665,13 +651,8 @@ export default function ContentReview() {
       setSubmissionNote('')
     } catch (error) {
       console.error('文案審核失敗：', error)
-      const apiError = error.response?.data?.err
       setSubmissionError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '文案審核失敗'
+        getErrorMessage(error, '文案審核失敗')
       )
     } finally {
       setReviewingSubmissionId(null)

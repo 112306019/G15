@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { Check } from "lucide-react";
 import api from '../api/index';
+import { formatApiError } from '../errorMessage';
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -142,7 +143,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
                 setShowSuccessModal(true);
             } else {
                 setSubmitState("idle");
-                showToast("✗ " + (res.data.err || '申請失敗，請稍後再試'));
+                showToast("✗ " + (formatApiError(res.data.err) || '申請失敗，請稍後再試'));
             }
         } catch (err) {
             console.error('申請失敗', err);

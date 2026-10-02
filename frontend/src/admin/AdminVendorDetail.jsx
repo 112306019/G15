@@ -5,6 +5,7 @@ import {
   ArrowLeft, FileText, Wallet, ShieldAlert, CheckCircle, 
   AlertTriangle, Building2, Megaphone, Calendar
 } from 'lucide-react';
+import { formatApiError } from '../errorMessage';
 
 export default function AdminVendorDetail() {
   const navigate = useNavigate();
@@ -121,7 +122,7 @@ export default function AdminVendorDetail() {
       });
 
       if (!response.data.success) {
-        alert(response.data.err || '審核失敗');
+        alert(formatApiError(response.data.err) || '審核失敗');
         return;
       }
 

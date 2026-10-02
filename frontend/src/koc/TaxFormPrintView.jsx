@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Printer } from 'lucide-react';
 import api from '../api/index';
+import { getErrorMessage } from '../errorMessage';
 
 function toRocDate(isoDateOrNow) {
   const d = isoDateOrNow ? new Date(isoDateOrNow) : new Date();
@@ -87,13 +88,8 @@ export default function TaxFormPrintView() {
 
         setData(res.data);
       } catch (err) {
-        const apiError = err.response?.data?.err;
         setError(
-          typeof apiError === 'string'
-            ? apiError
-            : apiError
-              ? JSON.stringify(apiError)
-              : err.message || '資料載入失敗'
+          getErrorMessage(err, '資料載入失敗')
         );
       } finally {
         setLoading(false);

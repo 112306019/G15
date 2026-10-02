@@ -26,6 +26,7 @@ import {
   formatCurrency,
   cn
 } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 
 function Card({
@@ -271,16 +272,9 @@ export default function Overview() {
         requestError
       )
 
-      const apiError =
-        requestError.response?.data?.err
 
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '成效總覽載入失敗'
+        getErrorMessage(requestError, '成效總覽載入失敗')
       )
     } finally {
       setLoading(false)

@@ -36,6 +36,7 @@ import {
   formatCurrency,
   cn
 } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 
 function Card({
@@ -358,16 +359,9 @@ export default function ProductAnalytics() {
         requestError
       )
 
-      const apiError =
-        requestError.response?.data?.err
 
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : requestError.message ||
-              '商品成效載入失敗'
+        getErrorMessage(requestError, '商品成效載入失敗')
       )
     } finally {
       setLoading(false)

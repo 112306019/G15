@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ShieldCheck, Mail, Lock, ArrowRight } from 'lucide-react';
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
+import { formatApiError } from '../errorMessage';
 
 function InputField({ label, hint, icon: Icon, ...props }) {
   return (
@@ -48,7 +49,7 @@ export default function AdminLogin() {
       const data = await res.json();
 
       if (!res.ok || data.success === false) {
-        setLoginError(data.err || "帳號或密碼錯誤");
+        setLoginError(formatApiError(data.err) || "帳號或密碼錯誤");
         setIsLoggingIn(false);
         return;
       }

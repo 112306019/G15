@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ClipboardCheck, ChevronRight, Users } from 'lucide-react';
 import { getKOCList } from '../api/platform';
+import { formatApiError } from '../errorMessage';
 
 export default function AdminKOC() {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function AdminKOC() {
         if (res.data.success) {
           setKocs(res.data.koc_list || []);
         } else {
-          setError(res.data.err || '載入失敗');
+          setError(formatApiError(res.data.err) || '載入失敗');
         }
       } catch (err) {
         console.error('載入 KOC 列表失敗', err);
