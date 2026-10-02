@@ -27,6 +27,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
+from api.error_messages import internal_error_message, serializer_error_message
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
     APPLICATION_STATUS_REVERSE_MAP,
@@ -103,7 +104,7 @@ def update_koc_profile(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -259,10 +260,10 @@ def get_available_campaign_list(request):
             "campaigns": campaigns_data
         })
 
-    except Exception as e:
+    except Exception:
         return Response({
             "success": False,
-            "err": f"伺服器發生錯誤: {str(e)}",
+            "err": internal_error_message("活動列表讀取失敗"),
             "campaigns": []
         }, status=500)
 
@@ -324,10 +325,10 @@ def get_applied_campaign_list(request):
             "campaigns": campaigns_data
         })
 
-    except Exception as e:
+    except Exception:
         return Response({
             "success": False,
-            "err": f"伺服器發生錯誤: {str(e)}",
+            "err": internal_error_message("已申請活動讀取失敗"),
             "campaigns": []
         }, status=500)
 
@@ -451,10 +452,10 @@ def apply_mission(request):
             "status": "pending"           
         })
         
-    except Exception as e:
+    except Exception:
         return Response({
             "success": False,
-            "err": f"伺服器發生錯誤: {str(e)}",
+            "err": internal_error_message("任務申請失敗"),
             "application_id": "",
             "status": "pending"
         }, status=500)
@@ -467,7 +468,7 @@ def mission_submit(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -598,7 +599,7 @@ def save_draft(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -1847,7 +1848,7 @@ def koc_apply(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data

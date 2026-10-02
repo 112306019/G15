@@ -7,6 +7,7 @@ from django.utils import timezone
 from urllib.parse import urlencode, parse_qs, quote_plus
 from urllib.request import Request, urlopen
 
+from api.error_messages import internal_error_message
 from api.models import ShipmentInfo, OrderItem, Vendor, ReturnRequest
 
 from django.conf import settings
@@ -506,9 +507,9 @@ def create_ecpay_logistics_order(order):
     try:
         with urlopen(request, timeout=30) as response:
             raw_response = response.read().decode("utf-8")
-    except Exception as error:
+    except Exception:
         raise ValueError(
-            f"呼叫綠界物流 API 失敗：{error}"
+            internal_error_message("無法連線綠界物流")
         )
 
     if not raw_response.startswith("1|"):
@@ -738,9 +739,9 @@ def query_ecpay_logistics_order(shipment):
                 .decode("utf-8")
             )
 
-    except Exception as error:
+    except Exception:
         raise ValueError(
-            f"查詢綠界物流失敗：{error}"
+            internal_error_message("查詢綠界物流失敗")
         )
 
     response_data = {
@@ -872,7 +873,8 @@ def create_ecpay_return_logistics_order(return_request):
         raise ValueError("目前僅支援 7-ELEVEN 取貨訂單的自動退貨流程")
 
     if not settings.ECPAY_LOGISTICS_REPLY_URL:
-        raise ValueError("尚未設定 ECPAY_LOGISTICS_REPLY_URL")
+        # 平台端環境變數 ECPAY_LOGISTICS_REPLY_URL 沒設定
+        raise ValueError("退貨物流設定不完整，請聯絡平台管理員")
 
     # 退貨品項：單品項退貨只算那一項，整張訂單退貨則列出所有品項
     if return_request.order_item:
@@ -941,8 +943,8 @@ def create_ecpay_return_logistics_order(return_request):
     try:
         with urlopen(request, timeout=30) as response:
             raw_response = response.read().decode("utf-8")
-    except Exception as error:
-        raise ValueError(f"呼叫綠界逆物流 API 失敗：{error}")
+    except Exception:
+        raise ValueError(internal_error_message("無法連線綠界逆物流"))
 
     # 逆物流回應格式（不是 1| 開頭）：
     # 成功：RtnMerchantTradeNo|RtnOrderNo（第一段有值）

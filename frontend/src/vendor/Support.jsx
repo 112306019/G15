@@ -3,6 +3,7 @@ import { Headset, Loader2, Send } from 'lucide-react'
 
 import { getVendorSupportMessages, sendVendorSupportMessage } from '../api/vendor'
 import { cn } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 function formatTime(value) {
   if (!value) return ''
@@ -53,13 +54,8 @@ export default function Support() {
 
       setMessages(response.data?.messages || [])
     } catch (error) {
-      const apiError = error.response?.data?.err
       setLoadError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '客服訊息載入失敗'
+        getErrorMessage(error, '客服訊息載入失敗')
       )
     } finally {
       setLoading(false)
@@ -86,13 +82,8 @@ export default function Support() {
       setMessages(previous => [...previous, response.data.message])
       setInput('')
     } catch (error) {
-      const apiError = error.response?.data?.err
       setSendError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '訊息送出失敗'
+        getErrorMessage(error, '訊息送出失敗')
       )
     } finally {
       setSending(false)

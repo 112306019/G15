@@ -6,6 +6,7 @@ import {
   getDistrictsByCity,
   getPostalCode,
 } from "../taiwanAddress";
+import { getErrorMessage } from '../errorMessage';
 
 function CheckIcon({ className = "" }) {
   return (
@@ -932,6 +933,25 @@ export default function CheckoutPage({
         }
       );
 
+      // GA4：轉帳／貨到付款不會經過綠界付款結果頁（PaymentResultPage），
+      // 在這裡標記為已付款後直接送 purchase，否則這些訂單只會被算成「開始結帳」
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'purchase', {
+          transaction_id: String(orderId),
+          currency: 'TWD',
+          value: grandTotal,
+          coupon: appliedCoupon ? appliedCoupon.code : undefined,
+          link_ref: getKocRef(),
+          payment_type: method,
+          items: normalizedCartItems.map((item) => ({
+            item_id: String(item.productId ?? item.Product_id ?? item.product_id ?? item.id),
+            item_name: item.name ?? item.productName ?? '',
+            price: item.price ?? 0,
+            quantity: item.qty ?? item.quantity ?? item.Quantity ?? 1,
+          })),
+        });
+      }
+
       for (
         const item
         of normalizedCartItems
@@ -979,8 +999,7 @@ export default function CheckoutPage({
       setSubmitState("error");
 
       setPayError(
-        err.message ||
-        "付款失敗，請再試一次"
+        getErrorMessage(err, "付款失敗，請再試一次")
       );
 
       setTimeout(() => {

@@ -5,6 +5,7 @@ import { formatCurrency, cn } from './lib/utils'
 import { getVendorProducts, createVendorProduct, deleteVendorProduct, updateVendorProduct} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
+import { formatApiError, getErrorMessage } from '../errorMessage';
 
 const statusCfg = {
   active:   { label: '推廣中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' }, // 掛在一個進行中的活動
@@ -166,7 +167,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
       if (data.success) {
         setForm(prev => ({ ...prev, imageUrl: data.image_url, thumbnail: data.image_url }));
       } else {
-        toast.error(data.err || "上傳失敗");
+        toast.error(formatApiError(data.err) || "上傳失敗");
       }
     } catch (err) {
       toast.error("上傳失敗，請確認後端是否正常運作");
@@ -207,8 +208,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
       setForm(emptyForm)
       onClose()
     } catch (err) {
-      const apiError = err.response?.data?.err
-      setError(typeof apiError === 'string' ? apiError : apiError ? JSON.stringify(apiError) : err.message || '商品儲存失敗')
+      setError(getErrorMessage(err, '商品儲存失敗'))
     } finally {
       setSaving(false)
     }
@@ -392,7 +392,7 @@ export default function Products() {
         const response = await getVendorProducts(vendorId)
         setProds(response.data.products.map(mapProductFromApi))
       } catch (err) {
-        setError(err.response?.data?.err || err.message || '商品資料載入失敗')
+        setError(getErrorMessage(err, '商品資料載入失敗'))
       } finally {
         setLoading(false)
       }
@@ -433,8 +433,7 @@ export default function Products() {
       setProds(previous => previous.filter(item => item.id !== product.id))
       toast.success('商品已刪除')
     } catch (err) {
-      const apiError = err.response?.data?.err
-      setError(typeof apiError === 'string' ? apiError : apiError ? JSON.stringify(apiError) : err.message || '刪除商品失敗')
+      setError(getErrorMessage(err, '刪除商品失敗'))
     }
   }
 
@@ -485,7 +484,7 @@ export default function Products() {
         status: nextStatus !== 'active' ? 'delisted' : item.stock === 0 ? 'empty' : item.isPromoting ? 'active' : 'idle'
       } : item))
     } catch (err) {
-      setError(err.response?.data?.err || err.message || '商品狀態更新失敗')
+      setError(getErrorMessage(err, '商品狀態更新失敗'))
     }
   }
 

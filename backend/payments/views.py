@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from api.error_messages import internal_error_message
 from api.models import Order
 
 from .models import PaymentTransaction
@@ -49,8 +50,9 @@ def create_payment(request):
     try:
         payment = create_order_payment(order)
         form = build_payment_form(payment)
-    except ValueError as e:
-        return Response({"success": False, "err": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except ValueError:
+        # services 丟出的 ValueError 都是金額/品項資料異常的技術訊息，只記 log
+        return Response({"success": False, "err": internal_error_message("付款建立失敗")}, status=status.HTTP_400_BAD_REQUEST)
     except ImproperlyConfigured:
         logger.exception("ECPay 設定缺漏，無法建立付款")
         raise

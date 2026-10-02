@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, Download, Loader2, X } from 'lucide-react';
 import api from '../api/index';
+import { getErrorMessage } from '../errorMessage';
 
 function isValidUrl(value) {
   try {
@@ -46,13 +47,8 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, userId,
       onSubmitted?.(res.data);
       onClose?.();
     } catch (err) {
-      const apiError = err.response?.data?.err;
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : err.message || '送出失敗，請稍後再試'
+        getErrorMessage(err, '送出失敗，請稍後再試')
       );
     } finally {
       setSubmitting(false);

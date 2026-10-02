@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { ArrowLeft, Mail, Lock, User, ShieldCheck } from "lucide-react";
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
+import { formatApiError } from '../errorMessage';
 
 function InputField({ label, hint, icon: Icon, ...props }) {
   return (
@@ -104,7 +105,7 @@ export default function LoginPage({
         localStorage.setItem("role", data.role);
         onLoginSuccess?.({ userId: data.userId, role: data.role, token: data.token });
       } else {
-        setLoginError(data.err || "帳號或密碼錯誤");
+        setLoginError(formatApiError(data.err) || "帳號或密碼錯誤");
         setLoginNeedsVerification(Boolean(data.needsVerification));
       }
     } catch (err) {
@@ -159,7 +160,7 @@ export default function LoginPage({
           switchToLoginAfterRegister(regEmail.trim());
         }
       } else {
-        setRegError(data.err || "註冊失敗，請再試一次");
+        setRegError(formatApiError(data.err) || "註冊失敗，請再試一次");
       }
     } catch (err) {
       setRegError("網路錯誤，請確認後端是否正常運作");
@@ -190,7 +191,7 @@ export default function LoginPage({
         setRegSuccess(true);
         onRegisterSuccess?.({ name: regName.trim(), account: regEmail.trim() });
       } else {
-        setVerifyError(data.err || "驗證失敗，請再試一次");
+        setVerifyError(formatApiError(data.err) || "驗證失敗，請再試一次");
       }
     } catch (err) {
       setVerifyError("網路錯誤，請確認後端是否正常運作");
@@ -213,7 +214,7 @@ export default function LoginPage({
       if (res.ok && data.success) {
         setVerifyResendMsg("驗證碼已重新寄出，請查收信箱。");
       } else {
-        setVerifyError(data.err || "驗證碼寄送失敗，請稍後再試");
+        setVerifyError(formatApiError(data.err) || "驗證碼寄送失敗，請稍後再試");
       }
     } catch (err) {
       setVerifyError("網路錯誤，請確認後端是否正常運作");
@@ -260,7 +261,7 @@ export default function LoginPage({
       if (res.ok && data.success) {
         setForgotStep("reset");
       } else {
-        setForgotError(data.err || "驗證碼寄送失敗，請稍後再試");
+        setForgotError(formatApiError(data.err) || "驗證碼寄送失敗，請稍後再試");
       }
     } catch (err) {
       setForgotError("網路錯誤，請確認後端是否正常運作");
@@ -291,7 +292,7 @@ export default function LoginPage({
       if (res.ok && data.success) {
         setForgotStep("done");
       } else {
-        setForgotError(data.err || "重設密碼失敗，請稍後再試");
+        setForgotError(formatApiError(data.err) || "重設密碼失敗，請稍後再試");
       }
     } catch (err) {
       setForgotError("網路錯誤，請確認後端是否正常運作");

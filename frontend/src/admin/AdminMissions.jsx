@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ClipboardList, TrendingUp, Clock, Edit } from 'lucide-react';
 import { getAllMissions, updateKOCMissionStage, getEarningsTracking, getVendorReviewOverdue, notifyVendorReviewOverdue } from '../api/platform';
+import { formatApiError } from '../errorMessage';
 
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
@@ -59,7 +60,7 @@ export default function AdminMissions() {
       if (res.data.success) {
         alert('已重新寄送提醒信');
       } else {
-        alert(res.data.err || '寄送失敗');
+        alert(formatApiError(res.data.err) || '寄送失敗');
       }
     } catch (err) {
       alert(err.response?.data?.err || '寄送失敗，請稍後再試');
@@ -76,7 +77,7 @@ export default function AdminMissions() {
       if (res.data.success) {
         setMissions(res.data.missions || []);
       } else {
-        setError(res.data.err || '載入失敗');
+        setError(formatApiError(res.data.err) || '載入失敗');
       }
     } catch (err) {
       console.error('載入任務列表失敗', err);
@@ -119,7 +120,7 @@ export default function AdminMissions() {
         if (res.data.success) {
           setTracking(res.data.tracking || []);
         } else {
-          setTrackingError(res.data.err || '載入失敗');
+          setTrackingError(formatApiError(res.data.err) || '載入失敗');
         }
       } catch (err) {
         console.error('載入分潤追蹤資料失敗', err);
@@ -149,7 +150,7 @@ export default function AdminMissions() {
         setShowUpdateModal(false);
         fetchMissions();
       } else {
-        alert(res.data.err || '更新失敗');
+        alert(formatApiError(res.data.err) || '更新失敗');
       }
     } catch (err) {
       console.error('更新任務階段失敗', err);

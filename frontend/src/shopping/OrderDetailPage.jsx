@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
+import { getErrorMessage } from '../errorMessage';
 
 function formatNTD(amount) {
   const value = Number(amount);
@@ -247,7 +248,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
       setPackingProofUrls([]);
       await fetchReturnRequests();
     } catch (err) {
-      alert(err.message || "申請退貨退款失敗");
+      alert(getErrorMessage(err, "申請退貨退款失敗"));
     } finally {
       setReturnSubmitting(false);
     }
@@ -275,7 +276,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
       }
       await fetchReturnRequests();
     } catch (err) {
-      alert(err.message || "提出爭議失敗");
+      alert(getErrorMessage(err, "提出爭議失敗"));
     } finally {
       setReturnSubmitting(false);
     }
@@ -315,7 +316,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
       }));
     } catch (err) {
       console.error("完成訂單失敗", err);
-      alert(err.message || "完成訂單失敗");
+      alert(getErrorMessage(err, "完成訂單失敗"));
     } finally {
       setCompletingOrder(false);
     }
@@ -362,7 +363,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
       }));
       setCancelModalOpen(false);
     } catch (err) {
-      setCancelError(err.message || "取消訂單失敗，請稍後再試");
+      setCancelError(getErrorMessage(err, "取消訂單失敗，請稍後再試"));
     } finally {
       setCancelSubmitting(false);
     }

@@ -7,6 +7,7 @@ import {
   sendAdminSupportMessage,
   markAdminSupportRead,
 } from '../api/platform';
+import { getErrorMessage } from '../errorMessage';
 
 function formatTime(value) {
   if (!value) return '';
@@ -53,13 +54,8 @@ export default function AdminSupport() {
 
       setRooms(response.data?.rooms || []);
     } catch (error) {
-      const apiError = error.response?.data?.err;
       setRoomsError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '聊天室列表載入失敗'
+        getErrorMessage(error, '聊天室列表載入失敗')
       );
     } finally {
       setRoomsLoading(false);
@@ -90,13 +86,8 @@ export default function AdminSupport() {
         );
       }
     } catch (error) {
-      const apiError = error.response?.data?.err;
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '聊天室訊息載入失敗'
+        getErrorMessage(error, '聊天室訊息載入失敗')
       );
     } finally {
       setMessagesLoading(false);
@@ -133,13 +124,8 @@ export default function AdminSupport() {
         )
       );
     } catch (error) {
-      const apiError = error.response?.data?.err;
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '訊息送出失敗'
+        getErrorMessage(error, '訊息送出失敗')
       );
     } finally {
       setSending(false);

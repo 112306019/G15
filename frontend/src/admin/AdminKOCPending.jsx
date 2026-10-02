@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, X, Mail, Instagram, Clock } from 'lucide-react';
 import { getKOCPendingList, approveKOC, rejectKOC } from '../api/platform';
+import { formatApiError } from '../errorMessage';
 
 const ROLE_LABELS = { 0: '廠商', 1: 'KOC', 2: '消費者' };
 
@@ -26,7 +27,7 @@ export default function AdminKOCPending() {
         setPendingList(res.data.pending_list || []);
       } else {
         setPendingList([]);
-        setError(res.data.err || '載入失敗');
+        setError(formatApiError(res.data.err) || '載入失敗');
       }
     } catch (err) {
       console.error('載入 KOC 待審核清單失敗：', err);
@@ -54,7 +55,7 @@ export default function AdminKOCPending() {
           prev.filter((item) => item.koc_id !== koc.koc_id)
         );
       } else {
-        alert(res.data.err || '審核失敗');
+        alert(formatApiError(res.data.err) || '審核失敗');
       }
     } catch (err) {
       console.error('同意 KOC 申請失敗：', err);
@@ -103,7 +104,7 @@ export default function AdminKOCPending() {
         setRejectTarget(null);
         setRejectReason('');
       } else {
-        alert(res.data.err || '拒絕失敗');
+        alert(formatApiError(res.data.err) || '拒絕失敗');
       }
     } catch (err) {
       console.error('拒絕 KOC 申請失敗：', err);
