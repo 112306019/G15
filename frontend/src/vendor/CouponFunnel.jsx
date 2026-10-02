@@ -8,6 +8,11 @@ const RANGE_OPTIONS = [
   { value: '90daysAgo', label: '近 90 天' },
 ]
 
+const SOURCE_TABS = [
+  { value: 'coupon', label: '手動輸入優惠碼' },
+  { value: 'link', label: '推廣連結' },
+]
+
 const fmtNumber = n => Number(n || 0).toLocaleString()
 const fmtPercent = n =>
   n === null || n === undefined ? '—' : `${(n * 100).toFixed(1)}%`
@@ -25,6 +30,7 @@ function StatCard({ label, value, hint }) {
 export default function CouponFunnel({ open, onClose, campaignId, campaignName }) {
   const vendorId = localStorage.getItem('vendor_id')
   const [range, setRange] = useState('30daysAgo')
+  const [source, setSource] = useState('coupon')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -63,7 +69,10 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
     }
   }, [vendorId, range, open, campaignId])
 
-  const summary = data?.summary
+  const isLink = source === 'link'
+  const view = isLink ? data?.link : data
+  const summary = view?.summary
+  const linkError = isLink && data && !data.link ? data.link_error : ''
 
   if (!open) return null
 
@@ -105,28 +114,60 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
         </select>
       </div>
 
+      <div className="flex gap-2 mb-5">
+        {SOURCE_TABS.map(tab => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setSource(tab.value)}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold border transition-colors ${
+              source === tab.value
+                ? 'bg-[#1A1A18] text-white border-[#1A1A18]'
+                : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4] hover:text-[#1A1A18]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="py-12 flex items-center justify-center text-[#8C8880] gap-2">
           <Loader2 size={18} className="animate-spin" />
           <span className="text-sm font-bold">讀取中...</span>
         </div>
-      ) : error ? (
+      ) : error || linkError ? (
         <div className="py-8 flex items-center justify-center text-[#C8522A] gap-2">
           <AlertCircle size={18} />
-          <span className="text-sm font-bold">{error}</span>
+          <span className="text-sm font-bold">{error || linkError}</span>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-            <StatCard
-              label="優惠碼使用次數（導流點擊）"
-              value={fmtNumber(summary.promotion_uses)}
-              hint="消費者成功套用優惠碼的次數"
-            />
+            {isLink ? (
+              <>
+                <StatCard
+                  label="連結點擊"
+                  value={fmtNumber(summary.clicks)}
+                  hint="點擊推廣短連結的次數（伺服器記錄）"
+                />
+                <StatCard
+                  label="進站"
+                  value={fmtNumber(summary.landings)}
+                  hint="透過連結抵達商品頁的次數（GA4）"
+                />
+              </>
+            ) : (
+              <StatCard
+                label="優惠碼使用次數（導流點擊）"
+                value={fmtNumber(summary.promotion_uses)}
+                hint="消費者成功套用優惠碼的次數"
+              />
+            )}
             <StatCard
               label="開始結帳"
               value={fmtNumber(summary.begin_checkout)}
-              hint="訂單建立、進入付款的次數"
+              hint={isLink ? '點連結後 30 天內建立訂單的次數' : '訂單建立、進入付款的次數'}
             />
             <StatCard
               label="完成購買"
@@ -139,33 +180,51 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
               hint="完成購買 ÷ 開始結帳"
             />
             <StatCard
-              label="棄單率"
+              label="結帳未完成率"
               value={fmtPercent(summary.abandonment_rate)}
               hint="開始結帳但未完成付款的比例"
             />
           </div>
 
-          {data.by_code?.length > 0 && (
+          {view.by_code?.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-[#E2DDD4] text-xs font-bold text-[#8C8880]">
                     <th className="pb-3 pr-4">優惠碼</th>
-                    <th className="pb-3 px-4 text-right">使用次數</th>
+                    {isLink ? (
+                      <>
+                        <th className="pb-3 px-4 text-right">連結點擊</th>
+                        <th className="pb-3 px-4 text-right">進站</th>
+                      </>
+                    ) : (
+                      <th className="pb-3 px-4 text-right">使用次數</th>
+                    )}
                     <th className="pb-3 px-4 text-right">開始結帳</th>
                     <th className="pb-3 px-4 text-right">完成購買</th>
                     <th className="pb-3 pl-4 text-right">營收</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2DDD4]">
-                  {data.by_code.map(row => (
+                  {view.by_code.map(row => (
                     <tr key={row.code} className="text-sm">
                       <td className="py-3 pr-4 font-mono font-bold text-[#1A1A18]">
                         {row.code}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold">
-                        {fmtNumber(row.promotion_uses)}
-                      </td>
+                      {isLink ? (
+                        <>
+                          <td className="py-3 px-4 text-right font-bold">
+                            {fmtNumber(row.clicks)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold">
+                            {fmtNumber(row.landings)}
+                          </td>
+                        </>
+                      ) : (
+                        <td className="py-3 px-4 text-right font-bold">
+                          {fmtNumber(row.promotion_uses)}
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-right font-bold">
                         {fmtNumber(row.begin_checkout)}
                       </td>
@@ -184,6 +243,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
 
           <p className="text-[11px] text-[#8C8880] mt-4">
             Google Analytics 的數據可能有數小時延遲，新事件不會即時顯示。
+            {isLink && ' 連結點擊由伺服器記錄、不受廣告攔截器影響，通常會比 GA4 的進站數多。'}
           </p>
         </>
       )}
