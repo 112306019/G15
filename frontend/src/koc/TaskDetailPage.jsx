@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle } from 'lucide-react';
 import api from '../api/index';
 import { buildPromoLink } from '../config';
+import { formatApiError } from '../errorMessage';
 
 // 小問號圖示，滑鼠移上去顯示說明文字；用具名 group（group/tooltip）避免跟
 // 長條圖那邊既有的 group-hover（放大長條）互相干擾。
@@ -181,7 +182,7 @@ export default function TaskDetailPage({ task, onBack }) {
           // 如果有草稿內容，預填進文字框
           setCopyText(res.data.draft_content || '');
         } else {
-          setLoadError(res.data.err || '任務載入失敗');
+          setLoadError(formatApiError(res.data.err) || '任務載入失敗');
         }
       } catch (err) {
         console.error('載入任務詳情失敗', err);
@@ -292,7 +293,7 @@ export default function TaskDetailPage({ task, onBack }) {
       if (res.data.success) {
         alert('草稿已成功儲存！');
       } else {
-        alert(res.data.err || '儲存失敗');
+        alert(formatApiError(res.data.err) || '儲存失敗');
       }
     } catch (err) {
       console.error('儲存草稿失敗:', err);
@@ -321,7 +322,7 @@ export default function TaskDetailPage({ task, onBack }) {
         setDetail(prev => ({ ...prev, stage: 1, vendor_feedback: null }));
         alert('文案已送出審核！');
       } else {
-        alert(res.data.err || '提交失敗');
+        alert(formatApiError(res.data.err) || '提交失敗');
       }
     } catch (err) {
       console.error('提交失敗', err);
@@ -346,7 +347,7 @@ export default function TaskDetailPage({ task, onBack }) {
         // 跳回任務列表，並通知 HomePage 切換到「推廣中」分頁 (activeStage = 4)
         onBack(4);
       } else {
-        alert(res.data.err || '提交失敗');
+        alert(formatApiError(res.data.err) || '提交失敗');
       }
     } catch (err) {
       console.error('提交連結失敗', err);
@@ -366,7 +367,7 @@ export default function TaskDetailPage({ task, onBack }) {
       });
 
       if (!res.data.success) {
-        alert(res.data.err || '取消失敗，請稍後再試');
+        alert(formatApiError(res.data.err) || '取消失敗，請稍後再試');
         return;
       }
 

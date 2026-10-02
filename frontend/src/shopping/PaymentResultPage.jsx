@@ -3,6 +3,7 @@ import { getKocRef } from '../kocRef';
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
+import { formatApiError } from '../errorMessage';
 
 // 綠界 OrderResultURL 只負責把瀏覽器導回這裡、帶上 order_id，不能相信網址上的任何付款結果欄位
 // （OrderResultURL 跟真正決定狀態的 ReturnURL 到達順序沒有保證，且網址參數任何人都能竄改）。
@@ -64,7 +65,7 @@ export default function PaymentResultPage({ onCartCleared }) {
 
         if (!res.ok || !data.success) {
           setState("error");
-          setErrorMsg(data.err || "查無此訂單的付款紀錄");
+          setErrorMsg(formatApiError(data.err) || "查無此訂單的付款紀錄");
           return;
         }
 

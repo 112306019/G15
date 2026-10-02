@@ -35,6 +35,7 @@ import {
 import { formatCurrency, cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
+import { getErrorMessage } from '../errorMessage'
 
 const shippingFilters = [
   'all',
@@ -802,11 +803,8 @@ function ReturnManagementPanel({ vendorId }) {
       }
       setReturns(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : error.message || '退貨申請載入失敗'
+        getErrorMessage(error, '退貨申請載入失敗')
       )
     } finally {
       setLoadingReturns(false)
@@ -852,7 +850,7 @@ function ReturnManagementPanel({ vendorId }) {
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err || error.message || '處理失敗'
+        getErrorMessage(error, '處理失敗')
       )
     } finally {
       setActingId(null)
@@ -920,7 +918,7 @@ function ReturnManagementPanel({ vendorId }) {
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err || error.message || '拒絕退貨失敗'
+        getErrorMessage(error, '拒絕退貨失敗')
       )
     } finally {
       setActingId(null)
@@ -948,7 +946,7 @@ function ReturnManagementPanel({ vendorId }) {
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err || error.message || '確認收貨失敗'
+        getErrorMessage(error, '確認收貨失敗')
       )
     } finally {
       setActingId(null)
@@ -978,7 +976,7 @@ function ReturnManagementPanel({ vendorId }) {
       await loadReturns()
     } catch (error) {
       toast.error(
-        error.response?.data?.err || error.message || '退款處理失敗'
+        getErrorMessage(error, '退款處理失敗')
       )
     } finally {
       setActingId(null)
@@ -1053,7 +1051,7 @@ function ReturnManagementPanel({ vendorId }) {
       setDisputeTarget(null)
       await loadReturns()
     } catch (error) {
-      toast.error(error.response?.data?.err || error.message || '提出爭議失敗')
+      toast.error(getErrorMessage(error, '提出爭議失敗'))
     } finally {
       setDisputeSubmitting(false)
     }
@@ -1476,13 +1474,8 @@ export default function Orders() {
         )
       } catch (error) {
         console.error('訂單載入失敗：', error)
-        const apiError = error.response?.data?.err
         setError(
-          typeof apiError === 'string'
-            ? apiError
-            : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '訂單載入失敗'
+          getErrorMessage(error, '訂單載入失敗')
         )
       } finally {
         setLoading(false)
@@ -1595,13 +1588,8 @@ export default function Orders() {
           : null
       })
     } catch (error) {
-      const apiError = error.response?.data?.err
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '訂單詳細資料載入失敗'
+        getErrorMessage(error, '訂單詳細資料載入失敗')
       )
       setSelectedOrder(null)
     } finally {
@@ -1661,13 +1649,8 @@ export default function Orders() {
 
       toast.success('出貨狀態已更新')
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '更新出貨狀態失敗'
+        getErrorMessage(error, '更新出貨狀態失敗')
       )
     } finally {
       setShippingUpdating(false)
@@ -1716,11 +1699,8 @@ export default function Orders() {
 
       toast.success('發票號碼已上傳，已通知消費者')
     } catch (error) {
-      const apiError = error.response?.data?.err
       setMsg(
-        typeof apiError === 'string'
-          ? apiError
-          : error.message || '上傳發票號碼失敗'
+        getErrorMessage(error, '上傳發票號碼失敗')
       )
     } finally {
       setUploading(false)
@@ -1770,13 +1750,8 @@ export default function Orders() {
         approve ? '已核准取消，訂單狀態更新為已取消' : '已拒絕取消申請'
       )
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '處理取消申請失敗'
+        getErrorMessage(error, '處理取消申請失敗')
       )
     } finally {
       setCancelRespondingId(null)
@@ -1858,13 +1833,8 @@ export default function Orders() {
         )
       }
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '建立綠界物流單失敗'
+        getErrorMessage(error, '建立綠界物流單失敗')
       )
     } finally {
       setLogisticsCreating(false)
@@ -1912,13 +1882,8 @@ export default function Orders() {
         )
       }
     } catch (error) {
-      const apiError = error.response?.data?.err
       toast.error(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : error.message || '查詢 7-ELEVEN 寄貨編號失敗'
+        getErrorMessage(error, '查詢 7-ELEVEN 寄貨編號失敗')
       )
     } finally {
       setLogisticsQuerying(false)

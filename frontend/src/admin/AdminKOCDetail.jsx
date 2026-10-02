@@ -5,6 +5,7 @@ import {
   ClipboardList, CreditCard, AlertTriangle, Edit
 } from 'lucide-react';
 import { getKOCList, getKOCDetail, updateKOCMissionStage } from '../api/platform';
+import { formatApiError } from '../errorMessage';
 
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
@@ -61,7 +62,7 @@ export default function AdminKocDetail() {
       if (res.data.success) {
         setMissions(res.data.data || []);
       } else {
-        setMissionsError(res.data.err || '載入失敗');
+        setMissionsError(formatApiError(res.data.err) || '載入失敗');
       }
     } catch (err) {
       console.error('載入 KOC 任務參與資料失敗', err);
@@ -93,7 +94,7 @@ export default function AdminKocDetail() {
         setStageTarget(null);
         fetchMissions();
       } else {
-        alert(res.data.err || '更新失敗');
+        alert(formatApiError(res.data.err) || '更新失敗');
       }
     } catch (err) {
       console.error('更新任務階段失敗', err);

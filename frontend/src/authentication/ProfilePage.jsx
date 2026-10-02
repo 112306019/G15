@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import api from '../api/index';
+import { formatApiError } from '../errorMessage';
 
 function Field({ label, value, onChange, disabled, type = "text", placeholder }) {
   return (
@@ -102,7 +103,7 @@ export default function ProfileInfo({ isKOC = false }) {
         showToast("✓ 資料已更新");
         setEditing(false);
       } else {
-        showToast("✗ 更新失敗：" + (res.data.err || '請稍後再試'));
+        showToast("✗ 更新失敗：" + (formatApiError(res.data.err) || '請稍後再試'));
       }
     } catch (err) {
       console.error('更新失敗', err);

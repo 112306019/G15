@@ -26,10 +26,23 @@ class GA4NotConfigured(Exception):
     pass
 
 
+def friendly_error(error, context):
+    """
+    把 GA4 API 的錯誤轉成廠商看得懂的訊息，原始錯誤印到 server log 方便除錯。
+    最常見的是 GA4 後台還沒註冊對應的自訂維度（例如 link_ref），
+    這是平台端的設定問題，廠商自己無法處理。
+    """
+    print(f"GA4 {context}讀取失敗: {error}")
+    if "is not a valid dimension" in str(error):
+        return f"GA4 尚未完成{context}追蹤設定，請聯絡平台管理員"
+    return f"{context}數據暫時無法讀取，請稍後再試"
+
+
 def _get_client():
     raw = os.getenv("GA4_CREDENTIALS_JSON", "")
     if not raw or not os.getenv("GA4_PROPERTY_ID"):
-        raise GA4NotConfigured("尚未設定 GA4_CREDENTIALS_JSON 或 GA4_PROPERTY_ID")
+        print("GA4 未設定：缺少環境變數 GA4_CREDENTIALS_JSON 或 GA4_PROPERTY_ID")
+        raise GA4NotConfigured("GA4 尚未完成設定，請聯絡平台管理員")
 
     info = json.loads(raw)
     credentials = service_account.Credentials.from_service_account_info(
@@ -41,7 +54,7 @@ def _get_client():
 
 def _event_count_by_code(client, property_id, event_name, dimension_name, codes, start_date, end_date):
     """
-    回傳 {優惠碼: 事件次數}。
+    回傳 {優惠碼: {"events": 事件次數, "users": 不重複人數}}。
     dimension_name 是 GA4 自訂維度名稱，格式為 customEvent:<參數名稱>。
     """
     if not codes:
@@ -50,7 +63,7 @@ def _event_count_by_code(client, property_id, event_name, dimension_name, codes,
     request = RunReportRequest(
         property=f"properties/{property_id}",
         dimensions=[Dimension(name=dimension_name)],
-        metrics=[Metric(name="eventCount")],
+        metrics=[Metric(name="eventCount"), Metric(name="totalUsers")],
         date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
         dimension_filter=FilterExpression(
             and_group=FilterExpressionList(
@@ -79,19 +92,26 @@ def _event_count_by_code(client, property_id, event_name, dimension_name, codes,
     result = {}
     for row in response.rows:
         code = row.dimension_values[0].value
-        result[code] = int(row.metric_values[0].value)
+        result[code] = {
+            "events": int(row.metric_values[0].value),
+            "users": int(row.metric_values[1].value),
+        }
     return result
 
 
 def _purchase_stats_by_code(client, property_id, dimension_name, codes, start_date, end_date):
-    """回傳 {優惠碼: {"purchases": 購買次數, "revenue": 營收}}。"""
+    """回傳 {優惠碼: {"purchases": 購買次數, "users": 不重複人數, "revenue": 營收}}。"""
     if not codes:
         return {}
 
     request = RunReportRequest(
         property=f"properties/{property_id}",
         dimensions=[Dimension(name=dimension_name)],
-        metrics=[Metric(name="eventCount"), Metric(name="purchaseRevenue")],
+        metrics=[
+            Metric(name="eventCount"),
+            Metric(name="totalUsers"),
+            Metric(name="purchaseRevenue"),
+        ],
         date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
         dimension_filter=FilterExpression(
             and_group=FilterExpressionList(
@@ -122,44 +142,55 @@ def _purchase_stats_by_code(client, property_id, dimension_name, codes, start_da
         code = row.dimension_values[0].value
         result[code] = {
             "purchases": int(row.metric_values[0].value),
-            "revenue": float(row.metric_values[1].value),
+            "users": int(row.metric_values[1].value),
+            "revenue": float(row.metric_values[2].value),
         }
     return result
 
 
 def _build_funnel(codes, first_step, checkouts, purchases):
-    """把三個步驟的 {優惠碼: 次數} 組成每碼明細與總計。first_step 是漏斗第一步的次數。"""
+    """
+    把三個步驟的查詢結果組成每碼明細與總計。first_step 是漏斗第一步。
+
+    開始結帳與完成購買同時保留「人數」與「次數」：同一個人付款失敗後重新結帳
+    會建立新訂單、多送一次 begin_checkout，所以轉換率用人數計算才不會被重試灌低。
+    總計是各優惠碼人數相加，同一個人用了兩組優惠碼會被算兩次。
+    """
     by_code = []
-    total_first = total_checkouts = total_purchases = 0
-    total_revenue = 0.0
+    totals = {
+        "first_step": 0,
+        "begin_checkout_users": 0,
+        "begin_checkout_events": 0,
+        "purchase_users": 0,
+        "purchases": 0,
+        "revenue": 0.0,
+    }
 
     for code in codes:
-        f = first_step.get(code, 0)
-        c = checkouts.get(code, 0)
-        p = purchases.get(code, {}).get("purchases", 0)
-        r = purchases.get(code, {}).get("revenue", 0.0)
-        by_code.append({
-            "code": code,
-            "first_step": f,
-            "begin_checkout": c,
-            "purchases": p,
-            "revenue": r,
-        })
-        total_first += f
-        total_checkouts += c
-        total_purchases += p
-        total_revenue += r
+        checkout = checkouts.get(code, {})
+        purchase = purchases.get(code, {})
+        row = {
+            "first_step": first_step.get(code, {}).get("events", 0),
+            "begin_checkout_users": checkout.get("users", 0),
+            "begin_checkout_events": checkout.get("events", 0),
+            "purchase_users": purchase.get("users", 0),
+            "purchases": purchase.get("purchases", 0),
+            "revenue": purchase.get("revenue", 0.0),
+        }
+        for key, value in row.items():
+            totals[key] += value
+        by_code.append({"code": code, **row})
 
-    # 結帳轉換率 = 購買 ÷ 開始結帳；結帳未完成率 = 1 − 轉換率
-    checkout_cvr = (total_purchases / total_checkouts) if total_checkouts else None
+    # 結帳轉換率 = 完成購買人數 ÷ 開始結帳人數；結帳未完成率 = 1 − 轉換率
+    checkout_users = totals["begin_checkout_users"]
+    checkout_cvr = (
+        min(totals["purchase_users"] / checkout_users, 1.0) if checkout_users else None
+    )
     abandonment_rate = (1 - checkout_cvr) if checkout_cvr is not None else None
 
     return {
         "summary": {
-            "first_step": total_first,
-            "begin_checkout": total_checkouts,
-            "purchases": total_purchases,
-            "revenue": total_revenue,
+            **totals,
             "checkout_cvr": checkout_cvr,
             "abandonment_rate": abandonment_rate,
         },
@@ -224,6 +255,6 @@ def get_coupon_funnel(codes, start_date="30daysAgo", end_date="today"):
         funnel["link_error"] = ""
     except Exception as error:
         funnel["link"] = None
-        funnel["link_error"] = f"推廣連結數據讀取失敗：{error}"
+        funnel["link_error"] = friendly_error(error, "推廣連結")
 
     return funnel

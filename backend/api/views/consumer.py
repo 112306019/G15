@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+from api.error_messages import internal_error_message
 from api.r2_storage import upload_image_to_r2
 from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
 from .platform import (
@@ -1864,8 +1865,8 @@ def get_product_campaign(request):
             'end_date': campaign.end_date,
             'status': campaign.status,
         }, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({'success': False, 'err': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        return Response({'success': False, 'err': internal_error_message('活動資料讀取失敗')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ==============================================================================
@@ -2366,8 +2367,8 @@ def consumer_upload_image(request):
             "success": True,
             "image_url": image_url
         }, status=status.HTTP_200_OK)
-    except Exception as e:
+    except Exception:
         return Response({
             "success": False,
-            "err": str(e)
+            "err": internal_error_message("圖片上傳失敗")
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

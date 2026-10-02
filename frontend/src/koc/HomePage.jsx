@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, Copy, Check } from 'lucide-react';
 import api from '../api/index';
 import { buildPromoLink } from '../config';
+import { formatApiError } from '../errorMessage';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
@@ -276,7 +277,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
         }));
         setAppliedCampaign(campaign);
       } else {
-        alert(res.data.err || '申請失敗');
+        alert(formatApiError(res.data.err) || '申請失敗');
       }
     } catch (err) {
       console.error(err);

@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config';
 import React, { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { formatApiError } from '../errorMessage';
 
 function ImgIcon() {
   return (
@@ -291,7 +292,7 @@ export default function CartPage({
         setCouponMsg({ show: true, text: "已獲得優惠！", ok: true });
       } else {
         setCouponApplied(false);
-        setCouponMsg({ show: true, text: data.err || "優惠碼無效", ok: false });
+        setCouponMsg({ show: true, text: formatApiError(data.err) || "優惠碼無效", ok: false });
       }
     } catch (err) {
       setCouponMsg({ show: true, text: "驗證失敗，請稍後再試", ok: false });

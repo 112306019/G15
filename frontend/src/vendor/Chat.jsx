@@ -25,6 +25,7 @@ import {
 
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 const stageLabels = {
   pending: '等待開始',
@@ -217,13 +218,8 @@ export default function Chat() {
       }
     } catch (requestError) {
       console.error('聊天室清單載入失敗：', requestError)
-      const apiError = requestError.response?.data?.err
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : requestError.message || '聊天室清單載入失敗'
+        getErrorMessage(requestError, '聊天室清單載入失敗')
       )
     } finally {
       setRoomLoading(false)
@@ -283,13 +279,8 @@ export default function Chat() {
       await markRoomRead(roomId)
     } catch (requestError) {
       console.error('聊天室訊息載入失敗：', requestError)
-      const apiError = requestError.response?.data?.err
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : requestError.message || '聊天室訊息載入失敗'
+        getErrorMessage(requestError, '聊天室訊息載入失敗')
       )
     } finally {
       setMessageLoading(false)
@@ -384,13 +375,8 @@ export default function Chat() {
       setInput('')
     } catch (requestError) {
       console.error('訊息發送失敗：', requestError)
-      const apiError = requestError.response?.data?.err
       setMessageError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : requestError.message || '訊息發送失敗'
+        getErrorMessage(requestError, '訊息發送失敗')
       )
     } finally {
       setSending(false)

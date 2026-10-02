@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import status as http_status
 
+from api.error_messages import internal_error_message, serializer_error_message
 from api.models import (
     User,
     Vendor,
@@ -3498,7 +3499,7 @@ def koc_approve(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -3565,7 +3566,7 @@ def koc_reject(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -3765,7 +3766,7 @@ def koc_mission_stage_update(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": "; ".join(str(e) for e in serializer.errors.values())
+            "err": serializer_error_message(serializer.errors)
         }, status=http_status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -4335,10 +4336,10 @@ def admin_resolve_return_dispute(request):
             'success': False,
             'err': str(error)
         }, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as error:
+    except Exception:
         return Response({
             'success': False,
-            'err': f'退款帳務處理失敗：{error}'
+            'err': internal_error_message('退款帳務處理失敗')
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -4568,10 +4569,10 @@ def admin_notify_vendor_review_overdue(request):
 
     try:
         send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted)
-    except Exception as e:
+    except Exception:
         return Response({
             'success': False,
-            'err': f'提醒信寄送失敗：{e}',
+            'err': internal_error_message('提醒信寄送失敗'),
         }, status=status.HTTP_502_BAD_GATEWAY)
 
     # 手動重寄後，也更新記錄，避免排程指令緊接著又寄一次重複的信

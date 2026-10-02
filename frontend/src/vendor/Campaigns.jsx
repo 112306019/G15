@@ -5,6 +5,7 @@ import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
+import { formatApiError, getErrorMessage } from '../errorMessage';
 
 
 // 取得今天的日期字串 (YYYY-MM-DD)，用於防呆與排程判斷
@@ -193,7 +194,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       if (data.success) {
         setForm(prev => ({ ...prev, prodImageUrl: data.image_url, thumbnail: data.image_url }))
       } else {
-        toast.error(data.err || "上傳失敗")
+        toast.error(formatApiError(data.err) || "上傳失敗")
       }
     } catch (err) {
       toast.error("上傳失敗，請確認後端是否正常運作")
@@ -328,9 +329,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       onClose()
     } catch (error) {
       toast.error(
-        error.response?.data?.err
-          ? JSON.stringify(error.response.data.err)
-          : error.message || '儲存草稿失敗'
+        getErrorMessage(error, '儲存草稿失敗')
       )
     } finally {
       setIsSaving(false)
@@ -372,9 +371,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       onClose()
     } catch (error) {
       toast.error(
-        error.response?.data?.err
-          ? JSON.stringify(error.response.data.err)
-          : error.message || '任務發佈失敗'
+        getErrorMessage(error, '任務發佈失敗')
       )
     } finally {
       setIsSaving(false)
@@ -809,9 +806,7 @@ export default function Campaigns() {
       toast.success('草稿已刪除')
     } catch (error) {
       toast.error(
-        error.response?.data?.err ||
-        error.message ||
-        '刪除草稿失敗'
+        getErrorMessage(error, '刪除草稿失敗')
       )
     }
   }
@@ -872,9 +867,7 @@ export default function Campaigns() {
       setKocList([])
 
       setKocError(
-        error.response?.data?.err ||
-        error.message ||
-        'KOC 報名名單載入失敗'
+        getErrorMessage(error, 'KOC 報名名單載入失敗')
       )
     } finally {
       setKocLoading(false)
@@ -953,14 +946,9 @@ export default function Campaigns() {
     } catch (error) {
       console.error('審核 KOC 申請失敗：', error)
 
-      const apiError = error.response?.data?.err
 
       setKocError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '審核失敗'
+        getErrorMessage(error, '審核失敗')
       )
     } finally {
       setReviewingApplicationId(null)
@@ -1030,7 +1018,7 @@ export default function Campaigns() {
         const response = await getVendorCampaigns(vendorId)
         setItems((response.data.campaigns || []).map(mapCampaignFromApi))
       } catch (error) {
-        setError(error.response?.data?.err || error.message || '任務資料載入失敗')
+        setError(getErrorMessage(error, '任務資料載入失敗'))
       } finally {
         setCampaignLoading(false)
       }
@@ -1052,7 +1040,7 @@ export default function Campaigns() {
           const response = await getVendorProducts(vendorId)
           setExistingProducts(response.data.products || [])
         } catch (error) {
-          setError(error.response?.data?.err || error.message || '商品資料載入失敗')
+          setError(getErrorMessage(error, '商品資料載入失敗'))
         } finally {
           setProductLoading(false)
         }

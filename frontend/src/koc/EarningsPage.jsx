@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/index';
 import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle, Receipt } from 'lucide-react';
+import { getErrorMessage } from '../errorMessage';
 
 function extractApiError(err, fallback) {
-  const apiError = err.response?.data?.err;
-  if (typeof apiError === 'string' && apiError) return apiError;
-  if (apiError) return JSON.stringify(apiError);
-  return err.message || fallback;
+  return getErrorMessage(err, fallback);
 }
 
 function MissingTaxFormModal({ amount, onClose, onGoFill }) {

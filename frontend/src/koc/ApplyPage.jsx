@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, CheckCircle2, PackageCheck, Info } from 'lucide-react';
 import api from '../api/index';
+import { formatApiError } from '../errorMessage';
 
 export default function ApplyPage() {
   const user_id = localStorage.getItem('userId');
@@ -92,7 +93,7 @@ export default function ApplyPage() {
         ]);
         setShowModal(true);
       } else {
-        alert(res.data.err || '申請失敗');
+        alert(formatApiError(res.data.err) || '申請失敗');
       }
     } catch (err) {
       console.error(err);

@@ -9,6 +9,7 @@ from datetime import datetime, time, timedelta
 from django.db import transaction
 from django.db.models import Sum, Count, Min
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from api.error_messages import internal_error_message, serializer_error_message
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import (
@@ -74,7 +75,7 @@ def vendor_register(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     email = serializer.validated_data.get("email")
@@ -240,7 +241,7 @@ def vendor_login(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     vendor_id = serializer.validated_data["vendor_id"]
@@ -359,7 +360,7 @@ def vendor_profile_update(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     serializer.save()
@@ -389,7 +390,7 @@ def vendor_product_create(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     vendor_id = serializer.validated_data.get("vendor_id")
@@ -449,7 +450,7 @@ def vendor_product_update(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     serializer.save()
@@ -473,7 +474,7 @@ def vendor_product_update_status(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     product_id = serializer.validated_data["product_id"]
@@ -680,7 +681,7 @@ def vendor_campaign_create(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -818,10 +819,10 @@ def vendor_campaign_create(request):
                 koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
             )
 
-    except Exception as error:
+    except Exception:
         return Response({
             "success": False,
-            "err": str(error)
+            "err": internal_error_message("任務建立失敗")
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
@@ -851,7 +852,7 @@ def vendor_campaign_update(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     data = serializer.validated_data
@@ -1035,10 +1036,10 @@ def vendor_campaign_update(request):
                     koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
                 )
 
-    except Exception as error:
+    except Exception:
         return Response({
             "success": False,
-            "err": str(error)
+            "err": internal_error_message("任務更新失敗")
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
@@ -1398,7 +1399,7 @@ def vendor_application_review(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     vendor_id = serializer.validated_data["vendor_id"]
@@ -1559,10 +1560,10 @@ def vendor_application_review(request):
                 created_coupon = coupon
                 created_chatroom = chatroom
 
-    except Exception as error:
+    except Exception:
         return Response({
             "success": False,
-            "err": str(error)
+            "err": internal_error_message("申請審核失敗")
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if application.koc:
@@ -1748,7 +1749,7 @@ def vendor_mission_review_submission(request):
     if not serializer.is_valid():
         return Response({
             "success": False,
-            "err": serializer.errors
+            "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     vendor_id = serializer.validated_data["vendor_id"]
@@ -2117,12 +2118,12 @@ def vendor_order_create_logistics(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    except Exception as error:
+    except Exception:
         return Response(
             {
                 "success": False,
                 "err":
-                    f"建立物流單失敗：{error}"
+                    internal_error_message("建立物流單失敗")
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
@@ -2226,11 +2227,11 @@ def vendor_order_query_logistics(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    except Exception as error:
+    except Exception:
         return Response(
             {
                 "success": False,
-                "err": f"查詢物流失敗：{error}"
+                "err": internal_error_message("查詢物流失敗")
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
@@ -3001,9 +3002,9 @@ def vendor_return_process_refund(request):
             {"success": False, "err": str(error)},
             status=status.HTTP_400_BAD_REQUEST
         )
-    except Exception as error:
+    except Exception:
         return Response(
-            {"success": False, "err": f"退款帳務處理失敗：{error}"},
+            {"success": False, "err": internal_error_message("退款帳務處理失敗")},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -4141,7 +4142,7 @@ def vendor_upload_image(request):
     except Exception as e:
         return Response({
             "success": False,
-            "err": str(e)
+            "err": internal_error_message("圖片上傳失敗")
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ==============================================================================
@@ -5192,9 +5193,10 @@ def vendor_analytics_funnel(request):
     再用優惠碼去 GA4 篩選 select_promotion / begin_checkout / purchase 事件。
     另外回傳 link：從推廣連結（/r/<優惠碼>）進站的漏斗，點擊數來自後端記錄。
     """
-    from api.ga4_client import get_coupon_funnel, GA4NotConfigured
+    from api.ga4_client import get_coupon_funnel, GA4NotConfigured, friendly_error
 
     vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
     start_date = request.GET.get("start_date") or "30daysAgo"
     end_date = request.GET.get("end_date") or "today"
 
@@ -5204,11 +5206,14 @@ def vendor_analytics_funnel(request):
             "err": "vendor_id is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    codes = list(
-        CouponNew.objects
-        .filter(kocmission__application__campaign__vendor_id=vendor_id)
-        .values_list("promotion_code", flat=True)
+    coupon_qs = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
     )
+    if campaign_id:
+        coupon_qs = coupon_qs.filter(
+            kocmission__application__campaign_id=campaign_id
+        )
+    codes = list(coupon_qs.values_list("promotion_code", flat=True))
 
     try:
         funnel = get_coupon_funnel(codes, start_date, end_date)
@@ -5221,7 +5226,7 @@ def vendor_analytics_funnel(request):
     except Exception as error:
         return Response({
             "success": False,
-            "err": f"GA4 資料讀取失敗：{error}"
+            "err": friendly_error(error, "優惠碼")
         }, status=status.HTTP_502_BAD_GATEWAY)
 
     return Response({

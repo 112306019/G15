@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Loader2, AlertCircle, X } from 'lucide-react'
 import { getVendorAnalyticsFunnel } from '../api/vendor'
+import { getErrorMessage } from '../errorMessage'
 
 const RANGE_OPTIONS = [
   { value: '7daysAgo', label: '近 7 天' },
@@ -56,7 +57,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
       } catch (err) {
         if (cancelled) return
         setError(
-          err.response?.data?.err || err.message || '電商漏斗資料讀取失敗'
+          getErrorMessage(err, '電商漏斗資料讀取失敗')
         )
       } finally {
         if (!cancelled) setLoading(false)
@@ -165,24 +166,24 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
               />
             )}
             <StatCard
-              label="開始結帳"
-              value={fmtNumber(summary.begin_checkout)}
-              hint={isLink ? '點連結後 30 天內建立訂單的次數' : '訂單建立、進入付款的次數'}
+              label="開始結帳人數"
+              value={fmtNumber(summary.begin_checkout_users)}
+              hint={`${isLink ? '點連結後 30 天內' : ''}共建立 ${fmtNumber(summary.begin_checkout_events)} 筆訂單`}
             />
             <StatCard
-              label="完成購買"
-              value={fmtNumber(summary.purchases)}
-              hint={`營收 NT$ ${fmtNumber(summary.revenue)}`}
+              label="完成購買人數"
+              value={fmtNumber(summary.purchase_users)}
+              hint={`${fmtNumber(summary.purchases)} 筆訂單｜營收 NT$ ${fmtNumber(summary.revenue)}`}
             />
             <StatCard
               label="結帳轉換率"
               value={fmtPercent(summary.checkout_cvr)}
-              hint="完成購買 ÷ 開始結帳"
+              hint="完成購買人數 ÷ 開始結帳人數"
             />
             <StatCard
               label="結帳未完成率"
               value={fmtPercent(summary.abandonment_rate)}
-              hint="開始結帳但未完成付款的比例"
+              hint="開始結帳但沒有完成付款的人數比例"
             />
           </div>
 
@@ -200,8 +201,8 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
                     ) : (
                       <th className="pb-3 px-4 text-right">使用次數</th>
                     )}
-                    <th className="pb-3 px-4 text-right">開始結帳</th>
-                    <th className="pb-3 px-4 text-right">完成購買</th>
+                    <th className="pb-3 px-4 text-right">開始結帳（人）</th>
+                    <th className="pb-3 px-4 text-right">完成購買（人）</th>
                     <th className="pb-3 pl-4 text-right">營收</th>
                   </tr>
                 </thead>
@@ -226,10 +227,10 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
                         </td>
                       )}
                       <td className="py-3 px-4 text-right font-bold">
-                        {fmtNumber(row.begin_checkout)}
+                        {fmtNumber(row.begin_checkout_users)}
                       </td>
                       <td className="py-3 px-4 text-right font-bold">
-                        {fmtNumber(row.purchases)}
+                        {fmtNumber(row.purchase_users)}
                       </td>
                       <td className="py-3 pl-4 text-right font-black text-[#C8522A]">
                         NT$ {fmtNumber(row.revenue)}
@@ -243,6 +244,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
 
           <p className="text-[11px] text-[#8C8880] mt-4">
             Google Analytics 的數據可能有數小時延遲，新事件不會即時顯示。
+            人數以裝置（瀏覽器）計算，同一個人重新結帳只算一次。
             {isLink && ' 連結點擊由伺服器記錄、不受廣告攔截器影響，通常會比 GA4 的進站數多。'}
           </p>
         </>

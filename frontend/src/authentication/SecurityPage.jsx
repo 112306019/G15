@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Lock } from "lucide-react";
 import { API_BASE_URL } from "../config";
+import { formatApiError } from '../errorMessage';
 
 function Modal({ open, title, onClose, children }) {
   return (
@@ -138,7 +139,7 @@ export default function SecurityPage({ onLogout }) {
         setPasswordUpdatedAt(new Date().toISOString());
         showToast("✓ 密碼已成功更新");
       } else {
-        showToast(data.err || "密碼更新失敗");
+        showToast(formatApiError(data.err) || "密碼更新失敗");
       }
     } catch (err) {
       showToast("網路錯誤，請稍後再試");

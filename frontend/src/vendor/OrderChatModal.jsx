@@ -3,6 +3,7 @@ import { X, MessageCircle, Loader2, Send, Package } from 'lucide-react'
 
 import { getVendorOrderChatMessages, sendVendorOrderChatMessage } from '../api/vendor'
 import { cn, formatCurrency } from './lib/utils'
+import { getErrorMessage } from '../errorMessage'
 
 function formatTime(value) {
   if (!value) return ''
@@ -48,13 +49,8 @@ export default function OrderChatModal({ open, orderId, vendorId, items = [], to
 
       setMessages(response.data?.messages || [])
     } catch (error) {
-      const apiError = error.response?.data?.err
       setLoadError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '訊息載入失敗'
+        getErrorMessage(error, '訊息載入失敗')
       )
     } finally {
       setLoading(false)
@@ -82,13 +78,8 @@ export default function OrderChatModal({ open, orderId, vendorId, items = [], to
       setMessages(previous => [...previous, response.data.message])
       setInput('')
     } catch (error) {
-      const apiError = error.response?.data?.err
       setSendError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-            ? JSON.stringify(apiError)
-            : error.message || '訊息送出失敗'
+        getErrorMessage(error, '訊息送出失敗')
       )
     } finally {
       setSending(false)

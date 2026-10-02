@@ -17,6 +17,7 @@ import {
   getPostalCode,
   normalizeCityName,
 } from '../taiwanAddress'
+import { getErrorMessage } from '../errorMessage'
 
 
 function Card({ children, className = '' }) {
@@ -173,9 +174,7 @@ export default function Settings() {
         })
       } catch (err) {
         setError(
-          err.response?.data?.err ||
-          err.message ||
-          '廠商資料載入失敗'
+          getErrorMessage(err, '廠商資料載入失敗')
         )
       } finally {
         setLoading(false)
@@ -315,16 +314,9 @@ export default function Settings() {
 
       setMessage('資料更新成功')
     } catch (err) {
-      const apiError =
-        err.response?.data?.err
 
       setError(
-        typeof apiError === 'string'
-          ? apiError
-          : apiError
-          ? JSON.stringify(apiError)
-          : err.message ||
-            '公司資料更新失敗'
+        getErrorMessage(err, '公司資料更新失敗')
       )
     } finally {
       setSaving(false)
