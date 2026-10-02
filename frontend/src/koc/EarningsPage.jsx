@@ -209,7 +209,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
                   className="flex-1 flex items-center justify-center gap-2 bg-white border border-[#E2DDD4] text-[#1A1A18] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#F5F0E8] hover:-translate-y-1 transition-all active:translate-y-0 shadow-sm"
                 >
                   <FileText size={16} className="md:w-[18px] md:h-[18px]" />
-                  查看收益明細
+                  查看分潤詳情
                 </button>
               </div>
             </div>

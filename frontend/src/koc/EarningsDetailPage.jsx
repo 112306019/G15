@@ -18,16 +18,14 @@ export default function EarningsDetailPage({ onBack }) {
         });
         if (res.data.success) {
           setDetails(res.data.history.map(item => ({
-            date: item.date || '-',
             amount: `$${item.amount}`,
-            id: item.earnings_no,
             task: item.campaign_name || '-',
             status: STATUS_LABEL[item.status],
             commissionRate: item.commission_rate,
           })));
         }
       } catch (err) {
-        console.error('載入收益明細失敗', err);
+        console.error('載入分潤詳情失敗', err);
       } finally {
         setLoading(false);
       }
@@ -46,14 +44,12 @@ export default function EarningsDetailPage({ onBack }) {
         返回我的收益
       </button>
 
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">收益明細</h2>
+      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">分潤詳情</h2>
 
       <div className="w-full bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-        
-        <div className="hidden md:grid grid-cols-6 px-10 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
-          <span>匯款日期</span>
+
+        <div className="hidden md:grid grid-cols-4 px-10 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
           <span>收款金額</span>
-          <span>金流編號</span>
           <span>接案名稱</span>
           <span>分潤比例</span>
           <span>狀態</span>
@@ -64,7 +60,7 @@ export default function EarningsDetailPage({ onBack }) {
           {loading ? (
             <div className="py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">載入中...</div>
           ) : details.length === 0 ? (
-            <div className="py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">目前沒有收益明細</div>
+            <div className="py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">目前沒有分潤詳情</div>
           ) : (
             details.map((item, index) => (
               <div
@@ -81,13 +77,6 @@ export default function EarningsDetailPage({ onBack }) {
                   </div>
                   <div className="flex justify-between items-end mt-1">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] text-[#8C8880] font-medium flex items-center gap-1.5">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#E2DDD4]"></span>
-                        {item.date}
-                      </span>
-                      <span className="text-[10px] text-[#8C8880] font-mono tracking-wide">
-                        ID: {item.id}
-                      </span>
                       {item.commissionRate && (
                         <span className="text-[10px] text-[#8C8880] font-medium">
                           分潤比例 {item.commissionRate}%
@@ -103,11 +92,9 @@ export default function EarningsDetailPage({ onBack }) {
                 </div>
 
                 {/* ======== 電腦版排版 (傳統表格橫排) ======== */}
-                <div className="hidden md:grid grid-cols-6 items-center text-sm gap-4">
-                  <div className="text-[#8C8880] font-medium">{item.date}</div>
+                <div className="hidden md:grid grid-cols-4 items-center text-sm gap-4">
                   {/* 金額使用焦糖橘色強調 */}
                   <div className="font-bold text-[#C8522A] text-base">{item.amount}</div>
-                  <div className="text-[#8C8880] font-mono">{item.id}</div>
                   <div className="font-bold text-[#1A1A18] truncate pr-4">{item.task}</div>
                   <div className="text-[#8C8880] font-medium">{item.commissionRate ? `${item.commissionRate}%` : '—'}</div>
                   {/* 根據狀態變色 */}
