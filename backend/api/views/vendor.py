@@ -5101,6 +5101,7 @@ def vendor_analytics_funnel(request):
     from api.ga4_client import get_coupon_funnel, GA4NotConfigured, friendly_error
 
     vendor_id = request.GET.get("vendor_id")
+    campaign_id = request.GET.get("campaign_id")
     start_date = request.GET.get("start_date") or "30daysAgo"
     end_date = request.GET.get("end_date") or "today"
 
@@ -5110,11 +5111,14 @@ def vendor_analytics_funnel(request):
             "err": "vendor_id is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    codes = list(
-        CouponNew.objects
-        .filter(kocmission__application__campaign__vendor_id=vendor_id)
-        .values_list("promotion_code", flat=True)
+    coupon_qs = CouponNew.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
     )
+    if campaign_id:
+        coupon_qs = coupon_qs.filter(
+            kocmission__application__campaign_id=campaign_id
+        )
+    codes = list(coupon_qs.values_list("promotion_code", flat=True))
 
     try:
         funnel = get_coupon_funnel(codes, start_date, end_date)
