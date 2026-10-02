@@ -5,7 +5,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.contrib.auth.hashers import check_password
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.utils import timezone
 from django.db import transaction
@@ -44,6 +44,7 @@ from api.models import (
     VendorInvoice,
     VendorReceivable,
     VendorReceivablePayout,
+    VendorPayoutBatch,
     Payouts,
     ReturnRequest,
     Submissions
@@ -145,25 +146,44 @@ def calculate_order_commission(order):
     """
     promotion_code = (order.promotion_code or "").strip()
     if not promotion_code:
-        return {"created": False, "earning": None, "commission_amount": 0, "message": "訂單未使用優惠碼"}
+        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "訂單未使用優惠碼"}
 
     try:
         coupon = (CouponNew.objects
                   .select_related("kocmission__koc__user", "kocmission__application__campaign__vendor")
                   .get(promotion_code=promotion_code))
     except CouponNew.DoesNotExist:
-        return {"created": False, "earning": None, "commission_amount": 0, "message": "找不到優惠碼"}
+        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "找不到優惠碼"}
 
     if coupon.status != "active":
-        return {"created": False, "earning": None, "commission_amount": 0, "message": "優惠碼尚未啟用"}
+        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "優惠碼尚未啟用"}
 
     mission = coupon.kocmission
     if not mission or not mission.koc_id or not mission.koc or not mission.koc.user:
         raise ValueError("找不到 KOC 對應資料")
 
+    # 第三層保險：
+    # 歷史訂單、直接改資料或其他繞過 checkout 的情況，
+    # 只要下單者就是優惠碼所屬 KOC，就不建立 Earnings。
+    if (
+        order.user_id
+        and str(order.user_id) == str(mission.koc.user_id)
+    ):
+        return {
+            "created": False,
+            "earning_id": None,
+            "commission_amount": 0,
+            "message": "KOC 自購訂單不計算分潤",
+        }
+
     existing = Earnings.objects.filter(order=order, kocmission=mission).first()
     if existing:
-        return {"created": False, "earning": existing, "commission_amount": existing.amount, "message": "此訂單已計算過分潤"}
+        return {
+            "created": False,
+            "earning_id": existing.earnings_id,
+            "commission_amount": existing.amount,
+            "message": "此訂單已計算過分潤",
+        }
 
     campaign = mission.application.campaign
     campaign_product_ids = set(
@@ -172,16 +192,16 @@ def calculate_order_commission(order):
     eligible_items = OrderItem.objects.filter(
         order=order,
         product_id__in=campaign_product_ids,
-        product__vendor=campaign.vendor,
+        product__vendor_id=campaign.vendor_id,
     )
     commission_base = sum((Decimal(str(i.subtotal)) for i in eligible_items), Decimal('0.00'))
     if commission_base <= 0:
-        return {"created": False, "earning": None, "commission_amount": 0, "message": "沒有符合活動的訂單商品"}
+        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "沒有符合活動的訂單商品"}
 
     raw = commission_base * Decimal(str(KOC_COMMISSION_RATE_PERCENT)) / Decimal('100')
     commission_amount = int(raw.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     if commission_amount <= 0:
-        return {"created": False, "earning": None, "commission_amount": 0, "message": "計算後分潤為 0"}
+        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "計算後分潤為 0"}
 
     with transaction.atomic():
         earning = Earnings.objects.create(
@@ -206,7 +226,7 @@ def calculate_order_commission(order):
 
     return {
         "created": True,
-        "earning": earning,
+        "earning_id": earning.earnings_id,
         "commission_amount": commission_amount,
         "commission_base": str(commission_base),
         "message": "分潤已建立，待廠商完成平台結算後轉為可提領",
@@ -237,7 +257,7 @@ def calculate_vendor_earning(order):
     order_items = list(
         OrderItem.objects
         .filter(order=order)
-        .select_related("product__vendor")
+        .select_related("product")
     )
     if not order_items:
         return []
@@ -366,7 +386,7 @@ def create_vendor_receivables(order):
     order_items = list(
         OrderItem.objects
         .filter(order=order)
-        .select_related("product__vendor")
+        .select_related("product")
     )
     if not order_items:
         return []
@@ -640,70 +660,306 @@ def reverse_earning_and_vendor_income_for_return(return_request):
 # 只給撥款用，任何排程觸發的財務批次工作都比對同一個值）。
 # ==============================================================================
 
+
+def _previous_calendar_month():
+    """回傳上個曆月的第一天與最後一天。"""
+    today = timezone.localdate()
+    this_month_start = today.replace(day=1)
+    previous_month_end = this_month_start - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
+    return previous_month_start, previous_month_end
+
+
+def _month_bounds(month_value=None):
+    """
+    將 YYYY-MM 轉成該月第一天、最後一天。
+
+    若未帶 month，預設使用上個曆月。
+    例如 2026-10-01 執行時，預設結算 2026-09。
+    """
+    if not month_value:
+        return _previous_calendar_month()
+
+    try:
+        year_text, month_text = str(month_value).strip().split('-', 1)
+        year = int(year_text)
+        month = int(month_text)
+
+        if month < 1 or month > 12:
+            raise ValueError
+
+        period_start = date(year, month, 1)
+
+        if month == 12:
+            next_month_start = date(year + 1, 1, 1)
+        else:
+            next_month_start = date(year, month + 1, 1)
+
+        period_end = next_month_start - timedelta(days=1)
+        return period_start, period_end
+    except Exception:
+        raise ValueError('month 格式必須為 YYYY-MM，例如 2026-09')
+
+
+def _next_month_start(period_end):
+    return period_end + timedelta(days=1)
+
+
+def _month_datetime_bounds(period_start, period_end):
+    """
+    eligible_at 是 DateTimeField，所以月結篩選使用：
+        >= 本月第一天 00:00
+        <  下月第一天 00:00
+    """
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(
+        timezone.datetime.combine(period_start, timezone.datetime.min.time()),
+        tz
+    )
+    next_month = period_end + timedelta(days=1)
+    end_dt = timezone.make_aware(
+        timezone.datetime.combine(next_month, timezone.datetime.min.time()),
+        tz
+    )
+    return start_dt, end_dt
+
+
+def _sync_monthly_finance_eligibility():
+    """
+    將已過退貨風險期、無退款／未結退貨的貨款與服務費明細同步成 eligible。
+
+    只做資格同步，不建立月結單。
+    """
+    now = timezone.now()
+
+    receivables = (
+        VendorReceivable.objects
+        .select_related('order')
+        .filter(
+            payout_batch__isnull=True,
+            status__in=['pending', 'eligible']
+        )
+    )
+
+    for receivable in receivables:
+        if (
+            receivable.eligible_at
+            and receivable.eligible_at <= now
+            and receivable.order.payment_status != 'refunded'
+            and not has_unresolved_return_request(receivable.order)
+        ):
+            if receivable.status != 'eligible':
+                receivable.status = 'eligible'
+                receivable.save(update_fields=['status', 'updated_at'])
+
+    settlement_items = (
+        VendorSettlementItem.objects
+        .select_related('order')
+        .filter(
+            settlement__isnull=True,
+            status__in=['pending', 'eligible']
+        )
+    )
+
+    for item in settlement_items:
+        if (
+            item.eligible_at
+            and item.eligible_at <= now
+            and item.order.payment_status != 'refunded'
+            and not has_unresolved_return_request(item.order)
+        ):
+            if item.status != 'eligible':
+                item.status = 'eligible'
+                item.save(update_fields=['status', 'updated_at'])
+
+
+def _next_supplemental_sequence(model_cls, vendor, period_start, period_end, type_field):
+    filter_kwargs = {
+        'vendor': vendor,
+        'period_start': period_start,
+        'period_end': period_end,
+        type_field: 'supplemental',
+    }
+
+    latest = (
+        model_cls.objects
+        .filter(**filter_kwargs)
+        .order_by('-sequence')
+        .first()
+    )
+
+    return (latest.sequence + 1) if latest else 1
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_settle_vendor_earnings(request):
-    """建立 Vendor 應繳平台的結算單；保留舊函式名稱供現有 urls 相容。"""
+    """
+    產生 Vendor 的「月結服務費結算單」。
+
+    - 預設結算上個曆月。
+    - 可傳 month='YYYY-MM' 手動指定月份。
+    - 月份歸屬以 VendorSettlementItem.eligible_at 為準。
+    - 只納入該月份已 eligible、尚未被其他 settlement 納入的明細。
+    """
     admin_obj = None
+
     if request.data.get('Admin_id'):
-        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        admin_obj, err = require_admin_role(
+            request,
+            FINANCE_ADMIN_ROLES,
+            source='data'
+        )
         if err:
             return err
     else:
         cron_token = request.headers.get('X-Cron-Token')
-        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+        expected_token = getattr(
+            settings,
+            'VENDOR_PAYOUT_CRON_TOKEN',
+            None
+        )
+
         if not expected_token or cron_token != expected_token:
-            return Response({'success': False, 'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
 
     target_vendor_id = request.data.get('vendor_id')
-    now = timezone.now()
-    qs = VendorSettlementItem.objects.select_related('vendor','order').filter(settlement__isnull=True, status__in=['pending','eligible'])
+    month_value = request.data.get('month')
+
+    try:
+        period_start, period_end = _month_bounds(month_value)
+    except ValueError as exc:
+        return Response({
+            'success': False,
+            'err': str(exc)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    _sync_monthly_finance_eligibility()
+
+    start_dt, end_dt = _month_datetime_bounds(
+        period_start,
+        period_end
+    )
+
+    qs = (
+        VendorSettlementItem.objects
+        .select_related('vendor', 'order')
+        .filter(
+            settlement__isnull=True,
+            status='eligible',
+            eligible_at__gte=start_dt,
+            eligible_at__lt=end_dt,
+        )
+        .order_by('vendor_id', 'eligible_at')
+    )
+
     if target_vendor_id:
         qs = qs.filter(vendor_id=target_vendor_id)
 
-    # 先把已到期且沒有退貨案件的 pending 明細更新成 eligible
-    for item in qs.filter(status='pending'):
-        if (item.eligible_at and item.eligible_at <= now and item.order.payment_status != 'refunded'
-                and not has_unresolved_return_request(item.order)):
-            item.status = 'eligible'
-            item.save(update_fields=['status','updated_at'])
-
-    eligible = list(qs.filter(status='eligible').order_by('vendor_id','eligible_at'))
     by_vendor = {}
-    for item in eligible:
-        by_vendor.setdefault(item.vendor_id, []).append(item)
+
+    for item in qs:
+        if (
+            item.order.payment_status == 'refunded'
+            or has_unresolved_return_request(item.order)
+        ):
+            continue
+
+        by_vendor.setdefault(
+            item.vendor_id,
+            []
+        ).append(item)
 
     created_settlements = []
+
     for vendor_id, items in by_vendor.items():
         vendor = items[0].vendor
-        gross = sum((i.sales_amount for i in items), Decimal('0.00'))
-        fee = sum((i.settlement_amount for i in items), Decimal('0.00'))
-        koc = sum((i.koc_amount for i in items), Decimal('0.00'))
-        platform_amount = max(Decimal('0.00'), fee - koc)
-        period_start = min((i.order.created_at.date() for i in items if i.order.created_at), default=timezone.localdate())
-        period_end = timezone.localdate()
-        due_date = period_end + timedelta(days=14)
+
+        regular_settlement = VendorSettlement.objects.filter(
+            vendor=vendor,
+            period_start=period_start,
+            period_end=period_end,
+            settlement_type='regular',
+            sequence=1,
+        ).first()
+
+        if regular_settlement:
+            settlement_type = 'supplemental'
+            sequence = _next_supplemental_sequence(
+                VendorSettlement,
+                vendor,
+                period_start,
+                period_end,
+                'settlement_type',
+            )
+        else:
+            settlement_type = 'regular'
+            sequence = 1
+
+        gross = sum(
+            (item.sales_amount for item in items),
+            Decimal('0.00')
+        )
+
+        fee = sum(
+            (item.settlement_amount for item in items),
+            Decimal('0.00')
+        )
+
+        koc = sum(
+            (item.koc_amount for item in items),
+            Decimal('0.00')
+        )
+
+        platform_amount = max(
+            Decimal('0.00'),
+            fee - koc
+        )
+
+        # 月結於次月產生，服務費給 Vendor 7 天付款：
+        # 例如 9 月結算 -> 10/1 產生 -> 10/8 到期。
+        due_date = _next_month_start(period_end) + timedelta(days=7)
 
         with transaction.atomic():
             settlement = VendorSettlement.objects.create(
                 vendor=vendor,
                 period_start=period_start,
                 period_end=period_end,
+                settlement_type=settlement_type,
+                sequence=sequence,
                 gross_sales=gross,
                 adjustment_amount=Decimal('0.00'),
-                settlement_rate=Decimal(str(VENDOR_SETTLEMENT_RATE_PERCENT)),
+                settlement_rate=Decimal(
+                    str(VENDOR_SETTLEMENT_RATE_PERCENT)
+                ),
                 amount_due=fee,
                 koc_amount=koc,
                 platform_amount=platform_amount,
                 status='awaiting_payment',
                 due_date=due_date,
             )
-            VendorSettlementItem.objects.filter(pk__in=[i.pk for i in items]).update(settlement=settlement, status='included')
+
+            VendorSettlementItem.objects.filter(
+                pk__in=[item.pk for item in items]
+            ).update(
+                settlement=settlement,
+                status='included'
+            )
 
         created_settlements.append({
             'settlement_id': settlement.settlement_id,
             'vendor_id': vendor_id,
             'vendor_name': vendor.company_name,
+            'settlement_type': settlement.settlement_type,
+            'sequence': settlement.sequence,
+            'display_label': (
+                '正式月結'
+                if settlement.settlement_type == 'regular'
+                else f'補結算 #{settlement.sequence}'
+            ),
             'item_count': len(items),
             'gross_sales': str(gross),
             'amount_due': str(fee),
@@ -711,24 +967,46 @@ def admin_settle_vendor_earnings(request):
             'platform_amount': str(platform_amount),
             'due_date': due_date,
             'status': settlement.status,
+            'already_existed': False,
         })
+
         if admin_obj:
             AdminAuditLogs.objects.create(
                 admin_id=admin_obj,
-                action_type='generate_vendor_settlement',
+                action_type='generate_vendor_monthly_settlement',
                 vendor=vendor,
                 tasks_id=str(settlement.settlement_id),
-                action_reason=f'建立廠商結算單 #{settlement.settlement_id}，有效成交額 NT$ {gross}，應繳平台 NT$ {fee}',
+                action_reason=(
+                    f'建立 {period_start:%Y-%m} 月 Vendor 服務費結算單 '
+                    f'#{settlement.settlement_id}，'
+                    f'有效成交額 NT$ {gross}，'
+                    f'應繳平台服務費 NT$ {fee}'
+                ),
             )
 
     return Response({
         'success': True,
         'err': '',
-        'settled_count': sum(x['item_count'] for x in created_settlements),
-        'total_amount': str(sum((Decimal(x['amount_due']) for x in created_settlements), Decimal('0.00'))),
+        'month': period_start.strftime('%Y-%m'),
+        'period_start': period_start,
+        'period_end': period_end,
+        'settled_count': sum(
+            item['item_count']
+            for item in created_settlements
+            if not item.get('already_existed')
+        ),
+        'total_amount': str(sum(
+            (
+                Decimal(item['amount_due'])
+                for item in created_settlements
+                if not item.get('already_existed')
+            ),
+            Decimal('0.00')
+        )),
         'settlements': created_settlements,
         'settled': created_settlements,
     }, status=status.HTTP_200_OK)
+
 
 # 新名稱，下一步 urls.py 會改用它
 admin_generate_vendor_settlement = admin_settle_vendor_earnings
@@ -775,36 +1053,98 @@ def admin_list_vendor_invoices(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_list_settleable_vendors(request):
-    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    """
+    列出指定月份可產生 15% 服務費月結單的 Vendor。
+
+    GET:
+        /platform/vendors/settleable?Admin_id=1&month=2026-09
+
+    month 未帶時預設上個曆月。
+    """
+    _admin_obj, err = require_admin_role(
+        request,
+        FINANCE_ADMIN_ROLES,
+        source='query'
+    )
     if err:
         return err
-    now = timezone.now()
-    items = VendorSettlementItem.objects.select_related('vendor','order').filter(settlement__isnull=True, status__in=['pending','eligible'])
+
+    try:
+        period_start, period_end = _month_bounds(
+            request.query_params.get('month')
+        )
+    except ValueError as exc:
+        return Response({
+            'success': False,
+            'err': str(exc)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    _sync_monthly_finance_eligibility()
+
+    start_dt, end_dt = _month_datetime_bounds(
+        period_start,
+        period_end
+    )
+
+    items = (
+        VendorSettlementItem.objects
+        .select_related('vendor', 'order')
+        .filter(
+            settlement__isnull=True,
+            status='eligible',
+            eligible_at__gte=start_dt,
+            eligible_at__lt=end_dt,
+        )
+        .order_by('vendor_id', 'eligible_at')
+    )
+
     by_vendor = {}
+
     for item in items:
-        if item.status == 'pending' and item.eligible_at and item.eligible_at <= now and item.order.payment_status != 'refunded' and not has_unresolved_return_request(item.order):
-            item.status = 'eligible'
-            item.save(update_fields=['status','updated_at'])
-        entry = by_vendor.setdefault(item.vendor_id, {
-            'Vendor_id': item.vendor_id, 'Vendor_name': item.vendor.company_name,
-            'Eligible_count': 0, 'Eligible_amount': Decimal('0.00'), 'Eligible_sales': Decimal('0.00'),
-            'Not_yet_eligible_count': 0, 'Not_yet_eligible_amount': Decimal('0.00'), 'Earliest_eligible_at': None,
-        })
-        if item.status == 'eligible':
-            entry['Eligible_count'] += 1
-            entry['Eligible_amount'] += item.settlement_amount
-            entry['Eligible_sales'] += item.sales_amount
-        else:
-            entry['Not_yet_eligible_count'] += 1
-            entry['Not_yet_eligible_amount'] += item.settlement_amount
-            if item.eligible_at and (entry['Earliest_eligible_at'] is None or item.eligible_at < entry['Earliest_eligible_at']):
-                entry['Earliest_eligible_at'] = item.eligible_at
-    result=[]
-    for v in by_vendor.values():
-        v['Eligible_amount']=float(v['Eligible_amount']); v['Eligible_sales']=float(v['Eligible_sales']); v['Not_yet_eligible_amount']=float(v['Not_yet_eligible_amount'])
-        result.append(v)
-    result.sort(key=lambda x:x['Eligible_amount'], reverse=True)
-    return Response(result, status=status.HTTP_200_OK)
+        if (
+            item.order.payment_status == 'refunded'
+            or has_unresolved_return_request(item.order)
+        ):
+            continue
+
+        entry = by_vendor.setdefault(
+            item.vendor_id,
+            {
+                'Vendor_id': item.vendor_id,
+                'Vendor_name': item.vendor.company_name,
+                'Eligible_count': 0,
+                'Eligible_amount': Decimal('0.00'),
+                'Eligible_sales': Decimal('0.00'),
+            }
+        )
+
+        entry['Eligible_count'] += 1
+        entry['Eligible_amount'] += item.settlement_amount
+        entry['Eligible_sales'] += item.sales_amount
+
+    result = []
+
+    for entry in by_vendor.values():
+        entry['Month'] = period_start.strftime('%Y-%m')
+        entry['Period_start'] = period_start
+        entry['Period_end'] = period_end
+        entry['Eligible_amount'] = float(
+            entry['Eligible_amount']
+        )
+        entry['Eligible_sales'] = float(
+            entry['Eligible_sales']
+        )
+        result.append(entry)
+
+    result.sort(
+        key=lambda row: row['Eligible_amount'],
+        reverse=True
+    )
+
+    return Response(
+        result,
+        status=status.HTTP_200_OK
+    )
 
 
 
@@ -834,6 +1174,13 @@ def admin_list_vendor_payouts(request):
             'Payout_id': s.settlement_id,
             'Vendor_id': s.vendor_id,
             'Vendor_name': s.vendor.company_name,
+            'Settlement_type': s.settlement_type,
+            'Sequence': s.sequence,
+            'Display_label': (
+                '正式月結'
+                if s.settlement_type == 'regular'
+                else f'補結算 #{s.sequence}'
+            ),
             'Gross_sales': float(s.gross_sales),
             'Amount_due': float(s.amount_due),
             'Amount_paid': float(paid),
@@ -870,14 +1217,14 @@ admin_list_vendor_settlements = admin_list_vendor_payouts
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_export_payout_transfers(request):
-    """新制只匯出 KOC 撥款；Vendor 不再由平台撥款。"""
+    """此舊匯出端點目前只處理 KOC；Vendor 貨款改由月結批次處理。"""
     _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
     if err:
         return err
     export_type = request.query_params.get('type')
     export_status = request.query_params.get('status', 'pending')
     if export_type != 'koc':
-        return Response({'success': False, 'err': "新制 Vendor 為應收結算款，不再提供 Vendor 撥款匯出；type 請使用 'koc'"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'success': False, 'err': "Vendor 貨款已改為月結批次，不再使用舊 VendorPayouts 匯出；type 請使用 'koc'"}, status=status.HTTP_400_BAD_REQUEST)
     fieldnames = ['撥款單號','KOC用戶ID','KOC名稱','銀行代碼','銀行帳號','戶名','金額','申請日期']
     rows=[]
     payouts=(Payouts.objects.select_related('koc__koc_profile').filter(status=export_status).order_by('payout_date'))
@@ -970,40 +1317,73 @@ admin_confirm_vendor_settlement_payment = admin_confirm_vendor_payout
 
 
 # ==============================================================================
-# Vendor 商品款應付 / 撥款：ShareBuy → Vendor
+# Vendor 貨款月結：ShareBuy → Vendor
 #
-# 這一組 API 與 VendorSettlement 完全分開：
-# - VendorReceivable：平台代收後，應全額撥給 Vendor 的折扣後商品款
-# - VendorSettlement：Vendor 應繳給 ShareBuy 的 15% 平台服務費
+# VendorReceivable：
+#   每張訂單、每個 Vendor 的貨款明細。
 #
-# GET  /platform/vendor/receivables
-# POST /platform/vendor/receivable/payout
-# POST /platform/vendor/receivable/payout/confirm
+# VendorPayoutBatch：
+#   依 eligible_at 所屬月份彙整成一張 Vendor 貨款月結單。
+#
+# 月結月份以「取得結算資格的月份」為準，不是 Order 建立月份。
+# 兩筆金流仍完全獨立：
+#   ShareBuy → Vendor：VendorPayoutBatch
+#   Vendor → ShareBuy：VendorSettlement
 # ==============================================================================
 
 
 def _sync_vendor_receivable_status(receivable):
-    """依退貨風險期與已確認撥款金額同步應付商品款狀態。"""
+    """
+    同步 VendorReceivable 狀態。
+
+    新月結制：
+    - 尚未過退貨風險期：pending
+    - 已符合資格、尚未進月結：eligible
+    - 已加入 VendorPayoutBatch：included
+    - 該月結已完成：paid
+
+    舊 VendorReceivablePayout 僅保留相容既有資料。
+    """
     if receivable.status in ('refunded', 'cancelled'):
         return receivable
 
-    paid = Decimal(str(receivable.amount_paid or 0))
-    due = Decimal(str(receivable.amount_due or 0))
+    due = Decimal(
+        str(receivable.amount_due or 0)
+    )
 
     if due <= 0:
         receivable.status = 'refunded'
         receivable.paid_at = None
-    elif paid >= due:
-        receivable.status = 'paid'
-        if not receivable.paid_at:
-            receivable.paid_at = timezone.now()
-    elif paid > 0:
-        receivable.status = 'partially_paid'
-        receivable.paid_at = None
+
+    elif receivable.payout_batch_id:
+        batch = receivable.payout_batch
+
+        if batch.status == 'paid':
+            receivable.status = 'paid'
+            receivable.paid_at = (
+                batch.paid_at
+                or receivable.paid_at
+                or timezone.now()
+            )
+        else:
+            receivable.status = 'included'
+            receivable.paid_at = None
+
     else:
-        has_pending_payout = receivable.payouts.filter(status='pending').exists()
-        if has_pending_payout:
-            receivable.status = 'payout_pending'
+        # 相容 0052 之前／月結切換前已存在的單筆撥款紀錄。
+        legacy_paid = (
+            receivable.payouts
+            .filter(status='confirmed')
+            .aggregate(total=Sum('amount'))['total']
+            or Decimal('0.00')
+        )
+
+        if legacy_paid >= due:
+            receivable.status = 'paid'
+
+            if not receivable.paid_at:
+                receivable.paid_at = timezone.now()
+
         elif (
             receivable.eligible_at
             and receivable.eligible_at <= timezone.now()
@@ -1011,63 +1391,77 @@ def _sync_vendor_receivable_status(receivable):
             and not has_unresolved_return_request(receivable.order)
         ):
             receivable.status = 'eligible'
+            receivable.paid_at = None
+
         else:
             receivable.status = 'pending'
-        receivable.paid_at = None
+            receivable.paid_at = None
 
     receivable.save(
-        update_fields=['status', 'paid_at', 'updated_at']
+        update_fields=[
+            'status',
+            'paid_at',
+            'updated_at',
+        ]
     )
+
     return receivable
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def admin_list_vendor_receivables(request):
-    """列出平台應撥給 Vendor 的商品款，並一併回傳實際撥款紀錄。"""
+    """
+    保留逐訂單貨款明細查詢，供稽核／明細頁使用。
+
+    新月結流程不再從此 API 對單筆 receivable 建立撥款。
+    """
     _admin_obj, err = require_admin_role(
-        request, FINANCE_ADMIN_ROLES, source='query'
+        request,
+        FINANCE_ADMIN_ROLES,
+        source='query'
     )
     if err:
         return err
 
-    vendor_id = request.query_params.get('vendor_id')
-    requested_status = request.query_params.get('status')
+    vendor_id = request.query_params.get(
+        'vendor_id'
+    )
+
+    requested_status = request.query_params.get(
+        'status'
+    )
 
     qs = (
         VendorReceivable.objects
-        .select_related('vendor', 'order')
+        .select_related(
+            'vendor',
+            'order',
+            'payout_batch',
+        )
         .prefetch_related('payouts')
         .order_by('-created_at')
     )
 
     if vendor_id:
-        qs = qs.filter(vendor_id=vendor_id)
+        qs = qs.filter(
+            vendor_id=vendor_id
+        )
 
     rows = []
 
     for receivable in qs[:500]:
-        _sync_vendor_receivable_status(receivable)
+        _sync_vendor_receivable_status(
+            receivable
+        )
 
-        if requested_status and receivable.status != requested_status:
+        if (
+            requested_status
+            and receivable.status != requested_status
+        ):
             continue
 
-        payouts = []
-
-        for payout in receivable.payouts.all().order_by('-created_at'):
-            payouts.append({
-                'Payout_id': payout.payout_id,
-                'Amount': float(payout.amount or 0),
-                'Payout_method': payout.payout_method,
-                'Destination_bank_code': payout.destination_bank_code or '',
-                'Destination_account_last4': payout.destination_account_last4 or '',
-                'Destination_account_name': payout.destination_account_name or '',
-                'Transaction_reference': payout.transaction_reference or '',
-                'Status': payout.status,
-                'Payout_at': payout.payout_at,
-                'Confirmed_at': payout.confirmed_at,
-                'Created_at': payout.created_at,
-            })
+        batch = receivable.payout_batch
 
         rows.append({
             'Receivable_id': receivable.receivable_id,
@@ -1075,27 +1469,48 @@ def admin_list_vendor_receivables(request):
             'Vendor_name': receivable.vendor.company_name,
             'Order_id': str(receivable.order_id),
 
-            'Goods_amount': float(receivable.goods_amount or 0),
-            'Shipping_amount': float(receivable.shipping_amount or 0),
-            'Adjustment_amount': float(receivable.adjustment_amount or 0),
+            'Goods_amount': float(
+                receivable.goods_amount or 0
+            ),
 
-            'Amount_due': float(receivable.amount_due or 0),
-            'Amount_paid': float(receivable.amount_paid or 0),
-            'Outstanding_amount': float(receivable.outstanding_amount or 0),
+            'Shipping_amount': float(
+                receivable.shipping_amount or 0
+            ),
+
+            'Adjustment_amount': float(
+                receivable.adjustment_amount or 0
+            ),
+
+            'Amount_due': float(
+                receivable.amount_due or 0
+            ),
+
+            'Amount_paid': float(
+                receivable.amount_paid or 0
+            ),
+
+            'Outstanding_amount': float(
+                receivable.outstanding_amount or 0
+            ),
 
             'Eligible_at': receivable.eligible_at,
             'Paid_at': receivable.paid_at,
             'Status': receivable.status,
 
-            'Bank_code': receivable.vendor.bank_code or '',
-            'Bank_account_last4': (
-                receivable.vendor.bank_account[-4:]
-                if receivable.vendor.bank_account
-                else ''
+            'Payout_batch_id': (
+                batch.batch_id
+                if batch else None
             ),
-            'Bank_account_name': receivable.vendor.bank_account_name or '',
 
-            'Payouts': payouts,
+            'Payout_batch_status': (
+                batch.status
+                if batch else None
+            ),
+
+            'Payout_month': (
+                batch.period_start.strftime('%Y-%m')
+                if batch else None
+            ),
 
             'Created_at': receivable.created_at,
         })
@@ -1107,264 +1522,775 @@ def admin_list_vendor_receivables(request):
     }, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([AllowAny])
-def admin_create_vendor_receivable_payout(request):
+def admin_list_monthly_payout_ready_vendors(request):
     """
-    建立一筆 ShareBuy → Vendor 商品款撥款紀錄。
+    列出指定月份可產生「貨款月結單」的 Vendor。
 
-    這一步只建立 pending payout，代表財務準備/已送出匯款，
-    尚未視為真正完成；必須再由 confirm API 確認。
+    GET:
+      /platform/vendor/payout-batches/ready
+        ?Admin_id=1
+        &month=2026-09
     """
-    admin_obj, err = require_admin_role(
-        request, FINANCE_ADMIN_ROLES, source='data'
+    _admin_obj, err = require_admin_role(
+        request,
+        FINANCE_ADMIN_ROLES,
+        source='query'
     )
     if err:
         return err
 
-    receivable_id = request.data.get('receivable_id')
-    amount_raw = request.data.get('amount')
-    payout_method = request.data.get('payout_method', 'bank_transfer')
-    transaction_reference = (
-        request.data.get('transaction_reference')
-        or request.data.get('reference_no')
-        or ''
-    ).strip()
-    action_reason = request.data.get('Action_reason') or ''
-
-    if not receivable_id:
+    try:
+        period_start, period_end = _month_bounds(
+            request.query_params.get('month')
+        )
+    except ValueError as exc:
         return Response({
             'success': False,
-            'err': 'receivable_id 為必填'
+            'err': str(exc)
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    if payout_method not in ('bank_transfer', 'manual', 'other'):
+    _sync_monthly_finance_eligibility()
+
+    start_dt, end_dt = _month_datetime_bounds(
+        period_start,
+        period_end
+    )
+
+    qs = (
+        VendorReceivable.objects
+        .select_related('vendor', 'order')
+        .filter(
+            payout_batch__isnull=True,
+            status='eligible',
+            eligible_at__gte=start_dt,
+            eligible_at__lt=end_dt,
+        )
+        .order_by('vendor_id', 'eligible_at')
+    )
+
+    by_vendor = {}
+
+    for receivable in qs:
+        if (
+            receivable.order.payment_status == 'refunded'
+            or has_unresolved_return_request(
+                receivable.order
+            )
+        ):
+            continue
+
+        entry = by_vendor.setdefault(
+            receivable.vendor_id,
+            {
+                'Vendor_id': receivable.vendor_id,
+                'Vendor_name': receivable.vendor.company_name,
+                'Receivable_count': 0,
+                'Goods_amount': Decimal('0.00'),
+                'Shipping_amount': Decimal('0.00'),
+                'Adjustment_amount': Decimal('0.00'),
+                'Amount_due': Decimal('0.00'),
+                'Bank_code': receivable.vendor.bank_code or '',
+                'Bank_account_last4': (
+                    receivable.vendor.bank_account[-4:]
+                    if receivable.vendor.bank_account
+                    else ''
+                ),
+                'Bank_account_name': (
+                    receivable.vendor.bank_account_name
+                    or ''
+                ),
+                'Has_bank_account': bool(
+                    receivable.vendor.bank_account
+                ),
+            }
+        )
+
+        entry['Receivable_count'] += 1
+        entry['Goods_amount'] += (
+            receivable.goods_amount
+            or Decimal('0.00')
+        )
+        entry['Shipping_amount'] += (
+            receivable.shipping_amount
+            or Decimal('0.00')
+        )
+        entry['Adjustment_amount'] += (
+            receivable.adjustment_amount
+            or Decimal('0.00')
+        )
+        entry['Amount_due'] += (
+            receivable.amount_due
+            or Decimal('0.00')
+        )
+
+    result = []
+
+    for entry in by_vendor.values():
+        entry['Month'] = (
+            period_start.strftime('%Y-%m')
+        )
+        entry['Period_start'] = period_start
+        entry['Period_end'] = period_end
+
+        for key in (
+            'Goods_amount',
+            'Shipping_amount',
+            'Adjustment_amount',
+            'Amount_due',
+        ):
+            entry[key] = float(entry[key])
+
+        result.append(entry)
+
+    result.sort(
+        key=lambda row: row['Amount_due'],
+        reverse=True
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'month': period_start.strftime('%Y-%m'),
+        'period_start': period_start,
+        'period_end': period_end,
+        'vendors': result,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_generate_vendor_payout_batch(request):
+    """
+    產生 ShareBuy → Vendor 的貨款月結單。
+
+    POST body:
+      {
+        "Admin_id": 1,
+        "vendor_id": "V00001",   # 可選；不帶則該月全部 Vendor
+        "month": "2026-09"       # 可選；預設上個月
+      }
+    """
+    admin_obj = None
+
+    if request.data.get('Admin_id'):
+        admin_obj, err = require_admin_role(
+            request,
+            FINANCE_ADMIN_ROLES,
+            source='data'
+        )
+        if err:
+            return err
+    else:
+        cron_token = request.headers.get(
+            'X-Cron-Token'
+        )
+
+        expected_token = getattr(
+            settings,
+            'VENDOR_PAYOUT_CRON_TOKEN',
+            None
+        )
+
+        if (
+            not expected_token
+            or cron_token != expected_token
+        ):
+            return Response({
+                'success': False,
+                'err': (
+                    '未授權：需要有效的 '
+                    'Admin_id 或 X-Cron-Token'
+                )
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    target_vendor_id = request.data.get(
+        'vendor_id'
+    )
+
+    try:
+        period_start, period_end = _month_bounds(
+            request.data.get('month')
+        )
+    except ValueError as exc:
         return Response({
             'success': False,
-            'err': '不支援的 payout_method'
+            'err': str(exc)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    _sync_monthly_finance_eligibility()
+
+    start_dt, end_dt = _month_datetime_bounds(
+        period_start,
+        period_end
+    )
+
+    qs = (
+        VendorReceivable.objects
+        .select_related('vendor', 'order')
+        .filter(
+            payout_batch__isnull=True,
+            status='eligible',
+            eligible_at__gte=start_dt,
+            eligible_at__lt=end_dt,
+        )
+        .order_by('vendor_id', 'eligible_at')
+    )
+
+    if target_vendor_id:
+        qs = qs.filter(
+            vendor_id=target_vendor_id
+        )
+
+    by_vendor = {}
+
+    for receivable in qs:
+        if (
+            receivable.order.payment_status == 'refunded'
+            or has_unresolved_return_request(
+                receivable.order
+            )
+        ):
+            continue
+
+        by_vendor.setdefault(
+            receivable.vendor_id,
+            []
+        ).append(receivable)
+
+    created_batches = []
+
+    for vendor_id, receivables in by_vendor.items():
+        vendor = receivables[0].vendor
+
+        regular_batch = VendorPayoutBatch.objects.filter(
+            vendor=vendor,
+            period_start=period_start,
+            period_end=period_end,
+            batch_type='regular',
+            sequence=1,
+        ).first()
+
+        if regular_batch:
+            batch_type = 'supplemental'
+            sequence = _next_supplemental_sequence(
+                VendorPayoutBatch,
+                vendor,
+                period_start,
+                period_end,
+                'batch_type',
+            )
+        else:
+            batch_type = 'regular'
+            sequence = 1
+
+        if not vendor.bank_account:
+            created_batches.append({
+                'vendor_id': vendor_id,
+                'vendor_name': vendor.company_name,
+                'error': (
+                    'Vendor 尚未設定收款銀行帳戶'
+                ),
+                'already_existed': False,
+                'skipped': True,
+            })
+            continue
+
+        goods_amount = sum(
+            (
+                item.goods_amount
+                for item in receivables
+            ),
+            Decimal('0.00')
+        )
+
+        shipping_amount = sum(
+            (
+                item.shipping_amount
+                for item in receivables
+            ),
+            Decimal('0.00')
+        )
+
+        adjustment_amount = sum(
+            (
+                item.adjustment_amount
+                for item in receivables
+            ),
+            Decimal('0.00')
+        )
+
+        amount_due = sum(
+            (
+                item.amount_due
+                for item in receivables
+            ),
+            Decimal('0.00')
+        )
+
+        # 先定為次月 5 日預計撥款。
+        scheduled_payout_date = (
+            _next_month_start(period_end)
+            + timedelta(days=4)
+        )
+
+        with transaction.atomic():
+            batch = VendorPayoutBatch.objects.create(
+                vendor=vendor,
+                period_start=period_start,
+                period_end=period_end,
+                batch_type=batch_type,
+                sequence=sequence,
+                goods_amount=goods_amount,
+                shipping_amount=shipping_amount,
+                adjustment_amount=adjustment_amount,
+                amount_due=amount_due,
+                status='ready',
+                payout_method='bank_transfer',
+                destination_bank_code=(
+                    vendor.bank_code or ''
+                ),
+                destination_account_last4=(
+                    vendor.bank_account[-4:]
+                    if vendor.bank_account
+                    else ''
+                ),
+                destination_account_name=(
+                    vendor.bank_account_name
+                    or ''
+                ),
+                scheduled_payout_date=(
+                    scheduled_payout_date
+                ),
+            )
+
+            VendorReceivable.objects.filter(
+                pk__in=[
+                    item.pk
+                    for item in receivables
+                ]
+            ).update(
+                payout_batch=batch,
+                status='included'
+            )
+
+        created_batches.append({
+            'batch_id': batch.batch_id,
+            'vendor_id': vendor_id,
+            'vendor_name': vendor.company_name,
+            'batch_type': batch.batch_type,
+            'sequence': batch.sequence,
+            'display_label': (
+                '正式月結'
+                if batch.batch_type == 'regular'
+                else f'補結算 #{batch.sequence}'
+            ),
+            'receivable_count': len(
+                receivables
+            ),
+            'goods_amount': str(
+                goods_amount
+            ),
+            'amount_due': str(
+                amount_due
+            ),
+            'scheduled_payout_date': (
+                scheduled_payout_date
+            ),
+            'status': batch.status,
+            'already_existed': False,
+            'skipped': False,
+        })
+
+        if admin_obj:
+            AdminAuditLogs.objects.create(
+                admin_id=admin_obj,
+                action_type=(
+                    'generate_vendor_monthly_payout_batch'
+                ),
+                vendor=vendor,
+                tasks_id=str(
+                    batch.batch_id
+                ),
+                action_reason=(
+                    f'建立 {period_start:%Y-%m} 月 '
+                    f'Vendor 貨款月結單 '
+                    f'#{batch.batch_id}，'
+                    f'{len(receivables)} 筆貨款，'
+                    f'應撥 NT$ {amount_due}'
+                ),
+            )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'month': period_start.strftime('%Y-%m'),
+        'period_start': period_start,
+        'period_end': period_end,
+        'batches': created_batches,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_vendor_payout_batches(request):
+    """
+    列出 Vendor 貨款月結單。
+    """
+    _admin_obj, err = require_admin_role(
+        request,
+        FINANCE_ADMIN_ROLES,
+        source='query'
+    )
+    if err:
+        return err
+
+    vendor_id = request.query_params.get(
+        'vendor_id'
+    )
+
+    requested_status = request.query_params.get(
+        'status'
+    )
+
+    month_value = request.query_params.get(
+        'month'
+    )
+
+    qs = (
+        VendorPayoutBatch.objects
+        .select_related(
+            'vendor',
+            'confirmed_by',
+        )
+        .prefetch_related(
+            'receivables__order'
+        )
+        .order_by(
+            '-period_start',
+            '-created_at',
+        )
+    )
+
+    if vendor_id:
+        qs = qs.filter(
+            vendor_id=vendor_id
+        )
+
+    if requested_status:
+        qs = qs.filter(
+            status=requested_status
+        )
+
+    if month_value:
+        try:
+            period_start, period_end = (
+                _month_bounds(month_value)
+            )
+        except ValueError as exc:
+            return Response({
+                'success': False,
+                'err': str(exc)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = qs.filter(
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+    rows = []
+
+    for batch in qs[:300]:
+        rows.append({
+            'Batch_id': batch.batch_id,
+            'Vendor_id': batch.vendor_id,
+            'Vendor_name': batch.vendor.company_name,
+            'Batch_type': batch.batch_type,
+            'Sequence': batch.sequence,
+            'Display_label': (
+                '正式月結'
+                if batch.batch_type == 'regular'
+                else f'補結算 #{batch.sequence}'
+            ),
+
+            'Month': batch.period_start.strftime(
+                '%Y-%m'
+            ),
+
+            'Period_start': batch.period_start,
+            'Period_end': batch.period_end,
+
+            'Receivable_count': (
+                batch.receivables.count()
+            ),
+
+            'Goods_amount': float(
+                batch.goods_amount or 0
+            ),
+
+            'Shipping_amount': float(
+                batch.shipping_amount or 0
+            ),
+
+            'Adjustment_amount': float(
+                batch.adjustment_amount or 0
+            ),
+
+            'Amount_due': float(
+                batch.amount_due or 0
+            ),
+
+            'Amount_paid': float(
+                batch.amount_paid or 0
+            ),
+
+            'Outstanding_amount': float(
+                batch.outstanding_amount or 0
+            ),
+
+            'Status': batch.status,
+
+            'Scheduled_payout_date': (
+                batch.scheduled_payout_date
+            ),
+
+            'Paid_at': batch.paid_at,
+
+            'Bank_code': (
+                batch.destination_bank_code
+                or ''
+            ),
+
+            'Bank_account_last4': (
+                batch.destination_account_last4
+                or ''
+            ),
+
+            'Bank_account_name': (
+                batch.destination_account_name
+                or ''
+            ),
+
+            'Transaction_reference': (
+                batch.transaction_reference
+                or ''
+            ),
+
+            'Created_at': batch.created_at,
+        })
+
+    return Response({
+        'success': True,
+        'err': '',
+        'batches': rows,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_confirm_vendor_payout_batch(request):
+    """
+    確認一張 Vendor 貨款月結單是否已完成匯款。
+
+    POST:
+      {
+        "Admin_id": 1,
+        "batch_id": 123,
+        "status": "completed",
+        "transaction_reference": "BANK-..."
+      }
+    """
+    admin_obj, err = require_admin_role(
+        request,
+        FINANCE_ADMIN_ROLES,
+        source='data'
+    )
+    if err:
+        return err
+
+    batch_id = request.data.get(
+        'batch_id'
+    )
+
+    new_status = request.data.get(
+        'status'
+    )
+
+    transaction_reference = (
+        request.data.get(
+            'transaction_reference'
+        )
+        or request.data.get(
+            'reference_no'
+        )
+        or ''
+    ).strip()
+
+    action_reason = (
+        request.data.get(
+            'Action_reason'
+        )
+        or ''
+    )
+
+    if not batch_id:
+        return Response({
+            'success': False,
+            'err': 'batch_id 為必填'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    status_map = {
+        'completed': 'paid',
+        'confirmed': 'paid',
+        'paid': 'paid',
+        'failed': 'failed',
+        'cancelled': 'cancelled',
+    }
+
+    target_status = status_map.get(
+        new_status
+    )
+
+    if not target_status:
+        return Response({
+            'success': False,
+            'err': (
+                'status 必須是 '
+                'completed/confirmed/paid、'
+                'failed 或 cancelled'
+            )
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         with transaction.atomic():
-            receivable = (
-                VendorReceivable.objects
+            batch = (
+                VendorPayoutBatch.objects
                 .select_for_update()
-                .select_related('vendor', 'order')
-                .get(receivable_id=receivable_id)
+                .select_related('vendor')
+                .get(batch_id=batch_id)
             )
-            _sync_vendor_receivable_status(receivable)
 
-            if receivable.status not in (
-                'eligible', 'partially_paid', 'payout_pending', 'adjusted'
-            ):
+            if batch.status == 'paid':
                 return Response({
                     'success': False,
-                    'err': f'此商品款目前狀態為 {receivable.status}，尚不可建立撥款'
+                    'err': '此貨款月結單已完成撥款'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if not receivable.vendor.bank_account:
-                return Response({
-                    'success': False,
-                    'err': 'Vendor 尚未設定收款銀行帳戶'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            if transaction_reference:
+                batch.transaction_reference = (
+                    transaction_reference
+                )
 
-            outstanding = Decimal(str(receivable.outstanding_amount or 0))
-            if outstanding <= 0:
-                return Response({
-                    'success': False,
-                    'err': '此商品款已無待撥金額'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            batch.status = target_status
 
-            if amount_raw in (None, ''):
-                amount = outstanding
+            if target_status == 'paid':
+                batch.paid_at = timezone.now()
+                batch.confirmed_by = admin_obj
+
             else:
-                try:
-                    amount = Decimal(str(amount_raw)).quantize(
-                        Decimal('0.01'), rounding=ROUND_HALF_UP
-                    )
-                except Exception:
-                    return Response({
-                        'success': False,
-                        'err': 'amount 格式錯誤'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                batch.paid_at = None
 
-            if amount <= 0 or amount > outstanding:
-                return Response({
-                    'success': False,
-                    'err': f'撥款金額必須大於 0 且不得超過待撥金額 {outstanding}'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            batch.note = action_reason
 
-            pending_total = (
-                receivable.payouts
-                .filter(status='pending')
-                .aggregate(total=Sum('amount'))['total']
-                or Decimal('0.00')
-            )
-            if pending_total + amount > outstanding:
-                return Response({
-                    'success': False,
-                    'err': '已有待確認撥款，新增後會超過待撥金額'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            batch.save(update_fields=[
+                'status',
+                'transaction_reference',
+                'paid_at',
+                'confirmed_by',
+                'note',
+                'updated_at',
+            ])
 
-            payout = VendorReceivablePayout.objects.create(
-                receivable=receivable,
-                amount=amount,
-                payout_method=payout_method,
-                destination_bank_code=receivable.vendor.bank_code or None,
-                destination_account_last4=(
-                    receivable.vendor.bank_account[-4:]
-                    if receivable.vendor.bank_account else None
-                ),
-                destination_account_name=(
-                    receivable.vendor.bank_account_name or None
-                ),
-                transaction_reference=transaction_reference or None,
-                status='pending',
-                payout_at=timezone.now(),
-            )
+            if target_status == 'paid':
+                batch.receivables.update(
+                    status='paid',
+                    paid_at=batch.paid_at,
+                )
 
-            receivable.status = 'payout_pending'
-            receivable.save(update_fields=['status', 'updated_at'])
+            elif target_status in (
+                'failed',
+                'cancelled',
+            ):
+                # 月結單仍保留供稽核；
+                # 明細也仍掛在原批次，不重新進其他月份。
+                batch.receivables.update(
+                    status='included',
+                    paid_at=None,
+                )
 
             AdminAuditLogs.objects.create(
                 admin_id=admin_obj,
-                action_type='create_vendor_goods_payout',
-                vendor=receivable.vendor,
-                tasks_id=str(receivable.receivable_id),
+                action_type=(
+                    'confirm_vendor_monthly_payout'
+                    if target_status == 'paid'
+                    else 'vendor_monthly_payout_failed'
+                ),
+                vendor=batch.vendor,
+                tasks_id=str(
+                    batch.batch_id
+                ),
                 action_reason=(
                     action_reason
-                    or f'建立 Vendor 商品款撥款 #{payout.payout_id}，NT$ {amount}'
+                    or (
+                        f'Vendor 貨款月結單 '
+                        f'#{batch.batch_id} '
+                        f'標記為 {target_status}，'
+                        f'金額 NT$ {batch.amount_due}'
+                    )
                 ),
             )
 
         return Response({
             'success': True,
             'err': '',
-            'receivable_id': receivable.receivable_id,
-            'payout_id': payout.payout_id,
-            'amount': float(payout.amount),
-            'status': payout.status,
-        }, status=status.HTTP_201_CREATED)
+            'batch_id': batch.batch_id,
+            'status': batch.status,
+            'amount_due': float(
+                batch.amount_due
+            ),
+            'paid_at': batch.paid_at,
+            'transaction_reference': (
+                batch.transaction_reference
+            ),
+        }, status=status.HTTP_200_OK)
 
-    except VendorReceivable.DoesNotExist:
+    except VendorPayoutBatch.DoesNotExist:
         return Response({
             'success': False,
-            'err': '找不到 VendorReceivable'
+            'err': '找不到此 Vendor 貨款月結單'
         }, status=status.HTTP_404_NOT_FOUND)
+
+
+# --------------------------------------------------------------------------
+# 舊 0052 單筆撥款 API：保留名稱避免舊前端暫時 404，但停止建立新單筆撥款。
+# --------------------------------------------------------------------------
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_create_vendor_receivable_payout(request):
+    return Response({
+        'success': False,
+        'err': (
+            '貨款已改為月結制，'
+            '請使用 VendorPayoutBatch 月結功能，'
+            '不再逐筆建立 VendorReceivablePayout。'
+        )
+    }, status=status.HTTP_410_GONE)
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def admin_confirm_vendor_receivable_payout(request):
-    """確認商品款實際匯款成功或失敗。"""
-    admin_obj, err = require_admin_role(
-        request, FINANCE_ADMIN_ROLES, source='data'
-    )
-    if err:
-        return err
+    return Response({
+        'success': False,
+        'err': (
+            '貨款已改為月結制。'
+            '舊單筆 VendorReceivablePayout '
+            '僅保留歷史資料。'
+        )
+    }, status=status.HTTP_410_GONE)
 
-    payout_id = request.data.get('payout_id')
-    new_status = request.data.get('status')
-    transaction_reference = (
-        request.data.get('transaction_reference')
-        or request.data.get('reference_no')
-        or ''
-    ).strip()
-    action_reason = request.data.get('Action_reason') or ''
-
-    status_map = {
-        'completed': 'confirmed',
-        'confirmed': 'confirmed',
-        'failed': 'failed',
-        'cancelled': 'cancelled',
-    }
-    target_status = status_map.get(new_status)
-
-    if not payout_id:
-        return Response({
-            'success': False,
-            'err': 'payout_id 為必填'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if not target_status:
-        return Response({
-            'success': False,
-            'err': "status 必須是 completed/confirmed、failed 或 cancelled"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        with transaction.atomic():
-            payout = (
-                VendorReceivablePayout.objects
-                .select_for_update()
-                .select_related('receivable__vendor', 'receivable__order')
-                .get(payout_id=payout_id)
-            )
-
-            if payout.status != 'pending':
-                return Response({
-                    'success': False,
-                    'err': f'此撥款已經是 {payout.status}，不能重複確認'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            payout.status = target_status
-            if transaction_reference:
-                payout.transaction_reference = transaction_reference
-
-            update_fields = ['status', 'transaction_reference']
-
-            if target_status == 'confirmed':
-                payout.confirmed_by = admin_obj
-                payout.confirmed_at = timezone.now()
-                if not payout.payout_at:
-                    payout.payout_at = timezone.now()
-
-                update_fields += [
-                    'confirmed_by',
-                    'confirmed_at',
-                    'payout_at',
-                ]
-
-            payout.save(update_fields=update_fields)
-
-            receivable = (
-                VendorReceivable.objects
-                .select_for_update()
-                .get(receivable_id=payout.receivable_id)
-            )
-            _sync_vendor_receivable_status(receivable)
-
-            AdminAuditLogs.objects.create(
-                admin_id=admin_obj,
-                action_type=(
-                    'confirm_vendor_goods_payout'
-                    if target_status == 'confirmed'
-                    else 'fail_vendor_goods_payout'
-                ),
-                vendor=payout.receivable.vendor,
-                tasks_id=str(payout.payout_id),
-                action_reason=(
-                    action_reason
-                    or f'Vendor 商品款撥款 #{payout.payout_id} 標記為 {target_status}'
-                ),
-            )
-
-        return Response({
-            'success': True,
-            'err': '',
-            'payout_id': payout.payout_id,
-            'receivable_id': receivable.receivable_id,
-            'payout_status': payout.status,
-            'receivable_status': receivable.status,
-            'amount_paid': float(receivable.amount_paid or 0),
-            'outstanding_amount': float(receivable.outstanding_amount or 0),
-        }, status=status.HTTP_200_OK)
-
-    except VendorReceivablePayout.DoesNotExist:
-        return Response({
-            'success': False,
-            'err': '找不到這筆 Vendor 商品款撥款'
-        }, status=status.HTTP_404_NOT_FOUND)
 
 
 
