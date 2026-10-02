@@ -1735,6 +1735,7 @@ class VendorSettlementPayment(models.Model):
     STATUS_CHOICES = [
         ('pending', '待確認'),
         ('confirmed', '已確認'),
+        ('rejected', '已退回'),
         ('failed', '入帳失敗'),
         ('cancelled', '已取消'),
     ]

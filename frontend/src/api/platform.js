@@ -163,6 +163,12 @@ export const confirmVendorSettlementPayment = (data) => {
   return api.post('/platform/vendor/settlement/confirm', data)
 }
 
+// Admin 確認／退回 Vendor 回報的服務費匯款
+// data: { Admin_id, payment_id, action: 'confirm' | 'reject', Action_reason? }
+export const confirmVendorSettlementRemittance = (data) => {
+  return api.post('/platform/vendor/settlement/payment/confirm', data)
+}
+
 // 平台開給 Vendor 的服務費發票
 export const getVendorSettlementInvoices = (params = {}) => {
   return api.get('/platform/vendor/invoices', { params })

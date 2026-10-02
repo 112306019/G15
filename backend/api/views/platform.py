@@ -1027,9 +1027,14 @@ def admin_list_vendor_invoices(request):
     if err:
         return err
     vendor_id = request.query_params.get('vendor_id')
-    qs = VendorInvoice.objects.select_related('vendor','settlement').order_by('-created_at')
+    status_filter = request.query_params.get('status')
+
+    qs = VendorInvoice.objects.select_related('vendor', 'settlement').order_by('-created_at')
     if vendor_id:
         qs = qs.filter(vendor_id=vendor_id)
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
     result = [{
         'invoice_id': inv.invoice_id,
         'settlement_id': inv.settlement_id,
@@ -1049,6 +1054,218 @@ def admin_list_vendor_invoices(request):
     } for inv in qs[:200]]
     return Response({'success': True, 'err': '', 'invoices': result}, status=status.HTTP_200_OK)
 
+
+def _finalize_vendor_settlement_status(locked_settlement):
+    """
+    結算單收到一筆已確認付款後，重新計算 status（部分/全額繳清），全額繳清
+    的話一併釋放對應訂單的 KOC 分潤（pending -> withdrawable）。呼叫端要自己
+    在 transaction.atomic() 裡先 select_for_update 鎖住這張 settlement 再呼叫，
+    這支本身不開交易。
+    """
+    confirmed_total = VendorSettlementPayment.objects.filter(
+        settlement=locked_settlement, status='confirmed'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    if confirmed_total >= locked_settlement.amount_due:
+        locked_settlement.status = 'paid'
+        locked_settlement.paid_at = timezone.now()
+    else:
+        locked_settlement.status = 'partially_paid'
+    locked_settlement.save(update_fields=['status', 'paid_at', 'updated_at'])
+
+    released = []
+    if locked_settlement.status == 'paid':
+        order_ids = list(locked_settlement.items.values_list('order_id', flat=True))
+        earnings = Earnings.objects.select_related('kocmission__koc').filter(
+            order_id__in=order_ids,
+            status=EARNINGS_STATUS_CHOICES_MAP['pending'],
+            kocmission__application__campaign__vendor=locked_settlement.vendor,
+        )
+        for earning in earnings:
+            wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=earning.kocmission.koc)
+            amount_to_release = earning.amount
+            wallet.balance_frozen = max(0, wallet.balance_frozen - amount_to_release)
+            wallet.balance_available += amount_to_release
+            wallet.save(update_fields=['balance_frozen', 'balance_available', 'updated_at'])
+            earning.status = EARNINGS_STATUS_CHOICES_MAP['withdrawable']
+            earning.save(update_fields=['status'])
+            Transactions.objects.create(
+                koc_wallet=wallet, type='settlement_release', amount=amount_to_release,
+                reference_type='vendor_settlement', reference_id=str(locked_settlement.settlement_id)
+            )
+            released.append({'earnings_id': earning.earnings_id, 'amount': amount_to_release, 'user_id': earning.user_id})
+
+    return released
+
+
+def _issue_vendor_settlement_invoice(settlement):
+    """
+    廠商結算單全額繳清後，建立（或重用既有）VendorInvoice 並呼叫綠界 B2B
+    電子發票 API 開立。同一張結算單只會真的開票一次——已經 issued 的話直接
+    回傳既有紀錄，不會重複呼叫綠界。
+    """
+    from api.models import VendorInvoice
+
+    existing = VendorInvoice.objects.filter(settlement=settlement, status='issued').first()
+    if existing:
+        return {
+            'invoice_id': existing.invoice_id, 'status': existing.status,
+            'invoice_number': existing.invoice_number, 'error_message': existing.error_message,
+        }
+
+    vendor_obj = settlement.vendor
+    if not vendor_obj.tax_id:
+        return {'invoice_id': None, 'status': 'failed', 'invoice_number': None, 'error_message': '廠商無統一編號，無法開立發票'}
+
+    service_fee = Decimal(str(settlement.amount_due or 0))
+    tax_amount = (service_fee * Decimal('0.05')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    grand_total = service_fee + tax_amount
+
+    invoice, _ = VendorInvoice.objects.get_or_create(
+        settlement=settlement,
+        defaults={
+            'vendor': vendor_obj,
+            'relate_number': f"INV{int(timezone.now().timestamp())}{settlement.vendor_id}"[:20],
+            'settlement_amount': Decimal(str(settlement.gross_sales or 0)),
+            'service_fee': service_fee,
+            'platform_service_fee': Decimal(str(settlement.platform_amount or 0)),
+            'koc_commission_display': Decimal(str(settlement.koc_amount or 0)),
+            'tax_amount': tax_amount,
+            'total_amount': grand_total,
+            'status': 'pending',
+        },
+    )
+
+    from api.ecpay_invoice import issue_b2b_invoice
+
+    issue_success, invoice_number, issue_message = issue_b2b_invoice(
+        relate_number=invoice.relate_number,
+        buyer_tax_id=vendor_obj.tax_id,
+        item_name='平台服務費',
+        sales_amount=int(invoice.service_fee),
+        tax_amount=int(invoice.tax_amount),
+    )
+
+    if issue_success:
+        invoice.status = 'issued'
+        invoice.invoice_number = invoice_number
+        invoice.error_message = None
+    else:
+        invoice.status = 'failed'
+        invoice.error_message = issue_message
+    invoice.save(update_fields=['status', 'invoice_number', 'error_message'])
+
+    return {
+        'invoice_id': invoice.invoice_id, 'status': invoice.status,
+        'invoice_number': invoice.invoice_number, 'error_message': invoice.error_message,
+    }
+
+
+# ==============================================================================
+# 後台確認廠商「服務費」匯款回報：廠商在服務費月結明細回報匯款後，這裡
+# 「確認收到」才真的更新結算單狀態、釋放對應的 KOC 分潤，全額繳清時順便
+# 呼叫綠界 B2B 電子發票 API 開立；「退回」則讓廠商可以重新回報。
+# POST /platform/vendor/settlement/payment/confirm
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_confirm_vendor_settlement_remittance(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    from api.notifications import create_notification
+
+    payment_id = request.data.get('payment_id')
+    action = request.data.get('action')  # 'confirm' 或 'reject'
+    action_reason = request.data.get('Action_reason')
+
+    if action not in ('confirm', 'reject'):
+        return Response({'success': False, 'err': "action 必須是 'confirm' 或 'reject'"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payment = VendorSettlementPayment.objects.select_related('settlement__vendor').get(payment_id=payment_id)
+    except VendorSettlementPayment.DoesNotExist:
+        return Response({'success': False, 'err': '找不到這筆匯款回報'}, status=status.HTTP_404_NOT_FOUND)
+
+    if payment.status != 'pending':
+        return Response({'success': False, 'err': f'這筆匯款回報已經是「{payment.get_status_display()}」狀態，不能重複處理'}, status=status.HTTP_400_BAD_REQUEST)
+
+    settlement = payment.settlement
+    vendor_obj = settlement.vendor
+
+    if action == 'reject':
+        with transaction.atomic():
+            payment.status = 'rejected'
+            payment.note = action_reason or '匯款資訊有誤，請重新回報'
+            payment.save(update_fields=['status', 'note'])
+
+            AdminAuditLogs.objects.create(
+                admin_id=admin_obj,
+                action_type='reject_vendor_settlement_payment',
+                tasks_id=str(settlement.settlement_id), vendor=vendor_obj,
+                action_reason=action_reason or f'退回廠商結算單 #{settlement.settlement_id} 的匯款回報',
+            )
+
+        try:
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費匯款回報已被退回',
+                body=f'您回報的匯款資訊未通過確認：{payment.note}，請重新回報。',
+                reference_type='vendor_finance', reference_id=str(settlement.settlement_id),
+            )
+        except Exception as e:
+            logger.error(f'服務費匯款退回通知寄送失敗（payment_id={payment.payment_id}）: {e}')
+
+        return Response({'success': True, 'err': '', 'payment_id': payment.payment_id, 'status': payment.status}, status=status.HTTP_200_OK)
+
+    with transaction.atomic():
+        locked = VendorSettlement.objects.select_for_update().get(pk=settlement.pk)
+        payment.status = 'confirmed'
+        payment.confirmed_by = admin_obj
+        payment.confirmed_at = timezone.now()
+        payment.save(update_fields=['status', 'confirmed_by', 'confirmed_at'])
+
+        released = _finalize_vendor_settlement_status(locked)
+
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='confirm_vendor_settlement_payment',
+            tasks_id=str(locked.settlement_id), vendor=vendor_obj,
+            action_reason=action_reason or f'確認收到廠商結算單 #{locked.settlement_id} 的服務費匯款 NT$ {payment.amount}',
+        )
+
+    invoice_payload = None
+    if locked.status == 'paid':
+        invoice_payload = _issue_vendor_settlement_invoice(locked)
+
+    try:
+        if invoice_payload and invoice_payload['status'] == 'issued':
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費發票已開立',
+                body=f'平台已確認收到匯款並開立服務費發票（發票號碼：{invoice_payload["invoice_number"]}）。',
+                reference_type='vendor_finance', reference_id=str(locked.settlement_id),
+            )
+        elif invoice_payload and invoice_payload['status'] == 'failed':
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費發票開立失敗',
+                body=f'平台已確認收到匯款，但開立發票時發生錯誤：{invoice_payload["error_message"]}，將由平台人員協助處理。',
+                reference_type='vendor_finance', reference_id=str(locked.settlement_id),
+            )
+        else:
+            create_notification(
+                vendor=vendor_obj, category='payout', title='服務費匯款已確認',
+                body=f'平台已確認收到 NT$ {payment.amount} 服務費匯款。',
+                reference_type='vendor_finance', reference_id=str(locked.settlement_id),
+            )
+    except Exception as e:
+        logger.error(f'服務費匯款確認通知寄送失敗（payment_id={payment.payment_id}）: {e}')
+
+    return Response({
+        'success': True, 'err': '', 'payment_id': payment.payment_id,
+        'settlement_id': locked.settlement_id, 'settlement_status': locked.status,
+        'released_earnings': released, 'invoice': invoice_payload,
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -1163,13 +1380,39 @@ def admin_list_vendor_payouts(request):
     if err:
         return err
     requested_status = request.query_params.get('status')
-    qs = VendorSettlement.objects.select_related('vendor').order_by('-created_at')
+    qs = VendorSettlement.objects.select_related('vendor').prefetch_related('payments', 'invoices').order_by('-created_at')
     if requested_status:
         status_map={'pending':'awaiting_payment','completed':'paid'}
         qs=qs.filter(status=status_map.get(requested_status, requested_status))
     result=[]
     for s in qs[:300]:
         paid = s.amount_paid
+
+        # 最新一筆廠商匯款回報（依 payment_id 由大到小，不依賴沒有設
+        # Meta.ordering 的預設順序），給後台判斷目前有沒有待審核的回報。
+        payments_sorted = sorted(s.payments.all(), key=lambda p: p.payment_id, reverse=True)
+        latest_payment = payments_sorted[0] if payments_sorted else None
+        latest_payment_payload = None
+        if latest_payment:
+            latest_payment_payload = {
+                'payment_id': latest_payment.payment_id,
+                'amount': float(latest_payment.amount or 0),
+                'reference_no': latest_payment.reference_no,
+                'status': latest_payment.status,
+                'paid_at': latest_payment.paid_at,
+                'note': latest_payment.note,
+            }
+
+        invoice_obj = next(iter(s.invoices.all()), None)
+        invoice_payload = None
+        if invoice_obj:
+            invoice_payload = {
+                'invoice_id': invoice_obj.invoice_id,
+                'status': invoice_obj.status,
+                'invoice_number': invoice_obj.invoice_number,
+                'error_message': invoice_obj.error_message,
+            }
+
         result.append({
             'Settlement_id': s.settlement_id,
             'Payout_id': s.settlement_id,
@@ -1191,6 +1434,8 @@ def admin_list_vendor_payouts(request):
             'Due_date': s.due_date,
             'Status': s.status,
             'Created_at': s.created_at,
+            'latest_payment': latest_payment_payload,
+            'invoice': invoice_payload,
         })
     return Response(result, status=status.HTTP_200_OK)
 
@@ -1275,34 +1520,11 @@ def admin_confirm_vendor_payout(request):
             confirmed_at=timezone.now() if payment_status=='confirmed' else None,
             note=action_reason,
         )
+        released = []
         if payment_status == 'confirmed':
-            confirmed_total = VendorSettlementPayment.objects.filter(settlement=locked,status='confirmed').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            if confirmed_total >= locked.amount_due:
-                locked.status='paid'; locked.paid_at=timezone.now()
-            else:
-                locked.status='partially_paid'
-            locked.save(update_fields=['status','paid_at','updated_at'])
+            released = _finalize_vendor_settlement_status(locked)
         else:
             locked.save(update_fields=['updated_at'])
-
-        released=[]
-        if locked.status == 'paid':
-            order_ids=list(locked.items.values_list('order_id',flat=True))
-            earnings=(Earnings.objects.select_related('kocmission__koc').filter(
-                order_id__in=order_ids,
-                status=EARNINGS_STATUS_CHOICES_MAP['pending'],
-                kocmission__application__campaign__vendor=locked.vendor,
-            ))
-            for earning in earnings:
-                wallet,_=KocWallet.objects.select_for_update().get_or_create(koc=earning.kocmission.koc)
-                amount_to_release=earning.amount
-                wallet.balance_frozen=max(0,wallet.balance_frozen-amount_to_release)
-                wallet.balance_available += amount_to_release
-                wallet.save(update_fields=['balance_frozen','balance_available','updated_at'])
-                earning.status=EARNINGS_STATUS_CHOICES_MAP['withdrawable']
-                earning.save(update_fields=['status'])
-                Transactions.objects.create(koc_wallet=wallet,type='settlement_release',amount=amount_to_release,reference_type='vendor_settlement',reference_id=str(locked.settlement_id))
-                released.append({'earnings_id':earning.earnings_id,'amount':amount_to_release,'user_id':earning.user_id})
 
         AdminAuditLogs.objects.create(
             admin_id=admin_obj,
@@ -1311,7 +1533,12 @@ def admin_confirm_vendor_payout(request):
             tasks_id=str(locked.settlement_id),
             action_reason=action_reason or f'廠商結算單 #{locked.settlement_id} 收款 NT$ {amount}，狀態 {locked.status}',
         )
-    return Response({'success':True,'err':'','settlement_id':locked.settlement_id,'payment_id':payment.payment_id,'status':locked.status,'released_earnings':released},status=status.HTTP_200_OK)
+
+    invoice_payload = None
+    if locked.status == 'paid':
+        invoice_payload = _issue_vendor_settlement_invoice(locked)
+
+    return Response({'success':True,'err':'','settlement_id':locked.settlement_id,'payment_id':payment.payment_id,'status':locked.status,'released_earnings':released,'invoice':invoice_payload},status=status.HTTP_200_OK)
 
 admin_confirm_vendor_settlement_payment = admin_confirm_vendor_payout
 

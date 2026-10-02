@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Store, UserCheck,
-  ClipboardList, CreditCard, LogOut, History, 
-  ShieldAlert, Headset, FileText, Menu, X
+  ClipboardList, CreditCard, LogOut, History,
+  ShieldAlert, Headset, FileText, Menu, X,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 import LogoIcon from './assets/logo.jpg';
@@ -24,6 +25,32 @@ import AdminLogs from './admin/AdminLogs';
 import AdminSupport from './admin/AdminSupport';
 import AdminTaxForms from './admin/AdminTaxForms';
 
+// 路由保護元件：定義在元件外層，避免每次 AdminApp 重新渲染（例如側邊欄收合、
+// 個人選單開關）就產生一個全新的元件型別，導致 React 把底下的頁面整個卸載重掛，
+// 讓頁面內部狀態（例如分頁選擇、已載入的資料）無故被重置。
+function ProtectedRoute({ allowedRoles, adminRole, children }) {
+  const navigate = useNavigate();
+
+  if (!allowedRoles.includes(adminRole)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm animate-in fade-in px-4 text-center">
+        <div className="w-20 h-20 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center mb-6 border-4 border-[#C8522A]/10">
+          <ShieldAlert size={36} />
+        </div>
+        <h3 className="text-2xl font-serif font-black text-[#1A1A18] mb-2">權限不足</h3>
+        <p className="text-[#8C8880] font-medium">您的帳號角色 <span className="font-bold text-[#1A1A18]">{adminRole}</span> 無法存取此管理模組。</p>
+        <button
+          onClick={() => navigate('/admin')}
+          className="mt-6 px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold text-sm hover:bg-[#333] transition-all shadow-md"
+        >
+          返回平台總覽
+        </button>
+      </div>
+    );
+  }
+  return children;
+}
+
 export default function AdminApp() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,6 +63,8 @@ export default function AdminApp() {
   // 控制手機版側邊選單與右上角個人選單開關的狀態
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  // 桌面版側邊欄收合狀態：收合後釋放寬度給內容區（例如財務頁面的寬表格）
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
@@ -82,28 +111,6 @@ export default function AdminApp() {
 
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
 
-  // 路由保護元件
-  const ProtectedRoute = ({ allowedRoles, children }) => {
-    if (!allowedRoles.includes(adminRole)) {
-      return (
-        <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm animate-in fade-in px-4 text-center">
-          <div className="w-20 h-20 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center mb-6 border-4 border-[#C8522A]/10">
-            <ShieldAlert size={36} />
-          </div>
-          <h3 className="text-2xl font-serif font-black text-[#1A1A18] mb-2">權限不足</h3>
-          <p className="text-[#8C8880] font-medium">您的帳號角色 <span className="font-bold text-[#1A1A18]">{adminRole}</span> 無法存取此管理模組。</p>
-          <button
-            onClick={() => navigate('/admin')}
-            className="mt-6 px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold text-sm hover:bg-[#333] transition-all shadow-md"
-          >
-            返回平台總覽
-          </button>
-        </div>
-      );
-    }
-    return children;
-  };
-
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800 overflow-x-hidden">
 
@@ -114,24 +121,35 @@ export default function AdminApp() {
         />
       )}
 
-      {/* 側邊欄 (支援響應式滑動) */}
-      <aside className={`w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-30 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* 側邊欄 (支援響應式滑動，桌面版可收合) */}
+      <aside className={`${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-30 transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+        <button
+          onClick={() => setIsSidebarCollapsed(v => !v)}
+          className="hidden md:flex absolute top-20 -right-3 w-6 h-6 bg-white border border-[#E2DDD4] rounded-full items-center justify-center shadow-sm hover:bg-[#F5F0E8] transition-colors z-40"
+        >
+          {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
         <div className="h-16 md:h-20 flex items-center px-4 border-b border-[#E2DDD4] cursor-pointer" onClick={() => navigate('/admin')}>
-          
-          <div className="bg-[#F5F0E8] w-full px-2.5 py-2 rounded-xl flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm">
-            <img 
-              src={LogoIcon} 
-              alt="ShareBuy Logo" 
-              className="h-7 w-7 md:h-8 md:w-8 object-cover rounded-lg shadow-sm flex-shrink-0" 
+
+          <div className={`bg-[#F5F0E8] w-full px-2.5 py-2 rounded-xl flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
+            <img
+              src={LogoIcon}
+              alt="ShareBuy Logo"
+              className="h-7 w-7 md:h-8 md:w-8 object-cover rounded-lg shadow-sm flex-shrink-0"
             />
-            <img 
-              src={LogoText} 
-              alt="ShareBuy Text" 
-              className="h-5 md:h-6 w-auto object-contain mix-blend-multiply"
-            />
-            <span className="text-[10px] bg-[#1A1A18] text-white px-2 py-0.5 rounded-md font-bold tracking-wider ml-auto flex-shrink-0">
-              ADMIN
-            </span>
+            {!isSidebarCollapsed && (
+              <>
+                <img
+                  src={LogoText}
+                  alt="ShareBuy Text"
+                  className="h-5 md:h-6 w-auto object-contain mix-blend-multiply"
+                />
+                <span className="text-[10px] bg-[#1A1A18] text-white px-2 py-0.5 rounded-md font-bold tracking-wider ml-auto flex-shrink-0">
+                  ADMIN
+                </span>
+              </>
+            )}
           </div>
 
         </div>
@@ -144,13 +162,14 @@ export default function AdminApp() {
               <button
                 key={item.id}
                 onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-4 py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
+                title={isSidebarCollapsed ? item.label : undefined}
+                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : ''} px-4 py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
                     ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
                     : 'text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]'
                   }`}
               >
                 <span className={isActive ? 'text-[#C8522A]' : ''}>{item.icon}</span>
-                {item.label}
+                {!isSidebarCollapsed && item.label}
               </button>
             );
           })}
@@ -159,15 +178,16 @@ export default function AdminApp() {
         <div className="p-4 border-t border-[#E2DDD4]">
           <button
             onClick={handleLogout}
+            title={isSidebarCollapsed ? '登出系統' : undefined}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm text-[#8C8880] border border-[#E2DDD4] hover:bg-[#FDF0ED] hover:text-[#C8522A] hover:border-[#C8522A]/30 transition-all"
           >
-            <LogOut size={16} /> 登出系統
+            <LogOut size={16} /> {!isSidebarCollapsed && '登出系統'}
           </button>
         </div>
       </aside>
 
       {/* 主要內容區 */}
-      <main className="flex-1 w-full md:ml-64 flex flex-col min-h-screen transition-all duration-300">
+      <main className={`flex-1 w-full ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} flex flex-col min-h-screen transition-all duration-300`}>
 
         {/* 頂部 Header */}
         <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-between md:justify-end px-4 md:px-10">
@@ -226,76 +246,76 @@ export default function AdminApp() {
         <div className="p-4 sm:p-6 md:p-10 flex-1 overflow-x-hidden">
           <Routes>
             <Route path="/" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'finance', 'reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'finance', 'reviewer']} adminRole={adminRole}>
                 <AdminOverview currentRole={adminRole} />
               </ProtectedRoute>
             } />
 
             <Route path="/vendors" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminVendors />
               </ProtectedRoute>
             } />
             <Route path="/vendors/:id" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminVendorDetail />
               </ProtectedRoute>
             } />     
 
             <Route path="/koc" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminKOC />
               </ProtectedRoute>
             } />
             <Route path="/koc/pending" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminKOCPending />
               </ProtectedRoute>
             } />
             
             <Route path="/koc/:id" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminKocDetail />
               </ProtectedRoute>
             } />
 
             <Route path="/consumers" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']} adminRole={adminRole}>
                 <AdminConsumers />
               </ProtectedRoute>
             } />
             <Route path="/consumers/:id" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']} adminRole={adminRole}>
                 <AdminConsumerDetail />
               </ProtectedRoute>
             } />
 
             <Route path="/missions" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer']} adminRole={adminRole}>
                 <AdminMissions />
               </ProtectedRoute>
             } />
 
             <Route path="/finance" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'finance']} adminRole={adminRole}>
                 <AdminFinance />
               </ProtectedRoute>
             } />
 
             <Route path="/tax-forms" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'finance']} adminRole={adminRole}>
                 <AdminTaxForms />
               </ProtectedRoute>
             } />
 
             <Route path="/support" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminSupport />
               </ProtectedRoute>
             } />
 
             <Route path="/logs" element={
-              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']}>
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminLogs />
               </ProtectedRoute>
             } />

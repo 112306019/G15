@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import datetime, time, timedelta
 from django.db import transaction
 from django.db.models import Sum, Count, Min
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from api.error_messages import internal_error_message, serializer_error_message
 from api.r2_storage import upload_image_to_r2
 
@@ -26,7 +26,7 @@ from api.models import (
     Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
-
+    VendorInvoice,
 )
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from api.notifications import create_notification
@@ -3124,6 +3124,92 @@ def vendor_order_upload_invoice(request):
     }, status=status.HTTP_200_OK)
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_report_settlement_payment(request):
+    """
+    廠商回報已經把服務費結算款匯給平台（金額＋匯款帳號後5碼＋匯款日期）。
+    建立一筆 status='pending' 的 VendorSettlementPayment，平台本身不會自動
+    更新結算單狀態，要等後台 confirm（見 admin_confirm_vendor_settlement_remittance）
+    確認收到款項後才真的生效、並視情況開立發票。
+    URL: /vendor/settlement/payment/report
+    """
+    vendor_id = request.data.get("vendor_id")
+    settlement_id = request.data.get("settlement_id")
+    amount = request.data.get("amount")
+    account_last5 = (request.data.get("account_last5") or "").strip()
+    transfer_date = request.data.get("transfer_date")
+
+    if not vendor_id or not settlement_id or not amount or not account_last5 or not transfer_date:
+        return Response({
+            "success": False,
+            "err": "vendor_id、settlement_id、amount、account_last5、transfer_date 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        settlement = VendorSettlement.objects.get(settlement_id=settlement_id)
+    except VendorSettlement.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的結算單"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if str(settlement.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "這張結算單不屬於這個廠商"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    if settlement.status not in ("awaiting_payment", "partially_paid", "overdue"):
+        return Response({
+            "success": False,
+            "err": f"這張結算單目前狀態是「{settlement.get_status_display()}」，不能回報匯款"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if VendorSettlementPayment.objects.filter(settlement=settlement, status="pending").exists():
+        return Response({
+            "success": False,
+            "err": "已經有一筆匯款回報正在等待平台確認，請勿重複送出"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        amount = Decimal(str(amount))
+    except InvalidOperation:
+        return Response({
+            "success": False,
+            "err": "amount 必須是數字"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        transfer_date_parsed = datetime.strptime(str(transfer_date), "%Y-%m-%d").date()
+    except ValueError:
+        return Response({
+            "success": False,
+            "err": "transfer_date 格式錯誤，需為 YYYY-MM-DD"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # paid_at 是 DateTimeField，廠商只填日期沒填時間，補成當天開始（午夜）並
+    # 轉成有時區資訊的 datetime，避免 Django 丟 naive datetime 的警告。
+    paid_at = timezone.make_aware(datetime.combine(transfer_date_parsed, time.min))
+
+    payment = VendorSettlementPayment.objects.create(
+        settlement=settlement,
+        amount=amount,
+        payment_method="bank_transfer",
+        reference_no=account_last5,
+        status="pending",
+        paid_at=paid_at,
+    )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "payment_id": payment.payment_id,
+        "settlement_id": settlement.settlement_id,
+        "status": payment.status,
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_coupon_get_usage_list(request):
@@ -4771,15 +4857,8 @@ def get_vendor_finance_transactions(request):
     settlements = (
         VendorSettlement.objects
         .filter(vendor=vendor)
-        .prefetch_related(
-            "payments",
-            "items",
-            "items__order",
-        )
-        .order_by(
-            "-period_end",
-            "-created_at",
-        )
+        .prefetch_related("payments", "items", "items__order", "invoices")
+        .order_by("-period_end", "-created_at")
     )
 
     status_text = {
@@ -4871,7 +4950,12 @@ def get_vendor_finance_transactions(request):
                 ),
             })
 
-        payments = [{
+        # 前端（廠商端 Modal）要用第一筆判斷「最新一次回報」的狀態，用
+        # payment_id 由大到小排序，不要依賴 settlement.payments.all() 的
+        # 預設順序（沒有特別設 Meta.ordering）。用 Python 排序而不是另外下
+        # .order_by()，才不會讓這份已經 prefetch_related 好的 queryset
+        # 多打一次 DB。
+        payments = sorted([{
             "payment_id": p.payment_id,
             "amount": float(
                 p.amount or 0
@@ -4884,10 +4968,20 @@ def get_vendor_finance_transactions(request):
             ),
             "status": p.status,
             "paid_at": p.paid_at,
-            "confirmed_at": (
-                p.confirmed_at
-            ),
-        } for p in settlement.payments.all()]
+            "confirmed_at": p.confirmed_at,
+            "note": p.note,
+        } for p in settlement.payments.all()], key=lambda p: p["payment_id"], reverse=True)
+
+        invoice_obj = next(iter(settlement.invoices.all()), None)
+        invoice_payload = None
+        if invoice_obj:
+            invoice_payload = {
+                "invoice_id": invoice_obj.invoice_id,
+                "status": invoice_obj.status,
+                "invoice_number": invoice_obj.invoice_number,
+                "error_message": invoice_obj.error_message,
+                "total_amount": float(invoice_obj.total_amount or 0),
+            }
 
         row = {
             "settlement_id": (
@@ -4940,6 +5034,7 @@ def get_vendor_finance_transactions(request):
             ),
             "items": items,
             "payments": payments,
+            "invoice": invoice_payload,
         }
 
         settlement_rows.append(row)

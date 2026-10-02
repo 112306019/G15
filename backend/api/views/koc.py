@@ -1480,10 +1480,7 @@ def get_revenue_history(request):
 
     result = []
     for earning in earnings:
-        # date: 目前先回 null，等轉帳 API 做好後再補上實際匯款日期
         result.append({
-            "earnings_no": str(earning.earnings_id).zfill(8),
-            "date": None,
             "amount": earning.amount,
             # 分潤比例：固定顯示 KOC_COMMISSION_RATE_PERCENT，不再讀
             # CampaignProduct.koc_commission_rate——calculate_order_commission

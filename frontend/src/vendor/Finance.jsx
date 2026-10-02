@@ -26,6 +26,7 @@ import {
   getVendorReceivables,
   getVendorSettlementOverview,
   getVendorSettlements,
+  reportVendorSettlementPayment,
 } from '../api/vendor'
 
 
@@ -407,6 +408,17 @@ export default function Finance() {
     setSelectedSettlement,
   ] = useState(null)
 
+  const [
+    reportingSettlementId,
+    setReportingSettlementId,
+  ] = useState(null)
+
+  const [reportForm, setReportForm] =
+    useState({ account_last5: '', transfer_date: '' })
+
+  const [submittingReport, setSubmittingReport] =
+    useState(false)
+
 
   const loadData =
     useCallback(async () => {
@@ -504,6 +516,55 @@ export default function Finance() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+
+  const openSettlementReportForm = settlement => {
+    setReportingSettlementId(settlement.settlement_id)
+    setReportForm({ account_last5: '', transfer_date: '' })
+  }
+
+  const submitSettlementReport = async settlement => {
+    if (!/^\d{5}$/.test(reportForm.account_last5)) {
+      toast.error('請輸入匯款帳號後 5 碼（數字）')
+      return
+    }
+    if (!reportForm.transfer_date) {
+      toast.error('請選擇匯款日期')
+      return
+    }
+
+    setSubmittingReport(true)
+    try {
+      const res = await reportVendorSettlementPayment({
+        vendor_id: vendorId,
+        settlement_id: settlement.settlement_id,
+        amount: settlement.outstanding_amount,
+        account_last5: reportForm.account_last5,
+        transfer_date: reportForm.transfer_date,
+      })
+      if (res.data?.success) {
+        toast.success('已送出匯款回報，請等待平台確認')
+        setReportingSettlementId(null)
+        const freshRes = await getVendorSettlements(vendorId)
+        if (freshRes.data?.success) {
+          const freshSettlements = freshRes.data.settlements || []
+          setSettlements(freshSettlements)
+          const updated = freshSettlements.find(
+            s => s.settlement_id === settlement.settlement_id
+          )
+          if (updated) setSelectedSettlement(updated)
+        }
+      } else {
+        toast.error(res.data?.err || '送出匯款回報失敗')
+      }
+    } catch (err) {
+      toast.error(
+        err.response?.data?.err || '送出匯款回報失敗，請稍後再試'
+      )
+    } finally {
+      setSubmittingReport(false)
+    }
+  }
 
 
   const pendingGoodsTotal =
@@ -1530,6 +1591,154 @@ export default function Finance() {
                   </p>
                 )}
               </div>
+
+              {['awaiting_payment', 'partially_paid', 'overdue'].includes(
+                selectedSettlement.status
+              ) && (
+                <div className="rounded-xl border border-[#E2DDD4] p-4">
+                  <p className="text-xs font-black text-[#1A1A18]">
+                    回報匯款
+                  </p>
+
+                  {(() => {
+                    const latestPayment = selectedSettlement.payments?.[0]
+                    const isPendingReview =
+                      latestPayment?.status === 'pending'
+                    const rejectReason =
+                      latestPayment?.status === 'rejected'
+                        ? latestPayment.note
+                        : null
+
+                    if (isPendingReview) {
+                      return (
+                        <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
+                          已回報帳號後 5 碼 {latestPayment.reference_no}，
+                          匯款日期 {dateText(latestPayment.paid_at)}，
+                          請等待平台確認。
+                        </p>
+                      )
+                    }
+
+                    return (
+                      <>
+                        {rejectReason && (
+                          <p className="mt-3 rounded-lg bg-[#FFF0F0] p-3 text-[10px] font-bold text-[#D93025]">
+                            退回原因：{rejectReason}
+                          </p>
+                        )}
+
+                        {reportingSettlementId ===
+                        selectedSettlement.settlement_id ? (
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                              <label className="flex flex-1 flex-col gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-[#8C8880]">
+                                  匯款帳號後 5 碼
+                                </span>
+                                <input
+                                  type="text"
+                                  maxLength={5}
+                                  value={reportForm.account_last5}
+                                  onChange={e =>
+                                    setReportForm(f => ({
+                                      ...f,
+                                      account_last5: e.target.value.replace(
+                                        /\D/g,
+                                        ''
+                                      ),
+                                    }))
+                                  }
+                                  className="rounded-lg border border-[#E2DDD4] px-3 py-2 text-sm font-bold text-[#1A1A18]"
+                                  placeholder="12345"
+                                />
+                              </label>
+                              <label className="flex flex-1 flex-col gap-1">
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-[#8C8880]">
+                                  匯款日期
+                                </span>
+                                <input
+                                  type="date"
+                                  value={reportForm.transfer_date}
+                                  onChange={e =>
+                                    setReportForm(f => ({
+                                      ...f,
+                                      transfer_date: e.target.value,
+                                    }))
+                                  }
+                                  className="rounded-lg border border-[#E2DDD4] px-3 py-2 text-sm font-bold text-[#1A1A18]"
+                                />
+                              </label>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={submittingReport}
+                                onClick={() =>
+                                  submitSettlementReport(selectedSettlement)
+                                }
+                                className="flex items-center gap-2 rounded-full bg-[#C8522A] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#B04A24] disabled:opacity-60"
+                              >
+                                {submittingReport && (
+                                  <Loader2 size={14} className="animate-spin" />
+                                )}
+                                送出回報
+                              </button>
+                              <button
+                                type="button"
+                                disabled={submittingReport}
+                                onClick={() => setReportingSettlementId(null)}
+                                className="rounded-full border border-[#E2DDD4] bg-white px-4 py-2 text-xs font-bold text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#E2DDD4] bg-[#F8F9FA] p-3 text-[10px] font-bold text-[#1A1A18]">
+                              <Landmark
+                                size={14}
+                                className="mt-0.5 shrink-0 text-[#C8522A]"
+                              />
+                              匯款帳戶資訊：請洽財務人員
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openSettlementReportForm(selectedSettlement)
+                              }
+                              className="mt-3 rounded-full bg-[#C8522A] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#B04A24]"
+                            >
+                              回報匯款
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {selectedSettlement.invoice && (
+                <div className="rounded-xl border border-[#E2DDD4] p-4">
+                  <p className="text-xs font-black text-[#1A1A18]">
+                    服務費發票
+                  </p>
+                  {selectedSettlement.invoice.status === 'issued' && (
+                    <p className="mt-2 text-xs font-bold text-[#1A1A18]">
+                      發票號碼：{selectedSettlement.invoice.invoice_number}
+                    </p>
+                  )}
+                  {selectedSettlement.invoice.status === 'failed' && (
+                    <p className="mt-2 text-[10px] font-bold text-[#D93025]">
+                      開立發票失敗，平台人員將盡快協助處理
+                      {selectedSettlement.invoice.error_message
+                        ? `：${selectedSettlement.invoice.error_message}`
+                        : '。'}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <p className="text-xs font-black text-[#1A1A18]">

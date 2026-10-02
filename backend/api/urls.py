@@ -32,6 +32,7 @@ from .views.platform import (
     admin_list_vendor_review_overdue,
     admin_notify_vendor_review_overdue,
     admin_list_vendor_invoices,
+    admin_confirm_vendor_settlement_remittance,
     admin_list_settleable_vendors,
     admin_list_vendor_settlements,
     admin_confirm_vendor_settlement_payment,
@@ -147,6 +148,7 @@ urlpatterns = [
     path('platform/vendor/settlements', admin_list_vendor_settlements, name='platform-vendor-settlements'),
     path('platform/vendor/settlement/confirm', admin_confirm_vendor_settlement_payment, name='platform-vendor-settlement-confirm'),
     path('platform/vendor/invoices', admin_list_vendor_invoices, name='platform-vendor-invoices'),
+    path('platform/vendor/settlement/payment/confirm', admin_confirm_vendor_settlement_remittance, name='platform-vendor-settlement-payment-confirm'),
     path('platform/vendors/settleable', admin_list_settleable_vendors, name='platform-vendors-settleable'),
     path('platform/vendor/receivables', admin_list_vendor_receivables, name='platform-vendor-receivables'),
     path('platform/vendor/payout-batches/ready', admin_list_monthly_payout_ready_vendors, name='platform-vendor-payout-batches-ready'),
@@ -279,6 +281,7 @@ urlpatterns = [
     path('vendor/receivable/list', vendor.get_vendor_receivables, name='vendor-receivable-list'),
     path('vendor/settlement/overview', vendor.get_vendor_finance_overview, name='vendor-settlement-overview'),
     path('vendor/settlement/list', vendor.get_vendor_finance_transactions, name='vendor-settlement-list'),
+    path('vendor/settlement/payment/report', vendor.vendor_report_settlement_payment, name='vendor-settlement-payment-report'),
 
     # 舊路徑暫時保留給尚未更新的前端；requestPayout 會回 410 Gone。
     path('vendor/finance/getOverview', vendor.get_vendor_finance_overview, name='vendor-finance-get-overview-legacy'),

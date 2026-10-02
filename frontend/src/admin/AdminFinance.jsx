@@ -25,7 +25,7 @@ import {
   getSettleableVendors,
   generateVendorSettlement,
   getVendorSettlements,
-  confirmVendorSettlementPayment,
+  confirmVendorSettlementRemittance,
   getVendorSettlementInvoices,
 
   getAdminKocPayouts,
@@ -919,70 +919,40 @@ export default function AdminFinance() {
     }
 
 
-  const handleConfirmSettlement =
-    async (settlement) => {
-      const settlementId =
-        settlement.Settlement_id ??
-        settlement.settlement_id
+  const handleConfirmSettlementRemittance =
+    async (paymentId, action) => {
+      let actionReason = null
 
-      const vendorName =
-        settlement.Vendor_name ??
-        settlement.vendor_name ??
-        '廠商'
-
-      const outstanding =
-        settlement.Outstanding_amount ??
-        settlement.outstanding_amount ??
-        settlement.Amount_due ??
-        settlement.amount_due ??
-        0
-
-      if (
+      if (action === 'reject') {
+        actionReason = window.prompt(
+          '請輸入退回原因（會顯示給廠商看）：'
+        )
+        if (actionReason === null) return
+      } else if (
         !window.confirm(
-          `確定平台已收到 ${vendorName} 的服務費 ${money(
-            outstanding
-          )} 嗎？\n\n確認後，對應 KOC 分潤才會釋放。`
+          '確定已經收到這筆匯款，要確認並視情況開立服務費發票嗎？'
         )
       ) {
         return
       }
 
-      const reference =
-        window.prompt(
-          '可輸入轉帳交易編號／收款備註（可留空）',
-          ''
-        ) || ''
-
-      const key =
-        `settlement-confirm-${settlementId}`
-
+      const key = `settlement-remittance-${paymentId}`
       setProcessingKey(key)
 
       try {
         const res =
-          await confirmVendorSettlementPayment({
+          await confirmVendorSettlementRemittance({
             Admin_id: adminId,
-            settlement_id:
-              settlementId,
-            status: 'completed',
-            amount: outstanding,
-            payment_method:
-              'bank_transfer',
-            reference_no: reference,
+            payment_id: paymentId,
+            action,
+            Action_reason: actionReason,
           })
 
-        if (
-          res.data?.success === false
-        ) {
+        if (res.data?.success === false) {
           throw new Error(
-            res.data.err ||
-              '確認服務費失敗'
+            res.data.err || '處理失敗'
           )
         }
-
-        alert(
-          '已確認收到平台服務費。'
-        )
 
         await loadAll(false)
       } catch (err) {
@@ -2085,31 +2055,70 @@ export default function AdminFinance() {
                             </td>
 
                             <td className="px-5 py-4">
-                              {[
-                                'awaiting_payment',
-                                'partially_paid',
-                                'overdue',
-                              ].includes(
-                                status
-                              ) ? (
-                                <ActionButton
-                                  primary
-                                  disabled={
-                                    processingKey ===
-                                    `settlement-confirm-${settlementId}`
-                                  }
-                                  onClick={() =>
-                                    handleConfirmSettlement(
-                                      item
-                                    )
-                                  }
-                                >
-                                  確認已收款
-                                </ActionButton>
+                              {item.latest_payment?.status === 'pending' ? (
+                                <div className="space-y-2">
+                                  <p className="text-[9px] leading-relaxed text-[#8C8880]">
+                                    廠商已回報：{money(item.latest_payment.amount)}
+                                    <br />
+                                    帳號後5碼：{item.latest_payment.reference_no || '—'}
+                                    <br />
+                                    匯款日期：{dateText(item.latest_payment.paid_at)}
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <ActionButton
+                                      disabled={
+                                        processingKey ===
+                                        `settlement-remittance-${item.latest_payment.payment_id}`
+                                      }
+                                      onClick={() =>
+                                        handleConfirmSettlementRemittance(
+                                          item.latest_payment.payment_id,
+                                          'reject'
+                                        )
+                                      }
+                                    >
+                                      退回
+                                    </ActionButton>
+                                    <ActionButton
+                                      primary
+                                      disabled={
+                                        processingKey ===
+                                        `settlement-remittance-${item.latest_payment.payment_id}`
+                                      }
+                                      onClick={() =>
+                                        handleConfirmSettlementRemittance(
+                                          item.latest_payment.payment_id,
+                                          'confirm'
+                                        )
+                                      }
+                                    >
+                                      確認收到
+                                    </ActionButton>
+                                  </div>
+                                </div>
+                              ) : [
+                                  'awaiting_payment',
+                                  'partially_paid',
+                                  'overdue',
+                                ].includes(status) ? (
+                                <span className="text-[10px] text-[#8C8880]">
+                                  等待廠商回報
+                                </span>
                               ) : (
                                 <span className="text-[10px] text-[#8C8880]">
                                   —
                                 </span>
+                              )}
+
+                              {item.invoice?.status === 'issued' && (
+                                <p className="mt-2 text-[9px] font-bold text-[#1A1A18]">
+                                  發票號碼：{item.invoice.invoice_number}
+                                </p>
+                              )}
+                              {item.invoice?.status === 'failed' && (
+                                <p className="mt-2 text-[9px] font-bold text-[#D93025]">
+                                  開票失敗：{item.invoice.error_message || '—'}
+                                </p>
                               )}
                             </td>
                           </tr>
