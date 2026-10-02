@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config';
+import { getKocRef } from '../kocRef';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   TAIWAN_CITIES,
@@ -817,6 +818,7 @@ export default function CheckoutPage({
           currency: 'TWD',
           value: grandTotal,
           coupon: appliedCoupon ? appliedCoupon.code : undefined,
+          link_ref: getKocRef(),
           items: normalizedCartItems.map((item) => ({
             item_id: String(item.productId ?? item.Product_id ?? item.product_id ?? item.id),
             item_name: item.name ?? item.productName ?? '',
