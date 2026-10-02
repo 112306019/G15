@@ -24,7 +24,8 @@ from api.models import (
     Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message,
     Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
-    VendorReceivable, VendorReceivablePayout, VendorPayoutBatch,
+    VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
+
 )
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from api.notifications import create_notification
@@ -5046,6 +5047,45 @@ def vendor_request_payout(request):
     }, status=status.HTTP_410_GONE)
 
 
+def _resolve_ga4_date(value):
+    """把 GA4 的日期寫法（today / yesterday / NdaysAgo / YYYY-MM-DD）轉成 date。"""
+    today = timezone.localdate()
+    if value == "today":
+        return today
+    if value == "yesterday":
+        return today - timedelta(days=1)
+    if value.endswith("daysAgo"):
+        return today - timedelta(days=int(value[:-len("daysAgo")]))
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _attach_link_clicks(funnel, coupon_qs, start_date, end_date):
+    """
+    把後端記錄的短連結點擊數（KocLinkClickDaily，已濾掉社群預覽機器人）
+    併進連結漏斗。點擊數由伺服器端計算，不受廣告攔截器影響，
+    所以通常會比 GA4 的落地事件數多一些。
+    """
+    link = funnel.get("link")
+    if not link:
+        return
+
+    rows = (
+        KocLinkClickDaily.objects
+        .filter(
+            coupon__in=coupon_qs,
+            click_date__gte=_resolve_ga4_date(start_date),
+            click_date__lte=_resolve_ga4_date(end_date),
+        )
+        .values("coupon__promotion_code")
+        .annotate(total=Sum("click_count"))
+    )
+    clicks = {row["coupon__promotion_code"]: row["total"] or 0 for row in rows}
+
+    for row in link["by_code"]:
+        row["clicks"] = clicks.get(row["code"], 0)
+    link["summary"]["clicks"] = sum(clicks.values())
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_analytics_funnel(request):
@@ -5055,6 +5095,7 @@ def vendor_analytics_funnel(request):
 
     只追蹤「KOC 優惠碼帶來的流量」：先查出這個廠商所有活動底下的優惠碼，
     再用優惠碼去 GA4 篩選 select_promotion / begin_checkout / purchase 事件。
+    另外回傳 link：從推廣連結（/r/<優惠碼>）進站的漏斗，點擊數來自後端記錄。
     """
     from api.ga4_client import get_coupon_funnel, GA4NotConfigured
 
@@ -5076,6 +5117,7 @@ def vendor_analytics_funnel(request):
 
     try:
         funnel = get_coupon_funnel(codes, start_date, end_date)
+        _attach_link_clicks(funnel, coupon_qs, start_date, end_date)
     except GA4NotConfigured as error:
         return Response({
             "success": False,
