@@ -4064,25 +4064,49 @@ def get_earnings_tracking(request):
         .order_by('-created_at')
     )
 
-    # 🔥 批次查出所有推薦碼對應的 KOC 姓名（CouponNew -> KOCMissionNew -> KOC -> User），避免迴圈內逐一查詢
+    # 批次查出推薦碼對應的 KOC 與任務（CouponNew -> KOCMissionNew -> KOC / 活動），
+    # 前端依 KOC → 任務 → 訂單分組顯示；避免迴圈內逐一查詢
     promotion_codes = {earning.order.promotion_code for earning in earnings_list}
     coupons = CouponNew.objects.filter(
         promotion_code__in=promotion_codes
-    ).select_related('kocmission__koc__user')
+    ).select_related(
+        'kocmission__koc__user',
+        'kocmission__application__campaign__vendor',
+    )
 
-    koc_name_map = {}
+    coupon_info_map = {}
     for coupon in coupons:
-        if coupon.promotion_code in koc_name_map:
+        if coupon.promotion_code in coupon_info_map:
             continue
-        if coupon.kocmission and coupon.kocmission.koc and coupon.kocmission.koc.user:
-            koc_name_map[coupon.promotion_code] = coupon.kocmission.koc.user.name
+        mission = coupon.kocmission
+        koc_user = mission.koc.user if mission and mission.koc else None
+        campaign = (
+            mission.application.campaign
+            if mission and mission.application else None
+        )
+        coupon_info_map[coupon.promotion_code] = {
+            "koc_user_id": koc_user.user_id if koc_user else None,
+            "koc_name": (koc_user.display_name or koc_user.name) if koc_user else None,
+            "kocmission_id": mission.kocmission_id if mission else None,
+            "campaign_name": campaign.name if campaign else None,
+            "vendor_name": (
+                campaign.vendor.company_name
+                if campaign and campaign.vendor else None
+            ),
+        }
 
     result = []
     for earning in earnings_list:
         promotion_code = earning.order.promotion_code
+        info = coupon_info_map.get(promotion_code, {})
         result.append({
             "promotion_code": promotion_code,
-            "koc_name": koc_name_map.get(promotion_code),
+            # 推薦碼查不到對應任務時（舊資料），KOC 改用分潤紀錄本身的 user
+            "koc_user_id": info.get("koc_user_id") or earning.user_id,
+            "koc_name": info.get("koc_name"),
+            "kocmission_id": info.get("kocmission_id"),
+            "campaign_name": info.get("campaign_name"),
+            "vendor_name": info.get("vendor_name"),
             "order_id": str(earning.order.order_id),
             "order_total": float(earning.order.total_amount),
             "order_created_at": earning.order.created_at,
