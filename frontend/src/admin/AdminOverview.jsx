@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Users, Store, ClipboardList, Wallet, 
-  TrendingUp, UserPlus, X, ShieldCheck, History 
+  TrendingUp, UserPlus, X, ShieldCheck, Loader2
 } from 'lucide-react';
 import {
   getAdminOverview,
   getAdminPerformance,
+  createAdminAccount,
 } from '../api/platform';
 import { getErrorMessage } from '../errorMessage';
+import SiteTrafficChart from './SiteTrafficChart';
+import RecentActivity from './RecentActivity';
+import { exportOverviewReport } from './overviewReport';
 
 function InputField({ label, ...props }) {
   return (
@@ -24,7 +27,6 @@ function InputField({ label, ...props }) {
 
 // 接收從 AdminApp 傳來的 currentRole 屬性
 export default function AdminOverview({ currentRole }) {
-  const navigate = useNavigate();
   
   // 平台數據狀態 (對應 API: GET /admin/overview)
   const [stats, setStats] = useState({
@@ -32,13 +34,20 @@ export default function AdminOverview({ currentRole }) {
     vendors: 0,
     kocMissions: 0,
     totalRevenue: 0,
+    newUsers30d: 0,
+    newVendors30d: 0,
   });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [exporting, setExporting] = useState(false);
+
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
-  const [newAdmin, setNewAdmin] = useState({ email: '', password: '', role: 'reviewer' });
+  const EMPTY_ADMIN = { name: '', email: '', password: '', role: 'reviewer' };
+  const [newAdmin, setNewAdmin] = useState(EMPTY_ADMIN);
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [addAdminError, setAddAdminError] = useState('');
 
   useEffect(() => {
     const fetchOverview = async () => {
@@ -81,6 +90,8 @@ export default function AdminOverview({ currentRole }) {
           totalRevenue: Number(
             summary.Total_revenue || 0
           ),
+          newUsers30d: Number(overview.New_user_count_30d || 0),
+          newVendors30d: Number(overview.New_vendor_count_30d || 0),
         });
       } catch (err) {
         console.error('取得平台總覽失敗：', err);
@@ -96,11 +107,46 @@ export default function AdminOverview({ currentRole }) {
     fetchOverview();
   }, []);
 
-  const handleAddAdmin = (e) => {
+  const canViewFinance = currentRole === 'super_admin' || currentRole === 'finance';
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportOverviewReport({ canViewFinance });
+    } catch (err) {
+      alert(getErrorMessage(err, '報表匯出失敗，請稍後再試'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const openAddAdminModal = () => {
+    setNewAdmin(EMPTY_ADMIN);
+    setAddAdminError('');
+    setShowAddAdminModal(true);
+  };
+
+  const handleAddAdmin = async (e) => {
     e.preventDefault();
-    alert(`已成功建立 ${newAdmin.role} 帳號：${newAdmin.email}`);
-    setShowAddAdminModal(false);
-    setNewAdmin({ email: '', password: '', role: 'reviewer' });
+    setAddingAdmin(true);
+    setAddAdminError('');
+    try {
+      const response = await createAdminAccount({
+        // 後端用操作者的 Admin_id 確認是 super_admin 才放行
+        Admin_id: localStorage.getItem('admin_id'),
+        Name: newAdmin.name,
+        Email: newAdmin.email,
+        Password: newAdmin.password,
+        Role: newAdmin.role,
+      });
+      alert(`已建立管理員帳號：${response.data.Name}（${response.data.Email}）`);
+      setShowAddAdminModal(false);
+      setNewAdmin(EMPTY_ADMIN);
+    } catch (err) {
+      setAddAdminError(getErrorMessage(err, '建立管理員帳號失敗，請稍後再試'));
+    } finally {
+      setAddingAdmin(false);
+    }
   };
 
   return (
@@ -121,14 +167,24 @@ export default function AdminOverview({ currentRole }) {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto">
-          <button className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-[#E2DDD4] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-[#1A1A18] hover:bg-[#F8F9FA] hover:border-[#1A1A18] transition-all shadow-sm">
-            <TrendingUp size={16} className="sm:w-4 sm:h-4" /> 匯出報表
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-[#E2DDD4] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-[#1A1A18] hover:bg-[#F8F9FA] hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-60 disabled:cursor-wait"
+          >
+            {exporting ? (
+              <Loader2 size={16} className="animate-spin sm:w-4 sm:h-4" />
+            ) : (
+              <TrendingUp size={16} className="sm:w-4 sm:h-4" />
+            )}
+            {exporting ? '匯出中...' : '匯出報表'}
           </button>
           
           {/* 權限控管：只有 Super Admin 能看到新增管理員按鈕 */}
           {currentRole === 'super_admin' && (
             <button 
-              onClick={() => setShowAddAdminModal(true)}
+              onClick={openAddAdminModal}
               className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
             >
               <UserPlus size={16} className="sm:w-4 sm:h-4" /> 新增管理員
@@ -159,7 +215,9 @@ export default function AdminOverview({ currentRole }) {
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">+12%</span>
+            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">
+              近 30 天 +{stats.newUsers30d.toLocaleString()} 人
+            </span>
           </div>
           <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">總註冊會員 / KOC</p>
           <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A18] mt-1">{stats.users.toLocaleString()}</h3>
@@ -170,7 +228,9 @@ export default function AdminOverview({ currentRole }) {
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
               <Store size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">+3 家</span>
+            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">
+              近 30 天 +{stats.newVendors30d.toLocaleString()} 家
+            </span>
           </div>
           <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">合作廠商總數</p>
           <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A18] mt-1">{stats.vendors}</h3>
@@ -191,7 +251,7 @@ export default function AdminOverview({ currentRole }) {
         </div>
 
         {/* 只有 Super Admin 或 Finance 能看到收益 */}
-        {currentRole === 'super_admin' || currentRole === 'finance' ? (
+        {canViewFinance ? (
           <div className="bg-[#1A1A18] p-5 sm:p-6 rounded-[1.5rem] shadow-md border border-[#1A1A18] relative overflow-hidden group">
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B89B6A] rounded-full filter blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity" />
 
@@ -225,57 +285,11 @@ export default function AdminOverview({ currentRole }) {
       ========================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 pt-4 sm:pt-6 md:pt-8">
         
-        {/* 左側圖表區塊 */}
-        <div className="lg:col-span-2 bg-white p-5 sm:p-8 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] flex flex-col">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18]">流量與活動趨勢</h2>
-            <select className="w-full sm:w-auto text-xs sm:text-sm font-bold border-[#E2DDD4] rounded-xl border px-3 sm:px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#C8522A]/20 cursor-pointer bg-[#F8F9FA] text-[#1A1A18] appearance-none">
-              <option>近 7 天</option>
-              <option>近 30 天</option>
-              <option>今年度</option>
-            </select>
-          </div>
-          <div className="flex-1 bg-[#F8F9FA] rounded-[1rem] border border-dashed border-[#E2DDD4] flex flex-col items-center justify-center min-h-[250px] sm:min-h-[350px]">
-            <TrendingUp size={40} className="text-[#E2DDD4] mb-3 sm:mb-4 sm:w-12 sm:h-12" />
-            <p className="text-[#8C8880] text-xs sm:text-sm font-bold tracking-widest">數據圖表載入區塊</p>
-          </div>
-        </div>
+        {/* 左側：網站流量趨勢（GA4） */}
+        <SiteTrafficChart />
 
         {/* 右側：最新操作紀錄 */}
-        <div className="bg-white p-5 sm:p-8 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] flex flex-col">
-          <div className="flex justify-between items-center mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18]">最新系統動態</h2>
-            <span className="text-[10px] sm:text-xs font-bold text-[#8C8880] bg-[#F8F9FA] px-2 sm:px-3 py-1 rounded-full border border-[#E2DDD4]">
-              即時更新
-            </span>
-          </div>
-          
-          <div className="space-y-3 sm:space-y-4 flex-1">
-            {[
-              { title: '新廠商註冊成功', sub: 'Vendor_ID: V092', time: '10 分鐘前' },
-              { title: '管理員匯出財務報表', sub: 'Admin_01 執行操作', time: '1 小時前' },
-              { title: 'KOC 任務獎金撥款', sub: '成功撥款給 12 位 KOC', time: '3 小時前' },
-            ].map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 sm:p-4 hover:bg-[#F5F0E8] rounded-xl sm:rounded-2xl border border-[#E2DDD4] transition-colors group">
-                <div className="flex items-start gap-2.5 sm:gap-4">
-                  <div className="mt-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#B89B6A] rounded-full shrink-0"></div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate">{item.title}</p>
-                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-0.5 sm:mt-1 truncate">{item.sub}</p>
-                  </div>
-                </div>
-                <span className="text-[9px] sm:text-[10px] text-[#8C8880] font-bold shrink-0">{item.time}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* 只有特定權限可以進入完整 Log 頁面 */}
-          {(currentRole === 'super_admin' || currentRole === 'reviewer') && (
-            <button onClick={() => navigate('/admin/logs')} className="w-full mt-4 sm:mt-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] border border-[#E2DDD4] rounded-xl hover:bg-[#F8F9FA] transition-colors flex items-center justify-center gap-2">
-              <History size={14} className="sm:w-4 sm:h-4" /> 查看完整操作紀錄
-            </button>
-          )}
-        </div>
+        <RecentActivity currentRole={currentRole} />
       </div>
 
       {/* =========================================
@@ -298,6 +312,14 @@ export default function AdminOverview({ currentRole }) {
             </div>
 
             <form onSubmit={handleAddAdmin}>
+              <InputField
+                label="姓名"
+                type="text"
+                placeholder="例如: 王小明"
+                value={newAdmin.name}
+                onChange={(e) => setNewAdmin({...newAdmin, name: e.target.value})}
+                required
+              />
               <InputField 
                 label="內部信箱 (Email)" 
                 type="email" 
@@ -309,7 +331,8 @@ export default function AdminOverview({ currentRole }) {
               <InputField 
                 label="初始密碼" 
                 type="text" 
-                placeholder="設定初始密碼"
+                placeholder="至少 8 個字元"
+                minLength={8}
                 value={newAdmin.password}
                 onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})}
                 required 
@@ -328,6 +351,12 @@ export default function AdminOverview({ currentRole }) {
                 </select>
               </div>
 
+              {addAdminError && (
+                <div className="mb-4 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs sm:text-sm font-bold text-[#C8522A]">
+                  {addAdminError}
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <button 
                   type="button" 
@@ -338,9 +367,10 @@ export default function AdminOverview({ currentRole }) {
                 </button>
                 <button 
                   type="submit" 
-                  className="w-full sm:w-auto flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 sm:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs sm:text-sm tracking-widest"
+                  disabled={addingAdmin}
+                  className="w-full sm:w-auto flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 sm:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs sm:text-sm tracking-widest disabled:opacity-60 disabled:cursor-wait"
                 >
-                  確認配發帳號
+                  {addingAdmin ? '建立中...' : '確認配發帳號'}
                 </button>
               </div>
             </form>

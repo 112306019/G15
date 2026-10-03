@@ -44,7 +44,8 @@ from .platform import (
     koc_get_pending_list,
     koc_get_list,
     koc_get_detail,
-    koc_mission_stage_update,
+    admin_force_close_mission,
+    admin_revert_mission_stage,
     admin_list_return_disputes,
     admin_resolve_return_dispute,
 )

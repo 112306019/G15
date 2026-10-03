@@ -1,12 +1,36 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ShieldAlert, CheckCircle, Edit, FileText, History } from 'lucide-react';
+import { formatApiError, getErrorMessage } from '../errorMessage';
+import { Search, Filter, ShieldAlert, CheckCircle, Edit, FileText, History, AlertCircle } from 'lucide-react';
+
+const ALL_TYPES = 'all';
+const PAGE_SIZE = 20;
+
+// 依 action_type 代碼判斷徽章樣式：成功類（核准、撥款完成、同意退款）、
+// 負面類（退回、失敗、維持拒絕），其餘為一般狀態變更
+const getActionTone = (type = '') => {
+  if (type.startsWith('reject') || type.endsWith('_reject') || type.includes('failed')) {
+    return 'negative';
+  }
+  if (
+    type.startsWith('approve') ||
+    type.endsWith('_approve') ||
+    type.endsWith('_paid') ||
+    type.endsWith('_completed') ||
+    type === 'confirm_vendor_monthly_payout'
+  ) {
+    return 'positive';
+  }
+  return 'neutral';
+};
 
 export default function AdminLogs() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("所有操作類型");
+  const [filterType, setFilterType] = useState(ALL_TYPES);
 
   const token = localStorage.getItem("admin_token");
 
@@ -16,34 +40,40 @@ export default function AdminLogs() {
         const res = await fetch(`${API_BASE_URL}/api/platform/audit/logs`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await res.json();
-        
-        if (Array.isArray(data)) {
-          // 💡 在這裡將資料依據 created_at 進行降冪排序（新到舊）
-          const sortedData = data.sort((a, b) => {
-            const timeA = new Date(a.created_at).getTime();
-            const timeB = new Date(b.created_at).getTime();
-            return timeB - timeA;
-          });
+        const data = await res.json().catch(() => null);
 
-          setLogs(sortedData.map((log) => ({
-            logId: `LOG-${log.Log_id}`,
-            adminId: `ADMIN-${log.Admin_id}`,
-            actionType: log.Action_type,
-            target: [
-              log.Vendor_id ? `Vendor: ${log.Vendor_id}` : null,
-              log.Influencer_id ? `KOC: ${log.Influencer_id}` : null,
-              log.Submission_id ? `Submission: ${log.Submission_id}` : null,
-              log.Tasks_id ? `Task: ${log.Tasks_id}` : null,
-            ].filter(Boolean).join(" / ") || "-",
-            actionReason: log.Action_reason || "-",
-            createdAt: log.created_at
-              ? new Date(log.created_at).toLocaleString("zh-TW", { hour12: false })
-              : "-",
-          })));
+        if (!res.ok || !Array.isArray(data)) {
+          throw new Error(formatApiError(data?.err) || "操作紀錄載入失敗");
         }
+
+        // 💡 在這裡將資料依據 created_at 進行降冪排序（新到舊）
+        const sortedData = data.sort((a, b) => {
+          const timeA = new Date(a.created_at).getTime();
+          const timeB = new Date(b.created_at).getTime();
+          return timeB - timeA;
+        });
+
+        setLogs(sortedData.map((log) => ({
+          logId: `LOG-${log.Log_id}`,
+          adminId: `ADMIN-${log.Admin_id}`,
+          adminName: log.Admin_name || "",
+          actionType: log.Action_type,
+          // 中文名稱由後端 AUDIT_ACTION_LABELS 提供，沒對應到的才顯示原始代碼
+          actionLabel: log.Action_label || log.Action_type,
+          target: [
+            log.Vendor_id ? `廠商：${log.Vendor_id}` : null,
+            log.Influencer_id ? `KOC：${log.Influencer_id}` : null,
+            log.Submission_id ? `投稿：${log.Submission_id}` : null,
+            log.Tasks_id ? `任務：${log.Tasks_id}` : null,
+          ].filter(Boolean).join(" / ") || "-",
+          actionReason: log.Action_reason || "-",
+          createdAt: log.created_at
+            ? new Date(log.created_at).toLocaleString("zh-TW", { hour12: false })
+            : "-",
+        })));
       } catch (err) {
         console.error("操作紀錄載入失敗", err);
+        setError(getErrorMessage(err, "操作紀錄載入失敗，請稍後再試"));
       } finally {
         setLoading(false);
       }
@@ -52,34 +82,43 @@ export default function AdminLogs() {
   }, [token]);
 
   const getActionBadge = (type) => {
-    switch (type) {
-      case 'approve_koc':
-      case 'confirm_vendor_payout_completed':
-      case '核准入駐':
-      case '手動撥款':
+    switch (getActionTone(type)) {
+      case 'positive':
         return { icon: <CheckCircle size={14} className="sm:w-4 sm:h-4" />, color: 'text-[#B89B6A] bg-[#F5F0E8] border-[#B89B6A]/30' };
-      case 'reject_koc':
-      case 'confirm_vendor_payout_failed':
-      case '停權處分':
+      case 'negative':
         return { icon: <ShieldAlert size={14} className="sm:w-4 sm:h-4" />, color: 'text-[#C8522A] bg-[#FDF0ED] border-[#C8522A]/20' };
-      case 'review_vendor':
-      case '狀態更新':
       default:
         return { icon: <Edit size={14} className="sm:w-4 sm:h-4" />, color: 'text-[#1A1A18] bg-white border-[#E2DDD4] shadow-sm' };
     }
   };
 
+  // 篩選選單只列出實際出現過的操作類型，顯示中文、比對用代碼
+  const typeOptions = Array.from(
+    new Map(logs.map((log) => [log.actionType, log.actionLabel])).entries()
+  );
+
   const filtered = logs.filter((log) => {
     const matchSearch =
       !search.trim() ||
       log.adminId?.includes(search) ||
-      log.actionType?.includes(search) ||
+      log.adminName?.includes(search) ||
+      log.actionLabel?.includes(search) ||
       log.target?.includes(search) ||
       log.logId?.includes(search);
     const matchType =
-      filterType === "所有操作類型" || log.actionType === filterType;
+      filterType === ALL_TYPES || log.actionType === filterType;
     return matchSearch && matchType;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // 篩選後筆數變少時，目前頁碼可能超出範圍
+  const currentPage = Math.min(page, totalPages);
+  const pageLogs = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // 換篩選條件或搜尋時回到第 1 頁
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterType]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-10">
@@ -102,12 +141,10 @@ export default function AdminLogs() {
             onChange={(e) => setFilterType(e.target.value)}
             className="w-full sm:w-auto px-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-xs md:text-sm font-bold text-[#8C8880] outline-none focus:border-[#C8522A] shadow-sm appearance-none cursor-pointer"
           >
-            <option>所有操作類型</option>
-            <option>approve_koc</option>
-            <option>reject_koc</option>
-            <option>review_vendor</option>
-            <option>confirm_vendor_payout_completed</option>
-            <option>confirm_vendor_payout_failed</option>
+            <option value={ALL_TYPES}>所有操作類型</option>
+            {typeOptions.map(([type, label]) => (
+              <option key={type} value={type}>{label}</option>
+            ))}
           </select>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-1 sm:flex-none">
@@ -117,7 +154,7 @@ export default function AdminLogs() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="搜尋管理員 ID 或目標..."
+                placeholder="搜尋管理員、操作類型或目標..."
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-xs md:text-sm outline-none focus:border-[#C8522A] focus:ring-2 focus:ring-[#C8522A]/10 transition-all shadow-sm"
               />
             </div>
@@ -132,6 +169,18 @@ export default function AdminLogs() {
       <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden flex flex-col">
         {loading ? (
           <div className="py-20 text-center text-sm font-bold text-[#8C8880]">載入中...</div>
+        ) : error ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-3 text-[#C8522A]">
+            <AlertCircle size={28} />
+            <span className="text-sm font-bold">{error}</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 text-xs font-bold text-[#1A1A18] border border-[#E2DDD4] rounded-xl bg-white hover:bg-[#F8F9FA] transition-colors"
+            >
+              重新載入
+            </button>
+          </div>
         ) : (
           <>
             {/* === 手機版視圖 (卡片式) === */}
@@ -142,7 +191,7 @@ export default function AdminLogs() {
                   <span>目前沒有符合條件的操作紀錄</span>
                 </div>
               ) : (
-                filtered.map((log) => {
+                pageLogs.map((log) => {
                   const badge = getActionBadge(log.actionType);
                   const [datePart, timePart] = log.createdAt.split(" ");
                   return (
@@ -155,7 +204,7 @@ export default function AdminLogs() {
                         </div>
                         <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest ${badge.color}`}>
                           {badge.icon}
-                          {log.actionType}
+                          {log.actionLabel}
                         </span>
                       </div>
 
@@ -164,7 +213,7 @@ export default function AdminLogs() {
                           <div className="w-6 h-6 rounded-full bg-[#1A1A18] text-[#F5F0E8] flex items-center justify-center font-bold text-[10px] shadow-sm shrink-0">
                             A
                           </div>
-                          <span className="text-xs font-bold text-[#1A1A18]">{log.adminId}</span>
+                          <span className="text-xs font-bold text-[#1A1A18]">{log.adminName || log.adminId}</span>
                         </div>
                         <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10 truncate max-w-[150px]">
                           {log.target}
@@ -198,7 +247,7 @@ export default function AdminLogs() {
                     <tr>
                       <td colSpan={5} className="py-16 text-center text-sm font-bold text-[#8C8880]">目前沒有操作紀錄</td>
                     </tr>
-                  ) : filtered.map((log) => {
+                  ) : pageLogs.map((log) => {
                     const badge = getActionBadge(log.actionType);
                     const [datePart, timePart] = log.createdAt.split(" ");
                     return (
@@ -213,13 +262,18 @@ export default function AdminLogs() {
                             <div className="w-6 h-6 rounded-full bg-[#1A1A18] text-[#F5F0E8] flex items-center justify-center font-bold text-[10px] shadow-sm">
                               A
                             </div>
-                            <span className="text-sm font-bold text-[#1A1A18]">{log.adminId}</span>
+                            <div>
+                              <div className="text-sm font-bold text-[#1A1A18]">{log.adminName || log.adminId}</div>
+                              {log.adminName && (
+                                <div className="text-[10px] text-[#8C8880] tracking-wider">{log.adminId}</div>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1.5 rounded-md border tracking-widest ${badge.color}`}>
                             {badge.icon}
-                            {log.actionType}
+                            {log.actionLabel}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -242,10 +296,26 @@ export default function AdminLogs() {
 
             {/* 表格底部分頁 */}
             <div className="p-4 sm:p-5 border-t border-[#E2DDD4] bg-[#F8F9FA] flex flex-col sm:flex-row justify-between items-center gap-3 text-xs sm:text-sm font-medium text-[#8C8880]">
-              <span>共 {filtered.length} 筆紀錄</span>
+              <span>共 {filtered.length} 筆紀錄・第 {currentPage} / {totalPages} 頁</span>
               <div className="flex gap-2">
-                <button className="px-3 py-1.5 border border-[#E2DDD4] rounded-lg bg-white text-[#E2DDD4] cursor-not-allowed">上一頁</button>
-                <button className="px-3 py-1.5 border border-[#E2DDD4] rounded-lg bg-white hover:bg-[#FDF0ED] hover:text-[#C8522A] transition-colors cursor-not-allowed text-[#E2DDD4]">下一頁</button>
+                {[
+                  { label: '上一頁', target: currentPage - 1, disabled: currentPage <= 1 },
+                  { label: '下一頁', target: currentPage + 1, disabled: currentPage >= totalPages },
+                ].map(({ label, target, disabled }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setPage(target)}
+                    className={`px-3 py-1.5 border border-[#E2DDD4] rounded-lg bg-white transition-colors ${
+                      disabled
+                        ? 'text-[#E2DDD4] cursor-not-allowed'
+                        : 'text-[#1A1A18] hover:bg-[#FDF0ED] hover:text-[#C8522A]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           </>

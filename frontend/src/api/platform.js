@@ -30,9 +30,14 @@ export const getKOCDetail = (params) => {
   return api.get('/platform/koc/getDetail', { params })
 }
 
-// 更新 KOC 任務階段
-export const updateKOCMissionStage = (data) => {
-  return api.patch('/platform/kocmission/stage/update', data)
+// KOC 任務例外處理（階段平常由流程自動推進）
+// data: { Admin_id, KOCMission_id, Reason }
+export const forceCloseKOCMission = (data) => {
+  return api.post('/platform/kocmission/forceClose', data)
+}
+
+export const revertKOCMissionStage = (data) => {
+  return api.post('/platform/kocmission/revertStage', data)
 }
 
 // ======================================================
@@ -245,4 +250,14 @@ export const getAdminTaxForms = (status) => {
 // 審核勞報單
 export const reviewAdminTaxForm = (data) => {
   return api.post('/platform/taxForms/review', data)
+}
+
+// 取得網站流量趨勢（GA4）：range = 7d | 30d | year
+export const getAdminSiteTraffic = (range = '7d') => {
+  return api.get('/platform/analytics/traffic', { params: { range } })
+}
+
+// 新增管理員帳號（只有 super_admin 可以）
+export const createAdminAccount = (data) => {
+  return api.post('/platform/admins/create', data)
 }

@@ -613,7 +613,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${
                     task.endReason === 'expired' ? 'bg-[#F5F0E8] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A]'
                   }`}>
-                    {task.endReason === 'expired' ? '已過期' : '自行取消'}
+                    {task.endReason === 'expired' ? '已過期' : task.endReason === 'admin_closed' ? '平台終止' : '自行取消'}
                   </span>
                 ) : task.stage === 2 && (
                   <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
