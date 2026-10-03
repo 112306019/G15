@@ -1091,6 +1091,13 @@ class KocMissionExpiryTests(TestCase):
     GET /api/koc/mission/getlist —— 任務是否過期的判斷：不管卡在哪個階段，
     只要現在日期超過「活動截止日 + 推廣寬限天數（promo_days）」就算過期，
     只有 completed 是例外（代表任務本身有正常跑完，不算過期）。
+
+    這個 endpoint 每次呼叫都會先跑 sync_expired_promoting_missions()：一旦真的
+    超過寬限期，writing/reviewing/publishing 階段的任務會在同一次呼叫裡就被
+    直接轉成 stage='completed'、end_reason='expired'（並記一次 KOC 違規），
+    所以沒辦法觀察到「還停在原本階段、但 is_expired=True」這種中間狀態——
+    is_expired 欄位實際只會在「還在寬限期內」的情況下出現（這時一定是
+    False）。真的過了寬限期的案例要改成檢查任務是否真的被結案。
     """
 
     def setUp(self):
@@ -1127,11 +1134,16 @@ class KocMissionExpiryTests(TestCase):
         self.assertEqual(len(missions), 1)
         return missions[0]
 
-    def test_writing_stage_past_deadline_and_grace_period_is_expired(self):
-        # end_date 7 天前，promo_days 寬限 7 天 -> 剛好用完寬限期，今天已經超過
-        self.make_mission(stage="writing", days_since_end=8, promo_days=7)
-        mission = self.get_mission(stage_code=0)
-        self.assertTrue(mission["is_expired"])
+    def test_writing_stage_past_deadline_and_grace_period_is_closed_and_violated(self):
+        # end_date 8 天前，promo_days 寬限 7 天 -> 寬限期已用完，今天已經超過。
+        # sync_expired_promoting_missions 會在 get_mission 這次呼叫裡就把它結案。
+        mission = self.make_mission(stage="writing", days_since_end=8, promo_days=7)
+        self.get_mission(stage_code=4)  # 已經被轉到 completed，要從這個分類查
+        mission.refresh_from_db()
+        self.assertEqual(mission.stage, "completed")
+        self.assertEqual(mission.end_reason, "expired")
+        self.koc.refresh_from_db()
+        self.assertEqual(self.koc.total_violation_count, 1)
 
     def test_writing_stage_within_grace_period_is_not_expired(self):
         # end_date 3 天前，promo_days 寬限 7 天 -> 還在寬限期內
@@ -1139,11 +1151,15 @@ class KocMissionExpiryTests(TestCase):
         mission = self.get_mission(stage_code=0)
         self.assertFalse(mission["is_expired"])
 
-    def test_publishing_stage_past_grace_period_is_expired(self):
+    def test_publishing_stage_past_grace_period_is_closed_and_violated(self):
         # 不管卡在哪個階段都適用，這裡測 publishing(2)
-        self.make_mission(stage="publishing", days_since_end=10, promo_days=7)
-        mission = self.get_mission(stage_code=2)
-        self.assertTrue(mission["is_expired"])
+        mission = self.make_mission(stage="publishing", days_since_end=10, promo_days=7)
+        self.get_mission(stage_code=4)
+        mission.refresh_from_db()
+        self.assertEqual(mission.stage, "completed")
+        self.assertEqual(mission.end_reason, "expired")
+        self.koc.refresh_from_db()
+        self.assertEqual(self.koc.total_violation_count, 1)
 
     def test_completed_stage_is_never_expired(self):
         # 已結案代表任務正常跑完，即使早就超過截止日+寬限期也不算過期
