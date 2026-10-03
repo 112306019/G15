@@ -2,47 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Search, ClipboardList, TrendingUp, Clock, Edit } from 'lucide-react';
 import { getAllMissions, getEarningsTracking, getVendorReviewOverdue, notifyVendorReviewOverdue } from '../api/platform';
 import MissionActionModal from './MissionActionModal';
+import CommissionTracking from './CommissionTracking';
 import { formatApiError } from '../errorMessage';
 
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 
-
-const EARNINGS_STATUS_LABELS = {
-  pending: '待結算',
-  withdrawable: '可提領',
-  transferred: '已分潤',
-  cancelled: '已取消（退款）',
-};
-const EARNINGS_STATUS_STYLES = {
-  pending: 'bg-[#E2DDD4] text-[#8C8880]',
-  withdrawable: 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/30',
-  transferred: 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30',
-  cancelled: 'bg-white text-[#8C8880] border-[#E2DDD4]',
-};
-
-// 訂單編號是 36 字元的 UUID，表格只顯示前 8 碼，滑鼠移上去可看完整編號
-const shortOrderId = id => (id ? id.slice(0, 8).toUpperCase() : '-');
-const fmtOrderDate = value =>
-  value ? new Date(value).toLocaleDateString('zh-TW') : '-';
-const fmtMoney = n => `NT$ ${Math.round(Number(n || 0)).toLocaleString()}`;
-
-// 分潤金額：已取消的劃掉；部分退款被調降的，另外標出原始金額
-function CommissionAmount({ item }) {
-  const cancelled = item.status === 'cancelled';
-  const adjusted = !cancelled && item.original_amount !== item.amount;
-  return (
-    <div>
-      <div className={`font-black text-sm ${cancelled ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]'}`}>
-        {fmtMoney(item.amount)}
-      </div>
-      {adjusted && (
-        <div className="text-[10px] font-bold text-[#8C8880] mt-0.5">
-          原 {fmtMoney(item.original_amount)}（部分退款）
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function AdminMissions() {
   const [activeTab, setActiveTab] = useState('missions');
@@ -327,111 +291,11 @@ export default function AdminMissions() {
 
       {/* 成效追蹤表格 (Performance) */}
       {activeTab === 'performance' && (
-        <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-          <div className="p-4 sm:p-5 border-b border-[#E2DDD4] bg-[#F8F9FA]">
-            <p className="text-xs sm:text-sm font-bold text-[#8C8880]">追蹤由推薦碼 (Promotion Code) 帶來的實際轉換訂單</p>
-            <p className="text-[11px] text-[#8C8880] mt-1">每一列是一筆已產生 KOC 分潤的訂單；退貨退款後分潤會標示為已取消。</p>
-          </div>
-          
-          <div className="md:hidden flex flex-col divide-y divide-[#E2DDD4]">
-            {trackingLoading && <div className="p-10 text-center text-sm font-bold text-[#8C8880]">載入中...</div>}
-            {!trackingLoading && trackingError && <div className="p-10 text-center text-sm font-bold text-red-500">{trackingError}</div>}
-            {!trackingLoading && !trackingError && tracking.length === 0 && (
-              <div className="p-10 text-center text-sm font-bold text-[#8C8880]">目前沒有分潤追蹤資料</div>
-            )}
-            
-            {!trackingLoading && !trackingError && tracking.map((item, idx) => (
-              <div key={`${item.order_id}-${idx}`} className="p-5 sm:p-6 hover:bg-[#F8F9FA] transition-colors">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">推薦碼</div>
-                    <div className="text-sm font-black text-[#1A1A18]">{item.promotion_code}</div>
-                  </div>
-                  <span className={`inline-block whitespace-nowrap text-[9px] sm:text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
-                    EARNINGS_STATUS_STYLES[item.status] || 'bg-[#E2DDD4] text-[#8C8880]'
-                  }`}>
-                    {EARNINGS_STATUS_LABELS[item.status] || item.status}
-                  </span>
-                </div>
-                
-                <div className="bg-[#F5F0E8]/50 rounded-xl p-3.5 flex flex-col gap-2.5 border border-[#E2DDD4]/50 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">歸屬 KOC</span>
-                    <span className="font-bold text-[#C8522A]">{item.koc_name || '未知'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">綁定訂單</span>
-                    <span className="font-bold text-[#1A1A18] font-mono" title={item.order_id}>
-                      {shortOrderId(item.order_id)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">下單日期</span>
-                    <span className="font-bold text-[#1A1A18]">{fmtOrderDate(item.order_created_at)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">訂單金額</span>
-                    <span className="font-bold text-[#1A1A18]">{fmtMoney(item.order_total)}</span>
-                  </div>
-                  <div className="flex justify-between items-start border-t border-[#E2DDD4]/50 pt-2.5 mt-0.5">
-                    <span className="font-bold text-[#8C8880]">分潤金額</span>
-                    <div className="text-right"><CommissionAmount item={item} /></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden md:block overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="bg-white border-b border-[#E2DDD4]">
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">推薦碼</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">歸屬 KOC</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">綁定訂單</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">訂單金額</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤狀態</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2DDD4]">
-                {trackingLoading && (
-                  <tr><td colSpan="6" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">載入中...</td></tr>
-                )}
-                {!trackingLoading && trackingError && (
-                  <tr><td colSpan="6" className="px-6 py-16 text-center text-sm font-bold text-red-500">{trackingError}</td></tr>
-                )}
-                {!trackingLoading && !trackingError && tracking.length === 0 && (
-                  <tr><td colSpan="6" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">目前沒有分潤追蹤資料</td></tr>
-                )}
-
-                {!trackingLoading && !trackingError && tracking.map((item, idx) => (
-                  <tr key={`${item.order_id}-${idx}`} className="hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-black text-[#1A1A18]">{item.promotion_code}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#C8522A]">{item.koc_name || '未知'}</td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-[#1A1A18] font-mono" title={item.order_id}>
-                        {shortOrderId(item.order_id)}
-                      </div>
-                      <div className="text-[11px] text-[#8C8880] mt-0.5">{fmtOrderDate(item.order_created_at)}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#1A1A18]">{fmtMoney(item.order_total)}</td>
-                    <td className="px-6 py-4"><CommissionAmount item={item} /></td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-block whitespace-nowrap text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                        EARNINGS_STATUS_STYLES[item.status] || 'bg-[#E2DDD4] text-[#8C8880]'
-                      }`}>
-                        {EARNINGS_STATUS_LABELS[item.status] || item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CommissionTracking
+          tracking={tracking}
+          loading={trackingLoading}
+          error={trackingError}
+        />
       )}
 
       {/* 廠商審核逾期 */}
