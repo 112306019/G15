@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { History, Loader2, AlertCircle } from 'lucide-react';
 import { getAdminAuditLogs } from '../api/platform';
 import { getErrorMessage } from '../errorMessage';
+import { getAuditActionLabel } from './auditActionLabels';
 
-const RECENT_LIMIT = 5;
+const RECENT_LIMIT = 3;
 
 // 2026-10-03T10:00:00 → 「10 分鐘前」；超過 7 天顯示日期
 const fmtRelativeTime = value => {
@@ -39,7 +40,13 @@ export default function RecentActivity({ currentRole }) {
     const load = async () => {
       try {
         const response = await getAdminAuditLogs({ limit: RECENT_LIMIT });
-        if (!cancelled) setLogs(Array.isArray(response.data) ? response.data : []);
+        if (cancelled) return;
+        // 前端也自己排序、截取：舊版後端不支援 limit，會回傳全部且未排序的紀錄
+        const data = Array.isArray(response.data) ? response.data : [];
+        const latest = [...data]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, RECENT_LIMIT);
+        setLogs(latest);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err, '操作紀錄載入失敗'));
       } finally {
@@ -86,7 +93,7 @@ export default function RecentActivity({ currentRole }) {
                   <div className="mt-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#B89B6A] rounded-full shrink-0"></div>
                   <div className="min-w-0">
                     <p className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate">
-                      {log.Action_label || log.Action_type}
+                      {getAuditActionLabel(log)}
                     </p>
                     <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-0.5 sm:mt-1 truncate">
                       {log.Admin_name || `管理員 ${log.Admin_id}`}

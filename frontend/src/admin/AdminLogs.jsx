@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { formatApiError, getErrorMessage } from '../errorMessage';
+import { getAuditActionLabel } from './auditActionLabels';
 import { Search, Filter, ShieldAlert, CheckCircle, Edit, FileText, History, AlertCircle } from 'lucide-react';
 
 const ALL_TYPES = 'all';
@@ -58,8 +59,7 @@ export default function AdminLogs() {
           adminId: `ADMIN-${log.Admin_id}`,
           adminName: log.Admin_name || "",
           actionType: log.Action_type,
-          // 中文名稱由後端 AUDIT_ACTION_LABELS 提供，沒對應到的才顯示原始代碼
-          actionLabel: log.Action_label || log.Action_type,
+          actionLabel: getAuditActionLabel(log),
           target: [
             log.Vendor_id ? `廠商：${log.Vendor_id}` : null,
             log.Influencer_id ? `KOC：${log.Influencer_id}` : null,

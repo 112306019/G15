@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0054_remove_vendorpayoutbatch_uniq_vendor_payout_period_and_more'),
+        ('api', '0055_merge_20261003_0250'),
     ]
 
     operations = [
