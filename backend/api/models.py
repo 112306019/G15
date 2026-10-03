@@ -302,6 +302,7 @@ class KOCMissionNew(models.Model):
     END_REASON_CHOICES = [
         ('expired', '已過期'),
         ('cancelled', 'KOC取消'),
+        ('admin_closed', '平台終止'),  # 管理員強制結案（見 platform.admin_force_close_mission）
     ]
 
     kocmission_id = models.AutoField(primary_key=True, db_column='kocmission_id')
@@ -314,7 +315,8 @@ class KOCMissionNew(models.Model):
     stage = models.CharField(max_length=50, db_column='stage')
     # 只有 stage='completed' 時才有意義：null/blank 代表案件正常跑完（已結案）；
     # 'expired' 代表推廣期滿前沒完成該做的事就被系統自動結案（已取消）；
-    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）。
+    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）；
+    # 'admin_closed' 代表平台管理員強制結案（例如違規、廠商要求終止）。
     end_reason = models.CharField(
         max_length=20, choices=END_REASON_CHOICES, blank=True, null=True, db_column='end_reason'
     )

@@ -4,19 +4,12 @@ import {
   ArrowLeft, Instagram,
   ClipboardList, CreditCard, AlertTriangle, Edit
 } from 'lucide-react';
-import { getKOCList, getKOCDetail, updateKOCMissionStage } from '../api/platform';
+import { getKOCList, getKOCDetail } from '../api/platform';
+import MissionActionModal from './MissionActionModal';
 import { formatApiError } from '../errorMessage';
 
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
-const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
 
-const STAGE_OPTIONS = [
-  { value: 'writing', label: '撰寫文案' },
-  { value: 'reviewing', label: '文案審核中' },
-  { value: 'publishing', label: '待發佈' },
-  { value: 'promoting', label: '推廣中' },
-  { value: 'completed', label: '已結案' },
-];
 
 export default function AdminKocDetail() {
   const navigate = useNavigate();
@@ -31,8 +24,6 @@ export default function AdminKocDetail() {
   const [missionsError, setMissionsError] = useState(null);
 
   const [stageTarget, setStageTarget] = useState(null);
-  const [newStage, setNewStage] = useState('writing');
-  const [updatingStage, setUpdatingStage] = useState(false);
 
   // 若不是從列表頁點擊過來（沒有 state），退而求其次用列表 API 找出基本資料
   useEffect(() => {
@@ -79,29 +70,6 @@ export default function AdminKocDetail() {
 
   const openStageModal = (mission) => {
     setStageTarget(mission);
-    setNewStage(STAGE_CODE_TO_VALUE[mission.Stage] || 'writing');
-  };
-
-  const submitStageUpdate = async (e) => {
-    e.preventDefault();
-    setUpdatingStage(true);
-    try {
-      const res = await updateKOCMissionStage({
-        KOCMisson_id: Number(stageTarget.KOCMisson_id),
-        Stage: newStage,
-      });
-      if (res.data.success) {
-        setStageTarget(null);
-        fetchMissions();
-      } else {
-        alert(formatApiError(res.data.err) || '更新失敗');
-      }
-    } catch (err) {
-      console.error('更新任務階段失敗', err);
-      alert('更新失敗，請稍後再試');
-    } finally {
-      setUpdatingStage(false);
-    }
   };
 
   if (!profileLoading && !profile) {
@@ -222,7 +190,7 @@ export default function AdminKocDetail() {
                   onClick={() => openStageModal(mission)}
                   className="w-full inline-flex justify-center items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#1A1A18] px-3 py-2 rounded-lg text-xs font-bold hover:border-[#1A1A18] transition-all shadow-sm"
                 >
-                  <Edit size={14} /> 更新階段
+                  <Edit size={14} /> 例外處理
                 </button>
               </div>
             ))}
@@ -274,7 +242,7 @@ export default function AdminKocDetail() {
                         onClick={() => openStageModal(mission)}
                         className="inline-flex items-center gap-1.5 bg-white border border-[#E2DDD4] text-[#1A1A18] px-3 py-1.5 rounded-lg text-xs font-bold hover:border-[#1A1A18] transition-all shadow-sm"
                       >
-                        <Edit size={12} /> 更新階段
+                        <Edit size={12} /> 例外處理
                       </button>
                     </td>
                   </tr>
@@ -314,39 +282,20 @@ export default function AdminKocDetail() {
 
       </div>
 
-      {/* 更新階段彈窗 */}
+      {/* 任務例外處理（強制結案 / 退回上一階段） */}
       {stageTarget && (
-        <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-200">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#B89B6A] flex items-center justify-center mb-4 mx-auto">
-              <Edit size={20} className="sm:w-6 sm:h-6" />
-            </div>
-            <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18] text-center mb-1.5 sm:mb-2">更新任務階段</h3>
-            <p className="text-[#8C8880] text-center text-xs sm:text-sm mb-5 sm:mb-6">
-              任務編號：<span className="font-bold text-[#1A1A18]">{stageTarget.KOCMisson_id}</span>
-            </p>
-            <form onSubmit={submitStageUpdate} className="space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-[#8C8880] mb-2">選擇新階段</label>
-                <select
-                  value={newStage}
-                  onChange={(e) => setNewStage(e.target.value)}
-                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
-                >
-                  {STAGE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-2.5 sm:gap-3 pt-3 sm:pt-4">
-                <button type="button" onClick={() => setStageTarget(null)} className="flex-1 px-4 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#8C8880] rounded-xl font-bold text-xs sm:text-sm hover:bg-[#F8F9FA] transition-colors">取消</button>
-                <button type="submit" disabled={updatingStage} className="flex-1 px-4 py-2.5 sm:py-3 bg-[#1A1A18] text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-[#333] transition-all shadow-md disabled:opacity-50">
-                  {updatingStage ? '更新中...' : '確認更新'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <MissionActionModal
+          mission={{
+            id: stageTarget.KOCMisson_id,
+            stage: Number(stageTarget.Stage),
+            title: stageTarget.Promotion_code,
+          }}
+          onClose={() => setStageTarget(null)}
+          onDone={() => {
+            setStageTarget(null);
+            fetchMissions();
+          }}
+        />
       )}
     </div>
   );

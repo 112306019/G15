@@ -28,7 +28,8 @@ class UpdateKOCProfileSerializer(serializers.Serializer):
 class InfluencerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = '__all__'
+        # 密碼雜湊不能輸出給前端
+        exclude = ['password']
 
   
 class MissionSubmitSerializer(serializers.Serializer):
@@ -161,9 +162,3 @@ class PlatformKOCListItemSerializer(serializers.Serializer):
 class PlatformKOCDetailSerializer(serializers.Serializer):
     koc_id = serializers.CharField(required=True)
 
-class KOCMissionStageUpdateSerializer(serializers.Serializer):
-    KOCMisson_id = serializers.IntegerField(required=True)
-    Stage = serializers.ChoiceField(
-        choices=['writing', 'reviewing', 'publishing', 'promoting', 'completed'],
-        required=True
-    )
