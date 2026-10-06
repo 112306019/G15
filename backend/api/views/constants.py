@@ -184,6 +184,7 @@ def sync_expired_promoting_missions():
     0 筆時是 no-op）。
     """
     from django.utils import timezone
+    from datetime import timedelta
     from api.models import KOCMissionNew, CouponNew, Campaigns
     from api.notifications import create_notification
 
@@ -196,12 +197,22 @@ def sync_expired_promoting_missions():
 
     # 這批要逐筆處理（不能像上面用 bulk update），因為每筆任務屬於不同 KOC，
     # 違規次數要分別累加到各自的 KOC 帳號上。
-    stuck_missions = list(
+    # end_date__lt=today 只是粗篩（SQL 做不到「加上每筆活動各自的 promo_days」），
+    # 真正要不要算過期，要再加上 promo_days 寬限期才能跟 get_mission_list 的
+    # is_expired 判斷一致——否則寬限期內的任務會被這裡提早結案、提早記違規。
+    stuck_mission_candidates = list(
         KOCMissionNew.objects.filter(
             stage__in=['writing', 'reviewing', 'publishing'],
             application__campaign__end_date__date__lt=today
         ).select_related('koc__user', 'application__campaign')
     )
+    stuck_missions = [
+        mission for mission in stuck_mission_candidates
+        if today > (
+            mission.application.campaign.end_date
+            + timedelta(days=mission.application.campaign.promo_days or 0)
+        ).date()
+    ]
 
     for mission in stuck_missions:
         mission.stage = 'completed'

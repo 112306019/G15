@@ -12,7 +12,7 @@ from api.email_backend import SendGridEmailBackend
 from api.models import (
     Order, OrderItem, Product, User, Vendor, VendorEmailVerificationCode,
     SupportChatRoom, SupportMessage, KOC, KOCMissionNew, Application, Campaigns,
-    RemunerationForm, Earnings,
+    RemunerationForm, Earnings, Admins,
 )
 from payments.models import PaymentTransaction
 
@@ -32,6 +32,10 @@ class VendorPlatformPaymentReadTests(TestCase):
         )
         self.product = Product.objects.create(
             vendor_id="V00001", product_name="測試商品", price=500, status="active"
+        )
+        self.admin = Admins.objects.create(
+            name="財務admin", email="vendor-read-admin@example.com", password="x",
+            role="finance", status="active",
         )
 
     def make_order(self, total_amount=500):
@@ -118,14 +122,16 @@ class VendorPlatformPaymentReadTests(TestCase):
 
         unpaid_order = self.make_order()
 
-        resp_all = self.client.get("/api/platform/payments")
+        resp_all = self.client.get("/api/platform/payments", {"Admin_id": self.admin.admin_id})
         self.assertEqual(resp_all.status_code, 200)
         order_ids = {row["Order_id"] for row in resp_all.json()}
         # 改成以 Order 為主之後，還沒付款的訂單也該出現在列表裡，不是只有走過付款的才看得到
         self.assertIn(str(paid_order.order_id), order_ids)
         self.assertIn(str(unpaid_order.order_id), order_ids)
 
-        resp_filtered = self.client.get("/api/platform/payments", {"payment_status": "paid"})
+        resp_filtered = self.client.get(
+            "/api/platform/payments", {"Admin_id": self.admin.admin_id, "payment_status": "paid"}
+        )
         filtered_ids = {row["Order_id"] for row in resp_filtered.json()}
         self.assertIn(str(paid_order.order_id), filtered_ids)
         self.assertNotIn(str(unpaid_order.order_id), filtered_ids)
@@ -1091,6 +1097,13 @@ class KocMissionExpiryTests(TestCase):
     GET /api/koc/mission/getlist —— 任務是否過期的判斷：不管卡在哪個階段，
     只要現在日期超過「活動截止日 + 推廣寬限天數（promo_days）」就算過期，
     只有 completed 是例外（代表任務本身有正常跑完，不算過期）。
+
+    這個 endpoint 每次呼叫都會先跑 sync_expired_promoting_missions()：一旦真的
+    超過寬限期，writing/reviewing/publishing 階段的任務會在同一次呼叫裡就被
+    直接轉成 stage='completed'、end_reason='expired'（並記一次 KOC 違規），
+    所以沒辦法觀察到「還停在原本階段、但 is_expired=True」這種中間狀態——
+    is_expired 欄位實際只會在「還在寬限期內」的情況下出現（這時一定是
+    False）。真的過了寬限期的案例要改成檢查任務是否真的被結案。
     """
 
     def setUp(self):
@@ -1127,11 +1140,16 @@ class KocMissionExpiryTests(TestCase):
         self.assertEqual(len(missions), 1)
         return missions[0]
 
-    def test_writing_stage_past_deadline_and_grace_period_is_expired(self):
-        # end_date 7 天前，promo_days 寬限 7 天 -> 剛好用完寬限期，今天已經超過
-        self.make_mission(stage="writing", days_since_end=8, promo_days=7)
-        mission = self.get_mission(stage_code=0)
-        self.assertTrue(mission["is_expired"])
+    def test_writing_stage_past_deadline_and_grace_period_is_closed_and_violated(self):
+        # end_date 8 天前，promo_days 寬限 7 天 -> 寬限期已用完，今天已經超過。
+        # sync_expired_promoting_missions 會在 get_mission 這次呼叫裡就把它結案。
+        mission = self.make_mission(stage="writing", days_since_end=8, promo_days=7)
+        self.get_mission(stage_code=4)  # 已經被轉到 completed，要從這個分類查
+        mission.refresh_from_db()
+        self.assertEqual(mission.stage, "completed")
+        self.assertEqual(mission.end_reason, "expired")
+        self.koc.refresh_from_db()
+        self.assertEqual(self.koc.total_violation_count, 1)
 
     def test_writing_stage_within_grace_period_is_not_expired(self):
         # end_date 3 天前，promo_days 寬限 7 天 -> 還在寬限期內
@@ -1139,11 +1157,15 @@ class KocMissionExpiryTests(TestCase):
         mission = self.get_mission(stage_code=0)
         self.assertFalse(mission["is_expired"])
 
-    def test_publishing_stage_past_grace_period_is_expired(self):
+    def test_publishing_stage_past_grace_period_is_closed_and_violated(self):
         # 不管卡在哪個階段都適用，這裡測 publishing(2)
-        self.make_mission(stage="publishing", days_since_end=10, promo_days=7)
-        mission = self.get_mission(stage_code=2)
-        self.assertTrue(mission["is_expired"])
+        mission = self.make_mission(stage="publishing", days_since_end=10, promo_days=7)
+        self.get_mission(stage_code=4)
+        mission.refresh_from_db()
+        self.assertEqual(mission.stage, "completed")
+        self.assertEqual(mission.end_reason, "expired")
+        self.koc.refresh_from_db()
+        self.assertEqual(self.koc.total_violation_count, 1)
 
     def test_completed_stage_is_never_expired(self):
         # 已結案代表任務正常跑完，即使早就超過截止日+寬限期也不算過期
@@ -1154,7 +1176,9 @@ class KocMissionExpiryTests(TestCase):
 
 class TaxFormTests(TestCase):
     """
-    勞務報酬單（勞報單）：KOC 提交雲端連結、平台/財務審核通過或退回。
+    勞務報酬單（勞報單）：不綁定單一案件，KOC 把「目前所有還沒申報過的分潤」
+    （RemunerationForm.koc，可能來自好幾個不同案件）彙總成一張單，送出雲端
+    連結，平台/財務審核通過或退回。
     """
 
     def setUp(self):
@@ -1168,6 +1192,7 @@ class TaxFormTests(TestCase):
             password="x", phone="0900000001",
         )
         self.koc = KOC.objects.create(user=self.user)
+        self.other_koc = KOC.objects.create(user=self.other_user)
         self.vendor = Vendor.objects.create(
             vendor_id="V00001", company_name="測試廠商", contact_name="廠商聯絡人",
             email="tax-form-vendor@example.com", password="x", tax_id="12345678",
@@ -1183,98 +1208,125 @@ class TaxFormTests(TestCase):
         mission = KOCMissionNew.objects.create(application=application, koc=self.koc, stage=stage)
         return mission
 
-    def submit_link(self, mission, url="https://drive.google.com/file/d/abc123/view", user_id=None):
+    def make_undeclared_earning(self, amount=2000):
+        # Earnings.kocmission 只是為了讓這筆分潤看起來來自哪個案件，彙總邏輯本身
+        # 只看 user + remuneration_form__isnull，跟案件無關。
+        mission = self.make_mission(stage="completed")
+        return Earnings.objects.create(user=self.user, kocmission=mission, amount=amount, status="withdrawable")
+
+    def submit_link(self, url="https://drive.google.com/file/d/abc123/view", user_id=None):
         return self.client.post(
             "/api/koc/mission/submitTaxFormLink",
-            data={"User_id": user_id or self.user.user_id, "kocmission_id": mission.kocmission_id, "url": url},
+            data={"User_id": user_id or self.user.user_id, "url": url},
             content_type="application/json",
         )
 
     # ── 勞報單資料（給前端渲染/列印用） ──
 
-    def test_get_tax_form_data_succeeds_for_owner(self):
-        mission = self.make_mission(stage="completed")
-        Earnings.objects.create(user=self.user, kocmission=mission, amount=2000, status="withdrawable")
+    def test_get_tax_form_data_preview_without_form_id_returns_undeclared_amount(self):
+        # 不帶 form_id：預覽「現在馬上申報的話」會是多少錢
+        self.make_undeclared_earning(amount=2000)
 
-        resp = self.client.get(
-            "/api/koc/mission/taxFormData",
-            {"User_id": self.user.user_id, "kocmission_id": mission.kocmission_id},
-        )
+        resp = self.client.get("/api/koc/mission/taxFormData", {"User_id": self.user.user_id})
 
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertTrue(body["success"])
         self.assertEqual(body["koc_name"], "測試 KOC")
-        self.assertEqual(body["vendor_name"], "測試廠商")
-        self.assertEqual(body["vendor_tax_id"], "12345678")
-        self.assertEqual(body["campaign_name"], "測試活動")
         self.assertEqual(body["amount"], 2000)
-        self.assertEqual(body["mission_id"], mission.kocmission_id)
 
-    def test_get_tax_form_data_by_non_owner_is_forbidden(self):
-        mission = self.make_mission(stage="completed")
+    def test_get_tax_form_data_by_form_id_for_owner(self):
+        # 帶 form_id：查看某一張已經送出過的勞報單，金額是申報當下固定住的
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
 
         resp = self.client.get(
             "/api/koc/mission/taxFormData",
-            {"User_id": self.other_user.user_id, "kocmission_id": mission.kocmission_id},
+            {"User_id": self.user.user_id, "form_id": form.form_id},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["amount"], 2000)
+
+    def test_get_tax_form_data_by_non_owner_is_forbidden(self):
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
+
+        resp = self.client.get(
+            "/api/koc/mission/taxFormData",
+            {"User_id": self.other_user.user_id, "form_id": form.form_id},
         )
 
         self.assertEqual(resp.status_code, 403)
 
-    def test_get_tax_form_data_for_missing_mission_is_not_found(self):
+    def test_get_tax_form_data_for_missing_form_is_not_found(self):
         resp = self.client.get(
             "/api/koc/mission/taxFormData",
-            {"User_id": self.user.user_id, "kocmission_id": 999999},
+            {"User_id": self.user.user_id, "form_id": 999999},
         )
 
         self.assertEqual(resp.status_code, 404)
 
     # ── KOC 提交連結 ──
 
-    def test_submit_link_on_completed_mission_creates_pending_review(self):
-        mission = self.make_mission(stage="completed")
+    def test_submit_link_aggregates_undeclared_earnings_into_pending_review_form(self):
+        self.make_undeclared_earning(amount=1200)
+        self.make_undeclared_earning(amount=800)
 
-        resp = self.submit_link(mission)
+        resp = self.submit_link()
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["tax_form_status"], "pending_review")
+        self.assertEqual(resp.json()["amount"], 2000)
 
-        form = RemunerationForm.objects.get(kocmission=mission)
+        form = RemunerationForm.objects.get(koc=self.koc)
         self.assertEqual(form.status, "pending_review")
+        self.assertEqual(form.amount, 2000)
         self.assertEqual(form.cloud_link_url, "https://drive.google.com/file/d/abc123/view")
         self.assertIsNotNone(form.submitted_at)
+        # 被納入的分潤都要標記上這張單，之後才不會被下一張單重複計入
+        self.assertEqual(Earnings.objects.filter(user=self.user, remuneration_form__isnull=True).count(), 0)
 
-    def test_submit_link_on_non_completed_mission_is_rejected(self):
-        mission = self.make_mission(stage="promoting")
-
-        resp = self.submit_link(mission)
+    def test_submit_link_with_no_undeclared_earnings_is_rejected(self):
+        resp = self.submit_link()
 
         self.assertEqual(resp.status_code, 400)
-        self.assertFalse(RemunerationForm.objects.filter(kocmission=mission).exists())
+        self.assertFalse(RemunerationForm.objects.filter(koc=self.koc).exists())
 
     def test_submit_invalid_url_format_is_rejected(self):
-        mission = self.make_mission(stage="completed")
+        self.make_undeclared_earning(amount=2000)
 
-        resp = self.submit_link(mission, url="not-a-real-url")
+        resp = self.submit_link(url="not-a-real-url")
 
         self.assertEqual(resp.status_code, 400)
 
-    def test_submit_by_non_owner_is_forbidden(self):
-        mission = self.make_mission(stage="completed")
+    def test_submit_with_unknown_user_id_is_not_found(self):
+        resp = self.submit_link(user_id=999999)
 
-        resp = self.submit_link(mission, user_id=self.other_user.user_id)
+        self.assertEqual(resp.status_code, 404)
 
-        self.assertEqual(resp.status_code, 403)
+    def test_cannot_submit_new_form_while_one_is_pending_review(self):
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+
+        # 上一張單還在審核中，這之後新增的分潤先不計入，要等下一次開單
+        self.make_undeclared_earning(amount=500)
+        resp = self.submit_link(url="https://drive.google.com/file/d/another/view")
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(RemunerationForm.objects.filter(koc=self.koc).count(), 1)
 
     def test_resubmit_after_rejection_clears_reject_reason_and_reopens_review(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
         form.status = "rejected"
         form.reject_reason = "連結權限未開放"
         form.save(update_fields=["status", "reject_reason"])
 
-        resp = self.submit_link(mission, url="https://drive.google.com/file/d/newlink/view")
+        resp = self.submit_link(url="https://drive.google.com/file/d/newlink/view")
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["tax_form_status"], "pending_review")
@@ -1283,35 +1335,50 @@ class TaxFormTests(TestCase):
         self.assertEqual(form.status, "pending_review")
         self.assertIsNone(form.reject_reason)
         self.assertEqual(form.cloud_link_url, "https://drive.google.com/file/d/newlink/view")
+        # 金額維持退回當時的原始金額，不會因為重新提交而悄悄改變
+        self.assertEqual(form.amount, 2000)
 
-    def test_submit_after_approved_is_locked(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+    def test_submit_after_approval_with_no_new_earnings_is_rejected(self):
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
         form.status = "approved"
         form.save(update_fields=["status"])
 
-        resp = self.submit_link(mission, url="https://drive.google.com/file/d/another/view")
+        resp = self.submit_link(url="https://drive.google.com/file/d/another/view")
 
         self.assertEqual(resp.status_code, 400)
-        form.refresh_from_db()
-        self.assertEqual(form.status, "approved")
+        self.assertEqual(RemunerationForm.objects.filter(koc=self.koc).count(), 1)
 
-    def test_mission_list_reports_not_submitted_when_no_form_exists(self):
-        self.make_mission(stage="completed")
+    def test_submit_after_approval_with_new_earnings_opens_new_form(self):
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
+        form.status = "approved"
+        form.save(update_fields=["status"])
 
-        resp = self.client.get("/api/koc/mission/getlist", {"User_id": self.user.user_id, "stage": 4})
+        self.make_undeclared_earning(amount=900)
+        resp = self.submit_link(url="https://drive.google.com/file/d/second/view")
 
-        mission_row = resp.json()["missions"][0]
-        self.assertEqual(mission_row["tax_form_status"], "not_submitted")
-        self.assertIsNone(mission_row["tax_form_url"])
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["amount"], 900)
+        self.assertEqual(RemunerationForm.objects.filter(koc=self.koc).count(), 2)
+
+    def test_remuneration_forms_list_reports_undeclared_amount_when_no_form_exists(self):
+        self.make_undeclared_earning(amount=2000)
+
+        resp = self.client.get("/api/koc/revenue/getRemunerationForms", {"user_id": self.user.user_id})
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["undeclared_amount"], 2000)
+        self.assertEqual(body["forms"], [])
 
     # ── 平台/財務審核 ──
 
     def test_admin_get_tax_forms_filters_by_status_and_includes_amount(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        Earnings.objects.create(user=self.user, kocmission=mission, amount=1500, status="withdrawable")
+        self.make_undeclared_earning(amount=1500)
+        self.submit_link()
 
         resp = self.client.get("/api/platform/taxForms/getlist", {"status": "pending_review"})
 
@@ -1320,7 +1387,6 @@ class TaxFormTests(TestCase):
         self.assertEqual(len(forms), 1)
         self.assertEqual(forms[0]["amount"], 1500)
         self.assertEqual(forms[0]["koc_name"], "測試 KOC")
-        self.assertEqual(forms[0]["campaign_name"], "測試活動")
 
         empty_resp = self.client.get("/api/platform/taxForms/getlist", {"status": "approved"})
         self.assertEqual(empty_resp.json()["forms"], [])
@@ -1330,9 +1396,9 @@ class TaxFormTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_admin_approve_tax_form(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
 
         resp = self.client.post(
             "/api/platform/taxForms/review",
@@ -1349,9 +1415,9 @@ class TaxFormTests(TestCase):
         self.assertIsNotNone(form.reviewed_at)
 
     def test_admin_reject_tax_form_requires_reason(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
 
         resp = self.client.post(
             "/api/platform/taxForms/review",
@@ -1365,9 +1431,9 @@ class TaxFormTests(TestCase):
 
     @patch("api.views.platform.send_tax_form_rejected_email")
     def test_admin_reject_tax_form_sends_notification(self, mock_send_email):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
 
         resp = self.client.post(
             "/api/platform/taxForms/review",
@@ -1385,9 +1451,9 @@ class TaxFormTests(TestCase):
         mock_send_email.assert_called_once()
 
     def test_admin_cannot_review_already_approved_form(self):
-        mission = self.make_mission(stage="completed")
-        self.submit_link(mission)
-        form = RemunerationForm.objects.get(kocmission=mission)
+        self.make_undeclared_earning(amount=2000)
+        self.submit_link()
+        form = RemunerationForm.objects.get(koc=self.koc)
         form.status = "approved"
         form.save(update_fields=["status"])
 
