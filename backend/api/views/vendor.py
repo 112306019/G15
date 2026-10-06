@@ -629,6 +629,32 @@ def vendor_product_getlist(request):
         .values_list("product_id", flat=True)
     )
 
+    # 目前或之後會佔用該商品的所有已發佈活動（依開始日排序），
+    # 給建立活動精靈判斷「選的日期是否跟既有活動重疊」用。
+    bound_campaign_map = {}
+
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(product__vendor_id=vendor_id)
+        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
+        .select_related("campaign")
+    ):
+        campaign = campaign_product.campaign
+        occupied_until = _campaign_occupied_until(campaign)
+
+        if occupied_until < now:
+            continue
+
+        bound_campaign_map.setdefault(campaign_product.product_id, []).append({
+            "campaign_id": str(campaign.campaign_id),
+            "name": campaign.name,
+            "start_date": timezone.localtime(campaign.start_date).date().isoformat(),
+            "occupied_until": timezone.localtime(occupied_until).date().isoformat(),
+        })
+
+    for bound_list in bound_campaign_map.values():
+        bound_list.sort(key=lambda item: item["start_date"])
+
     product_list = []
 
     for product in products:
@@ -648,6 +674,7 @@ def vendor_product_getlist(request):
             "quantity_sold": sold_info["quantity_sold"],
             "total_sales": int(sold_info["total_sales"]),
             "is_promoting": product.product_id in promoting_product_ids,
+            "bound_campaigns": bound_campaign_map.get(product.product_id, []),
             "category": product.category,
             "status": product.status,
         })
@@ -658,6 +685,74 @@ def vendor_product_getlist(request):
         "products": product_list
     }, status=status.HTTP_200_OK)
 
+
+
+# ──────────────────────────────────────────────
+# 商品 ↔ 活動 綁定限制：同一商品同一時間只能綁一個活動
+# ──────────────────────────────────────────────
+#
+# 「佔用期間」= 活動 start_date ~ end_date。
+# 不加 promo_days：constants.sync_expired_promoting_missions() 在 end_date 一過
+# 就會把該活動的優惠碼改成 expired、任務轉 completed、活動轉 closed，
+# 實際上 end_date 之後折扣碼已經不能用，商品也就不再被這個活動推廣。
+#
+# 不佔用商品的狀態：
+# - draft：兩個草稿可以選同一商品，先發佈的佔住，後發佈的在發佈時被擋。
+# - closed：只會由 sync 在 end_date 過後寫入（沒有手動結案流程），代表已結束。
+
+CAMPAIGN_NON_OCCUPYING_STATUSES = ("draft", "closed")
+
+
+def _campaign_occupied_until(campaign):
+    return campaign.end_date
+
+
+def find_product_campaign_conflict(
+    product_id,
+    start_datetime,
+    end_datetime,
+    exclude_campaign_id=None,
+):
+    """
+    回傳與 [start_datetime, end_datetime] 期間重疊、
+    且已綁定同一商品的其他已發佈活動；沒有衝突回傳 None。
+    """
+    new_until = end_datetime
+
+    campaign_products = (
+        CampaignProduct.objects
+        .filter(product_id=product_id)
+        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
+        .select_related("campaign")
+    )
+
+    if exclude_campaign_id is not None:
+        campaign_products = campaign_products.exclude(
+            campaign_id=exclude_campaign_id
+        )
+
+    for campaign_product in campaign_products:
+        other = campaign_product.campaign
+        if (
+            other.start_date <= new_until
+            and start_datetime <= _campaign_occupied_until(other)
+        ):
+            return other
+
+    return None
+
+
+def product_campaign_conflict_message(campaign):
+    occupied_until = timezone.localtime(
+        _campaign_occupied_until(campaign)
+    ).date().isoformat()
+    start = timezone.localtime(campaign.start_date).date().isoformat()
+
+    return (
+        f"此商品已綁定活動「{campaign.name}」"
+        f"（{start} ~ {occupied_until}），"
+        f"同一商品同一時間只能參加一個活動，請調整活動日期或改選其他商品"
+    )
 
 
 # ──────────────────────────────────────────────
@@ -765,9 +860,23 @@ def vendor_campaign_create(request):
     try:
         with transaction.atomic():
 
-            # 既有商品直接使用前面查到的資料
+            # 既有商品：鎖住商品列再檢查，避免兩個請求同時把同一商品綁進不同活動
             if existing_product is not None:
-                product = existing_product
+                product = Product.objects.select_for_update().get(
+                    product_id=existing_product.product_id
+                )
+
+                conflict = find_product_campaign_conflict(
+                    product_id=product.product_id,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
+                )
+
+                if conflict is not None:
+                    return Response({
+                        "success": False,
+                        "err": product_campaign_conflict_message(conflict)
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
             # 新商品現在才寫入資料庫
             else:
@@ -964,7 +1073,38 @@ def vendor_campaign_update(request):
         with transaction.atomic():
 
             if existing_product is not None:
-                product = existing_product
+                product = Product.objects.select_for_update().get(
+                    product_id=existing_product.product_id
+                )
+
+                # 只有「換商品 / 草稿→發佈 / 改日期」才需要重新檢查，
+                # 單純改名稱、預算之類不檢查，避免舊資料裡已重疊的活動連改名都改不了。
+                product_changed = (
+                    campaign_product is None
+                    or campaign_product.product_id != product.product_id
+                )
+                publishing = (
+                    campaign.status in CAMPAIGN_NON_OCCUPYING_STATUSES
+                    and data["status"] not in CAMPAIGN_NON_OCCUPYING_STATUSES
+                )
+                period_changed = (
+                    campaign.start_date != start_datetime
+                    or campaign.end_date != end_datetime
+                )
+
+                if product_changed or publishing or period_changed:
+                    conflict = find_product_campaign_conflict(
+                        product_id=product.product_id,
+                        start_datetime=start_datetime,
+                        end_datetime=end_datetime,
+                        exclude_campaign_id=campaign.campaign_id,
+                    )
+
+                    if conflict is not None:
+                        return Response({
+                            "success": False,
+                            "err": product_campaign_conflict_message(conflict)
+                        }, status=status.HTTP_400_BAD_REQUEST)
             else:
                 product = Product.objects.create(
                     vendor_id=vendor_id,
