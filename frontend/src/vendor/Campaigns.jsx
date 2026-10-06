@@ -248,6 +248,33 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   const estimatedCommission =
     safeEstimatedPrice * (commissionRate / 100)
 
+  // ── 同一商品同一時間只能綁一個活動 ──
+  // 編輯中的活動本身不算佔用；日期都是 YYYY-MM-DD 字串，可以直接用字串比大小。
+  const getOtherBoundCampaigns = product =>
+    (product?.bound_campaigns || []).filter(
+      bound => bound.campaign_id !== form.id
+    )
+
+  const isPeriodOverlapping = bound =>
+    Boolean(form.startDate) &&
+    Boolean(form.recruitEndDate) &&
+    bound.start_date <= form.recruitEndDate &&
+    form.startDate <= bound.occupied_until
+
+  const selectedExistingProduct =
+    prodMode === 'existing'
+      ? existingProducts.find(
+          product => String(product.product_id) === String(form.prodId)
+        )
+      : null
+
+  const selectedBoundCampaigns = getOtherBoundCampaigns(selectedExistingProduct)
+
+  const conflictingCampaigns =
+    selectedBoundCampaigns.filter(isPeriodOverlapping)
+
+  const hasScheduleConflict = conflictingCampaigns.length > 0
+
   const handleSelectProduct = event => {
     const selected = existingProducts.find(
       product =>
@@ -490,6 +517,26 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
             </select>
             <p className="text-[10px] text-[#8C8880] mt-0.5 ml-1">接案任務截止後，消費者仍可使用該折扣碼下單的天數</p>
           </div>
+          {selectedBoundCampaigns.length > 0 && (
+            <div className={cn(
+              'rounded-xl border p-4 text-xs font-bold',
+              hasScheduleConflict
+                ? 'bg-[#FDF0ED] border-[#C8522A]/30 text-[#C8522A]'
+                : 'bg-[#F8F9FA] border-[#E2DDD4] text-[#8C8880]'
+            )}>
+              <div className="mb-1.5">
+                已選商品「{form.prodName}」在以下期間已被其他活動綁定，本活動日期不能與其重疊：
+              </div>
+              <ul className="space-y-0.5">
+                {selectedBoundCampaigns.map(bound => (
+                  <li key={bound.campaign_id}>
+                    {isPeriodOverlapping(bound) ? '✕' : '✓'}
+                    {' '}「{bound.name}」{bound.start_date} ~ {bound.occupied_until}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>}
 
         {step === 1 && <>
@@ -509,17 +556,43 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">從商品庫選擇 *</label>
               <select disabled={locked} value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60">
                 <option value="">請選擇要推廣的商品...</option>
-                {existingProducts.map(product => (
-                  <option
-                    key={product.product_id}
-                    value={product.product_id}
-                  >
-                    {product.product_name}
-                    {' '}
-                    （庫存：{product.stock}）
-                  </option>
-                ))}
+                {existingProducts.map(product => {
+                  const boundList = getOtherBoundCampaigns(product)
+                  const overlapping = boundList.filter(isPeriodOverlapping)
+
+                  return (
+                    <option
+                      key={product.product_id}
+                      value={product.product_id}
+                    >
+                      {product.product_name}
+                      {' '}
+                      （庫存：{product.stock}）
+                      {overlapping.length > 0
+                        ? `［期間衝突：${overlapping[0].name}］`
+                        : boundList.length > 0
+                          ? `［已排 ${boundList.length} 個活動，日期未衝突］`
+                          : ''}
+                    </option>
+                  )
+                })}
               </select>
+
+              {hasScheduleConflict && (
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl border border-[#C8522A]/30 bg-[#FDF0ED] p-3 text-[11px] font-bold text-[#C8522A]">
+                  <span className="flex-1">
+                    此商品在 {conflictingCampaigns.map(bound => `「${bound.name}」${bound.start_date} ~ ${bound.occupied_until}`).join('、')} 已被綁定，
+                    與本活動日期（{form.startDate} ~ {form.recruitEndDate}）重疊。請回上一步調整排程日期，或改選其他商品。
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="shrink-0 rounded-full border border-[#C8522A] px-3 py-1 hover:bg-white transition-colors"
+                  >
+                    回上一步改日期
+                  </button>
+                </div>
+              )}
               
               {form.prodName && (
                 <div className="mt-4 flex items-center gap-4 p-4 border border-[#E2DDD4] rounded-xl bg-white">
@@ -726,7 +799,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 onClick={() => setStep(s=>s+1)} 
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
-                  (step === 1 && !form.prodName) ||
+                  (step === 1 && (!form.prodName || hasScheduleConflict)) ||
                   (step === 2 && (form.discountValue === '' || Number(form.discountValue) <= 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > originalPrice))) ||
                   isSaving
                 }
@@ -762,6 +835,7 @@ export default function Campaigns() {
   const [kocError, setKocError] = useState('')
   const vendorId = localStorage.getItem('vendor_id')
   const [existingProducts, setExistingProducts] = useState([])
+  const [productsVersion, setProductsVersion] = useState(0)
   const [productLoading, setProductLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
@@ -773,6 +847,8 @@ export default function Campaigns() {
   const [reviewingApplicationId, setReviewingApplicationId] = useState(null)
 
   const handleCreateOrUpdate = (taskData) => {
+    // 重新抓商品清單，讓下一次開精靈時商品的已綁定期間是最新的
+    setProductsVersion(version => version + 1)
     setItems(prev => {
       const isExisting = prev.find(t => t.id === taskData.id)
       if (isExisting) {
@@ -1046,7 +1122,7 @@ export default function Campaigns() {
         }
       }
       loadProducts()
-    }, [vendorId])
+    }, [vendorId, productsVersion])
 
   
   if (campaignLoading) {
