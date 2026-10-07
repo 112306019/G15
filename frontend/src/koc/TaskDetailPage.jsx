@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Lo
 import api from '../api/index';
 import { buildPromoLink } from '../config';
 import { formatApiError } from '../errorMessage';
+import TierProgressCard from './TierProgressCard';
 
 // 小問號圖示，滑鼠移上去顯示說明文字；用具名 group（group/tooltip）避免跟
 // 長條圖那邊既有的 group-hover（放大長條）互相干擾。
@@ -100,9 +101,9 @@ function AnalyticsSection({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 xl:gap-4 mb-4 xl:mb-6">
         <StatTile
-          label="有效帶貨數量"
+          label="有效訂單數"
           value={usageCount}
-          tooltip="有效帶貨數量：消費者已完成取貨且無退貨的有效訂單，分潤將以此數字進行計算。"
+          tooltip="有效訂單數：消費者已完成取貨且沒有退貨的訂單筆數，從任務開始累計、不分月份。分潤級距看的是「本月售出的商品件數」，一張訂單買 3 件會算 3 件，所以兩個數字可能不同。"
         />
         <StatTile label="累積分潤" value={`NT$ ${totalCommission.toLocaleString()}`} />
         <StatTile label="連結點擊次數" value={clickCount} />
@@ -164,6 +165,7 @@ export default function TaskDetailPage({ task, onBack }) {
   const [totalCommission, setTotalCommission] = useState(0);
   const [clickCount, setClickCount] = useState(0);
   const [epc, setEpc] = useState(0);
+  const [commissionTier, setCommissionTier] = useState(null);
   const [chartPeriod, setChartPeriod] = useState('month');
   const [chartLoading, setChartLoading] = useState(true);
 
@@ -213,6 +215,7 @@ export default function TaskDetailPage({ task, onBack }) {
           setTotalCommission(res.data.total_commision);
           setClickCount(res.data.click_count ?? 0);
           setEpc(res.data.epc ?? 0);
+          setCommissionTier(res.data.commission_tier || null);
         }
       } catch (err) {
         if (!cancelled) console.error('載入成效分析失敗', err);
@@ -561,6 +564,8 @@ export default function TaskDetailPage({ task, onBack }) {
               <p className="text-[11px] xl:text-sm text-[#8C8880] font-medium leading-relaxed text-center">
                 活動截止日後，將自動結案並計算最終分潤
               </p>
+
+              <TierProgressCard tier={commissionTier} />
 
               <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection

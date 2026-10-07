@@ -27,6 +27,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
+from api.koc_commission import format_commission_rate, get_mission_tier_progress
 from api.error_messages import internal_error_message, serializer_error_message
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
@@ -42,7 +43,6 @@ from .constants import (
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
-    KOC_COMMISSION_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
     is_probably_bot_click,
     sync_expired_promoting_missions,
@@ -1482,11 +1482,12 @@ def get_revenue_history(request):
     for earning in earnings:
         result.append({
             "amount": earning.amount,
-            # 分潤比例：固定顯示 KOC_COMMISSION_RATE_PERCENT，不再讀
-            # CampaignProduct.koc_commission_rate——calculate_order_commission
-            # 已經改成不管廠商在活動商品上設定的值是多少，一律固定抽這個比例，
-            # 顯示廠商設定的舊值只會誤導 KOC（跟實際拿到的分潤金額對不上）。
-            "commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
+            # 分潤比例：顯示這筆分潤實際套用的級距分潤率（階梯式月結）；
+            # 舊資料沒有記錄分潤率，是固定 5% 時期建立的
+            "commission_rate": (
+                format_commission_rate(earning.commission_rate)
+                if earning.commission_rate is not None else "5"
+            ),
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
             "campaign_name": earning.kocmission.application.campaign.name if earning.kocmission else None,
             "status": EARNINGS_STATUS_CODE_MAP[earning.status],
@@ -1776,6 +1777,8 @@ def get_analytics_detail(request):
         "click_count": click_count,
         "epc": epc,
         "click_chart_data": click_chart_data,
+        # 階梯式月結分潤：這個任務本月的級距與升級進度
+        "commission_tier": get_mission_tier_progress(mission),
     }, status=http_status.HTTP_200_OK)
 
 
