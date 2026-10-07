@@ -57,6 +57,13 @@ from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMIND
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
+from api.koc_commission import (
+    commission_amount_for,
+    commission_month_of,
+    get_month_quantity,
+    get_tier_rate,
+    recalculate_mission_month,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +146,13 @@ def require_admin_role(request, allowed_roles, source='data'):
 # ==============================================================================
 
 def calculate_order_commission(order):
-    """訂單完成後建立 KOC 5% 待結算分潤。
+    """訂單完成後建立 KOC 待結算分潤（階梯式月結，見 api/koc_commission.py）。
 
-    新制：訂單完成時只建立 pending Earnings，並放入 KOCWallet.balance_frozen；
+    訂單完成時建立 pending Earnings，並放入 KOCWallet.balance_frozen；
     等該訂單所屬 Vendor 的 VendorSettlement 確認 paid 後，才轉成 withdrawable。
     分潤基礎只計算該 Campaign 綁定、且屬於該 Campaign Vendor 的商品小計，不含運費。
+    分潤率依「這個任務」當月（含這筆）累計的活動商品件數決定；這筆讓任務升級時，
+    同任務同月其他 pending 分潤會一起調整到新級距。
     """
     promotion_code = (order.promotion_code or "").strip()
     if not promotion_code:
@@ -195,22 +204,32 @@ def calculate_order_commission(order):
         product_id__in=campaign_product_ids,
         product__vendor_id=campaign.vendor_id,
     )
+    eligible_items = list(eligible_items)
     commission_base = sum((Decimal(str(i.subtotal)) for i in eligible_items), Decimal('0.00'))
+    item_quantity = sum((i.quantity or 0) for i in eligible_items)
     if commission_base <= 0:
         return {"created": False, "earning_id": None, "commission_amount": 0, "message": "沒有符合活動的訂單商品"}
 
-    raw = commission_base * Decimal(str(KOC_COMMISSION_RATE_PERCENT)) / Decimal('100')
-    commission_amount = int(raw.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
-    if commission_amount <= 0:
-        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "計算後分潤為 0"}
+    commission_month = commission_month_of(order.completed_at)
 
     with transaction.atomic():
+        # 先用「當月目前件數 + 這筆件數」決定分潤率；建立後再整月重算一次，
+        # 處理跨級時同月其他分潤的調整（也順便處理同時完成的訂單）
+        month_quantity = get_month_quantity(mission, commission_month) + item_quantity
+        commission_rate = get_tier_rate(month_quantity)
+        commission_amount = commission_amount_for(commission_base, commission_rate)
+
         earning = Earnings.objects.create(
             user=mission.koc.user,
             kocmission=mission,
             order=order,
             amount=commission_amount,
+            original_amount=commission_amount,
             status=EARNINGS_STATUS_CHOICES_MAP["pending"],
+            commission_base=commission_base,
+            item_quantity=item_quantity,
+            commission_rate=commission_rate,
+            commission_month=commission_month,
         )
         wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=mission.koc)
         wallet.balance_frozen += commission_amount
@@ -225,11 +244,15 @@ def calculate_order_commission(order):
         coupon.usage_count = (coupon.usage_count or 0) + 1
         coupon.save(update_fields=["usage_count"])
 
+        recalculate_mission_month(mission, commission_month)
+        earning.refresh_from_db(fields=["amount", "commission_rate"])
+
     return {
         "created": True,
         "earning_id": earning.earnings_id,
-        "commission_amount": commission_amount,
+        "commission_amount": earning.amount,
         "commission_base": str(commission_base),
+        "commission_rate": str(earning.commission_rate),
         "message": "分潤已建立，待廠商完成平台結算後轉為可提領",
     }
 
@@ -515,12 +538,31 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                .first())
     if earning and earning.kocmission and earning.kocmission.koc:
         wallet, _ = KocWallet.objects.get_or_create(koc=earning.kocmission.koc)
+        # 階梯式分潤（commission_base 有值）：部分退款時同步扣掉計算基礎與件數，
+        # 分潤金額用「剩下的基礎 × 目前分潤率」重算；舊資料維持按比例扣
+        tiered = earning.commission_base is not None and earning.commission_rate is not None
+        new_base = new_quantity = None
         if full_refund:
             delta = int(earning.amount)
         else:
             base = sum((Decimal(str(i.subtotal)) for i in OrderItem.objects.filter(order=order)), Decimal('0.00'))
             ratio = min(Decimal('1'), refunded_amount / base) if base > 0 else Decimal('0')
-            delta = int((Decimal(str(earning.amount)) * ratio).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+            if tiered:
+                new_base = (Decimal(str(earning.commission_base)) * (Decimal('1') - ratio)).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                )
+                new_quantity = earning.item_quantity or 0
+                returned_item = return_request.order_item
+                if returned_item and returned_item.product_id and earning.kocmission.application:
+                    campaign = earning.kocmission.application.campaign
+                    is_campaign_item = CampaignProduct.objects.filter(
+                        campaign=campaign, product_id=returned_item.product_id
+                    ).exists()
+                    if is_campaign_item:
+                        new_quantity = max(0, new_quantity - (return_request.quantity or returned_item.quantity or 0))
+                delta = earning.amount - commission_amount_for(new_base, earning.commission_rate)
+            else:
+                delta = int((Decimal(str(earning.amount)) * ratio).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
         if delta > 0:
             with transaction.atomic():
@@ -543,7 +585,18 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                     earning.save(update_fields=['status', 'cancelled_by_return_request'])
                 else:
                     earning.amount = max(0, earning.amount - delta)
-                    earning.save(update_fields=['amount'])
+                    update_fields = ['amount']
+                    if tiered:
+                        earning.commission_base = new_base
+                        earning.item_quantity = new_quantity
+                        update_fields += ['commission_base', 'item_quantity']
+                    earning.save(update_fields=update_fields)
+
+                # 退貨讓當月件數減少，級距可能往下調；月份已結束則鎖定不動
+                if tiered:
+                    recalculate_mission_month(earning.kocmission, earning.commission_month)
+                    # 重算可能改到這筆自己的金額，下面同步廠商結算明細前要用最新值
+                    earning.refresh_from_db(fields=['amount', 'status'])
             results['earning_adjustment'] = {'earnings_id': earning.earnings_id, 'deducted': delta, 'status': earning.status}
 
     qs = VendorSettlementItem.objects.select_related('settlement', 'vendor').filter(order=order)

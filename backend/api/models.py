@@ -1924,6 +1924,16 @@ class Earnings(models.Model):
     # original_amount：第一次計算出來、從未被退款調整過的原始金額。
     # 舊資料沒有這個值，view 層讀取時如果是 None 就以 amount 當作 original_amount。
     original_amount = models.IntegerField(null=True, blank=True)
+    # 階梯式月結分潤（見 api/koc_commission.py）。舊資料這四個欄位都是 null，
+    # 代表是固定 5% 時期建立的分潤，不參與級距重算。
+    # commission_base：計算基礎＝活動商品折扣後小計（扣掉部分退款）
+    # item_quantity：這張訂單的活動商品件數，加總後決定當月級距
+    # commission_rate：目前套用的分潤率（%）
+    # commission_month：歸屬月份（訂單完成日所在月份的 1 號，台灣時間）
+    commission_base = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    item_quantity = models.IntegerField(null=True, blank=True)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    commission_month = models.DateField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
     # 這筆分潤有沒有被納入某一張已申報的勞務報酬單。KOC 每次申報時會把當下所有還是
     # null 的分潤一次加總開單，開單後這裡就會指到那張單，之後不會再被算進下一張。
