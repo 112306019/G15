@@ -1,7 +1,6 @@
 from datetime import timedelta
 from urllib.parse import urlencode
 
-import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -38,6 +37,7 @@ from .constants import (
     SUBMISSION_TYPE_MAP,
     SUBMISSION_STATUS_CODE_MAP,
     STAGE_ALLOWED_SUBMISSION_TYPE,
+    STAGES_ALLOWING_TEXT_DRAFT,
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP,
     REMUNERATION_SERVICE_CONTENT,
@@ -482,6 +482,11 @@ def mission_submit(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     submission_type_db = SUBMISSION_TYPE_MAP[data['submission_type']]
+    if submission_type_db == 'text':
+        return Response({
+            "success": False,
+            "err": "已不需要提交文案給廠商審核，請直接發佈貼文並上傳作品連結"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
 
     # 驗證目前 stage 是否允許這種提交類型
     allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
@@ -523,54 +528,8 @@ def mission_submit(request):
         submitted_time=timezone.now(),
     )
 
-    # 文字類型的提交，自動打 AdGuard 做一次 AI 合規分析，
-    # 存進 ai_result，讓廠商打開審核頁面時可以直接看到結果，不用手動再按一次。
-    if submission_type_db == 'text' and data.get('text_content'):
-        try:
-            ad_category = 'other'
-            campaign_product = CampaignProduct.objects.filter(
-                campaign=mission.application.campaign
-            ).select_related('product').first()
-            if campaign_product and campaign_product.product:
-                ad_category = campaign_product.product.ad_category or 'other'
-
-            ai_resp = requests.post(
-                'http://127.0.0.1:8001/api/analyze',
-                json={'text': data.get('text_content'), 'category': ad_category},
-                timeout=30,
-            )
-            if ai_resp.ok:
-                submission.ai_result = ai_resp.json()
-                submission.save()
-        except Exception as e:
-            print(f"自動 AI 審核失敗（submission_id={submission.submission_id}）: {e}")
-
-    # 依提交類型，推進任務 stage
-    if submission_type_db == 'text':
-        # 文案提交後，立刻從 writing 推進到 reviewing
-        mission.stage = 'reviewing'
-        mission.save()
-
-        # 通知廠商有新的文案需要審核；通知寫入失敗不影響提交本身成功與否。
-        try:
-            from api.notifications import create_notification
-            campaign = mission.application.campaign if mission.application else None
-            if campaign and campaign.vendor_id:
-                koc_name = (
-                    (mission.koc.user.display_name or mission.koc.user.name)
-                    if mission.koc and mission.koc.user else ''
-                )
-                create_notification(
-                    vendor=campaign.vendor,
-                    category='koc',
-                    title='有新的文案需要審核',
-                    body=f'{koc_name} 在案件「{campaign.name}」提交了文案，請盡快審核。',
-                    reference_type='vendor_review',
-                    reference_id=str(mission.kocmission_id),
-                )
-        except Exception:
-            pass
-    elif submission_type_db == 'link':
+    # 依提交類型，推進任務 stage（文案已不再提交，只剩作品連結）
+    if submission_type_db == 'link':
         # 連結提交後，優惠碼立刻啟用(解法一：不等廠商審核)
         try:
             coupon = CouponNew.objects.get(kocmission=mission)
@@ -614,8 +573,12 @@ def save_draft(request):
 
     submission_type_db = SUBMISSION_TYPE_MAP[data['submission_type']]
 
-    # 驗證目前 stage 是否允許這種提交類型(跟 mission_submit 一樣的檢查)
-    allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
+    # 文案草稿是 KOC 自己的撰寫區（可搭配 AI 檢測），不會送給廠商，待發佈／推廣中都能存；
+    # 連結草稿仍照 mission_submit 的階段規則
+    if submission_type_db == 'text':
+        allowed_type = 'text' if mission.stage in STAGES_ALLOWING_TEXT_DRAFT else None
+    else:
+        allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
     if allowed_type is None:
         return Response({
             "success": False,

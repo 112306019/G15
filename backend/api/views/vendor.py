@@ -1488,10 +1488,10 @@ def vendor_application_review(request):
                             # koc 是 ForeignKey，
                             # 使用 koc_id 指定實際主鍵值
                             "koc_id": application.koc_id,
-                            # 任務建立時進入撰寫文案階段，
-                            # 對齊 constants.STAGE_CODE_MAP 的 "writing"
-                            "stage": "writing",
-                            # 進入 writing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
+                            # 任務建立時直接進入待發佈：KOC 不再提交文案給廠商審核，
+                            # 自行發文後上傳作品連結即可（對齊 STAGE_CODE_MAP 的 "publishing"）
+                            "stage": "publishing",
+                            # 進入 publishing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
                             "submission_deadline_at": timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS),
                         }
                     )
@@ -1506,7 +1506,7 @@ def vendor_application_review(request):
                     mission_fields_to_update.append("koc")
 
                 if not mission.stage:
-                    mission.stage = "writing"
+                    mission.stage = "publishing"
                     mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
                     mission.submission_reminder_sent = False
                     mission_fields_to_update.append("stage")
@@ -1678,7 +1678,6 @@ def vendor_mission_get_submission_detail(request):
             "vendor_feedback": submission.vendor_feedback,
             "submitted_time": submission.submitted_time,
             "reviewed_time": submission.reviewed_time,
-            "ai_result": submission.ai_result,
 
             "kocmission_id": mission.kocmission_id,
             "stage": mission.stage,
@@ -1704,40 +1703,6 @@ def vendor_mission_get_submission_detail(request):
         "success": True,
         "err": "",
         "submissions": submission_list
-    }, status=status.HTTP_200_OK)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def vendor_submission_save_ai_result(request):
-    """
-    廠商手動重新跑 AI 審核後，把最新結果存回 submission，
-    覆蓋掉之前（不管是自動跑的還是之前手動跑的）舊結果。
-    URL: /vendor/mission/submission/saveAiResult
-    """
-    submission_id = request.data.get("submission_id")
-    ai_result = request.data.get("ai_result")
-
-    if not submission_id or ai_result is None:
-        return Response({
-            "success": False,
-            "err": "submission_id 與 ai_result 為必填"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        submission = Submissions.objects.get(submission_id=submission_id)
-    except Submissions.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的投稿紀錄"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    submission.ai_result = ai_result
-    submission.save()
-
-    return Response({
-        "success": True,
-        "err": ""
     }, status=status.HTTP_200_OK)
 
 

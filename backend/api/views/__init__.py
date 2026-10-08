@@ -38,6 +38,12 @@ from .koc_insights import (
     koc_recommended_products,
 )
 
+from .ai_check import (
+    ai_check_terms,
+    ai_check_consent,
+    ai_check_analyze,
+)
+
 from .platform import (
     koc_approve, 
     koc_reject,

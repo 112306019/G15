@@ -3881,10 +3881,9 @@ MISSION_STAGE_LABELS = {
     'promoting': '推廣中',
     'completed': '已結案',
 }
-# 可以退回的階段 → 退回後的階段
+# 可以退回的階段 → 退回後的階段。
+# KOC 不再提交文案給廠商審核（任務核准後直接進入待發佈），所以只剩推廣中可以退回待發佈。
 MISSION_REVERT_TARGET = {
-    'reviewing': 'writing',
-    'publishing': 'reviewing',
     'promoting': 'publishing',
 }
 
@@ -4010,29 +4009,15 @@ def admin_revert_mission_stage(request):
         update_fields = ['stage']
         mission.stage = target_stage
 
-        if previous_stage == 'reviewing':
-            # 審核中 → 撰寫文案：把待審的文案標成退回，KOC 要重新提交
-            pending_text = submissions.filter(submission_type='text', status='pending').first()
-            if pending_text:
-                pending_text.status = 'revising'
-                pending_text.vendor_feedback = platform_feedback
-                pending_text.save(update_fields=['status', 'vendor_feedback'])
-        elif previous_stage == 'publishing':
-            # 待發佈 → 審核中：撤銷文案的審核通過，讓廠商重新審核；
-            # 優惠碼是在文案通過時啟用的，一起停用
-            approved_text = submissions.filter(submission_type='text', status='approved').first()
-            if approved_text:
-                approved_text.status = 'pending'
-                approved_text.reviewed_time = None
-                approved_text.save(update_fields=['status', 'reviewed_time'])
-            CouponNew.objects.filter(kocmission=mission).update(status='inactive')
-        elif previous_stage == 'promoting':
-            # 推廣中 → 待發佈：作品連結標成退回，KOC 要重新提交連結
+        if previous_stage == 'promoting':
+            # 推廣中 → 待發佈：作品連結標成退回，KOC 要重新提交連結；
+            # 優惠碼是在提交連結時啟用的，一起停用，重新提交連結後會再啟用
             latest_link = submissions.filter(submission_type='link').first()
             if latest_link:
                 latest_link.status = 'revising'
                 latest_link.vendor_feedback = platform_feedback
                 latest_link.save(update_fields=['status', 'vendor_feedback'])
+            CouponNew.objects.filter(kocmission=mission).update(status='inactive')
 
         # 回到需要 KOC 交件的階段時，比照正常流程重新起算交件提醒期限
         if target_stage in ('writing', 'publishing'):

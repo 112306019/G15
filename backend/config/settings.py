@@ -69,6 +69,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+# 廣告文案合規檢測服務（ad-checker）。KOC 的 AI 文案檢測由後端轉發到這裡，
+# 後端會先確認 KOC 已同意免責條款才轉發。
+ADGUARD_API_URL = os.getenv('ADGUARD_API_URL', 'http://127.0.0.1:8001').rstrip('/')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',

@@ -124,6 +124,9 @@ urlpatterns = [
     path('koc/insights/topProducts', views.koc_top_products, name='koc-insights-top-products'),
     path('koc/insights/recommendations', views.koc_recommended_products, name='koc-insights-recommendations'),
     path('koc/mission/saveDraft', views.save_draft, name='koc-mission-save-draft'),
+    path('koc/aiCheck/terms', views.ai_check_terms, name='koc-ai-check-terms'),
+    path('koc/aiCheck/consent', views.ai_check_consent, name='koc-ai-check-consent'),
+    path('koc/aiCheck/analyze', views.ai_check_analyze, name='koc-ai-check-analyze'),
     path('koc/apply', views.koc_apply, name='koc-apply'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
@@ -259,7 +262,6 @@ urlpatterns = [
     # Vendor 投稿 / 任務成果審核 API
     path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
     path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
-    path('vendor/mission/submission/saveAiResult', vendor.vendor_submission_save_ai_result, name='vendor-submission-save-ai-result'),
 
     # Vendor 訂單 API
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
