@@ -6,7 +6,7 @@ import {
   getDistrictsByCity,
   getPostalCode,
 } from "../taiwanAddress";
-import { getErrorMessage } from '../errorMessage';
+import { formatApiError, getErrorMessage } from '../errorMessage';
 
 function CheckIcon({ className = "" }) {
   return (
@@ -530,12 +530,17 @@ export default function CheckoutPage({
   // ============================
   // 套用優惠碼
   // ============================
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) {
+  // auto = true：消費者從 KOC 推廣連結進站，自動帶入那組優惠碼。
+  // 自動套用失敗（購物車沒有活動商品、已用過、是自己的推廣碼…）時不顯示錯誤，
+  // 消費者沒有自己輸入，突然跳紅字反而奇怪；需要的話他仍可手動輸入。
+  const applyCouponCode = async (rawCode, { auto = false } = {}) => {
+    const code = (rawCode || "").trim();
+    if (!code) {
       return;
     }
 
     if (appliedCoupon) {
+      if (auto) return;
       setCouponMsg({
         text: "請先移除目前的優惠碼再套用新的",
         ok: false,
@@ -564,8 +569,7 @@ export default function CheckoutPage({
           },
 
           body: JSON.stringify({
-            Promotion_code:
-              couponCode.trim(),
+            Promotion_code: code,
             User_id: userId,
           }),
         }
@@ -583,6 +587,7 @@ export default function CheckoutPage({
           );
 
         if (matchedItems.length === 0) {
+          if (auto) return;
           setCouponMsg({
             text:
               "此優惠碼不適用於購物車中的商品",
@@ -598,7 +603,7 @@ export default function CheckoutPage({
           window.gtag('event', 'select_promotion', {
             promotion_id: data.Promotion_code,
             promotion_name: data.Campaign_name,
-            creative_slot: 'checkout_coupon_input',
+            creative_slot: auto ? 'koc_promo_link' : 'checkout_coupon_input',
           });
         }
 
@@ -618,7 +623,7 @@ export default function CheckoutPage({
 
         setCouponMsg({
           text:
-            `✓ 已套用於：${matchedItems
+            `✓ ${auto ? "已自動套用推廣連結的優惠碼，" : ""}已套用於：${matchedItems
               .map((item) => item.name)
               .join("、")}`,
           ok: true,
@@ -626,9 +631,10 @@ export default function CheckoutPage({
         });
 
       } else {
+        if (auto) return;
         setCouponMsg({
           text:
-            data.err ||
+            formatApiError(data.err) ||
             "優惠碼無效或已過期",
           ok: false,
           show: true,
@@ -636,6 +642,7 @@ export default function CheckoutPage({
       }
 
     } catch (err) {
+      if (auto) return;
       setCouponMsg({
         text:
           "驗證失敗，請稍後再試",
@@ -647,6 +654,21 @@ export default function CheckoutPage({
       setCouponLoading(false);
     }
   };
+
+  const handleApplyCoupon = () => applyCouponCode(couponCode);
+
+  // 從 KOC 推廣連結進站的消費者（見 kocRef.js，30 天內有效），結帳時自動帶入優惠碼。
+  // 每次進入結帳頁只自動套用一次；消費者自己移除後不會再套回去。
+  const autoAppliedRef = useRef(false);
+  useEffect(() => {
+    if (autoAppliedRef.current || appliedCoupon || !userId) return;
+    if (normalizedCartItems.length === 0) return;
+    const refCode = getKocRef();
+    if (!refCode) return;
+    autoAppliedRef.current = true;
+    applyCouponCode(refCode, { auto: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedCartItems, appliedCoupon, userId]);
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
