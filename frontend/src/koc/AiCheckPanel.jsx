@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Loader2, AlertCircle, X } from 'lucide-react';
 import api from '../api/index';
+import { ADGUARD_API_URL } from '../config';
 import { getErrorMessage } from '../errorMessage';
+
+// ad-checker 分析一篇文案約需 1 分鐘，服務剛從休眠中啟動時可能要 2–3 分鐘
+const ANALYZE_TIMEOUT_MS = 4 * 60 * 1000;
 
 const RISK_STYLES = {
   none: { label: '低風險', className: 'text-[#1A1A18]' },
@@ -148,22 +152,53 @@ export default function AiCheckPanel({ missionId, text }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
+  // AI 檢測服務閒置後會休眠、啟動要一分多鐘：打開文案撰寫區時先在背景叫醒，
+  // 等 KOC 寫完按下檢測時通常已經醒了
+  useEffect(() => {
+    fetch(`${ADGUARD_API_URL}/health`).catch(() => {});
+  }, []);
+
+  // 1. 跟平台後端拿檢測通行證（後端會確認已同意目前版本的條款）
+  // 2. 帶著通行證直接呼叫 ad-checker：分析要一分鐘左右，不經過平台後端才不會卡住
   const runCheck = async () => {
     setChecking(true);
     setError('');
     setResult(null);
     try {
-      const res = await api.post('/koc/aiCheck/analyze', {
+      const tokenRes = await api.post('/koc/aiCheck/token', {
         User_id: userId,
         KOCMission_id: missionId,
-        text,
       });
-      setResult(res.data.result);
+      const { token, category, analyze_url: analyzeUrl } = tokenRes.data;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS);
+      let res;
+      try {
+        res = await fetch(analyzeUrl || `${ADGUARD_API_URL}/api/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-AiCheck-Token': token },
+          body: JSON.stringify({ text, category }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        // ad-checker（FastAPI）的錯誤訊息放在 detail
+        throw new Error(typeof data?.detail === 'string' ? data.detail : 'AI 文案檢測失敗，請稍後再試');
+      }
+      setResult(data);
     } catch (err) {
       if (err.response?.data?.need_consent) {
         // 條款剛好改版：重新讀條款並請 KOC 再同意一次
         setTerms(null);
         await openCheck();
+        return;
+      }
+      if (err.name === 'AbortError') {
+        setError('AI 檢測等待過久，服務可能剛啟動，請稍後再按一次檢測');
         return;
       }
       setError(getErrorMessage(err, 'AI 文案檢測失敗，請稍後再試'));
@@ -220,6 +255,12 @@ export default function AiCheckPanel({ missionId, text }) {
         {checking ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
         {checking ? 'AI 檢測中...' : 'AI 文案檢測（自行檢查法規風險）'}
       </button>
+
+      {checking && (
+        <p className="text-[11px] text-[#8C8880] text-center">
+          分析約需 1 分鐘，服務剛啟動時可能需要 2–3 分鐘，請勿關閉視窗。
+        </p>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs font-bold text-[#C8522A]">

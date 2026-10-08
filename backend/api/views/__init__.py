@@ -41,7 +41,7 @@ from .koc_insights import (
 from .ai_check import (
     ai_check_terms,
     ai_check_consent,
-    ai_check_analyze,
+    ai_check_token,
 )
 
 from .platform import (

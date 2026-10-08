@@ -6,21 +6,34 @@ KOC 在任務頁撰寫貼文時，可以用這個工具自行檢查文案有沒�
 
 使用前必須同意免責條款（constants.AI_CHECK_TERMS），同意紀錄存在
 AiCheckConsent。同一版條款只需同意一次，條款改版後要重新同意。
-後端在轉發檢測前一定會檢查同意紀錄，不只靠前端彈窗。
+
+為什麼不由後端代為轉送：ad-checker 分析一篇文案要一分鐘左右（休眠中還要更久），
+超過 gunicorn 每個請求 30 秒的上限，而且會佔住後端的 worker 讓整站卡住。
+所以改成「後端發通行證、瀏覽器直接呼叫 ad-checker」：
+  1. 前端呼叫 /koc/aiCheck/token，後端確認已同意目前版本條款、任務屬於這位 KOC，
+     才發一張短效的簽章通行證（內含使用者、任務、商品廣告類別、到期時間）。
+  2. 瀏覽器帶著通行證（X-AiCheck-Token header）直接呼叫 ad-checker 的 /api/analyze。
+  3. ad-checker 用同一把密鑰（AI_CHECK_SHARED_SECRET）驗證簽章與到期時間，
+     沒有有效通行證就拒絕（見 ad-checker/backend/main.py 的 verify_ai_check_token）。
+這樣沒同意條款就拿不到通行證，也就無法使用 ad-checker。
 
 GET  /koc/aiCheck/terms?User_id=     條款內容與這位使用者是否已同意目前版本
 POST /koc/aiCheck/consent            同意條款 {User_id, terms_version}
-POST /koc/aiCheck/analyze            檢測文案 {User_id, KOCMission_id, text}
+POST /koc/aiCheck/token              取得檢測通行證 {User_id, KOCMission_id}
 """
 
-import requests
+import base64
+import hashlib
+import hmac
+import json
+import time
+
 from django.conf import settings
 from rest_framework import status as http_status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from api.error_messages import internal_error_message
 from api.models import AiCheckConsent, CampaignProduct, KOCMissionNew, User
 from api.views.constants import (
     AI_CHECK_TERMS,
@@ -28,8 +41,8 @@ from api.views.constants import (
     AI_CHECK_TERMS_VERSION,
 )
 
-AI_CHECK_MAX_TEXT_LENGTH = 5000
-AI_CHECK_TIMEOUT_SECONDS = 60
+# 通行證有效時間：夠 KOC 檢測幾次、等 ad-checker 從休眠中醒來即可
+AI_CHECK_TOKEN_TTL_SECONDS = 10 * 60
 
 
 def _get_user(user_id):
@@ -48,6 +61,20 @@ def _client_ip(request):
     if forwarded:
         return forwarded.split(',')[0].strip() or None
     return request.META.get('REMOTE_ADDR') or None
+
+
+def _b64url(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
+
+
+def sign_ai_check_token(payload, secret):
+    """
+    通行證格式：<base64url(JSON payload)>.<hex HMAC-SHA256>。
+    ad-checker 那邊用同樣的規則驗證，兩邊格式要一起改。
+    """
+    body = _b64url(json.dumps(payload, separators=(',', ':'), ensure_ascii=False).encode())
+    signature = hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f'{body}.{signature}'
 
 
 @api_view(['GET'])
@@ -101,7 +128,7 @@ def ai_check_consent(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def ai_check_analyze(request):
+def ai_check_token(request):
     user = _get_user(request.data.get('User_id'))
     if not user:
         return Response({
@@ -116,18 +143,6 @@ def ai_check_analyze(request):
             'need_consent': True,
         }, status=http_status.HTTP_403_FORBIDDEN)
 
-    text = (request.data.get('text') or '').strip()
-    if not text:
-        return Response({
-            'success': False,
-            'err': '請先輸入要檢測的文案'
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-    if len(text) > AI_CHECK_MAX_TEXT_LENGTH:
-        return Response({
-            'success': False,
-            'err': f'文案長度請在 {AI_CHECK_MAX_TEXT_LENGTH} 字以內'
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
     mission = (
         KOCMissionNew.objects
         .select_related('koc', 'application__campaign')
@@ -140,7 +155,16 @@ def ai_check_analyze(request):
             'err': '找不到對應的 KOC 任務'
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    # 依活動商品的廣告類別（食品／化粧品／醫療器材／藥品）套用對應法規
+    secret = getattr(settings, 'AI_CHECK_SHARED_SECRET', '')
+    if not secret:
+        print('AI 文案檢測：未設定環境變數 AI_CHECK_SHARED_SECRET')
+        return Response({
+            'success': False,
+            'err': 'AI 文案檢測尚未完成設定，請聯絡平台管理員'
+        }, status=http_status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    # 依活動商品的廣告類別（食品／化粧品／醫療器材／藥品）套用對應法規；
+    # 類別寫進通行證，ad-checker 以通行證裡的為準
     ad_category = 'other'
     campaign_product = (
         CampaignProduct.objects
@@ -151,24 +175,18 @@ def ai_check_analyze(request):
     if campaign_product and campaign_product.product:
         ad_category = campaign_product.product.ad_category or 'other'
 
-    try:
-        response = requests.post(
-            f'{settings.ADGUARD_API_URL}/api/analyze',
-            json={'text': text, 'category': ad_category},
-            timeout=AI_CHECK_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        result = response.json()
-    except Exception:
-        return Response({
-            'success': False,
-            'err': internal_error_message('AI 文案檢測暫時無法使用'),
-        }, status=http_status.HTTP_502_BAD_GATEWAY)
+    token = sign_ai_check_token({
+        'u': str(user.pk),
+        'm': mission.kocmission_id,
+        'c': ad_category,
+        'v': AI_CHECK_TERMS_VERSION,
+        'exp': int(time.time()) + AI_CHECK_TOKEN_TTL_SECONDS,
+    }, secret)
 
-    # 結果只回傳給 KOC，不寫進資料庫、不提供給廠商
     return Response({
         'success': True,
         'err': '',
+        'token': token,
         'category': ad_category,
-        'result': result,
+        'analyze_url': f'{settings.ADGUARD_API_URL}/api/analyze',
     }, status=http_status.HTTP_200_OK)
