@@ -69,9 +69,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-# 廣告文案合規檢測服務（ad-checker）。KOC 的 AI 文案檢測由後端轉發到這裡，
-# 後端會先確認 KOC 已同意免責條款才轉發。
+# 廣告文案合規檢測服務（ad-checker）。KOC 同意免責條款後，後端發一張簽章通行證，
+# 瀏覽器帶著通行證直接呼叫 ad-checker（見 api/views/ai_check.py）。
+# AI_CHECK_SHARED_SECRET 要跟 ad-checker 服務設定成同一個值。
 ADGUARD_API_URL = os.getenv('ADGUARD_API_URL', 'http://127.0.0.1:8001').rstrip('/')
+AI_CHECK_SHARED_SECRET = os.getenv('AI_CHECK_SHARED_SECRET', '')
 
 DATABASES = {
     'default': {
