@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  Check,
   X,
   UserCheck,
   FileText,
   Copy,
   AlertCircle,
-  RotateCcw,
   Clock,
-  CheckCircle2,
-  Loader2
+  CheckCircle2
 } from 'lucide-react'
 
 import {
@@ -20,16 +17,13 @@ import {
 } from './mock'
 
 import { Avatar } from './components/ui'
-import { ADGUARD_API_URL, API_BASE_URL } from '../config'
 import { cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
 
 import {
   getVendorApplications,
-  reviewVendorApplication,
-  getVendorSubmissions,
-  reviewVendorSubmission
+  reviewVendorApplication
 } from '../api/vendor'
 import { getErrorMessage } from '../errorMessage'
 
@@ -118,14 +112,6 @@ const qualificationBadge = {
   rejected: { label: '已拒絕', cls: 'bg-[#FFF0F0] text-[#D93025]', dot: 'bg-[#D93025]' }
 }
 
-const submissionBadge = {
-  pending: { label: '待審文案', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
-  submitted: { label: '待審文案', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
-  approved: { label: '文案核准', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
-  revising: { label: '需修改', cls: 'bg-[#FFF0F0] text-[#D93025]', dot: 'bg-[#D93025]' },
-  rejected: { label: '未通過', cls: 'bg-[#FFF0F0] text-[#D93025]', dot: 'bg-[#D93025]' }
-}
-
 function Pill({ cfg }) {
   if (!cfg) {
     return (
@@ -152,32 +138,6 @@ function Pill({ cfg }) {
   )
 }
 
-// ─── 文案合規檢查 ─────────────────────────────────────────────
-
-function compliance(submission) {
-  return [
-    {
-      label: '文案長度 ≥ 50 字',
-      ok: (submission?.caption?.trim().length ?? 0) >= 50
-    },
-    {
-      label: '包含優惠碼',
-      ok: Boolean(
-        submission?.couponCode &&
-        submission?.caption?.includes(submission.couponCode)
-      )
-    },
-    {
-      label: '無違禁詞',
-      ok: !/(保證|最強|第一|治療)/.test(submission?.caption ?? '')
-    },
-    {
-      label: '含業配/合作揭露用詞',
-      ok: /(合作|業配|贊助|廣告|#ad|#sponsored)/i.test(submission?.caption ?? '')
-    }
-  ]
-}
-
 // ─── Main Component ──────────────────────────────────────────
 
 export default function ContentReview() {
@@ -186,10 +146,7 @@ export default function ContentReview() {
   const { toast } = useToast()
   const confirm = useConfirm()
 
-  const [stage, setStage] = useState('qualification')
-
   const [qualificationFilter, setQualificationFilter] = useState('all')
-  const [submissionFilter, setSubmissionFilter] = useState('all')
 
   const [applications, setApplications] = useState(initial)
   const [applicationLoading, setApplicationLoading] = useState(false)
@@ -197,76 +154,6 @@ export default function ContentReview() {
   const [reviewingApplicationId, setReviewingApplicationId] = useState(null)
   const [selectedApplicationId, setSelectedApplicationId] = useState(null)
   const [qualificationNote, setQualificationNote] = useState('')
-  const [copied, setCopied] = useState(null)
-
-  // ── 真實文案投稿 ──
-  const [submissions, setSubmissions] = useState([])
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState(null)
-  const [submissionNote, setSubmissionNote] = useState('')
-  const [submissionLoading, setSubmissionLoading] = useState(false)
-  const [submissionError, setSubmissionError] = useState('')
-  const [reviewingSubmissionId, setReviewingSubmissionId] = useState(null)
-
-  const [category, setCategory] = useState('food')
-  const [aiResult, setAiResult] = useState(null)
-  const [aiLoading, setAiLoading] = useState(false)
-
-  const [expandedHistoryIds, setExpandedHistoryIds] = useState([])
-
-  const toggleHistory = missionKey => {
-    setExpandedHistoryIds(previous =>
-      previous.includes(missionKey)
-        ? previous.filter(id => id !== missionKey)
-        : [...previous, missionKey]
-    )
-  }
-
-  const handleAiCheck = async (caption, submissionId) => {
-    if (!caption) return
-    setAiLoading(true)
-    setAiResult(null)
-    try {
-      const res = await fetch(`${ADGUARD_API_URL}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: caption, category })
-      })
-      const data = await res.json()
-      setAiResult(data)
-
-      if (submissionId) {
-        try {
-          await fetch(
-            `${API_BASE_URL}/api/vendor/mission/submission/saveAiResult`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                submission_id: submissionId,
-                ai_result: data
-              })
-            }
-          )
-          // 存檔成功後同步更新列表裡對應那筆的 aiResult，
-          // 這樣關閉 Modal 重新打開（不刷新整頁）也能看到最新結果，
-          // 不會因為 submissions 陣列還是舊資料而顯示過期的審核結果。
-          setSubmissions(previous =>
-            previous.map(item =>
-              item.id === submissionId
-                ? { ...item, aiResult: data }
-                : item
-            )
-          )
-        } catch (saveErr) {
-          console.error('儲存 AI 審核結果失敗', saveErr)
-        }
-      }
-    } catch (err) {
-      console.error('AI 審核失敗', err)
-    } finally {
-      setAiLoading(false)
-    }
-  }
 
   // ─── 載入接案申請 ──────────────────────────────────────────
   useEffect(() => {
@@ -319,63 +206,6 @@ export default function ContentReview() {
     loadApplications()
   }, [vendorId])
 
-  // ─── 載入文案投稿 ──────────────────────────────────────────
-  useEffect(() => {
-    async function loadSubmissions() {
-      if (!vendorId) {
-        setSubmissionError('尚未登入廠商帳號')
-        return
-      }
-
-      try {
-        setSubmissionLoading(true)
-        setSubmissionError('')
-
-        const response = await getVendorSubmissions(vendorId, 'text')
-
-        if (response.data?.success === false) {
-          throw new Error(response.data.err || '文案投稿載入失敗')
-        }
-
-        const submissionData = response.data?.submissions || []
-
-        setSubmissions(
-          submissionData.map(item => ({
-            id: item.submission_id,
-            submissionId: item.submission_id,
-            submissionType: item.submission_type,
-            kocMissionId: item.kocmission_id,
-            kocId: item.koc_id || '',
-            kocName: item.koc_name || item.koc_id || '未命名 KOC',
-            campaignId: item.campaign_id || '',
-            campaignName: item.campaign_name || '未命名活動',
-            productId: item.product_id || null,
-            productName: item.product_name || '—',
-            caption: item.text_content || '',
-            contentUrl: item.content_url || '',
-            couponCode: item.promotion_code || '',
-            couponStatus: item.coupon_status || '',
-            status: item.status || 'pending',
-            missionStage: item.stage || '',
-            vendorFeedback: item.vendor_feedback || '',
-            submittedAt: item.submitted_time || null,
-            reviewedAt: item.reviewed_time || null,
-            aiResult: item.ai_result || null
-          }))
-        )
-      } catch (error) {
-        console.error('文案投稿載入失敗：', error)
-        setSubmissionError(
-          getErrorMessage(error, '文案投稿載入失敗')
-        )
-      } finally {
-        setSubmissionLoading(false)
-      }
-    }
-
-    loadSubmissions()
-  }, [vendorId])
-
   const sortedApplications = useMemo(
     () =>
       [...applications].sort(
@@ -384,59 +214,11 @@ export default function ContentReview() {
     [applications]
   )
 
-  const sortedSubmissions = useMemo(
-    () =>
-      [...submissions].sort(
-        (a, b) => new Date(b.submittedAt) - new Date(a.submittedAt)
-      ),
-    [submissions]
-  )
-
-  const groupedSubmissions = useMemo(() => {
-    const byMission = new Map()
-
-    for (const submission of sortedSubmissions) {
-      const key = submission.kocMissionId || submission.id
-
-      if (!byMission.has(key)) {
-        byMission.set(key, [])
-      }
-
-      byMission.get(key).push(submission)
-    }
-
-    return Array.from(byMission.values()).map(group => {
-      const [latest, ...history] = group
-
-      return {
-        ...latest,
-        historyCount: history.length,
-        history
-      }
-    })
-  }, [sortedSubmissions])
-
   // ─── 統計資料 ─────────────────────────────────────────────
   const qualificationCounts = {
     pending: applications.filter(item => item.status === 'pending').length,
     approved: applications.filter(item => item.status === 'approved').length,
     rejected: applications.filter(item => item.status === 'rejected').length
-  }
-
-  const contentCounts = {
-    pendingContent: groupedSubmissions.filter(
-      submission => !submission.caption
-    ).length,
-    submitted: groupedSubmissions.filter(
-      submission =>
-        submission.status === 'pending' || submission.status === 'submitted'
-    ).length,
-    approved: groupedSubmissions.filter(
-      submission => submission.status === 'approved'
-    ).length,
-    revising: groupedSubmissions.filter(
-      submission => submission.status === 'revising'
-    ).length
   }
 
   // ─── 依篩選條件過濾清單 ────────────────────────────────────
@@ -446,23 +228,6 @@ export default function ContentReview() {
       item => item.status === qualificationFilter
     )
   }, [sortedApplications, qualificationFilter])
-
-  const filteredSubmissions = useMemo(() => {
-    if (submissionFilter === 'all') return groupedSubmissions
-    if (submissionFilter === 'pendingContent') {
-      return groupedSubmissions.filter(submission => !submission.caption)
-    }
-    if (submissionFilter === 'submitted') {
-      return groupedSubmissions.filter(
-        submission =>
-          submission.status === 'pending' ||
-          submission.status === 'submitted'
-      )
-    }
-    return groupedSubmissions.filter(
-      submission => submission.status === submissionFilter
-    )
-  }, [groupedSubmissions, submissionFilter])
 
   // ─── 目前選取資料 ──────────────────────────────────────────
   const selectedApplication = selectedApplicationId
@@ -484,12 +249,6 @@ export default function ContentReview() {
   const selectedProduct = selectedApplication
     ? products.find(
         product => product.id === selectedApplication.productId
-      )
-    : null
-
-  const selectedSubmission = selectedSubmissionId
-    ? submissions.find(
-        submission => submission.id === selectedSubmissionId
       )
     : null
 
@@ -571,143 +330,11 @@ export default function ContentReview() {
     }
   }
 
-  function copyCode(code) {
-    if (!code) return
-    navigator.clipboard.writeText(code).catch(() => {})
-    setCopied(code)
-    window.setTimeout(() => {
-      setCopied(null)
-    }, 1500)
-  }
-
-  // ─── 文案審核 API ─────────────────────────────────────────
-  async function handleReviewSubmission(submission, reviewStatus) {
-    if (!submission) return
-
-    if (reviewStatus === 'revising' && !submissionNote.trim()) {
-      toast.error('退回修改時請填寫原因')
-      return
-    }
-
-    const actionText =
-      reviewStatus === 'approved'
-        ? '核准這篇文案並啟用優惠碼'
-        : '退回這篇文案'
-
-    const confirmed = await confirm({
-      title: `確定要${actionText}嗎？`,
-      description:
-        reviewStatus === 'approved'
-          ? '核准後優惠碼會正式啟用，KOC 可以開始使用。'
-          : 'KOC 會收到退回通知與您填寫的修改原因。',
-      confirmText: reviewStatus === 'approved' ? '核准文案' : '退回修改',
-      danger: reviewStatus !== 'approved'
-    })
-
-    if (!confirmed) return
-
-    try {
-      setReviewingSubmissionId(submission.submissionId)
-      setSubmissionError('')
-
-      const response = await reviewVendorSubmission({
-        vendor_id: vendorId,
-        submission_id: submission.submissionId,
-        status: reviewStatus,
-        vendor_feedback:
-          submissionNote.trim() ||
-          (reviewStatus === 'approved' ? '文案核准，可發布' : '')
-      })
-
-      if (response.data?.success === false) {
-        throw new Error(response.data.err || '文案審核失敗')
-      }
-
-      setSubmissions(previous =>
-        previous.map(item =>
-          item.submissionId === submission.submissionId
-            ? {
-                ...item,
-                status: response.data?.status || reviewStatus,
-                vendorFeedback:
-                  response.data?.vendor_feedback || submissionNote.trim(),
-                reviewedAt:
-                  response.data?.reviewed_time || new Date().toISOString(),
-                couponStatus:
-                  response.data?.coupon_status || item.couponStatus,
-                missionStage: response.data?.stage || item.missionStage
-              }
-            : item
-        )
-      )
-
-      toast.success(
-        reviewStatus === 'approved'
-          ? '文案已核准，優惠碼已正式啟用'
-          : '文案已退回修改'
-      )
-
-      setSelectedSubmissionId(null)
-      setSubmissionNote('')
-    } catch (error) {
-      console.error('文案審核失敗：', error)
-      setSubmissionError(
-        getErrorMessage(error, '文案審核失敗')
-      )
-    } finally {
-      setReviewingSubmissionId(null)
-    }
-  }
-
   // ─── Render ────────────────────────────────────────────────
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
-      {/* 分頁切換 */}
-      <div className="flex flex-col sm:flex-row bg-white rounded-[1.5rem] border border-[#E2DDD4] p-1 shadow-sm w-full sm:w-fit mx-auto lg:mx-0 overflow-hidden">
-        {[
-          { key: 'qualification', label: '1. 接案審核', sub: '決定是否讓 KOC 參與此活動' },
-          { key: 'content', label: '2. 文案審核', sub: '審核 KOC 提交的貼文內容' }
-        ].map(item => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => {
-              setStage(item.key)
-              setSelectedApplicationId(null)
-              setSelectedSubmissionId(null)
-            }}
-            className={cn(
-              `
-                px-4 sm:px-8 py-3 text-center sm:text-left
-                transition-all rounded-[1.2rem] sm:rounded-xl w-full sm:w-auto
-              `,
-              stage === item.key ? 'bg-[#F5F0E8] shadow-sm' : 'hover:bg-[#F8F9FA]'
-            )}
-          >
-            <div
-              className={cn(
-                'font-bold text-[13px] sm:text-sm mb-0.5 sm:mb-1',
-                stage === item.key ? 'text-[#1A1A18]' : 'text-[#8C8880]'
-              )}
-            >
-              {item.label}
-            </div>
-            <div
-              className={cn(
-                'text-[10px] sm:text-[11px] font-medium tracking-wider',
-                stage === item.key ? 'text-[#8C8880]' : 'text-[#E2DDD4]'
-              )}
-            >
-              {item.sub}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* ─── 第一階段：接案審核 ─────────────────────────────── */}
-      {stage === 'qualification' && (
-        <>
+      <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
             <StatCard
               label="全部"
@@ -969,461 +596,8 @@ export default function ContentReview() {
               </div>
             </div>
           )}
-        </>
-      )}
+      </>
 
-      {/* ─── 第二階段：文案審核 ─────────────────────────────── */}
-      {stage === 'content' && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-            <StatCard
-              label="全部"
-              value={groupedSubmissions.length}
-              icon={FileText}
-              active={submissionFilter === 'all'}
-              onClick={() => setSubmissionFilter('all')}
-            />
-            <StatCard
-              label="待提交"
-              value={contentCounts.pendingContent}
-              icon={Clock}
-              active={submissionFilter === 'pendingContent'}
-              onClick={() => setSubmissionFilter('pendingContent')}
-            />
-            <StatCard
-              label="待審文案"
-              value={contentCounts.submitted}
-              icon={FileText}
-              active={submissionFilter === 'submitted'}
-              onClick={() => setSubmissionFilter('submitted')}
-            />
-            <StatCard
-              label="文案核准"
-              value={contentCounts.approved}
-              icon={CheckCircle2}
-              active={submissionFilter === 'approved'}
-              onClick={() => setSubmissionFilter('approved')}
-            />
-            <StatCard
-              label="需修改"
-              value={contentCounts.revising}
-              icon={RotateCcw}
-              active={submissionFilter === 'revising'}
-              onClick={() => setSubmissionFilter('revising')}
-            />
-          </div>
-
-          <Card>
-            <div className="overflow-x-auto w-full">
-              <table className="w-full text-left min-w-[900px]">
-                <thead>
-                  <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                    {[
-                      'KOC',
-                      '活動',
-                      '商品',
-                      '優惠碼',
-                      '文案預覽',
-                      '提交時間',
-                      '狀態'
-                    ].map(header => (
-                      <th
-                        key={header}
-                        className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest whitespace-nowrap"
-                      >
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-[#E2DDD4]">
-                  {submissionLoading ? (
-                    <tr>
-                      <td colSpan={7} className="py-16 text-center">
-                        <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-[#8C8880]">
-                          <Loader2 size={16} className="animate-spin" />
-                          文案投稿載入中...
-                        </div>
-                      </td>
-                    </tr>
-                  ) : submissionError ? (
-                    <tr>
-                      <td colSpan={7} className="py-16 px-4 sm:px-5 text-center text-xs sm:text-sm font-bold text-red-600">
-                        {submissionError}
-                      </td>
-                    </tr>
-                  ) : filteredSubmissions.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-16 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
-                        {submissionFilter === 'all'
-                          ? '目前沒有文案投稿'
-                          : '這個分類目前沒有資料'}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredSubmissions.map(submission => {
-                      const canReview =
-                        submission.status === 'pending' ||
-                        submission.status === 'submitted' ||
-                        submission.status === 'revising'
-
-                      return (
-                        <React.Fragment key={submission.id}>
-                          <tr
-                            onClick={() => {
-                              if (!canReview) return
-                              setSelectedSubmissionId(submission.id)
-                              setSubmissionNote(submission.vendorFeedback || '')
-                              setAiResult(submission.aiResult || null)
-                            }}
-                            className={cn(
-                              'transition-colors',
-                              canReview ? 'hover:bg-[#F8F9FA] cursor-pointer' : ''
-                            )}
-                          >
-                            <td className="p-4 sm:p-5">
-                              <div className="flex items-center gap-2 sm:gap-3">
-                                <Avatar name={submission.kocName || '?'} size="sm" />
-                                <div>
-                                  <div className="text-[13px] sm:text-sm font-bold text-[#1A1A18] truncate max-w-[120px]">
-                                    {submission.kocName}
-                                  </div>
-                                  <div className="text-[9px] sm:text-[10px] font-bold text-[#8C8880] font-mono mt-0.5">
-                                    {submission.kocId}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] truncate max-w-[150px]">
-                              {submission.campaignName}
-                            </td>
-                            <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-[#8C8880] truncate max-w-[150px]">
-                              {submission.productName}
-                            </td>
-                            <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-mono font-bold text-[#C8522A] whitespace-nowrap">
-                              {submission.couponCode || '—'}
-                            </td>
-                            <td className="p-4 sm:p-5 text-[11px] sm:text-xs text-[#8C8880] max-w-[180px] sm:max-w-[220px]">
-                              {submission.caption ? (
-                                <span className="line-clamp-2 font-medium">
-                                  {submission.caption}
-                                </span>
-                              ) : (
-                                <span className="text-[#E2DDD4] italic">
-                                  尚未提交
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-[#8C8880] whitespace-nowrap">
-                              {submission.submittedAt
-                                ? new Date(submission.submittedAt).toLocaleString('zh-TW')
-                                : '—'}
-                            </td>
-                            <td className="p-4 sm:p-5">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
-                                <Pill cfg={submissionBadge[submission.status]} />
-                                {submission.historyCount > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={e => {
-                                      e.stopPropagation()
-                                      toggleHistory(
-                                        submission.kocMissionId || submission.id
-                                      )
-                                    }}
-                                    className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-1.5 sm:px-2 py-1 rounded-md hover:border-[#C8522A] hover:text-[#C8522A] transition-colors whitespace-nowrap w-fit"
-                                  >
-                                    <RotateCcw size={10} />
-                                    已重新提交 {submission.historyCount} 次
-                                    {expandedHistoryIds.includes(
-                                      submission.kocMissionId || submission.id
-                                    )
-                                      ? ' ▲'
-                                      : ' ▼'}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-
-                          {/* 歷史紀錄展開子列 */}
-                          {submission.historyCount > 0 &&
-                            expandedHistoryIds.includes(
-                              submission.kocMissionId || submission.id
-                            ) && (
-                              <tr className="bg-[#F8F9FA]">
-                                <td colSpan={7} className="px-4 sm:px-5 pb-3 sm:pb-4 pt-1">
-                                  <div className="ml-[40px] sm:ml-[52px] space-y-2 border-l-2 border-[#E2DDD4] pl-3 sm:pl-4">
-                                    <div className="text-[9px] sm:text-[10px] font-bold text-[#8C8880] uppercase tracking-widest mb-1">
-                                      先前投稿紀錄
-                                    </div>
-                                    {submission.history.map(past => (
-                                      <div
-                                        key={past.id}
-                                        className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 text-[11px] sm:text-xs bg-white border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3"
-                                      >
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-medium text-[#8C8880] line-clamp-2">
-                                            {past.caption || '（未填寫文案）'}
-                                          </p>
-                                          {past.vendorFeedback && (
-                                            <p className="text-[#D93025] font-bold mt-1">
-                                              退回原因：{past.vendorFeedback}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1.5 shrink-0 mt-2 sm:mt-0">
-                                          <Pill cfg={submissionBadge[past.status]} />
-                                          <span className="text-[9px] sm:text-[10px] font-medium text-[#8C8880] whitespace-nowrap">
-                                            {past.submittedAt
-                                              ? new Date(past.submittedAt).toLocaleString('zh-TW')
-                                              : '—'}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                        </React.Fragment>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* 文案審核 Modal */}
-          {selectedSubmission &&
-            (selectedSubmission.status === 'pending' ||
-              selectedSubmission.status === 'submitted' ||
-              selectedSubmission.status === 'revising') && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-2 sm:p-4">
-                <div className="relative w-full max-w-4xl bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-10 shadow-2xl border border-[#E2DDD4] max-h-[95vh] sm:max-h-[92vh] overflow-y-auto">
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-[#E2DDD4] relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSubmissionId(null)
-                        setSubmissionNote('')
-                      }}
-                      className="absolute top-0 right-0 sm:static p-1.5 sm:p-2 text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8] rounded-full transition-colors"
-                    >
-                      <X size={20} />
-                    </button>
-
-                    <div className="flex items-center gap-3 sm:gap-5 pr-8 sm:pr-0">
-                      <Avatar name={selectedSubmission.kocName || '?'} size="md" />
-                      <div>
-                        <div className="text-lg sm:text-2xl font-serif font-bold text-[#1A1A18] mb-0.5 sm:mb-1 truncate max-w-[200px]">
-                          {selectedSubmission.kocName}
-                        </div>
-                        <div className="text-[11px] sm:text-sm font-bold text-[#8C8880] truncate max-w-[200px] sm:max-w-xs">
-                          {selectedSubmission.kocId} · {selectedSubmission.campaignName}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-row sm:flex-col items-center sm:items-end flex-wrap gap-2 w-full sm:w-auto">
-                      <Pill cfg={submissionBadge[selectedSubmission.status]} />
-                      <span className="text-[10px] sm:text-xs text-[#C8522A] bg-[#FDF0ED] px-2.5 sm:px-3 py-1 rounded-md font-mono font-bold whitespace-nowrap">
-                        優惠碼：{selectedSubmission.couponCode || '—'}
-                      </span>
-                      <span className="text-[9px] sm:text-[10px] font-bold text-[#8C8880] whitespace-nowrap hidden sm:block">
-                        優惠碼狀態：{selectedSubmission.couponStatus || 'unknown'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-10">
-                    {/* 左側：文案預覽 */}
-                    <div>
-                      <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2 sm:mb-3">
-                        貼文預覽
-                      </div>
-                      <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-[13px] sm:text-sm text-[#1A1A18] leading-relaxed min-h-[200px] sm:min-h-[260px] whitespace-pre-wrap font-medium">
-                        {selectedSubmission.caption || '尚未提交文案'}
-                      </div>
-                    </div>
-
-                    {/* 右側：合規檢查與審核意見 */}
-                    <div className="flex flex-col">
-                      <div className="mb-5 sm:mb-6">
-                        <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2 sm:mb-3">
-                          AI 文案合規檢測
-                        </div>
-                        <div className="flex gap-2 mb-3">
-                          <select
-                            value={category}
-                            onChange={e => setCategory(e.target.value)}
-                            className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-[13px] sm:text-sm outline-none focus:border-[#C8522A]"
-                          >
-                            <option value="food">食品</option>
-                            <option value="cosmetic">化妝品</option>
-                            <option value="medical_device">醫療器材</option>
-                            <option value="drug">藥品</option>
-                            <option value="other">其他</option>
-                          </select>
-                          <Button
-                            variant="brand"
-                            onClick={() => handleAiCheck(selectedSubmission?.caption, selectedSubmission?.id)}
-                            disabled={aiLoading}
-                            className="px-4 sm:px-6"
-                          >
-                            {aiLoading ? '分析中...' : 'AI 審核'}
-                          </Button>
-                        </div>
-
-                        {aiResult && (
-                          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-3 text-[13px] sm:text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-[#1A1A18]">合規分數</span>
-                              <span
-                                className={`font-black text-base sm:text-lg ${
-                                  aiResult.risk_level === 'none' ? 'text-[#1A1A18]'
-                                : aiResult.risk_level === 'low' ? 'text-[#B89B6A]'
-                                : aiResult.risk_level === 'medium' ? 'text-[#C8522A]'
-                                : 'text-[#D93025]'
-                                }`}
-                              >
-                                {aiResult.score} 分
-                              </span>
-                            </div>
-
-                            {aiResult.violations?.length > 0 && (
-                              <div>
-                                <div className="font-bold text-[#D93025] mb-1">
-                                  違規詞（{aiResult.violations.length}）
-                                </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {aiResult.violations.map((v, i) => (
-                                    <span key={i} className="text-[11px] sm:text-xs bg-[#FFF0F0] text-[#D93025] px-2 py-1 rounded-md font-bold">
-                                      {v.word}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {aiResult.gray_areas?.length > 0 && (
-                              <div>
-                                <div className="font-bold text-[#8A6D1F] mb-1">
-                                  灰色地帶（{aiResult.gray_areas.length}）
-                                </div>
-                                {aiResult.gray_areas.map((g, i) => (
-                                  <div key={i} className="text-[11px] sm:text-xs bg-[#FDF6E3] text-[#6B5A2C] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg mb-1">
-                                    <span className="font-bold text-[#8A6D1F]">「{g.phrase}」</span> — {g.reason}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {aiResult.ai_analysis && (
-                              <div>
-                                <div className="font-bold text-[#1A1A18] mb-1">AI 整體評估</div>
-                                <p className="text-[#8C8880] text-[11px] sm:text-xs leading-relaxed">
-                                  {aiResult.ai_analysis.overall_assessment}
-                                </p>
-                                {aiResult.ai_analysis.suggestions?.length > 0 && (
-                                  <ul className="mt-2 list-disc list-inside text-[11px] sm:text-xs text-[#8C8880] space-y-1">
-                                    {aiResult.ai_analysis.suggestions.map((s, i) => (
-                                      <li key={i}>{s}</li>
-                                    ))}
-                                  </ul>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2 sm:mb-3">
-                        合規檢查
-                      </div>
-                      <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-2 sm:space-y-3 mb-5 sm:mb-6">
-                        {compliance(selectedSubmission).map(checkItem => (
-                          <div
-                            key={checkItem.label}
-                            className={cn(
-                              `
-                                flex items-center gap-2 sm:gap-3
-                                text-[11px] sm:text-xs font-bold
-                                px-3 sm:px-4 py-2 sm:py-3 rounded-xl border
-                              `,
-                              checkItem.ok
-                                ? 'bg-[#F5F0E8] border-[#E2DDD4] text-[#1A1A18]'
-                                : 'bg-[#FFF0F0] border-[#FFF0F0] text-[#D93025]'
-                            )}
-                          >
-                            {checkItem.ok ? <Check size={14} /> : <X size={14} />}
-                            {checkItem.label}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest mb-2 sm:mb-3">
-                        審核意見
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={submissionNote}
-                        onChange={e => setSubmissionNote(e.target.value)}
-                        placeholder="若需修改請輸入原因..."
-                        className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4 text-[13px] sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none transition-all flex-1"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 mt-6 sm:mt-8 border-t border-[#E2DDD4]">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedSubmissionId(null)
-                        setSubmissionNote('')
-                      }}
-                      className="w-full sm:w-auto px-10 order-3 sm:order-1"
-                    >
-                      取消
-                    </Button>
-                    <div className="hidden sm:block flex-1" />
-                    <Button
-                      variant="warning"
-                      onClick={() => handleReviewSubmission(selectedSubmission, 'revising')}
-                      className="w-full sm:w-auto px-8 gap-2 order-2"
-                      disabled={
-                        !submissionNote.trim() ||
-                        reviewingSubmissionId === selectedSubmission.submissionId
-                      }
-                    >
-                      {reviewingSubmissionId === selectedSubmission.submissionId ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <RotateCcw size={16} />
-                      )}
-                      退回修改
-                    </Button>
-                    <Button
-                      variant="brand"
-                      onClick={() => handleReviewSubmission(selectedSubmission, 'approved')}
-                      className="w-full sm:w-auto px-8 gap-2 order-1 sm:order-3"
-                      disabled={reviewingSubmissionId === selectedSubmission.submissionId}
-                    >
-                      {reviewingSubmissionId === selectedSubmission.submissionId ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <Check size={16} />
-                      )}
-                      核准文案並啟用優惠碼
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-        </>
-      )}
     </div>
   )
 }

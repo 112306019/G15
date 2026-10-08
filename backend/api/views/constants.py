@@ -368,10 +368,14 @@ COUPON_STATUS_CODE_MAP = {
     'active': 1,     # 啟用中
     'expired': 2,    # 已過期
 }
+# KOC 不再提交文案給廠商審核：任務核准後直接進入 publishing，只需要交作品連結。
+# writing / reviewing 兩個階段已停用（STAGE_CODE_MAP 保留代碼只為相容舊資料）。
 STAGE_ALLOWED_SUBMISSION_TYPE = {
-    'writing': 'text',   # 撰寫文案階段，只能交文案
     'publishing': 'link',  # 待發佈階段，只能交連結
 }
+
+# 文案草稿只給 KOC 自己撰寫與 AI 檢測用，不會送給廠商；發文前後都可以修改
+STAGES_ALLOWING_TEXT_DRAFT = {'publishing', 'promoting'}
 
 EARNINGS_STATUS_CHOICES_MAP = {
     'pending': 'pending',
@@ -546,3 +550,20 @@ PRODUCT_CATEGORY_CHOICES = [
     ('culture', '文創、娛樂與其他'),
 ]
 PRODUCT_CATEGORY_CODES = {code for code, _ in PRODUCT_CATEGORY_CHOICES}
+
+# ==============================================================================
+# KOC AI 文案檢測：免責條款（KOC 第一次使用前必須同意，見 models.AiCheckConsent）
+# ==============================================================================
+# 條款內容有任何修改時，一定要同時更新版本號，所有 KOC 下次使用前會被要求重新同意。
+AI_CHECK_TERMS_VERSION = '2026-10-08'
+AI_CHECK_TERMS_TITLE = 'AI 文案檢測使用條款'
+AI_CHECK_TERMS = [
+    '本功能由 AI 與規則比對自動產生檢測結果，僅供您撰寫文案時參考，不構成任何法律意見，'
+    '亦不保證文案符合《食品安全衛生管理法》《化粧品衛生安全管理法》《藥事法》《醫療器材管理法》等相關法規。',
+    '檢測結果可能有遺漏或誤判，「未檢出問題」不代表文案沒有違法風險。'
+    '文案是否合法應由您自行判斷，必要時請諮詢專業法律人士。',
+    '您發佈的內容由您自行負責。因文案內容所生之任何法律責任、行政裁罰或第三人求償，'
+    '均由您自行承擔，本平台及合作廠商不負任何責任。',
+    '您送出檢測的文案會傳送至 AI 服務（可能包含第三方服務，例如 Google Gemini）進行分析。'
+    '本平台不會保存檢測的文案與結果，也不會提供給廠商。',
+]

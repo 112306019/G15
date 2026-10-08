@@ -2451,3 +2451,31 @@ class ReturnRequest(models.Model):
 
     def __str__(self):
         return f"ReturnRequest {self.return_id} for Order {self.order_id} ({self.status})"
+
+class AiCheckConsent(models.Model):
+    """
+    KOC 使用「AI 文案檢測」前同意免責條款的紀錄（條款內容見
+    constants.AI_CHECK_TERMS）。
+
+    同一位使用者對同一版條款只需同意一次；條款改版（AI_CHECK_TERMS_VERSION
+    變更）後要重新同意。紀錄保留同意當下的 IP 與瀏覽器資訊，日後有爭議時
+    可以證明是哪個帳號、何時、同意了哪一版內容。
+    """
+    consent_id = models.AutoField(primary_key=True, db_column='consent_id')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='user_id',
+        related_name='ai_check_consents'
+    )
+    terms_version = models.CharField(max_length=20, db_column='terms_version')
+    agreed_at = models.DateTimeField(auto_now_add=True, db_column='agreed_at')
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_column='ip_address')
+    user_agent = models.CharField(max_length=500, blank=True, default='', db_column='user_agent')
+
+    class Meta:
+        db_table = 'Ai_Check_Consent'
+        unique_together = ('user', 'terms_version')
+
+    def __str__(self):
+        return f"AiCheckConsent user={self.user_id} v{self.terms_version}"

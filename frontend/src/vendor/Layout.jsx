@@ -12,7 +12,7 @@ const titles = {
   '/vendor/koc': { title: 'KOC 合作管理', sub: '追蹤 KOC 推廣成效與優惠碼使用情況' },
   '/vendor/orders': { title: '訂單管理', sub: '透過優惠碼追蹤每筆 KOC 帶入訂單' },
   '/vendor/analytics': { title: '成效分析', sub: '查看活動、訂單、商品與優惠碼帶來的實際成效' },
-  '/vendor/review': { title: '審核管理', sub: '審核 KOC 的合作申請及提交的貼文文案' },
+  '/vendor/review': { title: '審核管理', sub: '審核 KOC 的合作申請；核准後 KOC 直接發文並上傳作品連結' },
   '/vendor/chat': { title: '聊天室', sub: '與 KOC 即時溝通' },
   '/vendor/settings': { title: '設定', sub: '管理帳號資訊與通知偏好' },
   '/vendor/support': { title: '客服諮詢', sub: '有任何問題都可以在這裡詢問客服' },

@@ -7,17 +7,16 @@ import { getErrorMessage } from '../errorMessage';
 const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 const COMPLETED = 4;
 
-// 可退回的階段 → 退回後會發生什麼（跟後端 admin_revert_mission_stage 的處理一致）
+// 可退回的階段 → 退回後會發生什麼（跟後端 admin_revert_mission_stage 的處理一致）。
+// KOC 不再提交文案給廠商審核，只剩推廣中可以退回待發佈。
 const REVERT_EFFECTS = {
-  1: '退回「撰寫文案」：待審的文案標成退回，KOC 需重新提交。',
-  2: '退回「文案審核中」：撤銷文案的審核通過，廠商需重新審核，優惠碼暫停使用。',
-  3: '退回「待發佈」：作品連結標成退回，KOC 需重新提交連結。',
+  3: '退回「待發佈」：作品連結標成退回，KOC 需重新提交連結；優惠碼在重新提交前暫停使用。',
 };
 
 /**
  * KOC 任務的管理員例外處理。階段平常由流程自動推進，這裡只提供：
  * - 強制結案：任何未結束的任務，結案後優惠碼停用
- * - 退回上一階段：審核中 / 待發佈 / 推廣中，用來更正誤操作
+ * - 退回上一階段：只有推廣中可以退回待發佈，用來更正誤操作
  * 兩者都必須填原因，會寫入操作紀錄並通知 KOC 與廠商。
  *
  * mission: { id, stage（0~4 數字代碼）, title（顯示用，例如案件名稱） }
@@ -109,7 +108,7 @@ export default function MissionActionModal({ mission, onClose, onDone }) {
                   <Undo2 size={16} className="text-[#B89B6A]" /> 退回上一階段
                 </div>
                 <p className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
-                  {canRevert ? REVERT_EFFECTS[mission.stage] : '「撰寫文案」是第一個階段，無法再退回。'}
+                  {canRevert ? REVERT_EFFECTS[mission.stage] : '只有「推廣中」的任務可以退回上一階段。'}
                 </p>
               </button>
             </div>
@@ -121,7 +120,7 @@ export default function MissionActionModal({ mission, onClose, onDone }) {
                 onChange={(e) => setReason(e.target.value)}
                 required
                 rows={3}
-                placeholder="例如：廠商誤按審核通過，需重新審核文案"
+                placeholder="例如：作品連結無法開啟，請 KOC 重新提交"
                 className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all resize-none"
               />
             </div>
