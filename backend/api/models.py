@@ -2507,6 +2507,10 @@ class InquiryMessage(models.Model):
 
     message_id = models.AutoField(primary_key=True)
     room = models.ForeignKey(InquiryRoom, on_delete=models.CASCADE, db_column='room_id', related_name='messages')
+    # 從商品頁發起詢問時，第一則訊息附上詢問的是哪個商品（從廠商頁發起則為空）
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, db_column='product_id', null=True, blank=True, related_name='inquiry_messages'
+    )
     sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
     sender_id = models.CharField(max_length=50, db_column='sender_id')
     content = models.TextField(db_column='content')

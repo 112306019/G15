@@ -240,7 +240,8 @@ export default function ProductDetailPage({
       showToast("需先登入或註冊才能傳訊息給廠商喔！");
       return;
     }
-    navigate(`/inquiry/${productDetail.vendorId}`);
+    // 帶上商品編號，詢問頁會把這個商品附在第一則訊息上
+    navigate(`/inquiry/${productDetail.vendorId}?product=${productDetail.id}`);
   };
 
   const handleHeartClick = async () => {

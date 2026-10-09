@@ -3,11 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ConversationPanel from '../vendor/ConversationPanel';
+import { getKocChatrooms, getChatHistory, markKocChatroomRead, sendChatMessage } from '../api/koc';
 
+// KOC 多一個「接案聊天」（跟廠商的任務對話），排在最前面
+const KOC_TAB = { key: 'task', label: '接案聊天' };
 const TABS = [
   { key: 'inquiry', label: '商品詢問' },
   { key: 'order', label: '訂單訊息' },
 ];
+
+const throwIfFailed = (response, fallback) => {
+  if (response.data?.success === false) throw new Error(response.data.err || fallback);
+  return response.data;
+};
 
 async function getJson(url, options) {
   const res = await fetch(url, options);
@@ -18,14 +26,18 @@ async function getJson(url, options) {
   return data;
 }
 
-// 前台「我的訊息」：消費者（含 KOC 以消費者身分購物時）跟廠商的所有對話
+// 前台「我的訊息」：跟廠商的所有對話集中在這裡
+// - 接案聊天（只有 KOC）：KOC 接案任務跟廠商的對話
 // - 商品詢問：從廠商頁、商品頁按「傳訊息給廠商」發起，不用下單
 // - 訂單訊息：每張訂單跟廠商的對話
-// 網址參數 ?tab=inquiry|order，搭配 vendor（商品詢問）或 order（訂單訊息）直接打開某個對話
+// 網址參數 ?tab=task|inquiry|order，搭配 room（接案聊天）、vendor（商品詢問）或 order（訂單訊息）直接打開某個對話
 export default function MessagesPage() {
   const userId = localStorage.getItem('userId');
+  const isKoc = localStorage.getItem('role') === '1';
+  const tabs = isKoc ? [KOC_TAB, ...TABS] : TABS;
+  const defaultTab = tabs[0].key;
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = TABS.some((t) => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'inquiry';
+  const tab = tabs.some((t) => t.key === searchParams.get('tab')) ? searchParams.get('tab') : defaultTab;
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -35,16 +47,18 @@ export default function MessagesPage() {
         </div>
         <div>
           <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我的訊息</h2>
-          <p className="text-xs text-[#8C8880]">跟廠商的商品詢問與訂單對話都在這裡</p>
+          <p className="text-xs text-[#8C8880]">
+            {isKoc ? '接案聊天、商品詢問與訂單對話都在這裡' : '跟廠商的商品詢問與訂單對話都在這裡'}
+          </p>
         </div>
       </div>
 
       <div className="flex gap-1 mb-3 border-b border-[#E2DDD4]">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setSearchParams(t.key === 'inquiry' ? {} : { tab: t.key })}
+            onClick={() => setSearchParams(t.key === defaultTab ? {} : { tab: t.key })}
             className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-colors ${
               tab === t.key ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
             }`}
@@ -55,6 +69,40 @@ export default function MessagesPage() {
       </div>
 
       <div className="h-[70vh] rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] overflow-hidden shadow-sm bg-white">
+        {tab === 'task' && isKoc && (
+          <ConversationPanel
+            key="task"
+            mineRole="koc"
+            initialKey={searchParams.get('room')}
+            searchPlaceholder="搜尋廠商或活動…"
+            emptyListText="還沒有接案聊天"
+            emptyListHint="接案通過後，可以在這裡跟廠商溝通任務"
+            fetchList={async () => {
+              const data = throwIfFailed(await getKocChatrooms(userId), '接案聊天載入失敗');
+              return (data.chatrooms || []).map((r) => ({
+                key: String(r.room_id),
+                title: r.vendor_name || '廠商',
+                subtitle: r.campaign_name || '',
+                lastMessage: r.last_message || '',
+                lastMessageAt: r.last_message_time || r.created_at,
+                unreadCount: Number(r.unread_count || 0),
+              }));
+            }}
+            fetchMessages={async (conv) => {
+              const data = throwIfFailed(await getChatHistory(conv.key), '訊息載入失敗');
+              await markKocChatroomRead({ user_id: userId, room_id: conv.key }).catch(() => {});
+              return data.messages || [];
+            }}
+            sendMessage={async (conv, content) => {
+              const data = throwIfFailed(
+                await sendChatMessage({ room_id: conv.key, sender_role: 'koc', sender_id: userId, content }),
+                '訊息傳送失敗'
+              );
+              return data.message;
+            }}
+          />
+        )}
+
         {tab === 'inquiry' && (
           <ConversationPanel
             key="inquiry"

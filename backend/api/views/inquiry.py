@@ -4,7 +4,7 @@
 
 消費者端
 GET  /consumer/inquiry/getMessages?user_id=&vendor_id=   開啟（沒有就建立）對話並讀訊息，廠商訊息標為已讀
-POST /consumer/inquiry/sendMessage {user_id, vendor_id, content}
+POST /consumer/inquiry/sendMessage {user_id, vendor_id, content, product_id?}
 GET  /consumer/inquiry/list?user_id=                     消費者所有詢問對話
 
 廠商端
@@ -21,13 +21,14 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from api.models import InquiryMessage, InquiryRoom, User, Vendor
+from api.models import InquiryMessage, InquiryRoom, Product, User, Vendor
 from api.notifications import notify_new_chat_message
 
 MAX_MESSAGE_LENGTH = 2000
 
 
 def _serialize_message(message):
+    product = message.product
     return {
         "message_id": message.message_id,
         "room_id": message.room_id,
@@ -36,6 +37,13 @@ def _serialize_message(message):
         "content": message.content,
         "is_read": message.is_read,
         "created_at": message.created_at,
+        # 從商品頁發起的詢問會附上商品，前端在訊息上方顯示商品卡
+        "product": {
+            "product_id": product.product_id,
+            "product_name": product.product_name,
+            "image_url": product.image_url,
+            "price": product.discounted_price or product.price,
+        } if product else None,
     }
 
 
@@ -115,7 +123,7 @@ def consumer_inquiry_get_messages(request):
         "err": "",
         "room_id": room.room_id,
         "vendor": {"vendor_id": vendor.vendor_id, "vendor_name": vendor.company_name},
-        "messages": [_serialize_message(m) for m in room.messages.all()],
+        "messages": [_serialize_message(m) for m in room.messages.select_related("product")],
     }, status=status.HTTP_200_OK)
 
 
@@ -132,9 +140,16 @@ def consumer_inquiry_send_message(request):
     if error:
         return _bad_request(error)
 
+    # 只接受這家廠商自己的商品，避免附上別家的商品
+    product = None
+    if request.data.get("product_id"):
+        product = Product.objects.filter(
+            product_id=request.data.get("product_id"), vendor_id=vendor.vendor_id
+        ).first()
+
     room, _ = InquiryRoom.objects.get_or_create(user=user, vendor=vendor)
     message = InquiryMessage.objects.create(
-        room=room, sender_role="user", sender_id=str(user.pk), content=content,
+        room=room, sender_role="user", sender_id=str(user.pk), content=content, product=product,
     )
     notify_new_chat_message(
         vendor=vendor,
@@ -204,7 +219,7 @@ def vendor_inquiry_get_messages(request):
         "err": "",
         "room_id": room.room_id,
         "user_name": _user_display_name(room.user),
-        "messages": [_serialize_message(m) for m in room.messages.all()],
+        "messages": [_serialize_message(m) for m in room.messages.select_related("product")],
     }, status=status.HTTP_200_OK)
 
 
