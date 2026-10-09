@@ -2021,6 +2021,21 @@ def send_chat_message(request):
         content=content,
     )
 
+    # KOC 傳訊息時通知廠商（同一個任務還有未讀通知時不重複發）；
+    # 廠商傳給 KOC 的通知在 vendor.vendor_chatroom_send_message
+    if sender_role == 'koc':
+        from api.notifications import notify_new_chat_message
+        campaign = room.kocmission.application.campaign if room.kocmission and room.kocmission.application else None
+        if campaign and campaign.vendor_id:
+            notify_new_chat_message(
+                vendor=campaign.vendor,
+                category='koc',
+                title=f'KOC 在「{campaign.name}」傳來新訊息',
+                body=content,
+                reference_type='vendor_koc_chat',
+                reference_id=room.room_id,
+            )
+
     return Response({
         "success": True,
         "err": "",

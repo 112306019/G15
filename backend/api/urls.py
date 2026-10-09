@@ -90,6 +90,7 @@ from .views.vendor import vendor_upload_image
 from .views import shipping
 from .views import support
 from .views import order_chat
+from .views import inquiry
 from .views import notifications as notification_views
 
 urlpatterns = [
@@ -332,8 +333,18 @@ urlpatterns = [
     # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
     path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),
     path('user/orderChat/sendMessage', order_chat.user_order_chat_send_message, name='user-order-chat-send-message'),
+    path('user/orderChat/list', order_chat.user_order_chat_list, name='user-order-chat-list'),
     path('vendor/orderChat/getMessages', order_chat.vendor_order_chat_get_messages, name='vendor-order-chat-get-messages'),
     path('vendor/orderChat/sendMessage', order_chat.vendor_order_chat_send_message, name='vendor-order-chat-send-message'),
+    path('vendor/orderChat/list', order_chat.vendor_order_chat_list, name='vendor-order-chat-list'),
+
+    # 商品詢問（不用下單的消費者 ↔ 廠商對話）
+    path('consumer/inquiry/getMessages', inquiry.consumer_inquiry_get_messages, name='consumer-inquiry-get-messages'),
+    path('consumer/inquiry/sendMessage', inquiry.consumer_inquiry_send_message, name='consumer-inquiry-send-message'),
+    path('consumer/inquiry/list', inquiry.consumer_inquiry_list, name='consumer-inquiry-list'),
+    path('vendor/inquiry/list', inquiry.vendor_inquiry_list, name='vendor-inquiry-list'),
+    path('vendor/inquiry/getMessages', inquiry.vendor_inquiry_get_messages, name='vendor-inquiry-get-messages'),
+    path('vendor/inquiry/sendMessage', inquiry.vendor_inquiry_send_message, name='vendor-inquiry-send-message'),
 
     # Admin API
     # Platform Admin 平台端 API

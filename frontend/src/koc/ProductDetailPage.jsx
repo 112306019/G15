@@ -1,11 +1,12 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Heart, ShoppingBag, Star, Store, ChevronRight } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Heart, ShoppingBag, Star, Store, ChevronRight, MessageCircle } from 'lucide-react';
 
 export default function ProductDetailPage({
   onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, product,
 }) {
+  const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
@@ -234,6 +235,14 @@ export default function ProductDetailPage({
     }, 400);
   };
 
+  const handleContactVendor = () => {
+    if (userRole === 'guest') {
+      showToast("需先登入或註冊才能傳訊息給廠商喔！");
+      return;
+    }
+    navigate(`/inquiry/${productDetail.vendorId}`);
+  };
+
   const handleHeartClick = async () => {
     if (userRole === 'guest') {
       showToast("需先登入或註冊才能加入收藏清單喔！");
@@ -299,14 +308,23 @@ export default function ProductDetailPage({
 
           <div className="w-full md:w-[55%] flex flex-col justify-center">
             {productDetail.vendorId && (
-              <Link
-                to={`/store/${productDetail.vendorId}`}
-                className="mb-2 md:mb-3 inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
-              >
-                <Store size={14} className="md:w-4 md:h-4" />
-                {productDetail.vendorName}
-                <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-              </Link>
+              <div className="mb-2 md:mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Link
+                  to={`/store/${productDetail.vendorId}`}
+                  className="inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
+                >
+                  <Store size={14} className="md:w-4 md:h-4" />
+                  {productDetail.vendorName}
+                  <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleContactVendor}
+                  className="inline-flex items-center gap-1 text-xs md:text-sm font-bold text-[#C8522A] hover:underline"
+                >
+                  <MessageCircle size={14} className="md:w-4 md:h-4" /> 詢問廠商
+                </button>
+              </div>
             )}
 
             <div className="flex items-start justify-between gap-4 mb-3 md:mb-4">

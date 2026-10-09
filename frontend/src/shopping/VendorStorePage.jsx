@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Search, Package, CalendarDays, Sparkles } from 'lucide-react';
+import { ArrowLeft, Search, Package, CalendarDays, Sparkles, MessageCircle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { formatApiError } from '../errorMessage';
 import { ProductCard, formatNTD } from './ShopPage';
@@ -99,6 +99,14 @@ export default function VendorStorePage({ userRole, onAddToCart }) {
     }
   };
 
+  const contactVendor = () => {
+    if (userRole === 'guest') {
+      showToast('需先登入或註冊才能傳訊息給廠商喔！');
+      return;
+    }
+    navigate(`/inquiry/${vendorId}`);
+  };
+
   const openProduct = (product) => {
     localStorage.setItem('lastProductId', product.Product_id);
     navigate(`/product/${product.Product_id}`, { state: { product } });
@@ -139,6 +147,14 @@ export default function VendorStorePage({ userRole, onAddToCart }) {
               <div className="absolute -left-10 -bottom-12 md:-bottom-20 w-36 h-36 md:w-56 md:h-56 bg-[#B89B6A] rounded-full blur-[50px] md:blur-[70px] opacity-20" />
 
               <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
+                <button
+                  type="button"
+                  onClick={contactVendor}
+                  disabled={loading}
+                  className="order-last md:order-none md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 inline-flex items-center justify-center gap-2 rounded-full bg-[#F5F0E8] text-[#1A1A18] px-5 py-2.5 md:py-3 text-xs md:text-sm font-bold hover:bg-[#C8522A] hover:text-white transition-colors shadow-md disabled:opacity-50 w-full md:w-auto"
+                >
+                  <MessageCircle size={16} /> 傳訊息給廠商
+                </button>
                 <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center font-serif text-2xl md:text-4xl font-black shadow-lg ring-4 ring-white/10 shrink-0">
                   {loading ? '' : initial}
                 </div>

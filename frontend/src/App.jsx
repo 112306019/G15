@@ -2,7 +2,7 @@ import { API_BASE_URL } from './config';
 import { captureKocRef } from './kocRef';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart } from 'lucide-react';
+import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, MessageCircle } from 'lucide-react';
 
 // === KOC 相關頁面 ===
 import Header from './koc/Header';
@@ -28,6 +28,8 @@ import PaymentResultPage from './shopping/PaymentResultPage';
 import ECPayStoreResult from './shopping/ECPayStoreResult';
 import OrdersPage from './shopping/OrdersPage';
 import OrderChatPage from './shopping/OrderChatPage';
+import InquiryChatPage from './shopping/InquiryChatPage';
+import MessagesPage from './shopping/MessagesPage';
 import OrderDetailPage from './shopping/OrderDetailPage';
 import FavoritesPage from './shopping/FavoritesPage';
 import SupportChatPage from './shopping/SupportChatPage';
@@ -62,6 +64,7 @@ const VIEW_TO_PATH = {
   tax_form_records: '/earnings/tax-forms',
   payout_records: '/earnings/payouts',
   favorites: '/favorites',
+  messages: '/messages',
   support: '/support',
   applyKoc: '/apply-koc',
   kocIntro: '/koc-intro',  
@@ -89,6 +92,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
     { icon: <Briefcase size={18} />, label: '我的接案', view: 'home', role: 'koc' },
     { icon: <Sparkles size={18} />, label: '申請成為KOC', view: 'applyKoc', role: 'shopper' },
     { icon: <FileText size={18} />, label: '我的訂單', view: 'orders' },
+    { icon: <MessageCircle size={18} />, label: '我的訊息', view: 'messages' },
     { icon: <Heart size={18} />, label: '我的收藏', view: 'favorites' },
     { icon: <TrendingUp size={18} />, label: '我的收益', view: 'earnings', role: 'koc' },
     { icon: <User size={18} />, label: '個人資訊', view: 'profile' },
@@ -241,6 +245,13 @@ function OrderChatRoute() {
   return <OrderChatPage onBack={() => navigate('/orders')} orderId={id} />;
 }
 
+// 商品詢問頁（消費者不用下單就能問廠商）：廠商 id 來自網址
+function InquiryChatRoute() {
+  const { vendorId } = useParams();
+  const navigate = useNavigate();
+  return <InquiryChatPage onBack={() => navigate(-1)} vendorId={vendorId} />;
+}
+
 // 任務詳情頁需要「整包資料」才能顯示、沒有簡單 fetch-by-id API，一律靠路由 state
 // 傳資料；重新整理後資料會遺失，此時導回上一層列表頁（跟原本行為一致）。
 function TaskDetailRoute({ onJumpHome }) {
@@ -362,6 +373,9 @@ function MainSystem() {
       case "order_chat":
         handleNavigate("order_chat", notification.reference_id);
         break;
+      case "inquiry":
+        navigate(`/messages?tab=inquiry&vendor=${encodeURIComponent(notification.reference_id)}`);
+        break;
       case "koc_chat":
         handleNavigate("koc_chat", notification.reference_id);
         break;
@@ -446,7 +460,7 @@ function MainSystem() {
   const handleNavigate = (targetView, data = null, roleOverride = null) => {
     const protectedViews = [
       'profile', 'security', 'coupons', 'points', 'orders', 'order_detail', 'order_chat',
-      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications'
+      'home', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records', 'applyKoc', 'checkout', 'cart', 'review', 'favorites', 'chat', 'support', 'notifications', 'messages'
     ];
     const effectiveRole = roleOverride ?? userRole;
 
@@ -503,7 +517,7 @@ function MainSystem() {
   const shellViews = [
     'home', 'earnings', 'earnings_detail', 'profile',
     'security', 'orders', 'order_detail', 'order_chat', 'applyKoc',
-    'review', 'task_detail', 'favorites'
+    'review', 'task_detail', 'favorites', 'messages'
   ];
 
   const getSidebarActiveView = () => {
@@ -716,6 +730,18 @@ function MainSystem() {
         <Route path="/orders/:id" element={
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <OrderDetailRoute />
+          </ShellLayout>
+        } />
+
+        <Route path="/messages" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <MessagesPage />
+          </ShellLayout>
+        } />
+
+        <Route path="/inquiry/:vendorId" element={
+          <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
+            <InquiryChatRoute />
           </ShellLayout>
         } />
 

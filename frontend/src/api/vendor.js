@@ -350,6 +350,29 @@ export const sendVendorOrderChatMessage = (data) => {
   return api.post('/vendor/orderChat/sendMessage', data)
 }
 
+// 廠商所有有訊息的訂單聊天（統一聊天室「訂單訊息」分頁、訂單列表未讀紅點）
+export const getVendorOrderChatList = (vendorId) => {
+  return api.get('/vendor/orderChat/list', { params: { vendor_id: vendorId } })
+}
+
+// ======================================================
+// 商品詢問（不用下單的消費者 ↔ 廠商對話）
+// ======================================================
+
+export const getVendorInquiryList = (vendorId) => {
+  return api.get('/vendor/inquiry/list', { params: { vendor_id: vendorId } })
+}
+
+export const getVendorInquiryMessages = (vendorId, roomId) => {
+  return api.get('/vendor/inquiry/getMessages', {
+    params: { vendor_id: vendorId, room_id: roomId }
+  })
+}
+
+export const sendVendorInquiryMessage = (data) => {
+  return api.post('/vendor/inquiry/sendMessage', data)
+}
+
 // ======================================================
 // 成效分析
 // ======================================================

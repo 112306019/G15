@@ -22,7 +22,8 @@ import {
   getKocChatrooms,
   getChatHistory,
   sendChatMessage,
-  markKocChatroomRead
+  markKocChatroomRead,
+  getOrCreateChatRoom
 } from '../api/koc'
 import { getErrorMessage } from '../errorMessage'
 import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
@@ -314,6 +315,9 @@ export default function ChatPage() {
     })
   }, [messages, activeRoomId])
 
+  // 從接案詳情頁帶 ?mission= 進來、但這個任務還沒有聊天室時，只自動建立一次，避免失敗時無限重試
+  const ensuredMissionRef = useRef(null)
+
   // 背景輪詢比對新舊訊息時要讀最新的 state
   const messagesByRoomRef = useRef(messagesByRoom)
   messagesByRoomRef.current = messagesByRoom
@@ -423,6 +427,14 @@ export default function ChatPage() {
         // 帶 ?mission= 進來（來自接案詳情頁或站內通知），直接選中該任務的房間，
         // 手機版也一起跳過列表頁直接進對話。
         selectRoom(targetRoom)
+      } else if (missionIdParam && ensuredMissionRef.current !== missionIdParam) {
+        // 這個任務還沒有聊天室（舊資料可能沒建）：建立後重新載入並選中
+        ensuredMissionRef.current = missionIdParam
+        const created = await getOrCreateChatRoom(missionIdParam)
+        if (created.data?.success !== false && created.data?.room_id) {
+          await loadChatrooms()
+          return
+        }
       } else {
         const selectedRoomStillExists =
           mappedRooms.some(
@@ -708,7 +720,10 @@ export default function ChatPage() {
   function handleInputKeyDown(event) {
     if (
       event.key === 'Enter' &&
-      !event.shiftKey
+      !event.shiftKey &&
+      // 中文輸入法選字時按的 Enter 不送出
+      !event.nativeEvent.isComposing &&
+      event.keyCode !== 229
     ) {
       event.preventDefault()
       sendMessage()

@@ -20,13 +20,21 @@ import {
   getVendorChatrooms,
   getVendorChatMessages,
   sendVendorChatMessage,
-  markVendorChatroomRead
+  markVendorChatroomRead,
+  getVendorOrderChatList,
+  getVendorOrderChatMessages,
+  sendVendorOrderChatMessage,
+  getVendorInquiryList,
+  getVendorInquiryMessages,
+  sendVendorInquiryMessage
 } from '../api/vendor'
 
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
 import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
+import { useSearchParams } from 'react-router-dom'
+import ConversationPanel from './ConversationPanel'
 
 const stageLabels = {
   pending: '等待開始',
@@ -106,7 +114,8 @@ function groupRoomsByKoc(rooms) {
     })
 }
 
-export default function Chat() {
+// 「KOC 任務」分頁：KOC 接案的任務聊天室。initialRoomId：從通知點進來時要直接打開的聊天室
+function KocChatPanel({ initialRoomId = null }) {
   const vendorId = localStorage.getItem('vendor_id')
   const bottomRef = useRef(null)
 
@@ -155,7 +164,7 @@ export default function Chat() {
   useEffect(() => {
     loadChatrooms()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorId])
+  }, [vendorId, initialRoomId])
 
   useEffect(() => {
     if (!activeRoomId) return
@@ -223,6 +232,16 @@ export default function Chat() {
       const selectedRoomStillExists = mappedRooms.some(
         room => room.roomId === activeRoomId
       )
+
+      // 從通知點進來：直接打開指定的聊天室
+      const targetRoom = initialRoomId
+        ? mappedRooms.find(room => String(room.roomId) === String(initialRoomId))
+        : null
+      if (targetRoom && !selectedRoomStillExists) {
+        setActiveKocId(targetRoom.kocId)
+        setActiveRoomId(targetRoom.roomId)
+        return
+      }
 
       // 如果是在電腦版，預設選取第一個聊天室
       if (!selectedRoomStillExists && mappedRooms.length > 0 && window.innerWidth >= 768) {
@@ -417,14 +436,14 @@ export default function Chat() {
   }
 
   function handleInputKeyDown(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault()
       sendMessage()
     }
   }
 
   return (
-    <div className="flex h-[calc(100vh-100px)] sm:h-[calc(100vh-65px)] bg-white relative overflow-hidden">
+    <div className="flex h-full bg-white relative overflow-hidden">
 
       {/* 左側：KOC 聊天室清單 */}
       <div
@@ -886,6 +905,142 @@ export default function Chat() {
               </div>
             </div>
           </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+// ─── 廠商統一聊天室：KOC 任務 / 訂單訊息 / 商品詢問 ─────────────────────
+// 網址參數：?tab=koc|order|inquiry，搭配 room（KOC 任務、商品詢問）或 order（訂單訊息）
+// 直接打開某個對話（站內通知點進來時使用）
+const CHAT_TABS = [
+  { key: 'koc', label: 'KOC 任務' },
+  { key: 'order', label: '訂單訊息' },
+  { key: 'inquiry', label: '商品詢問' },
+]
+
+const throwIfFailed = (response, fallback) => {
+  if (response.data?.success === false) throw new Error(response.data.err || fallback)
+  return response.data
+}
+
+export default function Chat() {
+  const vendorId = localStorage.getItem('vendor_id')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = CHAT_TABS.some(t => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'koc'
+  const [unread, setUnread] = useState({ koc: 0, order: 0, inquiry: 0 })
+
+  // 分頁上的未讀數：三種對話一起輪詢（間隔比對話本身長一點）
+  const refreshUnread = async () => {
+    if (!vendorId) return
+    const sum = (rows, key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0)
+    const [koc, order, inquiry] = await Promise.all([
+      getVendorChatrooms(vendorId).then(r => sum(r.data?.chatrooms || [], 'unread_count')).catch(() => null),
+      getVendorOrderChatList(vendorId).then(r => sum(r.data?.rooms || [], 'unread_count')).catch(() => null),
+      getVendorInquiryList(vendorId).then(r => sum(r.data?.rooms || [], 'unread_count')).catch(() => null),
+    ])
+    setUnread(prev => ({
+      koc: koc ?? prev.koc,
+      order: order ?? prev.order,
+      inquiry: inquiry ?? prev.inquiry,
+    }))
+  }
+  useEffect(() => {
+    refreshUnread()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
+  usePolling(refreshUnread, CHAT_POLL_INTERVAL_MS * 2, Boolean(vendorId))
+
+  const switchTab = key => setSearchParams(key === 'koc' ? {} : { tab: key })
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-65px)] bg-white">
+      <div className="flex gap-1 px-3 sm:px-4 pt-2 border-b border-[#E2DDD4] bg-white shrink-0 overflow-x-auto">
+        {CHAT_TABS.map(t => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => switchTab(t.key)}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
+              tab === t.key ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+            )}
+          >
+            {t.label}
+            {unread[t.key] > 0 && (
+              <span className="bg-[#C8522A] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{unread[t.key]}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 min-h-0">
+        {tab === 'koc' && <KocChatPanel initialRoomId={searchParams.get('room')} />}
+
+        {tab === 'order' && (
+          <ConversationPanel
+            key="order"
+            initialKey={searchParams.get('order')}
+            searchPlaceholder="搜尋消費者或訂單編號…"
+            emptyListText="目前沒有訂單訊息"
+            emptyListHint="消費者在訂單裡傳訊息給您時，會出現在這裡"
+            fetchList={async () => {
+              const data = throwIfFailed(await getVendorOrderChatList(vendorId), '訂單訊息載入失敗')
+              return (data.rooms || []).map(r => ({
+                key: r.order_id,
+                title: r.buyer_name || '消費者',
+                subtitle: `訂單 ${String(r.order_id).slice(0, 8).toUpperCase()}`,
+                lastMessage: r.last_message,
+                lastMessageAt: r.last_message_at,
+                unreadCount: r.unread_count,
+              }))
+            }}
+            fetchMessages={async conv => {
+              const data = throwIfFailed(await getVendorOrderChatMessages(conv.key, vendorId), '訊息載入失敗')
+              return data.messages || []
+            }}
+            sendMessage={async (conv, content) => {
+              const data = throwIfFailed(
+                await sendVendorOrderChatMessage({ order_id: conv.key, vendor_id: vendorId, content }),
+                '訊息傳送失敗'
+              )
+              return data.message
+            }}
+          />
+        )}
+
+        {tab === 'inquiry' && (
+          <ConversationPanel
+            key="inquiry"
+            initialKey={searchParams.get('room')}
+            searchPlaceholder="搜尋消費者或訊息…"
+            emptyListText="目前沒有商品詢問"
+            emptyListHint="消費者在您的商店頁或商品頁按「傳訊息給廠商」時，會出現在這裡"
+            fetchList={async () => {
+              const data = throwIfFailed(await getVendorInquiryList(vendorId), '商品詢問載入失敗')
+              return (data.rooms || []).map(r => ({
+                key: String(r.room_id),
+                title: r.user_name || '消費者',
+                subtitle: '商品詢問',
+                lastMessage: r.last_message,
+                lastMessageAt: r.last_message_at,
+                unreadCount: r.unread_count,
+              }))
+            }}
+            fetchMessages={async conv => {
+              const data = throwIfFailed(await getVendorInquiryMessages(vendorId, conv.key), '訊息載入失敗')
+              return data.messages || []
+            }}
+            sendMessage={async (conv, content) => {
+              const data = throwIfFailed(
+                await sendVendorInquiryMessage({ vendor_id: vendorId, room_id: conv.key, content }),
+                '訊息傳送失敗'
+              )
+              return data.message
+            }}
+          />
         )}
       </div>
     </div>

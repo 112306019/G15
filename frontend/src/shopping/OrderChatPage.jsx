@@ -136,7 +136,7 @@ export default function OrderChatPage({ orderId, onBack }) {
   }
 
   function handleKeyDown(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       handleSend();
     }
