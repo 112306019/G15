@@ -71,7 +71,7 @@ export default function ProductDetailPage({
       .then(res => res.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
-        setIsFavorited(data.some(item => item.Product_id === productDetail?.id));
+        setIsFavorited(data.some(item => String(item.Product_id) === String(productDetail?.id)));
       })
       .catch(() => { });
 
@@ -243,20 +243,23 @@ export default function ProductDetailPage({
     const userId = localStorage.getItem("userId");
 
     try {
+      // 後端確認成功才更新愛心，避免畫面顯示已收藏、重新整理後卻不見
       if (!isFavorited) {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
         });
+        if (!res.ok) throw new Error(`wishlist add failed: ${res.status}`);
         setIsFavorited(true);
         showToast("✓ 已加入收藏清單");
       } else {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
         });
+        if (!res.ok) throw new Error(`wishlist delete failed: ${res.status}`);
         setIsFavorited(false);
         showToast("已從收藏清單移除");
       }

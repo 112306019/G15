@@ -2,6 +2,7 @@ import { API_BASE_URL } from '../config';
 import React, { useEffect, useRef, useState } from 'react';
 import { Headset, Loader2, Send } from 'lucide-react';
 import { getErrorMessage } from '../errorMessage';
+import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling';
 
 function cn(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -37,7 +38,14 @@ export default function SupportChatPage({ onBack }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  async function loadMessages() {
+  // 背景輪詢比對新舊訊息時要讀最新的 state
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // 準即時同步：定時抓新訊息，分頁在背景時暫停
+  usePolling(() => loadMessages({ silent: true }), CHAT_POLL_INTERVAL_MS, Boolean(userId));
+
+  async function loadMessages({ silent = false } = {}) {
     if (!userId) {
       setLoadError('尚未登入');
       setLoading(false);
@@ -45,8 +53,10 @@ export default function SupportChatPage({ onBack }) {
     }
 
     try {
-      setLoading(true);
-      setLoadError('');
+      if (!silent) {
+        setLoading(true);
+        setLoadError('');
+      }
 
       const res = await fetch(
         `${API_BASE_URL}/api/user/support/getMessages?user_id=${userId}`
@@ -57,11 +67,15 @@ export default function SupportChatPage({ onBack }) {
         throw new Error(data.err || '客服訊息載入失敗');
       }
 
-      setMessages(data.messages || []);
+      const nextMessages = data.messages || [];
+      if (!silent || hasNewMessages(messagesRef.current, nextMessages)) {
+        setMessages(nextMessages);
+      }
     } catch (err) {
+      if (silent) return;
       setLoadError(getErrorMessage(err, '客服訊息載入失敗'));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 

@@ -86,7 +86,7 @@ def vendor_register(request):
         if existing_vendor.is_verified:
             return Response({
                 "success": False,
-                "err": "Email already exists"
+                "err": "這個 Email 已經註冊過了"
             }, status=status.HTTP_400_BAD_REQUEST)
         else:
             # 之前註冊過但沒完成信箱驗證，視為未完成的舊紀錄，
@@ -97,7 +97,7 @@ def vendor_register(request):
     if Vendor.objects.filter(tax_id=tax_id).exists():
         return Response({
             "success": False,
-            "err": "Tax ID already exists"
+            "err": "這個統一編號已經註冊過了"
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
@@ -250,20 +250,21 @@ def vendor_login(request):
     try:
         vendor = Vendor.objects.get(vendor_id=vendor_id)
     except Vendor.DoesNotExist:
+        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
         return Response({
             "success": False,
-            "err": "Vendor not found"
-        }, status=status.HTTP_404_NOT_FOUND)
+            "err": "帳號或密碼錯誤"
+        }, status=status.HTTP_401_UNAUTHORIZED)
 
-    # 正式註冊的密碼會是 hash，所以用 check_password
-    # 如果你資料庫裡原本有明文密碼，也暫時允許直接比對，方便測試
-    password_correct = check_password(password, vendor.password) or password == vendor.password
+    # 密碼一律以雜湊比對；原本允許明文比對的後門已移除，
+    # 資料庫裡的明文測試密碼已全部轉成雜湊（密碼本身不變）
+    password_correct = check_password(password, vendor.password)
 
     if not password_correct:
         return Response({
             "success": False,
-            "err": "Invalid password"
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "err": "帳號或密碼錯誤"
+        }, status=status.HTTP_401_UNAUTHORIZED)
 
     # 信箱還沒驗證不能登入，前端要能分辨這種情況去導去驗證流程。
     # 廠商登入表單只收 vendor_id（不像消費者登入收 email），前端沒有信箱可以直接開驗證彈窗，
@@ -5287,11 +5288,91 @@ def _attach_link_clicks(funnel, coupon_qs, start_date, end_date):
     link["summary"]["clicks"] = sum(clicks.values())
 
 
+def _db_coupon_checkout_stats(codes, start_date, end_date):
+    """
+    從資料庫統計每組優惠碼的「開始結帳」與「完成購買」（不靠 GA4）：
+    - 開始結帳：期間內用這組優惠碼建立的訂單（不論後來有沒有付款），與 GA4 begin_checkout 同一時機
+    - 完成購買：其中付款狀態為已付款的訂單（已退款不算），營收為這些訂單的總金額
+    GA4 只收得到瀏覽器送出的事件，被廣告攔截器擋掉、或不是走網站結帳流程的訂單都會漏算；
+    這兩步改用資料庫才會跟 KOC 分潤、廠商帳務對得上。
+    回傳 {優惠碼: {begin_checkout_events, begin_checkout_users, purchases, purchase_users, revenue}}
+    """
+    if not codes:
+        return {}
+
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(_resolve_ga4_date(start_date), time.min), tz)
+    end_dt = timezone.make_aware(
+        datetime.combine(_resolve_ga4_date(end_date) + timedelta(days=1), time.min), tz
+    )
+
+    stats = {}
+    orders = Order.objects.filter(
+        promotion_code__in=codes,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    ).values('promotion_code', 'user_id', 'payment_status', 'total_amount')
+
+    for order in orders:
+        row = stats.setdefault(order['promotion_code'], {
+            'begin_checkout_events': 0,
+            'checkout_users': set(),
+            'purchases': 0,
+            'purchase_user_set': set(),
+            'revenue': 0.0,
+        })
+        row['begin_checkout_events'] += 1
+        row['checkout_users'].add(order['user_id'])
+        if order['payment_status'] in ('paid', 'completed'):
+            row['purchases'] += 1
+            row['purchase_user_set'].add(order['user_id'])
+            row['revenue'] += float(order['total_amount'] or 0)
+
+    return {
+        code: {
+            'begin_checkout_events': row['begin_checkout_events'],
+            'begin_checkout_users': len(row['checkout_users']),
+            'purchases': row['purchases'],
+            'purchase_users': len(row['purchase_user_set']),
+            'revenue': row['revenue'],
+        }
+        for code, row in stats.items()
+    }
+
+
+def _apply_db_checkout_stats(funnel, codes, db_stats):
+    """用資料庫的結帳／購買數字覆蓋優惠碼漏斗，並重算總計與轉換率。套用次數仍來自 GA4。"""
+    keys = ('begin_checkout_events', 'begin_checkout_users', 'purchases', 'purchase_users', 'revenue')
+    rows_by_code = {row['code']: row for row in funnel.get('by_code', [])}
+    by_code = []
+    for code in codes:
+        row = rows_by_code.get(code, {'code': code, 'promotion_uses': None})
+        stat = db_stats.get(code, {})
+        for key in keys:
+            row[key] = stat.get(key, 0.0 if key == 'revenue' else 0)
+        by_code.append(row)
+
+    summary = funnel.setdefault('summary', {})
+    for key in keys:
+        summary[key] = sum(row[key] for row in by_code)
+    checkout_users = summary['begin_checkout_users']
+    summary['checkout_cvr'] = (
+        min(summary['purchase_users'] / checkout_users, 1.0) if checkout_users else None
+    )
+    summary['abandonment_rate'] = (
+        1 - summary['checkout_cvr'] if summary['checkout_cvr'] is not None else None
+    )
+    funnel['by_code'] = by_code
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_analytics_funnel(request):
     """
-    廠商的 KOC 優惠碼電商漏斗（資料來源：GA4 Data API）。
+    廠商的 KOC 優惠碼電商漏斗。
+    - 套用優惠碼次數、推廣連結漏斗：GA4 Data API
+    - 開始結帳、完成購買、營收：資料庫（見 _db_coupon_checkout_stats）
+    GA4 讀取失敗時仍回傳資料庫的數字，套用次數為 null，並附上 ga4_error。
     URL: GET /vendor/analytics/funnel?vendor_id=...&start_date=...&end_date=...
 
     只追蹤「KOC 優惠碼帶來的流量」：先查出這個廠商所有活動底下的優惠碼，
@@ -5320,23 +5401,30 @@ def vendor_analytics_funnel(request):
         )
     codes = list(coupon_qs.values_list("promotion_code", flat=True))
 
+    ga4_error = ""
     try:
         funnel = get_coupon_funnel(codes, start_date, end_date)
-        _attach_link_clicks(funnel, coupon_qs, start_date, end_date)
     except GA4NotConfigured as error:
-        return Response({
-            "success": False,
-            "err": str(error)
-        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        funnel, ga4_error = None, str(error)
     except Exception as error:
+        funnel, ga4_error = None, friendly_error(error, "優惠碼")
+    if funnel is None:
+        # GA4 讀不到時，資料庫的結帳／購買數字照樣顯示，套用次數與推廣連結漏斗留空
+        funnel = {"summary": {"promotion_uses": None}, "by_code": [], "link": None, "link_error": ga4_error}
+
+    try:
+        _apply_db_checkout_stats(funnel, codes, _db_coupon_checkout_stats(codes, start_date, end_date))
+        _attach_link_clicks(funnel, coupon_qs, start_date, end_date)
+    except Exception:
         return Response({
             "success": False,
-            "err": friendly_error(error, "優惠碼")
-        }, status=status.HTTP_502_BAD_GATEWAY)
+            "err": internal_error_message("優惠碼成效讀取失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "success": True,
         "err": "",
         "coupon_count": len(codes),
+        "ga4_error": ga4_error,
         **funnel,
     }, status=status.HTTP_200_OK)

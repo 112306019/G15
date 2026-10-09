@@ -15,6 +15,8 @@ const SOURCE_TABS = [
 ]
 
 const fmtNumber = n => Number(n || 0).toLocaleString()
+// 套用次數來自 GA4，GA4 讀不到時後端回傳 null，顯示「—」而不是 0
+const fmtMaybe = n => (n === null || n === undefined ? '—' : fmtNumber(n))
 const fmtPercent = n =>
   n === null || n === undefined ? '—' : `${(n * 100).toFixed(1)}%`
 
@@ -98,7 +100,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
           </h2>
           <p className="text-xs text-[#8C8880] mt-1">
             {campaignName ? `目前檢視活動：${campaignName}` : '目前檢視：全部活動'}
-            {' '}｜ 追蹤消費者使用 KOC 優惠碼後的結帳表現（資料來源：Google Analytics）
+            {' '}｜ 追蹤消費者使用 KOC 優惠碼後的結帳表現
           </p>
         </div>
 
@@ -144,6 +146,12 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
         </div>
       ) : (
         <>
+          {!isLink && data?.ga4_error && (
+            <div className="mb-4 flex items-start gap-2 rounded-xl bg-[#FDF6E3] border border-[#E2DDD4] px-3 py-2.5 text-xs font-bold text-[#8A6D1F]">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>{data.ga4_error}。優惠碼套用次數暫時無法顯示，開始結帳與購買數字不受影響。</span>
+            </div>
+          )}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
             {isLink ? (
               <>
@@ -161,7 +169,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
             ) : (
               <StatCard
                 label="優惠碼使用次數（導流點擊）"
-                value={fmtNumber(summary.promotion_uses)}
+                value={fmtMaybe(summary.promotion_uses)}
                 hint="消費者成功套用優惠碼的次數"
               />
             )}
@@ -223,7 +231,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
                         </>
                       ) : (
                         <td className="py-3 px-4 text-right font-bold">
-                          {fmtNumber(row.promotion_uses)}
+                          {fmtMaybe(row.promotion_uses)}
                         </td>
                       )}
                       <td className="py-3 px-4 text-right font-bold">
@@ -243,9 +251,9 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
           )}
 
           <p className="text-[11px] text-[#8C8880] mt-4">
-            Google Analytics 的數據可能有數小時延遲，新事件不會即時顯示。
-            人數以裝置（瀏覽器）計算，同一個人重新結帳只算一次。
-            {isLink && ' 連結點擊由伺服器記錄、不受廣告攔截器影響，通常會比 GA4 的進站數多。'}
+            {isLink
+              ? '資料來源：Google Analytics，可能有數小時延遲；人數以裝置（瀏覽器）計算。連結點擊由伺服器記錄、不受廣告攔截器影響，通常會比 GA4 的進站數多。'
+              : '開始結帳、完成購買與營收來自平台訂單資料（即時，人數以會員帳號計算，同一人重新結帳只算一次）；優惠碼套用次數來自 Google Analytics，可能有數小時延遲。'}
           </p>
         </>
       )}

@@ -4,6 +4,7 @@ import { Headset, Loader2, Send } from 'lucide-react'
 import { getVendorSupportMessages, sendVendorSupportMessage } from '../api/vendor'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
+import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
 
 function formatTime(value) {
   if (!value) return ''
@@ -35,7 +36,14 @@ export default function Support() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  async function loadMessages() {
+  // 背景輪詢比對新舊訊息時要讀最新的 state
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+
+  // 準即時同步：定時抓新訊息，分頁在背景時暫停
+  usePolling(() => loadMessages({ silent: true }), CHAT_POLL_INTERVAL_MS, true)
+
+  async function loadMessages({ silent = false } = {}) {
     if (!vendorId) {
       setLoadError('尚未登入廠商帳號')
       setLoading(false)
@@ -43,8 +51,10 @@ export default function Support() {
     }
 
     try {
-      setLoading(true)
-      setLoadError('')
+      if (!silent) {
+        setLoading(true)
+        setLoadError('')
+      }
 
       const response = await getVendorSupportMessages(vendorId)
 
@@ -52,13 +62,17 @@ export default function Support() {
         throw new Error(response.data.err || '客服訊息載入失敗')
       }
 
-      setMessages(response.data?.messages || [])
+      const nextMessages = response.data?.messages || []
+      if (!silent || hasNewMessages(messagesRef.current, nextMessages)) {
+        setMessages(nextMessages)
+      }
     } catch (error) {
+      if (silent) return
       setLoadError(
         getErrorMessage(error, '客服訊息載入失敗')
       )
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
