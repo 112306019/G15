@@ -2479,3 +2479,43 @@ class AiCheckConsent(models.Model):
 
     def __str__(self):
         return f"AiCheckConsent user={self.user_id} v{self.terms_version}"
+
+
+class InquiryRoom(models.Model):
+    """
+    消費者與廠商的「商品詢問」對話：不用先下單，從廠商頁或商品頁發起。
+    每位消費者跟每家廠商只有一個對話（訂單相關的溝通走 OrderChatRoom）。
+    """
+    room_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='inquiry_rooms')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='inquiry_rooms')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Inquiry_Room'
+        unique_together = ('user', 'vendor')
+
+    def __str__(self):
+        return f"InquiryRoom {self.room_id} user={self.user_id} vendor={self.vendor_id}"
+
+
+class InquiryMessage(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('user', '消費者'),
+        ('vendor', '廠商'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(InquiryRoom, on_delete=models.CASCADE, db_column='room_id', related_name='messages')
+    sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Inquiry_Message'
+        ordering = ['created_at', 'message_id']
+
+    def __str__(self):
+        return f"InquiryMessage {self.message_id} in room {self.room_id}"

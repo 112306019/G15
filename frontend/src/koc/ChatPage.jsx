@@ -708,7 +708,10 @@ export default function ChatPage() {
   function handleInputKeyDown(event) {
     if (
       event.key === 'Enter' &&
-      !event.shiftKey
+      !event.shiftKey &&
+      // 中文輸入法選字時按的 Enter 不送出
+      !event.nativeEvent.isComposing &&
+      event.keyCode !== 229
     ) {
       event.preventDefault()
       sendMessage()

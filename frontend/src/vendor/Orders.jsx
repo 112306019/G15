@@ -30,12 +30,14 @@ import {
   raiseVendorReturnDispute,
   uploadVendorImage,
   uploadVendorInvoice,
+  getVendorOrderChatList
 } from '../api/vendor'
 
 import { formatCurrency, cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
 import { getErrorMessage } from '../errorMessage'
+import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
 
 const shippingFilters = [
   'all',
@@ -1418,6 +1420,30 @@ export default function Orders() {
   const [chatOrder, setChatOrder] =
     useState(null)
 
+  // 各訂單消費者傳來、廠商還沒讀的訊息數（聊天按鈕上的紅點）
+  const [chatUnreadByOrder, setChatUnreadByOrder] = useState({})
+
+  const refreshChatUnread = async () => {
+    if (!vendorId) return
+    try {
+      const response = await getVendorOrderChatList(vendorId)
+      const next = {}
+      for (const room of response.data?.rooms || []) {
+        if (room.unread_count > 0) next[String(room.order_id)] = room.unread_count
+      }
+      setChatUnreadByOrder(next)
+    } catch {
+      // 紅點只是提示，讀不到就等下一輪
+    }
+  }
+
+  useEffect(() => {
+    refreshChatUnread()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorId])
+
+  usePolling(refreshChatUnread, CHAT_POLL_INTERVAL_MS * 2, Boolean(vendorId))
+
   const [selectedOrderIds, setSelectedOrderIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('preparing')
   const [bulkUpdating, setBulkUpdating] = useState(false)
@@ -2245,14 +2271,20 @@ export default function Orders() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            title="聯絡買家"
+                            title={chatUnreadByOrder[String(order.orderId)] ? '買家傳來新訊息' : '聯絡買家'}
                             onClick={event => {
                               event.stopPropagation()
                               setChatOrder(order)
                             }}
-                            className="p-2 rounded-full text-[#8C8880] hover:bg-[#FDF0ED] hover:text-[#C8522A] transition-colors"
+                            className={cn(
+                              'relative p-2 rounded-full transition-colors hover:bg-[#FDF0ED] hover:text-[#C8522A]',
+                              chatUnreadByOrder[String(order.orderId)] ? 'text-[#C8522A]' : 'text-[#8C8880]'
+                            )}
                           >
                             <MessageCircle size={16} />
+                            {chatUnreadByOrder[String(order.orderId)] > 0 && (
+                              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#C8522A] ring-2 ring-white" />
+                            )}
                           </button>
 
                           <ChevronRight
@@ -2300,7 +2332,10 @@ export default function Orders() {
         vendorId={vendorId}
         items={chatOrder?.items}
         totalAmount={chatOrder?.totalAmount}
-        onClose={() => setChatOrder(null)}
+        onClose={() => {
+          setChatOrder(null)
+          refreshChatUnread()
+        }}
       />
     </div>
   )

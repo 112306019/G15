@@ -101,7 +101,7 @@ export default function OrderChatModal({ open, orderId, vendorId, items = [], to
   }
 
   function handleKeyDown(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault()
       handleSend()
     }
