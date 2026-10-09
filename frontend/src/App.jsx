@@ -21,6 +21,7 @@ import TaxFormPrintView from './koc/TaxFormPrintView';
 // === Shopping 相關頁面 ===
 import WelcomePage from './shopping/WelcomePage';
 import ShopPage from './shopping/ShopPage';
+import VendorStorePage from './shopping/VendorStorePage';
 import CartPage from './shopping/CartPage';
 import CheckoutPage from './shopping/CheckoutPage';
 import PaymentResultPage from './shopping/PaymentResultPage';
@@ -597,6 +598,10 @@ function MainSystem() {
 
         <Route path="/shop" element={
           <ShopPage key={shopKey} onNavigate={handleNavigate} userRole={userRole} onAddToCart={() => syncCartCount()} />
+        } />
+
+        <Route path="/store/:vendorId" element={
+          <VendorStorePage userRole={userRole} onAddToCart={() => syncCartCount()} />
         } />
 
         <Route path="/product/:id" element={
