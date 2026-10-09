@@ -295,6 +295,17 @@ export default function ProductDetailPage({
           </div>
 
           <div className="w-full md:w-[55%] flex flex-col justify-center">
+            {productDetail.vendorId && (
+              <Link
+                to={`/store/${productDetail.vendorId}`}
+                className="mb-2 md:mb-3 inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
+              >
+                <Store size={14} className="md:w-4 md:h-4" />
+                {productDetail.vendorName}
+                <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
+
             <div className="flex items-start justify-between gap-4 mb-3 md:mb-4">
               <h1 className="font-serif text-xl md:text-3xl leading-snug pr-2">{productDetail.name}</h1>
               <button
@@ -304,17 +315,6 @@ export default function ProductDetailPage({
                 <Heart size={18} className="md:w-5 md:h-5" fill={isFavorited ? "currentColor" : "none"} />
               </button>
             </div>
-
-            {productDetail.vendorId && (
-              <Link
-                to={`/store/${productDetail.vendorId}`}
-                className="mb-3 md:mb-4 inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
-              >
-                <Store size={14} className="md:w-4 md:h-4" />
-                {productDetail.vendorName}
-                <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            )}
 
             <div className="font-black text-xl md:text-2xl text-[#1A1A18] mb-4 md:mb-6">{productDetail.price}</div>
 
