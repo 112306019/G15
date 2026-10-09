@@ -332,21 +332,146 @@ def sync_submission_deadline_reminders():
     return len(overdue_missions)
 
 
+# ──────────────────────────────────────────────
+# 庫存（含組合商品）
+# ──────────────────────────────────────────────
+#
+# 組合商品（Product.is_bundle=True）本身沒有實體庫存：
+# - 扣庫存 / 加回庫存一律展開成「組成商品 × 數量」去動組成商品的 stock
+# - 組合自己的 stock 欄位只是快取的「目前可售組數」
+#   = min(組成商品 stock // 所需數量)，任一組成商品下架則為 0。
+#   商城列表、商品頁、加入購物車讀的都是 product.stock，所以這個快取要在
+#   組成商品庫存或狀態變動後呼叫 resync_bundle_stock() 更新。
+
+
+def expand_stock_demand(lines):
+    """
+    lines: [(Product, 數量), ...]
+    回傳 {實體商品 product_id: 需要的總數量}，組合商品會展開成組成商品。
+    同一張訂單裡「組合」和「組合裡的單品」同時出現時，需求會加總在一起。
+    """
+    from api.models import ProductBundleItem
+
+    bundle_ids = [product.product_id for product, _ in lines if product.is_bundle]
+    components = {}
+
+    if bundle_ids:
+        for bundle_item in ProductBundleItem.objects.filter(bundle_id__in=bundle_ids):
+            components.setdefault(bundle_item.bundle_id, []).append(
+                (bundle_item.component_id, bundle_item.quantity)
+            )
+
+    demand = {}
+
+    for product, quantity in lines:
+        if product.is_bundle:
+            for component_id, per_bundle in components.get(product.product_id, []):
+                demand[component_id] = demand.get(component_id, 0) + per_bundle * quantity
+        else:
+            demand[product.product_id] = demand.get(product.product_id, 0) + quantity
+
+    return demand
+
+
+def find_stock_shortage(lines):
+    """回傳庫存不足的實體商品名稱清單；都夠的話回傳空清單。"""
+    from api.models import Product
+
+    demand = expand_stock_demand(lines)
+
+    return [
+        product.product_name
+        for product in Product.objects.filter(product_id__in=list(demand))
+        if product.stock < demand[product.product_id]
+    ]
+
+
+def resync_bundle_stock(component_ids=None, bundle_ids=None):
+    """
+    重新計算組合商品的可售組數並寫回 bundle.stock。
+    component_ids：這些商品的庫存/狀態變了 → 更新所有用到它們的組合
+    bundle_ids：直接指定要更新的組合
+    """
+    from api.models import Product, ProductBundleItem
+
+    target_ids = set(bundle_ids or [])
+
+    if component_ids:
+        target_ids |= set(
+            ProductBundleItem.objects
+            .filter(component_id__in=list(component_ids))
+            .values_list('bundle_id', flat=True)
+        )
+
+    if not target_ids:
+        return
+
+    items_by_bundle = {}
+
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=target_ids)
+        .select_related('component')
+    ):
+        items_by_bundle.setdefault(bundle_item.bundle_id, []).append(bundle_item)
+
+    for bundle_id in target_ids:
+        bundle_items = items_by_bundle.get(bundle_id, [])
+
+        if not bundle_items:
+            available = 0
+        else:
+            available = min(
+                (
+                    bundle_item.component.stock // bundle_item.quantity
+                    if bundle_item.component.status == 'active'
+                    else 0
+                )
+                for bundle_item in bundle_items
+            )
+
+        Product.objects.filter(product_id=bundle_id).update(stock=max(available, 0))
+
+
+def deduct_stock_for_lines(lines):
+    """
+    下單扣庫存（要在 transaction.atomic() 裡呼叫）。
+    lines: [(Product, 數量), ...]；組合商品會展開扣組成商品，再更新受影響組合的可售組數。
+    """
+    from api.models import Product
+
+    demand = expand_stock_demand(lines)
+
+    if not demand:
+        return
+
+    for product in Product.objects.select_for_update().filter(product_id__in=list(demand)):
+        # 跟原本一樣夾在 0，避免併發下單把庫存扣成負數
+        product.stock = max(0, product.stock - demand[product.product_id])
+        product.save(update_fields=['stock'])
+
+    resync_bundle_stock(component_ids=demand.keys())
+
+
 def restore_order_stock(order):
     """
     訂單取消時（不論是消費者直接取消還是廠商核准取消申請）把商品庫存加回去，
-    對稱於 consumer.create_order 下單當下扣庫存的邏輯。
+    對稱於 consumer.create_order 下單當下扣庫存的邏輯；組合商品加回組成商品。
     """
-    from api.models import OrderItem
+    from api.models import OrderItem, Product
 
     items = OrderItem.objects.filter(order=order).select_related('product')
+    lines = [(item.product, item.quantity) for item in items if item.product]
+    demand = expand_stock_demand(lines)
 
-    for item in items:
-        product = item.product
-        if not product:
-            continue
-        product.stock = product.stock + item.quantity
+    if not demand:
+        return
+
+    for product in Product.objects.select_for_update().filter(product_id__in=list(demand)):
+        product.stock = product.stock + demand[product.product_id]
         product.save(update_fields=['stock'])
+
+    resync_bundle_stock(component_ids=demand.keys())
 
 
 # Submissions.status: 資料庫字串 <-> API 對外 integer

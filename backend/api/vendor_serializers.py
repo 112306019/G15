@@ -176,6 +176,48 @@ class VendorProductStatusSerializer(serializers.Serializer):
 
 
 # ──────────────────────────────────────────────
+# Vendor 組合商品
+# ──────────────────────────────────────────────
+
+class VendorBundleItemSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(min_value=1, max_value=99)
+
+
+class VendorBundleSaveSerializer(serializers.Serializer):
+    """建立 / 修改組合共用；修改時多帶 bundle_id"""
+
+    vendor_id = serializers.CharField()
+    bundle_id = serializers.IntegerField(required=False)
+    product_name = serializers.CharField(max_length=200)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    price = serializers.IntegerField(min_value=1)
+    category = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    image_url = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=500)
+    items = VendorBundleItemSerializer(many=True)
+
+    def validate_product_name(self, value):
+        return validate_ecpay_goods_name(value)
+
+    def validate_category(self, value):
+        if value and value not in PRODUCT_CATEGORY_CODES:
+            raise serializers.ValidationError("不是有效的商品分類")
+        return value
+
+    def validate_items(self, items):
+        product_ids = [item["product_id"] for item in items]
+
+        if len(product_ids) != len(set(product_ids)):
+            raise serializers.ValidationError("同一個商品請合併成一列，用數量表示")
+
+        # 組合至少要有兩種商品，或一種商品數量 2 以上，不然跟單品沒差別
+        if not items or (len(items) == 1 and items[0]["quantity"] < 2):
+            raise serializers.ValidationError("組合至少要有兩種商品，或單一商品數量 2 個以上")
+
+        return items
+
+
+# ──────────────────────────────────────────────
 # Vendor 任務 / Campaign 管理
 # ──────────────────────────────────────────────
 
@@ -227,6 +269,22 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         allow_null=True
+    )
+
+    # 制式推廣文案（給 KOC）
+    promo_copy = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=5000
+    )
+
+    # 選既有商品 / 組合時，順便更新該商品的商品簡介（Product.description）
+    product_description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=5000
     )
 
     budget = serializers.DecimalField(
@@ -363,6 +421,22 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         allow_null=True
+    )
+
+    # 制式推廣文案（給 KOC）
+    promo_copy = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=5000
+    )
+
+    # 選既有商品 / 組合時，順便更新該商品的商品簡介（Product.description）
+    product_description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=5000
     )
 
     budget = serializers.DecimalField(

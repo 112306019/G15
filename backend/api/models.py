@@ -142,6 +142,10 @@ class Campaigns(models.Model):
     # 累計人數達到上限時，前台要顯示「已額滿」，不能再申請。
     recruit_limit = models.IntegerField(null=True, blank=True, db_column='recruit_limit')
 
+    # 廠商提供給 KOC 的制式推廣文案（KOC 發文時可參考或直接引用）；
+    # 商品簡介則沿用 Product.description，跟商城商品頁同一份。
+    promo_copy = models.TextField(blank=True, default='', db_column='promo_copy')
+
     class Meta:
         db_table = 'Campaigns'
 
@@ -617,6 +621,11 @@ class Product(models.Model):
     category = models.CharField(max_length=100, blank=True, null=True)
     image_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=50)
+
+    # 組合商品：本身不記實體庫存，stock 是由組成商品換算出來的「可售組數」快取值
+    # （見 constants.resync_bundle_stock），組成內容記在 ProductBundleItem。
+    is_bundle = models.BooleanField(default=False, db_column='is_bundle')
+
     AD_CATEGORY_CHOICES = [
         ('food', '食品'),
         ('cosmetic', '化粧品'),
@@ -656,6 +665,39 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_name
+
+
+class ProductBundleItem(models.Model):
+    """
+    組合商品的組成明細：一列 = 組合裡的一種商品 + 需要幾個。
+    例：「防曬組」= 防曬乳 x2 + 卸妝油 x1 → 兩列。
+    """
+
+    bundle_item_id = models.AutoField(primary_key=True, db_column='bundle_item_id')
+
+    bundle = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        db_column='bundle_product_id',
+        related_name='bundle_items'
+    )
+
+    # PROTECT：被組合用到的商品不能直接刪掉，避免組合內容憑空少一項
+    component = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        db_column='component_product_id',
+        related_name='used_in_bundles'
+    )
+
+    quantity = models.PositiveIntegerField(default=1, db_column='quantity')
+
+    class Meta:
+        db_table = 'Product_Bundle_Item'
+        unique_together = ('bundle', 'component')
+
+    def __str__(self):
+        return f"Bundle {self.bundle_id}: {self.component_id} x{self.quantity}"
 
 
 class Cart(models.Model):
