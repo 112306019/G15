@@ -22,6 +22,7 @@ function formatTime(value) {
  * fetchMessages(conv)    → [{ message_id, sender_role, content, created_at }]（同時標記已讀）
  * sendMessage(conv, text)→ 新訊息物件
  * initialKey：從通知點進來時要直接打開的對話
+ * mineRole：自己這一方的 sender_role（廠商端 'vendor'，前台消費者 'user'），決定訊息靠右顯示
  */
 export default function ConversationPanel({
   fetchList,
@@ -32,6 +33,7 @@ export default function ConversationPanel({
   emptyListText = '目前沒有對話',
   emptyListHint = '',
   headerExtra = null,
+  mineRole = 'vendor',
 }) {
   const [conversations, setConversations] = useState([])
   const [listLoading, setListLoading] = useState(true)
@@ -256,7 +258,7 @@ export default function ConversationPanel({
                 <div className="py-12 text-center text-xs font-bold text-[#8C8880]">還沒有訊息</div>
               ) : (
                 messages.map(m => {
-                  const mine = m.sender_role === 'vendor'
+                  const mine = m.sender_role === mineRole
                   return (
                     <div key={m.message_id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
                       <div className="max-w-[75%]">

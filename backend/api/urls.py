@@ -333,6 +333,7 @@ urlpatterns = [
     # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
     path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),
     path('user/orderChat/sendMessage', order_chat.user_order_chat_send_message, name='user-order-chat-send-message'),
+    path('user/orderChat/list', order_chat.user_order_chat_list, name='user-order-chat-list'),
     path('vendor/orderChat/getMessages', order_chat.vendor_order_chat_get_messages, name='vendor-order-chat-get-messages'),
     path('vendor/orderChat/sendMessage', order_chat.vendor_order_chat_send_message, name='vendor-order-chat-send-message'),
     path('vendor/orderChat/list', order_chat.vendor_order_chat_list, name='vendor-order-chat-list'),
