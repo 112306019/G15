@@ -14,6 +14,27 @@ function formatTime(value) {
   })
 }
 
+// 商品詢問從商品頁發起時，訊息會附上商品（只顯示、不連結，廠商端點了不該跳到前台頁面）
+function MessageProduct({ product, mine }) {
+  if (!product) return null
+  return (
+    <div
+      className={cn(
+        'mb-2 flex items-center gap-2.5 rounded-xl p-2 pr-3 border',
+        mine ? 'bg-white/10 border-white/15' : 'bg-[#F8F9FA] border-[#E2DDD4]'
+      )}
+    >
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F0E8]">
+        {product.image_url && <img src={product.image_url} alt={product.product_name} className="h-full w-full object-cover" />}
+      </div>
+      <div className="min-w-0">
+        <div className={cn('text-[10px] font-bold', mine ? 'text-white/60' : 'text-[#8C8880]')}>詢問商品</div>
+        <div className="text-xs font-bold line-clamp-1">{product.product_name}</div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * 廠商統一聊天室的通用對話面板（「訂單訊息」「商品詢問」分頁共用）：
  * 左邊對話列表、右邊訊息與輸入框，跟其他聊天室一樣每 4 秒背景同步。
@@ -268,6 +289,7 @@ export default function ConversationPanel({
                             mine ? 'bg-[#1A1A18] text-white rounded-br-md' : 'bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-bl-md'
                           )}
                         >
+                          <MessageProduct product={m.product} mine={mine} />
                           {m.content}
                         </div>
                         <div className={cn('text-[10px] text-[#8C8880] mt-1', mine ? 'text-right' : 'text-left')}>
