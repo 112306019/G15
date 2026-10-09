@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Headset, Loader2, Send, Store, User, ArrowLeft } from 'lucide-react';
 
 import {
@@ -8,6 +8,7 @@ import {
   markAdminSupportRead,
 } from '../api/platform';
 import { getErrorMessage } from '../errorMessage';
+import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling';
 
 function formatTime(value) {
   if (!value) return '';
@@ -41,10 +42,25 @@ export default function AdminSupport() {
     setMessages([]);
   }, [participantType]);
 
-  async function loadRooms(type) {
+  // 背景輪詢比對新舊訊息時要讀最新的 state
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const selectedRoomIdRef = useRef(null);
+  selectedRoomIdRef.current = selectedRoom?.room_id ?? null;
+
+  // 準即時同步：打開的聊天室定時抓新訊息，聊天室列表同步最後一則訊息與未讀數
+  usePolling(async () => {
+    if (selectedRoom) await refreshSelectedRoom(selectedRoom.room_id);
+    await loadRooms(participantType, { silent: true });
+  }, CHAT_POLL_INTERVAL_MS);
+
+  // silent：背景輪詢用，不顯示載入中與錯誤
+  async function loadRooms(type, { silent = false } = {}) {
     try {
-      setRoomsLoading(true);
-      setRoomsError('');
+      if (!silent) {
+        setRoomsLoading(true);
+        setRoomsError('');
+      }
 
       const response = await getAdminSupportRooms(type);
 
@@ -54,11 +70,31 @@ export default function AdminSupport() {
 
       setRooms(response.data?.rooms || []);
     } catch (error) {
+      if (silent) return;
       setRoomsError(
         getErrorMessage(error, '聊天室列表載入失敗')
       );
     } finally {
-      setRoomsLoading(false);
+      if (!silent) setRoomsLoading(false);
+    }
+  }
+
+  // 背景抓目前打開的聊天室有沒有新訊息；有的話更新畫面並標記已讀
+  async function refreshSelectedRoom(roomId) {
+    try {
+      const response = await getAdminSupportMessages(roomId);
+      if (response.data?.success === false) return;
+      // 抓回來時使用者已經切到別的聊天室，就丟掉這次結果
+      if (selectedRoomIdRef.current !== roomId) return;
+      const nextMessages = response.data?.messages || [];
+      if (!hasNewMessages(messagesRef.current, nextMessages)) return;
+      setMessages(nextMessages);
+      await markAdminSupportRead(roomId);
+      setRooms((previous) =>
+        previous.map((r) => (r.room_id === roomId ? { ...r, unread_count: 0 } : r))
+      );
+    } catch {
+      // 背景更新失敗就等下一輪
     }
   }
 

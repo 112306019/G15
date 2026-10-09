@@ -26,6 +26,7 @@ import {
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
+import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
 
 const stageLabels = {
   pending: '等待開始',
@@ -166,16 +167,32 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeRoomId])
 
-  async function loadChatrooms() {
+  // 背景輪詢比對新舊訊息時要讀最新的 state
+  const messagesByRoomRef = useRef(messagesByRoom)
+  messagesByRoomRef.current = messagesByRoom
+
+  // 準即時同步：打開的聊天室定時抓新訊息，聊天室清單同步最後一則訊息與未讀數
+  usePolling(async () => {
+    if (activeRoomId) {
+      await loadMessages(activeRoomId, { silent: true })
+    }
+    await loadChatrooms({ silent: true })
+  }, CHAT_POLL_INTERVAL_MS, Boolean(vendorId))
+
+  // silent：背景輪詢用，不顯示載入中與錯誤、不改變目前選中的聊天室
+  async function loadChatrooms({ silent = false } = {}) {
     if (!vendorId) {
+      if (silent) return
       setError('尚未登入廠商帳號')
       setRoomLoading(false)
       return
     }
 
     try {
-      setRoomLoading(true)
-      setError('')
+      if (!silent) {
+        setRoomLoading(true)
+        setError('')
+      }
 
       const response = await getVendorChatrooms(vendorId)
 
@@ -201,6 +218,8 @@ export default function Chat() {
 
       setRooms(mappedRooms)
 
+      if (silent) return
+
       const selectedRoomStillExists = mappedRooms.some(
         room => room.roomId === activeRoomId
       )
@@ -217,21 +236,25 @@ export default function Chat() {
         setActiveRoomId(null)
       }
     } catch (requestError) {
+      if (silent) return
       console.error('聊天室清單載入失敗：', requestError)
       setError(
         getErrorMessage(requestError, '聊天室清單載入失敗')
       )
     } finally {
-      setRoomLoading(false)
+      if (!silent) setRoomLoading(false)
     }
   }
 
-  async function loadMessages(roomId) {
+  // silent：背景輪詢用，不顯示載入中與錯誤；沒有新訊息就不更新畫面、不重複標記已讀
+  async function loadMessages(roomId, { silent = false } = {}) {
     if (!vendorId || !roomId) return
 
     try {
-      setMessageLoading(true)
-      setMessageError('')
+      if (!silent) {
+        setMessageLoading(true)
+        setMessageError('')
+      }
 
       const response = await getVendorChatMessages(vendorId, roomId)
 
@@ -249,6 +272,15 @@ export default function Chat() {
         isRead: Boolean(message.is_read),
         createdAt: message.created_at
       }))
+
+      if (silent) {
+        const current = messagesByRoomRef.current[roomId] || []
+        const unchanged =
+          current.length === mappedMessages.length &&
+          current[current.length - 1]?.messageId ===
+            mappedMessages[mappedMessages.length - 1]?.messageId
+        if (unchanged) return
+      }
 
       setMessagesByRoom(previous => ({
         ...previous,
@@ -278,12 +310,13 @@ export default function Chat() {
 
       await markRoomRead(roomId)
     } catch (requestError) {
+      if (silent) return
       console.error('聊天室訊息載入失敗：', requestError)
       setMessageError(
         getErrorMessage(requestError, '聊天室訊息載入失敗')
       )
     } finally {
-      setMessageLoading(false)
+      if (!silent) setMessageLoading(false)
     }
   }
 

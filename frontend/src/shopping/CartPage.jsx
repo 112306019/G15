@@ -88,9 +88,15 @@ export default function CartPage({
   useEffect(() => {
     const fetchCart = async () => {
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/consumer/cart/view?User_id=${userId}`,
-        );
+        // 購物車與收藏清單一起載入，愛心才會反映實際的收藏狀態；
+        // 收藏清單讀不到時不影響購物車本身，愛心先全部顯示未收藏
+        const [res, wishedProductIds] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/consumer/cart/view?User_id=${userId}`),
+          fetch(`${API_BASE_URL}/api/consumer/wishlist/view?User_id=${userId}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((list) => new Set((Array.isArray(list) ? list : []).map((w) => String(w.Product_id))))
+            .catch(() => new Set()),
+        ]);
         const data = await res.json();
         if (data.Cart_id) {
           const mapped = (data.items || []).map((item, i) => ({
@@ -100,7 +106,7 @@ export default function CartPage({
             name: item.product_name || `商品 ${item.Product_id}`,
             price: parseFloat(item.Unit_price),
             qty: item.Quantity,
-            wish: false,
+            wish: wishedProductIds.has(String(item.Product_id)),
             removing: false,
             gradient: GRADIENTS[i % GRADIENTS.length],
             vendorId: item.Vendor_id || "",
@@ -221,7 +227,7 @@ export default function CartPage({
 
     if (!item.wish) {
       try {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -231,13 +237,14 @@ export default function CartPage({
             Product_id: item.productId,
           }),
         });
+        if (!res.ok) throw new Error(`wishlist add failed: ${res.status}`);
         setItems((prev) => prev.map((it) => (it.id === id ? { ...it, wish: true } : it)));
       } catch (err) {
         console.error("加入收藏失敗", err);
       }
     } else {
       try {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
@@ -247,6 +254,7 @@ export default function CartPage({
             Product_id: item.productId,
           }),
         });
+        if (!res.ok) throw new Error(`wishlist delete failed: ${res.status}`);
         setItems((prev) => prev.map((it) => (it.id === id ? { ...it, wish: false } : it)));
       } catch (err) {
         console.error("移除收藏失敗", err);
