@@ -16,6 +16,7 @@ from api.views.constants import (
     STAGE_ALLOWED_SUBMISSION_TYPE,
     sync_expired_promoting_missions,
     restore_order_stock,
+    resync_bundle_stock,
     SUBMISSION_REMINDER_DAYS,
     KOC_COMMISSION_RATE_PERCENT,
     VENDOR_SETTLEMENT_RATE_PERCENT,
@@ -26,7 +27,7 @@ from api.models import (
     Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
-    VendorInvoice,
+    VendorInvoice, ProductBundleItem,
 )
 from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from api.notifications import create_notification
@@ -40,6 +41,7 @@ from api.vendor_serializers import (
     VendorProductCreateSerializer,
     VendorProductUpdateSerializer,
     VendorProductStatusSerializer,
+    VendorBundleSaveSerializer,
     VendorCampaignCreateSerializer,
     VendorCampaignUpdateSerializer,
     VendorApplicationReviewSerializer,
@@ -442,6 +444,13 @@ def vendor_product_update(request):
             "err": "Product not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
+    # 組合商品的庫存是算出來的，不能從一般商品編輯直接改
+    if product.is_bundle:
+        return Response({
+            "success": False,
+            "err": "組合商品請到「組合商品」頁面修改"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     serializer = VendorProductUpdateSerializer(
         product,
         data=request.data,
@@ -455,6 +464,9 @@ def vendor_product_update(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     serializer.save()
+
+    # 單品庫存變了，用到它的組合可售組數也要跟著更新
+    resync_bundle_stock(component_ids=[product.product_id])
 
     return Response({
         "success": True,
@@ -498,6 +510,10 @@ def vendor_product_update_status(request):
 
     product.status = new_status
     product.save()
+
+    # 組成商品下架時，用到它的組合可售組數會變 0；重新上架再算回來
+    if not product.is_bundle:
+        resync_bundle_stock(component_ids=[product.product_id])
 
     return Response({
         "success": True,
@@ -551,6 +567,15 @@ def vendor_product_delete(request):
             "err": "此商品已綁定活動，無法刪除；請改為下架商品"
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    # 被組合商品用到，不允許刪除（組合內容會憑空少一項）
+    if ProductBundleItem.objects.filter(
+        component=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已被組合商品使用，請先從組合中移除，或改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     # 已有訂單紀錄，不允許刪除
     if OrderItem.objects.filter(
         product=product
@@ -579,6 +604,8 @@ def vendor_product_getlist(request):
     """
     vendor_id = request.GET.get("vendor_id")
     product_status = request.GET.get("status")
+    # 預設只列一般商品；組合商品有自己的頁面（/vendor/bundle/getlist）
+    include_bundles = request.GET.get("include_bundles") in ("1", "true", "True")
 
     if not vendor_id:
         return Response({
@@ -587,6 +614,9 @@ def vendor_product_getlist(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     products = Product.objects.filter(vendor_id=vendor_id)
+
+    if not include_bundles:
+        products = products.filter(is_bundle=False)
 
     if product_status:
         products = products.filter(status=product_status)
@@ -630,31 +660,7 @@ def vendor_product_getlist(request):
         .values_list("product_id", flat=True)
     )
 
-    # 目前或之後會佔用該商品的所有已發佈活動（依開始日排序），
-    # 給建立活動精靈判斷「選的日期是否跟既有活動重疊」用。
-    bound_campaign_map = {}
-
-    for campaign_product in (
-        CampaignProduct.objects
-        .filter(product__vendor_id=vendor_id)
-        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
-        .select_related("campaign")
-    ):
-        campaign = campaign_product.campaign
-        occupied_until = _campaign_occupied_until(campaign)
-
-        if occupied_until < now:
-            continue
-
-        bound_campaign_map.setdefault(campaign_product.product_id, []).append({
-            "campaign_id": str(campaign.campaign_id),
-            "name": campaign.name,
-            "start_date": timezone.localtime(campaign.start_date).date().isoformat(),
-            "occupied_until": timezone.localtime(occupied_until).date().isoformat(),
-        })
-
-    for bound_list in bound_campaign_map.values():
-        bound_list.sort(key=lambda item: item["start_date"])
+    bound_campaign_map = _bound_campaigns_by_product(vendor_id)
 
     product_list = []
 
@@ -676,6 +682,7 @@ def vendor_product_getlist(request):
             "total_sales": int(sold_info["total_sales"]),
             "is_promoting": product.product_id in promoting_product_ids,
             "bound_campaigns": bound_campaign_map.get(product.product_id, []),
+            "is_bundle": product.is_bundle,
             "category": product.category,
             "status": product.status,
         })
@@ -754,6 +761,453 @@ def product_campaign_conflict_message(campaign):
         f"（{start} ~ {occupied_until}），"
         f"同一商品同一時間只能參加一個活動，請調整活動日期或改選其他商品"
     )
+
+
+def _bound_campaigns_by_product(vendor_id):
+    """
+    {product_id: [目前或之後會佔用該商品的已發佈活動（依開始日排序）]}
+    給建立活動精靈判斷「選的日期是否跟既有活動重疊」用，一般商品與組合商品共用。
+    """
+    now = timezone.now()
+    bound_campaign_map = {}
+
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(product__vendor_id=vendor_id)
+        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
+        .select_related("campaign")
+    ):
+        campaign = campaign_product.campaign
+        occupied_until = _campaign_occupied_until(campaign)
+
+        if occupied_until < now:
+            continue
+
+        bound_campaign_map.setdefault(campaign_product.product_id, []).append({
+            "campaign_id": str(campaign.campaign_id),
+            "name": campaign.name,
+            "start_date": timezone.localtime(campaign.start_date).date().isoformat(),
+            "occupied_until": timezone.localtime(occupied_until).date().isoformat(),
+        })
+
+    for bound_list in bound_campaign_map.values():
+        bound_list.sort(key=lambda item: item["start_date"])
+
+    return bound_campaign_map
+
+
+# ──────────────────────────────────────────────
+# Vendor 組合商品（例：A 商品 x2 + B 商品 x1）
+# ──────────────────────────────────────────────
+#
+# 組合本身是一筆 Product（is_bundle=True），所以購物車、訂單、活動綁定、優惠碼、
+# 月結、「一個商品一次只能綁一個活動」都直接沿用一般商品的流程。
+# 組成內容記在 ProductBundleItem；庫存規則見 constants.py「庫存（含組合商品）」。
+
+
+def _apply_product_description(product, data):
+    """活動精靈裡改了既有商品 / 組合的商品簡介時，寫回 Product.description（商城商品頁同一份）"""
+    description = data.get("product_description")
+
+    if description is None:
+        return
+
+    description = description.strip()
+
+    if description != (product.description or ""):
+        product.description = description
+        product.save(update_fields=["description"])
+
+
+def _bundle_contents_map(product_ids):
+    """{bundle_id: [(組成商品 Product, 每組數量)]}，給訂單明細展開組合內容用"""
+    contents = {}
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=list(set(product_ids)))
+        .select_related("component")
+        .order_by("bundle_item_id")
+    ):
+        contents.setdefault(bundle_item.bundle_id, []).append(
+            (bundle_item.component, bundle_item.quantity)
+        )
+    return contents
+
+
+def _order_item_bundle_contents(order_item, bundle_map):
+    """
+    訂單品項若是組合，回傳出貨時要裝的內容（數量已乘上購買組數）：
+    買 2 組「防曬乳 x2 + 卸妝油 x1」→ 防曬乳 x4、卸妝油 x2
+    """
+    if not order_item.product.is_bundle:
+        return []
+    return [
+        {
+            "product_id": component.product_id,
+            "product_name": component.product_name,
+            "quantity_per_bundle": per_bundle,
+            "quantity": per_bundle * order_item.quantity,
+        }
+        for component, per_bundle in bundle_map.get(order_item.product_id, [])
+    ]
+
+
+def _validate_bundle_components(vendor_id, items):
+    """
+    確認組成商品都是這個廠商的一般商品（不能放別人的商品，也不能組合裡再放組合）。
+    回傳 (錯誤訊息 or None, {product_id: Product})
+    """
+    product_ids = [item["product_id"] for item in items]
+
+    components = {
+        product.product_id: product
+        for product in Product.objects.filter(
+            product_id__in=product_ids,
+            vendor_id=vendor_id,
+            is_bundle=False
+        )
+    }
+
+    if len(components) != len(product_ids):
+        return "組合只能選擇自己商品庫中的一般商品（不能放入其他組合）", components
+
+    return None, components
+
+
+def _bundle_return_policy(components):
+    """組成商品只要有一個不適用七天鑑賞期，整組就不適用，原因沿用該商品的原因。"""
+    for product in components:
+        if not product.is_returnable:
+            return False, product.non_returnable_reason
+    return True, None
+
+
+def _bundle_ad_category(components):
+    """組成商品廣告類別都一樣就沿用，不一樣就歸類為 other。"""
+    categories = {product.ad_category for product in components}
+    return categories.pop() if len(categories) == 1 else "other"
+
+
+def _serialize_bundle(bundle, bundle_items, bound_campaign_map, sold_info, has_orders):
+    items = [
+        {
+            "product_id": bundle_item.component.product_id,
+            "product_name": bundle_item.component.product_name,
+            "price": bundle_item.component.price,
+            "stock": bundle_item.component.stock,
+            "status": bundle_item.component.status,
+            "image_url": bundle_item.component.image_url,
+            "quantity": bundle_item.quantity,
+        }
+        for bundle_item in bundle_items
+    ]
+
+    return {
+        "bundle_id": bundle.product_id,
+        "product_id": bundle.product_id,
+        "product_name": bundle.product_name,
+        "description": bundle.description,
+        "price": bundle.price,
+        "discounted_price": bundle.discounted_price,
+        "image_url": bundle.image_url,
+        "category": bundle.category,
+        "status": bundle.status,
+        "is_bundle": True,
+        # 可售組數（由組成商品庫存換算）
+        "stock": bundle.stock,
+        "items": items,
+        "items_total_price": sum(item["price"] * item["quantity"] for item in items),
+        # 已有訂單的組合不能再改組成內容，否則舊訂單取消時會加回錯的庫存
+        "items_locked": has_orders,
+        "quantity_sold": sold_info["quantity_sold"],
+        "total_sales": int(sold_info["total_sales"]),
+        "bound_campaigns": bound_campaign_map.get(bundle.product_id, []),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_bundle_getlist(request):
+    """
+    組合商品清單
+    URL: /vendor/bundle/getlist?vendor_id=&status=
+    """
+    vendor_id = request.GET.get("vendor_id")
+    bundle_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    bundles = Product.objects.filter(vendor_id=vendor_id, is_bundle=True).order_by("-product_id")
+
+    if bundle_status:
+        bundles = bundles.filter(status=bundle_status)
+
+    bundles = list(bundles)
+    bundle_ids = [bundle.product_id for bundle in bundles]
+
+    items_by_bundle = {}
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=bundle_ids)
+        .select_related("component")
+        .order_by("bundle_item_id")
+    ):
+        items_by_bundle.setdefault(bundle_item.bundle_id, []).append(bundle_item)
+
+    ordered_bundle_ids = set(
+        OrderItem.objects
+        .filter(product_id__in=bundle_ids)
+        .values_list("product_id", flat=True)
+    )
+
+    sold_map = {
+        row["product_id"]: {
+            "quantity_sold": row["quantity_sold"] or 0,
+            "total_sales": row["total_sales"] or 0,
+        }
+        for row in (
+            OrderItem.objects
+            .filter(
+                product_id__in=bundle_ids,
+                order__payment_status__in=["paid", "completed"]
+            )
+            .values("product_id")
+            .annotate(quantity_sold=Sum("quantity"), total_sales=Sum("subtotal"))
+        )
+    }
+
+    bound_campaign_map = _bound_campaigns_by_product(vendor_id)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundles": [
+            _serialize_bundle(
+                bundle,
+                items_by_bundle.get(bundle.product_id, []),
+                bound_campaign_map,
+                sold_map.get(bundle.product_id, {"quantity_sold": 0, "total_sales": 0}),
+                bundle.product_id in ordered_bundle_ids,
+            )
+            for bundle in bundles
+        ]
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_create(request):
+    """
+    建立組合商品
+    URL: /vendor/bundle/create
+    body: { vendor_id, product_name, description, price, category, image_url,
+            items: [{ product_id, quantity }, ...] }
+    """
+    serializer = VendorBundleSaveSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    vendor_id = data["vendor_id"]
+
+    if not Vendor.objects.filter(vendor_id=vendor_id).exists():
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    err, components = _validate_bundle_components(vendor_id, data["items"])
+    if err:
+        return Response({"success": False, "err": err}, status=status.HTTP_400_BAD_REQUEST)
+
+    is_returnable, non_returnable_reason = _bundle_return_policy(components.values())
+
+    try:
+        with transaction.atomic():
+            bundle = Product.objects.create(
+                vendor_id=vendor_id,
+                product_name=data["product_name"],
+                description=data.get("description") or "",
+                price=data["price"],
+                discounted_price=None,
+                stock=0,
+                category=data.get("category") or None,
+                image_url=data.get("image_url") or None,
+                status="active",
+                is_bundle=True,
+                ad_category=_bundle_ad_category(components.values()),
+                is_returnable=is_returnable,
+                non_returnable_reason=non_returnable_reason,
+            )
+
+            ProductBundleItem.objects.bulk_create([
+                ProductBundleItem(
+                    bundle=bundle,
+                    component=components[item["product_id"]],
+                    quantity=item["quantity"],
+                )
+                for item in data["items"]
+            ])
+
+            resync_bundle_stock(bundle_ids=[bundle.product_id])
+
+    except Exception:
+        return Response({
+            "success": False,
+            "err": internal_error_message("組合商品建立失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": bundle.product_id,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_update(request):
+    """
+    修改組合商品（名稱、價格、說明、圖片、組成內容）
+    URL: /vendor/bundle/update
+    已有訂單的組合只能改名稱/價格/說明/圖片，組成內容不能改。
+    """
+    serializer = VendorBundleSaveSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    vendor_id = data["vendor_id"]
+    bundle_id = data.get("bundle_id")
+
+    if not bundle_id:
+        return Response({
+            "success": False,
+            "err": "bundle_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        bundle = Product.objects.get(product_id=bundle_id, vendor_id=vendor_id, is_bundle=True)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到這個組合商品"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    err, components = _validate_bundle_components(vendor_id, data["items"])
+    if err:
+        return Response({"success": False, "err": err}, status=status.HTTP_400_BAD_REQUEST)
+
+    current_items = {
+        bundle_item.component_id: bundle_item.quantity
+        for bundle_item in ProductBundleItem.objects.filter(bundle=bundle)
+    }
+    new_items = {item["product_id"]: item["quantity"] for item in data["items"]}
+    items_changed = current_items != new_items
+
+    if items_changed and OrderItem.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已有訂單，組成內容不能再修改（名稱、價格、說明、圖片可以改）；要換內容請另建新組合"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    is_returnable, non_returnable_reason = _bundle_return_policy(components.values())
+
+    try:
+        with transaction.atomic():
+            bundle.product_name = data["product_name"]
+            bundle.description = data.get("description") or ""
+            bundle.price = data["price"]
+            bundle.category = data.get("category") or None
+            bundle.image_url = data.get("image_url") or None
+            bundle.ad_category = _bundle_ad_category(components.values())
+            bundle.is_returnable = is_returnable
+            bundle.non_returnable_reason = non_returnable_reason
+            bundle.save()
+
+            if items_changed:
+                ProductBundleItem.objects.filter(bundle=bundle).delete()
+                ProductBundleItem.objects.bulk_create([
+                    ProductBundleItem(
+                        bundle=bundle,
+                        component=components[item["product_id"]],
+                        quantity=item["quantity"],
+                    )
+                    for item in data["items"]
+                ])
+
+            resync_bundle_stock(bundle_ids=[bundle.product_id])
+
+    except Exception:
+        return Response({
+            "success": False,
+            "err": internal_error_message("組合商品更新失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": bundle.product_id,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_delete(request):
+    """
+    刪除組合商品（規則同一般商品：沒綁活動、沒訂單才能刪；否則請下架）
+    URL: /vendor/bundle/delete
+    上架 / 下架沿用 /vendor/product/updateStatus。
+    """
+    vendor_id = request.data.get("vendor_id")
+    bundle_id = request.data.get("bundle_id")
+
+    if not vendor_id or not bundle_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id 與 bundle_id 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        bundle = Product.objects.get(product_id=bundle_id, vendor_id=vendor_id, is_bundle=True)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到這個組合商品"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if CampaignProduct.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已綁定活動，無法刪除；請改為下架"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if OrderItem.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已有訂單紀錄，無法刪除；請改為下架"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ProductBundleItem.bundle 是 CASCADE，組成明細會一起刪掉
+    bundle.delete()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": int(bundle_id),
+    }, status=status.HTTP_200_OK)
 
 
 # ──────────────────────────────────────────────
@@ -879,6 +1333,8 @@ def vendor_campaign_create(request):
                         "err": product_campaign_conflict_message(conflict)
                     }, status=status.HTTP_400_BAD_REQUEST)
 
+                _apply_product_description(product, data)
+
             # 新商品現在才寫入資料庫
             else:
                 product = Product.objects.create(
@@ -908,6 +1364,7 @@ def vendor_campaign_create(request):
                 vendor=vendor,
                 name=data["name"],
                 description=data.get("description", ""),
+                promo_copy=(data.get("promo_copy") or "").strip(),
                 budget=data["budget"],
                 reward_type=data.get(
                     "reward_type",
@@ -1106,6 +1563,8 @@ def vendor_campaign_update(request):
                             "success": False,
                             "err": product_campaign_conflict_message(conflict)
                         }, status=status.HTTP_400_BAD_REQUEST)
+
+                _apply_product_description(product, data)
             else:
                 product = Product.objects.create(
                     vendor_id=vendor_id,
@@ -1135,6 +1594,7 @@ def vendor_campaign_update(request):
                 "description",
                 ""
             )
+            campaign.promo_copy = (data.get("promo_copy") or "").strip()
             campaign.budget = data["budget"]
             campaign.reward_type = data.get(
                 "reward_type",
@@ -1294,6 +1754,7 @@ def vendor_campaign_getlist(request):
                 "category": product.category,
                 "image_url": product.image_url,
                 "status": product.status,
+                "is_bundle": product.is_bundle,
 
                 "discount_type": campaign_product.discount_type,
                 "discount_value": str(
@@ -1307,6 +1768,7 @@ def vendor_campaign_getlist(request):
             "vendor_id": campaign.vendor_id,
             "name": campaign.name,
             "description": campaign.description,
+            "promo_copy": campaign.promo_copy,
             "budget": str(campaign.budget),
             "reward_type": campaign.reward_type,
             "promo_days": campaign.promo_days,
@@ -2054,6 +2516,8 @@ def vendor_order_getlist(request):
         )
     }
 
+    bundle_map = _bundle_contents_map([item.product_id for item in order_items])
+
     order_map = {}
 
     for item in order_items:
@@ -2117,7 +2581,9 @@ def vendor_order_getlist(request):
             "quantity": item.quantity,
             "unit_price": str(item.unit_price),
             "subtotal": str(item.subtotal),
-            "apply_status": item.apply_status
+            "apply_status": item.apply_status,
+            "is_bundle": item.product.is_bundle,
+            "bundle_items": _order_item_bundle_contents(item, bundle_map),
         })
 
     return Response({
@@ -2452,6 +2918,8 @@ def vendor_order_get_detail(request):
             "shipping_status": shipment.shipping_status,
         }
 
+    bundle_map = _bundle_contents_map([item.product_id for item in order_items])
+
     items = []
 
     for item in order_items:
@@ -2462,7 +2930,9 @@ def vendor_order_get_detail(request):
             "quantity": item.quantity,
             "unit_price": str(item.unit_price),
             "subtotal": str(item.subtotal),
-            "apply_status": item.apply_status
+            "apply_status": item.apply_status,
+            "is_bundle": item.product.is_bundle,
+            "bundle_items": _order_item_bundle_contents(item, bundle_map),
         })
 
     # 舊版 Payment model 只有走過綠界前的模擬結帳流程才會有紀錄，改成一律從

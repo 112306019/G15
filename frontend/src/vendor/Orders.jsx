@@ -283,12 +283,35 @@ function OrderDetailModal({
                     className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 sm:gap-4 px-4 sm:px-6 py-4 sm:py-5 items-start sm:items-center"
                   >
                     <div>
-                      <div className="text-sm font-bold text-[#1A1A18]">
+                      <div className="text-sm font-bold text-[#1A1A18] flex items-center gap-1.5 flex-wrap">
+                        {item.isBundle && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F5F0E8] text-[#1A1A18]">
+                            組合
+                          </span>
+                        )}
                         {item.productName}
                       </div>
                       <div className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
                         商品編號：{item.productId}
                       </div>
+                      {item.isBundle && item.bundleItems?.length > 0 && (
+                        <div className="mt-2 rounded-lg border border-dashed border-[#E2DDD4] bg-[#F8F9FA] px-3 py-2">
+                          <div className="text-[10px] font-bold text-[#8C8880] mb-1">
+                            出貨內容（{item.quantity} 組合計）
+                          </div>
+                          <ul className="space-y-0.5">
+                            {item.bundleItems.map(component => (
+                              <li
+                                key={component.productId}
+                                className="text-xs text-[#1A1A18] flex justify-between gap-3"
+                              >
+                                <span>{component.productName}</span>
+                                <span className="font-bold">x{component.quantity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-xs sm:text-sm text-[#8C8880] flex justify-between sm:block mt-1 sm:mt-0">
@@ -777,7 +800,10 @@ const VENDOR_REJECT_REASON_OPTIONS = [
   { value: 'other', label: '其他' }
 ]
 
-function ReturnManagementPanel({ vendorId }) {
+// 需要廠商動作的退貨狀態：待審核、待確認收貨、待退款
+const RETURN_PENDING_STATUSES = ['requested', 'approved', 'returning', 'received']
+
+function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
   const { toast } = useToast()
   const confirm = useConfirm()
   const [returns, setReturns] = useState([])
@@ -1060,6 +1086,13 @@ function ReturnManagementPanel({ vendorId }) {
   }
 
   const activeReturns = returns.filter(item => item.status !== 'cancelled')
+
+  // 回報待處理筆數給上層，顯示在「退貨退款」頁籤的紅點
+  useEffect(() => {
+    onPendingCountChange?.(
+      returns.filter(item => RETURN_PENDING_STATUSES.includes(item.status)).length
+    )
+  }, [returns, onPendingCountChange])
 
   return (
     <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
@@ -1406,6 +1439,9 @@ export default function Orders() {
   const vendorId = localStorage.getItem('vendor_id')
 
   const [orders, setOrders] = useState([])
+  // 頁面上方分頁：訂單 / 退貨退款（退貨不再固定擋在訂單列表上面）
+  const [pageTab, setPageTab] = useState('orders')
+  const [pendingReturnCount, setPendingReturnCount] = useState(0)
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1491,6 +1527,12 @@ export default function Orders() {
               orderItemId: item.order_item_id,
               productId: item.product_id,
               productName: item.product_name,
+              isBundle: Boolean(item.is_bundle),
+              bundleItems: (item.bundle_items || []).map(component => ({
+                productId: component.product_id,
+                productName: component.product_name,
+                quantity: Number(component.quantity || 0)
+              })),
               quantity: Number(item.quantity || 0),
               unitPrice: Number(item.unit_price || 0),
               subtotal: Number(item.subtotal || 0),
@@ -1598,6 +1640,12 @@ export default function Orders() {
           orderItemId: item.order_item_id,
           productId: item.product_id,
           productName: item.product_name,
+          isBundle: Boolean(item.is_bundle),
+          bundleItems: (item.bundle_items || []).map(component => ({
+            productId: component.product_id,
+            productName: component.product_name,
+            quantity: Number(component.quantity || 0)
+          })),
           quantity: Number(item.quantity || 0),
           unitPrice: Number(item.unit_price || 0),
           subtotal: Number(item.subtotal || 0),
@@ -2006,7 +2054,52 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
-      <ReturnManagementPanel vendorId={vendorId} />
+      <div className="flex items-center gap-1 border-b border-[#E2DDD4]">
+        {[
+          { key: 'orders', label: '訂單' },
+          { key: 'returns', label: '退貨退款' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setPageTab(tab.key)}
+            className={cn(
+              'relative inline-flex items-center gap-2 px-4 sm:px-5 py-3 text-sm sm:text-base font-bold transition-colors -mb-px border-b-2',
+              pageTab === tab.key
+                ? 'border-[#1A1A18] text-[#1A1A18]'
+                : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+            )}
+          >
+            {tab.label}
+            {tab.key === 'returns' && pendingReturnCount > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#C8522A] text-white text-[11px] font-bold inline-flex items-center justify-center">
+                {pendingReturnCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* 用 hidden 切換而不是卸載，這樣停在「訂單」分頁時退貨待處理數仍會更新 */}
+      <div className={pageTab === 'returns' ? '' : 'hidden'}>
+        <ReturnManagementPanel
+          vendorId={vendorId}
+          onPendingCountChange={setPendingReturnCount}
+        />
+      </div>
+
+      {pageTab === 'orders' && pendingReturnCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setPageTab('returns')}
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-[#C8522A]/30 bg-[#FDF0ED] px-4 py-2.5 text-xs sm:text-sm font-bold text-[#C8522A] hover:bg-[#FBE4DD] transition-colors"
+        >
+          <span>有 {pendingReturnCount} 筆退貨退款等待處理</span>
+          <span className="inline-flex items-center gap-1">前往處理<ChevronRight size={14} /></span>
+        </button>
+      )}
+
+      <div className={pageTab === 'orders' ? 'space-y-6 sm:space-y-8' : 'hidden'}>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
         {/* 手機版橫向滾動頁籤 */}
@@ -2126,7 +2219,7 @@ export default function Orders() {
               {filteredOrders.length > 0 ? (
                 filteredOrders.map(order => {
                   const productSummary = order.items
-                    .map(item => item.productName)
+                    .map(item => (item.isBundle ? `［組合］${item.productName}` : item.productName))
                     .join('、')
 
                   return (
@@ -2309,6 +2402,7 @@ export default function Orders() {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
 
       <OrderDetailModal

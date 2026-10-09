@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react'
 import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List, AlertCircle } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
-import { getVendorProducts, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
+import { getVendorProducts, getVendorBundles, createVendorBundle, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
 import { formatApiError, getErrorMessage } from '../errorMessage';
@@ -118,7 +118,14 @@ function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }) {
 const STEPS = ['任務與時程', '推廣商品', '分潤與折扣', '確認發佈']
 
 // ─── 發佈任務精靈 ────────────────────────────────────────────────────────
-function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts }) {
+// 組合內容的一列：商品 + 數量
+const newBundleRow = () => ({
+  key: `${Date.now()}-${Math.random()}`,
+  productId: '',
+  quantity: '1'
+})
+
+function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts, existingBundles = [], onBundleCreated }) {
   const { toast } = useToast()
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
@@ -129,6 +136,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     id: '',
     name: '',
     description: '',
+    promoCopy: '',
     budget: '',
 
     startDate: getTodayString(),
@@ -158,8 +166,32 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     gmv: 0
   }
   const [form, setForm] = useState(defaultForm)
+  // 「組合商品」分頁直接在這裡搭配新組合（不另外開管理頁）
+  const [bundleRows, setBundleRows] = useState([newBundleRow(), newBundleRow()])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const copyFileInputRef = useRef(null)
+
+  // 推廣文案：從 .txt 匯入（直接讀檔內容填進文字框，不經過後端）
+  const handleImportCopy = event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (file.size > 100 * 1024) {
+      toast.error('檔案太大，請上傳 100KB 以內的純文字檔')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = String(reader.result || '').replace(/\r\n/g, '\n').slice(0, 5000)
+      setForm(previous => ({ ...previous, promoCopy: text }))
+      toast.success('已匯入推廣文案')
+    }
+    reader.onerror = () => toast.error('檔案讀取失敗')
+    reader.readAsText(file, 'utf-8')
+  }
   const [categoryOptions, setCategoryOptions] = useState([])
 
   useEffect(() => {
@@ -207,11 +239,16 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     if (open) {
       if (initialData) {
         setForm(initialData)
-        setProdMode(initialData.prodId ? 'existing' : (initialData.prodName ? 'new' : 'existing'))
+        setProdMode(
+          initialData.isBundle
+            ? 'bundle'
+            : initialData.prodId ? 'existing' : (initialData.prodName ? 'new' : 'existing')
+        )
       } else {
         setForm(defaultForm)
         setProdMode('existing')
       }
+      setBundleRows([newBundleRow(), newBundleRow()])
       setStep(0)
     }
   }, [open, initialData])
@@ -261,9 +298,13 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     bound.start_date <= form.recruitEndDate &&
     form.startDate <= bound.occupied_until
 
+  // 「選擇庫存商品」與「選擇組合商品」共用同一套選取 / 衝突檢查邏輯，只是清單不同
+  const selectableProducts =
+    prodMode === 'bundle' ? existingBundles : existingProducts
+
   const selectedExistingProduct =
-    prodMode === 'existing'
-      ? existingProducts.find(
+    prodMode !== 'new'
+      ? selectableProducts.find(
           product => String(product.product_id) === String(form.prodId)
         )
       : null
@@ -275,8 +316,109 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
   const hasScheduleConflict = conflictingCampaigns.length > 0
 
+  // ── 組合商品：沒選既有組合 = 在這裡搭配新組合 ──
+  const isNewBundle = prodMode === 'bundle' && !form.prodId
+
+  const singleProductById = Object.fromEntries(
+    existingProducts.map(product => [String(product.product_id), product])
+  )
+
+  const filledBundleRows = bundleRows.filter(row => row.productId)
+
+  const bundleItemsTotal = filledBundleRows.reduce((sum, row) => {
+    const product = singleProductById[row.productId]
+    return sum + (product ? product.price * (Number(row.quantity) || 0) : 0)
+  }, 0)
+
+  const bundleAvailableSets = filledBundleRows.length === 0
+    ? 0
+    : Math.min(...filledBundleRows.map(row => {
+        const product = singleProductById[row.productId]
+        const quantity = Number(row.quantity) || 0
+        if (!product || quantity <= 0 || product.status !== 'active') return 0
+        return Math.floor(product.stock / quantity)
+      }))
+
+  // 規則與後端 VendorBundleSaveSerializer 相同
+  const bundleError = (() => {
+    if (!isNewBundle) return ''
+    if (bundleRows.length === 0) return '請至少加入一個商品'
+    if (bundleRows.some(row => !row.productId)) return '還有商品欄位沒選'
+    if (bundleRows.some(row => !(Number(row.quantity) >= 1))) return '每個商品數量至少 1 個'
+    const ids = bundleRows.map(row => row.productId)
+    if (new Set(ids).size !== ids.length) return '同一個商品請合併成一列，用數量表示'
+    if (bundleRows.length === 1 && Number(bundleRows[0].quantity) < 2) return '組合至少要有兩種商品，或單一商品數量 2 個以上'
+    if (!form.prodName.trim()) return '請輸入組合名稱'
+    if (!(Number(form.prodPrice) > 0)) return '請輸入組合售價'
+    return ''
+  })()
+
+  const bundleFallbackImage = filledBundleRows
+    .map(row => singleProductById[row.productId]?.image_url)
+    .find(Boolean) || ''
+
+  const bundleImageUrl = form.prodImageUrl || bundleFallbackImage
+
+  const updateBundleRow = (key, patch) =>
+    setBundleRows(rows => rows.map(row => (row.key === key ? { ...row, ...patch } : row)))
+
+  // 新組合在送出活動前才真正建立；建立後把 id 記回表單，重送時不會重複建立。
+  // 組合內容不完整時回傳 null，呼叫端直接中止。
+  const ensureBundleProductId = async () => {
+    if (!isNewBundle) return form.prodId
+
+    if (bundleError) {
+      toast.error(bundleError)
+      return null
+    }
+
+
+    const response = await createVendorBundle({
+      vendor_id: localStorage.getItem('vendor_id'),
+      product_name: form.prodName.trim(),
+      price: Number(form.prodPrice),
+      description: form.prodDescription.trim(),
+      category: '',
+      // 有另外上傳就用上傳的，沒有就用第一個有圖的組成商品
+      image_url: bundleImageUrl,
+      items: bundleRows.map(row => ({
+        product_id: Number(row.productId),
+        quantity: Number(row.quantity)
+      }))
+    })
+
+    const bundleId = response.data.bundle_id
+    setForm(previous => ({ ...previous, prodId: bundleId }))
+    onBundleCreated?.()
+    return bundleId
+  }
+
+  const clearSelectedProduct = () => {
+    setForm(previous => ({
+      ...previous,
+      prodId: '',
+      prodName: '',
+      prodDescription: '',
+      prodPrice: '',
+      prodDiscountedPrice: '',
+      prodStock: '',
+      prodCategory: '',
+      prodImageUrl: '',
+      thumbnail: '📦'
+    }))
+  }
+
+  // 進出「組合商品」分頁時清掉已選商品，避免單品 id 被當成組合送出（反之亦然）
+  const switchProdMode = mode => {
+    if (mode === prodMode) return
+    if (mode === 'bundle' || prodMode === 'bundle') {
+      clearSelectedProduct()
+    }
+    setProdMode(mode)
+  }
+
   const handleSelectProduct = event => {
-    const selected = existingProducts.find(
+    const selected = selectableProducts.find(
       product =>
         String(product.product_id) === event.target.value
     )
@@ -317,7 +459,9 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     setIsSaving(true)
 
     try {
-      const payload = buildPayload('draft')
+      const productId = await ensureBundleProductId()
+      if (productId === null) return
+      const payload = buildPayload('draft', productId)
 
       let response
 
@@ -346,6 +490,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         ...form,
         id: savedCampaignId,
         prodId: savedProductId,
+        isBundle: prodMode === 'bundle',
         status: 'draft',
         spent: form.spent || 0,
         kocCount: form.kocCount || 0,
@@ -368,8 +513,11 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     try {
       setIsSaving(true)
 
+      const productId = await ensureBundleProductId()
+      if (productId === null) return
       const payload = buildPayload(
-        isEditingPublished ? form.status : 'active'
+        isEditingPublished ? form.status : 'active',
+        productId
       )
 
       let response
@@ -387,7 +535,8 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         ...form,
         id: response.data.campaign_id,
         prodId:
-          response.data.product_id || form.prodId,
+          response.data.product_id || productId || form.prodId,
+        isBundle: prodMode === 'bundle',
         status: isEditingPublished ? form.status : 'active',
         spent: form.spent || 0,
         kocCount: form.kocCount || 0,
@@ -407,11 +556,12 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
   
 
-  const buildPayload = campaignStatus => {
+  const buildPayload = (campaignStatus, productId = form.prodId) => {
     const basePayload = {
       vendor_id: localStorage.getItem('vendor_id'),
       name: form.name.trim(),
       description: form.description.trim(),
+      promo_copy: form.promoCopy.trim(),
       budget: Number(form.budget),
       reward_type: 'commission',
 
@@ -427,10 +577,13 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       status: campaignStatus
     }
 
-    if (prodMode === 'existing') {
+    // 組合商品本身也是一筆 Product，綁活動時跟既有商品一樣只送 product_id
+    if (prodMode === 'existing' || prodMode === 'bundle') {
       return {
         ...basePayload,
-        product_id: Number(form.prodId)
+        product_id: Number(productId),
+        // 商品簡介寫回該商品（與商城商品頁共用）
+        product_description: form.prodDescription.trim()
       }
     }
 
@@ -547,16 +700,21 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
             </div>
           )}
           <div className="flex flex-col sm:flex-row bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-1 mb-4 gap-1 sm:gap-0">
-            <button disabled={locked} onClick={() => setProdMode('existing')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50", prodMode === 'existing' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880]")}>選擇庫存商品</button>
-            <button disabled={locked} onClick={() => setProdMode('new')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50", prodMode === 'new' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880]")}>建立新商品</button>
+            <button disabled={locked} onClick={() => switchProdMode('existing')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50", prodMode === 'existing' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880]")}>選擇庫存商品</button>
+            <button disabled={locked} onClick={() => switchProdMode('bundle')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50", prodMode === 'bundle' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880]")}>選擇組合商品</button>
+            <button disabled={locked} onClick={() => switchProdMode('new')} className={cn("flex-1 py-2 text-xs font-bold rounded-lg transition-all disabled:opacity-50", prodMode === 'new' ? "bg-white text-[#1A1A18] shadow-sm" : "text-[#8C8880]")}>建立新商品</button>
           </div>
 
-          {prodMode === 'existing' ? (
+          {prodMode !== 'new' ? (
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">從商品庫選擇 *</label>
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+                {prodMode === 'bundle' ? '選擇組合商品 *' : '從商品庫選擇 *'}
+              </label>
               <select disabled={locked} value={form.prodId} onChange={handleSelectProduct} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all appearance-none disabled:opacity-60">
-                <option value="">請選擇要推廣的商品...</option>
-                {existingProducts.map(product => {
+                <option value="">
+                  {prodMode === 'bundle' ? '＋ 搭配新組合' : '請選擇要推廣的商品...'}
+                </option>
+                {selectableProducts.map(product => {
                   const boundList = getOtherBoundCampaigns(product)
                   const overlapping = boundList.filter(isPeriodOverlapping)
 
@@ -567,7 +725,9 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                     >
                       {product.product_name}
                       {' '}
-                      （庫存：{product.stock}）
+                      {prodMode === 'bundle'
+                        ? `（可售 ${product.stock} 組）`
+                        : `（庫存：${product.stock}）`}
                       {overlapping.length > 0
                         ? `［期間衝突：${overlapping[0].name}］`
                         : boundList.length > 0
@@ -594,7 +754,147 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 </div>
               )}
               
-              {form.prodName && (
+              {isNewBundle && (
+                <div className="mt-3 flex flex-col gap-3 p-4 border border-[#E2DDD4] rounded-xl bg-white">
+                  <div className="flex items-center gap-4 p-3 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-xl">
+                    <Thumb emoji={bundleImageUrl || '📦'} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={locked || uploading}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex items-center gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50"
+                        >
+                          <Upload size={14} />{uploading ? '上傳中...' : form.prodImageUrl ? '更換組合圖片' : '上傳組合圖片'}
+                        </button>
+                        {form.prodImageUrl && (
+                          <button
+                            type="button"
+                            disabled={locked || uploading}
+                            onClick={() => setForm(previous => ({ ...previous, prodImageUrl: '', thumbnail: '📦' }))}
+                            className="text-xs font-bold text-[#8C8880] hover:text-[#C8522A] px-2 py-1 disabled:opacity-50"
+                          >
+                            移除
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-[#8C8880] mt-1.5">
+                        {form.prodImageUrl
+                          ? '使用上傳的組合圖片'
+                          : bundleFallbackImage
+                            ? '目前先用第一個商品的圖片，可另外上傳組合照'
+                            : '選填，沒上傳會用第一個商品的圖片'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">組合內容 *</div>
+
+                  {bundleRows.map(row => {
+                    const chosenElsewhere = new Set(
+                      bundleRows.filter(other => other.key !== row.key).map(other => other.productId)
+                    )
+                    const product = singleProductById[row.productId]
+
+                    return (
+                      <div key={row.key} className="flex items-center gap-2">
+                        <select
+                          disabled={locked}
+                          value={row.productId}
+                          onChange={e => updateBundleRow(row.key, { productId: e.target.value })}
+                          className="flex-1 min-w-0 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2.5 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] appearance-none disabled:opacity-60"
+                        >
+                          <option value="">選擇商品...</option>
+                          {existingProducts.map(option => (
+                            <option
+                              key={option.product_id}
+                              value={String(option.product_id)}
+                              disabled={chosenElsewhere.has(String(option.product_id))}
+                            >
+                              {option.product_name}（{formatCurrency(option.price)}・庫存 {option.stock}{option.status !== 'active' ? '・已下架' : ''}）
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-xs font-bold text-[#8C8880]">x</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          disabled={locked}
+                          value={row.quantity}
+                          onChange={e => updateBundleRow(row.key, { quantity: e.target.value })}
+                          className="w-14 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-2 py-2.5 text-sm text-center outline-none focus:border-[#C8522A] disabled:opacity-60"
+                        />
+                        <span className="w-16 text-right text-[11px] font-mono text-[#8C8880] hidden sm:block">
+                          {product ? formatCurrency(product.price * (Number(row.quantity) || 0)) : '—'}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={locked || bundleRows.length <= 1}
+                          onClick={() => setBundleRows(rows => rows.filter(other => other.key !== row.key))}
+                          className="p-1.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors disabled:opacity-30"
+                          title="移除這一列"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )
+                  })}
+
+                  <button
+                    type="button"
+                    disabled={locked || bundleRows.length >= existingProducts.length}
+                    onClick={() => setBundleRows(rows => [...rows, newBundleRow()])}
+                    className="self-start inline-flex items-center gap-1.5 text-xs font-bold text-[#C8522A] px-3 py-1 rounded-full hover:bg-[#FDF0ED] transition-colors disabled:opacity-40"
+                  >
+                    <Plus size={13} />再加一個商品
+                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="組合名稱 *"
+                      disabled={locked}
+                      value={form.prodName}
+                      onChange={set('prodName')}
+                      placeholder="例：夏日防曬兩件組"
+                    />
+                    <Input
+                      label="組合售價 (NT$) *"
+                      type="number"
+                      min="1"
+                      disabled={locked}
+                      value={form.prodPrice}
+                      onChange={set('prodPrice')}
+                      placeholder={bundleItemsTotal ? String(bundleItemsTotal) : '例：999'}
+                    />
+                  </div>
+
+                  <div className="text-[11px] font-bold text-[#8C8880] flex flex-wrap gap-x-4 gap-y-1">
+                    <span>單品原價加總 {formatCurrency(bundleItemsTotal)}</span>
+                    {Number(form.prodPrice) > 0 && bundleItemsTotal > Number(form.prodPrice) && (
+                      <span className="text-[#C8522A]">消費者省 {formatCurrency(bundleItemsTotal - Number(form.prodPrice))}</span>
+                    )}
+                    <span>目前可售 {bundleAvailableSets} 組</span>
+                  </div>
+                  <p className="text-[10px] text-[#8C8880] -mt-1">
+                    組合不另外記庫存，消費者下單時直接扣各商品庫存。組合會在儲存草稿或發佈任務時一起建立。
+                  </p>
+
+                  {bundleError && filledBundleRows.length > 0 && (
+                    <p className="text-[11px] font-bold text-[#C8522A]">{bundleError}</p>
+                  )}
+                </div>
+              )}
+
+              {form.prodName && !isNewBundle && (
                 <div className="mt-4 flex items-center gap-4 p-4 border border-[#E2DDD4] rounded-xl bg-white">
                    <Thumb emoji={form.thumbnail} size="sm" />
                    <div>
@@ -609,6 +909,11 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                          <span>售價: {formatCurrency(form.prodPrice)}</span>
                        )}
                      </div>
+                     {prodMode === 'bundle' && selectedExistingProduct?.items?.length > 0 && (
+                       <div className="text-[11px] text-[#8C8880] font-bold mt-1">
+                         內含：{selectedExistingProduct.items.map(item => `${item.product_name} x${item.quantity}`).join('、')}
+                       </div>
+                     )}
                    </div>
                 </div>
               )}
@@ -653,6 +958,70 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               </div>
             </>
           )}
+
+          {/* ── 給 KOC 的文案素材 ── */}
+          <div className="pt-4 mt-2 border-t border-[#E2DDD4] flex flex-col gap-4">
+            <div>
+              <div className="text-sm font-bold text-[#1A1A18]">給 KOC 的文案素材</div>
+              <p className="text-[11px] text-[#8C8880] mt-0.5">
+                KOC 接案後會看到這兩段內容，可以參考或直接引用來發文。
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">商品簡介</label>
+                <span className="text-[10px] text-[#8C8880]">{form.prodDescription.length} / 5000</span>
+              </div>
+              <textarea
+                value={form.prodDescription}
+                onChange={set('prodDescription')}
+                maxLength={5000}
+                rows={4}
+                placeholder="例：SPF50+ PA++++ 清爽不黏膩，適合夏天通勤、戶外活動，敏感肌可用。"
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all resize-y placeholder:text-[#8C8880]/50"
+              />
+              <p className="text-[10px] text-[#8C8880] ml-1">
+                {prodMode === 'new' || isNewBundle
+                  ? '會存成這個商品的介紹，商城商品頁也會顯示。'
+                  : '選擇商品後會帶入目前的介紹；修改會同步更新商城商品頁。'}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">推廣文案（制式文案）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".txt,text/plain"
+                    ref={copyFileInputRef}
+                    onChange={handleImportCopy}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-3 py-1 rounded-full transition-all"
+                  >
+                    <Upload size={12} />匯入 .txt
+                  </button>
+                  <span className="text-[10px] text-[#8C8880]">{form.promoCopy.length} / 5000</span>
+                </div>
+              </div>
+              <textarea
+                value={form.promoCopy}
+                onChange={set('promoCopy')}
+                maxLength={5000}
+                rows={7}
+                placeholder={'例：\n☀️ 夏天出門最怕曬黑又黏膩？\n這瓶防曬我已經用了一整個月，清爽到幾乎感覺不到有擦！\n✔ SPF50+ PA++++\n✔ 敏感肌也能用\n👉 用我的專屬折扣碼下單再折 15%'}
+                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all resize-y placeholder:text-[#8C8880]/50 whitespace-pre-wrap"
+              />
+              <p className="text-[10px] text-[#8C8880] ml-1">
+                選填。可直接貼上，或匯入純文字檔；換行與 emoji 都會保留。
+              </p>
+            </div>
+          </div>
         </>}
 
         {step === 2 && (
@@ -799,7 +1168,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 onClick={() => setStep(s=>s+1)} 
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
-                  (step === 1 && (!form.prodName || hasScheduleConflict)) ||
+                  (step === 1 && (!form.prodName || hasScheduleConflict || Boolean(bundleError))) ||
                   (step === 2 && (form.discountValue === '' || Number(form.discountValue) <= 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > originalPrice))) ||
                   isSaving
                 }
@@ -835,6 +1204,7 @@ export default function Campaigns() {
   const [kocError, setKocError] = useState('')
   const vendorId = localStorage.getItem('vendor_id')
   const [existingProducts, setExistingProducts] = useState([])
+  const [existingBundles, setExistingBundles] = useState([])
   const [productsVersion, setProductsVersion] = useState(0)
   const [productLoading, setProductLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1038,6 +1408,7 @@ export default function Campaigns() {
       id: campaign.campaign_id,
       name: campaign.name,
       description: campaign.description || '',
+      promoCopy: campaign.promo_copy || '',
       budget: Number(campaign.budget || 0),
 
       startDate: campaign.start_date || '',
@@ -1061,6 +1432,7 @@ export default function Campaigns() {
           : '',
 
       prodId: product.product_id || '',
+      isBundle: Boolean(product.is_bundle),
       prodName: product.product_name || '',
       prodDescription: product.description || '',
       prodPrice: product.price || '',
@@ -1113,8 +1485,12 @@ export default function Campaigns() {
         try {
           setProductLoading(true)
           setError('')
-          const response = await getVendorProducts(vendorId)
+          const [response, bundleResponse] = await Promise.all([
+            getVendorProducts(vendorId),
+            getVendorBundles(vendorId),
+          ])
           setExistingProducts(response.data.products || [])
+          setExistingBundles(bundleResponse.data.bundles || [])
         } catch (error) {
           setError(getErrorMessage(error, '商品資料載入失敗'))
         } finally {
@@ -1322,6 +1698,8 @@ export default function Campaigns() {
         onComplete={handleCreateOrUpdate}
         initialData={editingDraft}
         existingProducts={existingProducts}
+        existingBundles={existingBundles}
+        onBundleCreated={() => setProductsVersion(version => version + 1)}
       />
 
       {/* 任務詳細資料 Modal */}

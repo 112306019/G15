@@ -70,6 +70,32 @@ export const updateVendorProductStatus = (data) => {
 }
 
 // ======================================================
+// 組合商品（例：A 商品 x2 + B 商品 x1）
+// 上架 / 下架沿用 updateVendorProductStatus（組合本身也是一筆商品）
+// ======================================================
+
+export const getVendorBundles = (vendorId, status) => {
+  return api.get('/vendor/bundle/getlist', {
+    params: {
+      vendor_id: vendorId,
+      status,
+    },
+  })
+}
+
+export const createVendorBundle = (data) => {
+  return api.post('/vendor/bundle/create', data)
+}
+
+export const updateVendorBundle = (data) => {
+  return api.post('/vendor/bundle/update', data)
+}
+
+export const deleteVendorBundle = (data) => {
+  return api.post('/vendor/bundle/delete', data)
+}
+
+// ======================================================
 // 活動 / Campaign
 // ======================================================
 

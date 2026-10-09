@@ -246,6 +246,10 @@ urlpatterns = [
 
     # Vendor 商品 API
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
+    path('vendor/bundle/getlist', vendor.vendor_bundle_getlist, name='vendor-bundle-getlist'),
+    path('vendor/bundle/create', vendor.vendor_bundle_create, name='vendor-bundle-create'),
+    path('vendor/bundle/update', vendor.vendor_bundle_update, name='vendor-bundle-update'),
+    path('vendor/bundle/delete', vendor.vendor_bundle_delete, name='vendor-bundle-delete'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
     path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
