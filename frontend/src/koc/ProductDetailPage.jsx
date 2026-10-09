@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Heart, ShoppingBag, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Heart, ShoppingBag, Star, Store, ChevronRight } from 'lucide-react';
 
 export default function ProductDetailPage({
   onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, product,
@@ -50,6 +51,7 @@ export default function ProductDetailPage({
         rating: 4.8,
         description: product.description || "",
         reviewsCount: 0,
+        vendorId: product.Vendor_id || "",
         vendorName: product.Vendor_name || product.Vendor_id || "",
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
@@ -222,6 +224,7 @@ export default function ProductDetailPage({
         price: `NTD$ ${rawPrice}`,
         rawPrice,
         description: p.description || "",
+        vendorId: p.Vendor_id || "",
         vendorName: p.Vendor_name || p.Vendor_id || "",
         imageUrl: p.image_url || "",
       }));
@@ -302,6 +305,17 @@ export default function ProductDetailPage({
               </button>
             </div>
 
+            {productDetail.vendorId && (
+              <Link
+                to={`/store/${productDetail.vendorId}`}
+                className="mb-3 md:mb-4 inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
+              >
+                <Store size={14} className="md:w-4 md:h-4" />
+                {productDetail.vendorName}
+                <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
+
             <div className="font-black text-xl md:text-2xl text-[#1A1A18] mb-4 md:mb-6">{productDetail.price}</div>
 
             <div className="mb-6 md:mb-8">
@@ -342,7 +356,13 @@ export default function ProductDetailPage({
             <div className="text-xs md:text-sm text-[#8C8880] leading-relaxed space-y-4">
               <div>
                 <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">廠商</h3>
-                <p>{productDetail.vendorName}</p>
+                {productDetail.vendorId ? (
+                  <Link to={`/store/${productDetail.vendorId}`} className="text-[#C8522A] font-bold hover:underline">
+                    {productDetail.vendorName}（查看這個廠商的所有商品）
+                  </Link>
+                ) : (
+                  <p>{productDetail.vendorName}</p>
+                )}
               </div>
               {campaignData ? (
                 <>

@@ -1,9 +1,10 @@
 import { API_BASE_URL } from '../config';
+import { addProductToCart } from './cartApi';
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import KOCVideo from '../assets/KOC_ad.mp4';
 import { getErrorMessage } from '../errorMessage';
 
-function formatNTD(amount) {
+export function formatNTD(amount) {
   const value = Number(amount);
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
 }
@@ -53,7 +54,7 @@ function ShoppingBagIcon() {
 }
 
 // 商品卡片
-function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
+export function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
   const isSoldOut = Number(stock) <= 0;
 
   return (
@@ -366,35 +367,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
       return;
     }
 
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
-
     try {
-      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ User_id: userId }),
-      });
-      const cartData = await cartRes.json();
-      const cartId = cartData.Cart_id;
-
-      const addRes = await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          Cart_id: cartId,
-          Product_id: productId,
-          Quantity: 1,
-        }),
-      });
-
-      if (addRes.ok) {
+      if (await addProductToCart(productId)) {
         showToast("✓ 已成功加入購物車！");
         onAddToCart?.();
       } else {
