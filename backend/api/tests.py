@@ -1140,10 +1140,21 @@ class KocMissionExpiryTests(TestCase):
         self.assertEqual(len(missions), 1)
         return missions[0]
 
-    def test_publishing_stage_within_grace_period_is_not_expired(self):
+    def test_writing_stage_past_deadline_and_grace_period_is_closed_and_violated(self):
+        # end_date 8 天前，promo_days 寬限 7 天 -> 寬限期已用完，今天已經超過。
+        # sync_expired_promoting_missions 會在 get_mission 這次呼叫裡就把它結案。
+        mission = self.make_mission(stage="writing", days_since_end=8, promo_days=7)
+        self.get_mission(stage_code=4)  # 已經被轉到 completed，要從這個分類查
+        mission.refresh_from_db()
+        self.assertEqual(mission.stage, "completed")
+        self.assertEqual(mission.end_reason, "expired")
+        self.koc.refresh_from_db()
+        self.assertEqual(self.koc.total_violation_count, 1)
+
+    def test_writing_stage_within_grace_period_is_not_expired(self):
         # end_date 3 天前，promo_days 寬限 7 天 -> 還在寬限期內
-        self.make_mission(stage="publishing", days_since_end=3, promo_days=7)
-        mission = self.get_mission(stage_code=2)
+        self.make_mission(stage="writing", days_since_end=3, promo_days=7)
+        mission = self.get_mission(stage_code=0)
         self.assertFalse(mission["is_expired"])
 
     def test_publishing_stage_past_grace_period_is_closed_and_violated(self):
