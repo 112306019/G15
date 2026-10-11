@@ -328,21 +328,146 @@ def sync_submission_deadline_reminders():
     return len(overdue_missions)
 
 
+# ──────────────────────────────────────────────
+# 庫存（含組合商品）
+# ──────────────────────────────────────────────
+#
+# 組合商品（Product.is_bundle=True）本身沒有實體庫存：
+# - 扣庫存 / 加回庫存一律展開成「組成商品 × 數量」去動組成商品的 stock
+# - 組合自己的 stock 欄位只是快取的「目前可售組數」
+#   = min(組成商品 stock // 所需數量)，任一組成商品下架則為 0。
+#   商城列表、商品頁、加入購物車讀的都是 product.stock，所以這個快取要在
+#   組成商品庫存或狀態變動後呼叫 resync_bundle_stock() 更新。
+
+
+def expand_stock_demand(lines):
+    """
+    lines: [(Product, 數量), ...]
+    回傳 {實體商品 product_id: 需要的總數量}，組合商品會展開成組成商品。
+    同一張訂單裡「組合」和「組合裡的單品」同時出現時，需求會加總在一起。
+    """
+    from api.models import ProductBundleItem
+
+    bundle_ids = [product.product_id for product, _ in lines if product.is_bundle]
+    components = {}
+
+    if bundle_ids:
+        for bundle_item in ProductBundleItem.objects.filter(bundle_id__in=bundle_ids):
+            components.setdefault(bundle_item.bundle_id, []).append(
+                (bundle_item.component_id, bundle_item.quantity)
+            )
+
+    demand = {}
+
+    for product, quantity in lines:
+        if product.is_bundle:
+            for component_id, per_bundle in components.get(product.product_id, []):
+                demand[component_id] = demand.get(component_id, 0) + per_bundle * quantity
+        else:
+            demand[product.product_id] = demand.get(product.product_id, 0) + quantity
+
+    return demand
+
+
+def find_stock_shortage(lines):
+    """回傳庫存不足的實體商品名稱清單；都夠的話回傳空清單。"""
+    from api.models import Product
+
+    demand = expand_stock_demand(lines)
+
+    return [
+        product.product_name
+        for product in Product.objects.filter(product_id__in=list(demand))
+        if product.stock < demand[product.product_id]
+    ]
+
+
+def resync_bundle_stock(component_ids=None, bundle_ids=None):
+    """
+    重新計算組合商品的可售組數並寫回 bundle.stock。
+    component_ids：這些商品的庫存/狀態變了 → 更新所有用到它們的組合
+    bundle_ids：直接指定要更新的組合
+    """
+    from api.models import Product, ProductBundleItem
+
+    target_ids = set(bundle_ids or [])
+
+    if component_ids:
+        target_ids |= set(
+            ProductBundleItem.objects
+            .filter(component_id__in=list(component_ids))
+            .values_list('bundle_id', flat=True)
+        )
+
+    if not target_ids:
+        return
+
+    items_by_bundle = {}
+
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=target_ids)
+        .select_related('component')
+    ):
+        items_by_bundle.setdefault(bundle_item.bundle_id, []).append(bundle_item)
+
+    for bundle_id in target_ids:
+        bundle_items = items_by_bundle.get(bundle_id, [])
+
+        if not bundle_items:
+            available = 0
+        else:
+            available = min(
+                (
+                    bundle_item.component.stock // bundle_item.quantity
+                    if bundle_item.component.status == 'active'
+                    else 0
+                )
+                for bundle_item in bundle_items
+            )
+
+        Product.objects.filter(product_id=bundle_id).update(stock=max(available, 0))
+
+
+def deduct_stock_for_lines(lines):
+    """
+    下單扣庫存（要在 transaction.atomic() 裡呼叫）。
+    lines: [(Product, 數量), ...]；組合商品會展開扣組成商品，再更新受影響組合的可售組數。
+    """
+    from api.models import Product
+
+    demand = expand_stock_demand(lines)
+
+    if not demand:
+        return
+
+    for product in Product.objects.select_for_update().filter(product_id__in=list(demand)):
+        # 跟原本一樣夾在 0，避免併發下單把庫存扣成負數
+        product.stock = max(0, product.stock - demand[product.product_id])
+        product.save(update_fields=['stock'])
+
+    resync_bundle_stock(component_ids=demand.keys())
+
+
 def restore_order_stock(order):
     """
     訂單取消時（不論是消費者直接取消還是廠商核准取消申請）把商品庫存加回去，
-    對稱於 consumer.create_order 下單當下扣庫存的邏輯。
+    對稱於 consumer.create_order 下單當下扣庫存的邏輯；組合商品加回組成商品。
     """
-    from api.models import OrderItem
+    from api.models import OrderItem, Product
 
     items = OrderItem.objects.filter(order=order).select_related('product')
+    lines = [(item.product, item.quantity) for item in items if item.product]
+    demand = expand_stock_demand(lines)
 
-    for item in items:
-        product = item.product
-        if not product:
-            continue
-        product.stock = product.stock + item.quantity
+    if not demand:
+        return
+
+    for product in Product.objects.select_for_update().filter(product_id__in=list(demand)):
+        product.stock = product.stock + demand[product.product_id]
         product.save(update_fields=['stock'])
+
+    resync_bundle_stock(component_ids=demand.keys())
 
 
 # Submissions.status: 資料庫字串 <-> API 對外 integer
@@ -364,9 +489,14 @@ COUPON_STATUS_CODE_MAP = {
     'active': 1,     # 啟用中
     'expired': 2,    # 已過期
 }
+# KOC 不再提交文案給廠商審核：任務核准後直接進入 publishing，只需要交作品連結。
+# writing / reviewing 兩個階段已停用（STAGE_CODE_MAP 保留代碼只為相容舊資料）。
 STAGE_ALLOWED_SUBMISSION_TYPE = {
     'publishing': 'link',  # 待發佈階段，只能交連結
 }
+
+# 文案草稿只給 KOC 自己撰寫與 AI 檢測用，不會送給廠商；發文前後都可以修改
+STAGES_ALLOWING_TEXT_DRAFT = {'publishing', 'promoting'}
 
 EARNINGS_STATUS_CHOICES_MAP = {
     'pending': 'pending',
@@ -389,10 +519,22 @@ EARNINGS_STATUS_CODE_MAP = {
 # ==============================================================================
 # ShareBuy 新制結算比例
 # ==============================================================================
-# KOC 分潤比例：固定為符合 KOC 歸因之有效商品成交額的 5%。
-# 不含運費；實際建立 Earnings 的條件仍由 calculate_order_commission 判斷，
-# 沒有有效 KOC 優惠碼／任務歸因的訂單不會憑空產生 KOC 分潤。
-KOC_COMMISSION_RATE_PERCENT = 5
+# KOC 分潤：階梯式月結（計算邏輯見 api/koc_commission.py）。
+# 以任務為單位：每個任務（KOC 接的一個廠商活動）每個月「透過優惠碼售出的活動商品件數」
+# 決定該任務當月級距，整月全額套用該級距；同一位 KOC 的不同任務各自計算：
+#   1–10 件 → 3%、11–50 件 → 5%、51 件以上 → 10%
+# 每個月獨立計算，月份以訂單完成日（台灣時間）為準，月底後該月級距鎖定。
+# 分潤從平台向廠商收的 VENDOR_SETTLEMENT_RATE_PERCENT（15%）裡支出，
+# 最高級距不可超過 15%，否則平台會虧損。
+# 格式：(件數上限, 分潤率%)，上限 None 代表沒有上限；必須依上限由小到大排列。
+KOC_COMMISSION_TIERS = [
+    (10, 3),
+    (50, 5),
+    (None, 10),
+]
+
+# 舊程式與畫面用的單一分潤率，改成階梯式後代表「基本級距」，僅供顯示用。
+KOC_COMMISSION_RATE_PERCENT = KOC_COMMISSION_TIERS[0][1]
 
 # Vendor 應支付給 ShareBuy 的平台推廣／服務費率。
 # 新制度是「消費者商品款由 Vendor 取得，Vendor 再依有效成交額支付 15% 給平台」，
@@ -529,3 +671,20 @@ PRODUCT_CATEGORY_CHOICES = [
     ('culture', '文創、娛樂與其他'),
 ]
 PRODUCT_CATEGORY_CODES = {code for code, _ in PRODUCT_CATEGORY_CHOICES}
+
+# ==============================================================================
+# KOC AI 文案檢測：免責條款（KOC 第一次使用前必須同意，見 models.AiCheckConsent）
+# ==============================================================================
+# 條款內容有任何修改時，一定要同時更新版本號，所有 KOC 下次使用前會被要求重新同意。
+AI_CHECK_TERMS_VERSION = '2026-10-08'
+AI_CHECK_TERMS_TITLE = 'AI 文案檢測使用條款'
+AI_CHECK_TERMS = [
+    '本功能由 AI 與規則比對自動產生檢測結果，僅供您撰寫文案時參考，不構成任何法律意見，'
+    '亦不保證文案符合《食品安全衛生管理法》《化粧品衛生安全管理法》《藥事法》《醫療器材管理法》等相關法規。',
+    '檢測結果可能有遺漏或誤判，「未檢出問題」不代表文案沒有違法風險。'
+    '文案是否合法應由您自行判斷，必要時請諮詢專業法律人士。',
+    '您發佈的內容由您自行負責。因文案內容所生之任何法律責任、行政裁罰或第三人求償，'
+    '均由您自行承擔，本平台及合作廠商不負任何責任。',
+    '您送出檢測的文案會傳送至 AI 服務（可能包含第三方服務，例如 Google Gemini）進行分析。'
+    '本平台不會保存檢測的文案與結果，也不會提供給廠商。',
+]

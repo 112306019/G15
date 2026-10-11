@@ -114,12 +114,22 @@ export default function Header({
             <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
           </div>
 
-          {userRole === 'koc' && (
+          {/* KOC：接案聊天；其他使用者：我的訊息（跟廠商的商品詢問、訂單對話） */}
+          {userRole === 'koc' ? (
             <div
               className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
               onClick={() => handleNavigate('chat')}
+              title="接案聊天"
             >
               <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            </div>
+          ) : (
+            <div
+              className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+              onClick={() => handleNavigate('messages')}
+              title="我的訊息"
+            >
+              <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
             </div>
           )}
         </div>
@@ -353,13 +363,21 @@ export default function Header({
               我的收藏
             </button>
 
+            <button
+              onClick={() => handleNavigate('messages')}
+              className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+            >
+              <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#C8522A]' : ''} />
+              我的訊息
+            </button>
+
             {userRole === 'koc' && (
               <button
                 onClick={() => handleNavigate('chat')}
                 className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
               >
                 <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#C8522A]' : ''} />
-                訊息中心
+                接案聊天
               </button>
             )}
 

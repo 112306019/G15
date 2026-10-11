@@ -1,14 +1,20 @@
-import React, { useMemo, useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   X,
   UserCheck,
   FileText,
+  Copy,
   AlertCircle,
   Clock,
   CheckCircle2
 } from 'lucide-react'
 
-import { kocApplications as initial } from './mock'
+import {
+  kocApplications as initial,
+  kocs,
+  campaigns,
+  products
+} from './mock'
 
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
@@ -230,6 +236,22 @@ export default function ContentReview() {
       )
     : null
 
+  const selectedKoc = selectedApplication
+    ? kocs.find(koc => koc.id === selectedApplication.kocId)
+    : null
+
+  const selectedCampaign = selectedApplication
+    ? campaigns.find(
+        campaign => campaign.id === selectedApplication.campaignId
+      )
+    : null
+
+  const selectedProduct = selectedApplication
+    ? products.find(
+        product => product.id === selectedApplication.productId
+      )
+    : null
+
   // ─── 接案審核函式 ────────────────────────────────────
   async function handleReviewApplication(application, reviewStatus) {
     if (!application) return
@@ -312,7 +334,8 @@ export default function ContentReview() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+      <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
             <StatCard
               label="全部"
               value={applications.length}
@@ -573,6 +596,8 @@ export default function ContentReview() {
               </div>
             </div>
           )}
+      </>
+
     </div>
   )
 }

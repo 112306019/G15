@@ -1,30 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ClipboardList, TrendingUp, Clock, Edit } from 'lucide-react';
-import { getAllMissions, updateKOCMissionStage, getEarningsTracking } from '../api/platform';
+import { getAllMissions, getEarningsTracking } from '../api/platform';
+import MissionActionModal from './MissionActionModal';
+import CommissionTracking from './CommissionTracking';
 import { formatApiError } from '../errorMessage';
 
-const STAGE_LABELS = { 2: '待發佈', 3: '推廣中', 4: '已結案' };
-const STAGE_CODE_TO_VALUE = { 2: 'publishing', 3: 'promoting', 4: 'completed' };
+const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
 
-const STAGE_OPTIONS = [
-  { value: 'publishing', label: '待發佈' },
-  { value: 'promoting', label: '推廣中' },
-  { value: 'completed', label: '已結案' },
-];
-
-const EARNINGS_STATUS_LABELS = { pending: '待結算', withdrawable: '可提領', transferred: '已分潤' };
-const EARNINGS_STATUS_STYLES = {
-  pending: 'bg-[#E2DDD4] text-[#8C8880]',
-  withdrawable: 'bg-[#FDF0ED] text-[#C8522A] border-[#C8522A]/30',
-  transferred: 'bg-[#F5F0E8] text-[#B89B6A] border-[#B89B6A]/30',
-};
 
 export default function AdminMissions() {
   const [activeTab, setActiveTab] = useState('missions');
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [selectedMission, setSelectedMission] = useState(null);
-  const [newStage, setNewStage] = useState('publishing');
-  const [updatingStage, setUpdatingStage] = useState(false);
 
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,68 +76,25 @@ export default function AdminMissions() {
 
   const handleUpdateClick = (mission) => {
     setSelectedMission(mission);
-    setNewStage(STAGE_CODE_TO_VALUE[mission.stage] || 'publishing');
-    setShowUpdateModal(true);
-  };
-
-  const submitStageUpdate = async (e) => {
-    e.preventDefault();
-    setUpdatingStage(true);
-    try {
-      const res = await updateKOCMissionStage({
-        KOCMisson_id: Number(selectedMission.kocmission_id),
-        Stage: newStage,
-      });
-      if (res.data.success) {
-        setShowUpdateModal(false);
-        fetchMissions();
-      } else {
-        alert(formatApiError(res.data.err) || '更新失敗');
-      }
-    } catch (err) {
-      console.error('更新任務階段失敗', err);
-      alert('更新失敗，請稍後再試');
-    } finally {
-      setUpdatingStage(false);
-    }
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 animate-in fade-in duration-500 relative pb-10">
 
-      {/* 狀態更新 Modal */}
-      {showUpdateModal && selectedMission && (
-        <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-200">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#B89B6A] flex items-center justify-center mb-4 mx-auto">
-              <Edit size={20} className="sm:w-6 sm:h-6" />
-            </div>
-            <h3 className="text-xl font-serif font-black text-[#1A1A18] text-center mb-2">更新任務階段</h3>
-            <p className="text-[#8C8880] text-center text-xs sm:text-sm mb-5 sm:mb-6">
-              任務編號：<span className="font-bold text-[#1A1A18]">{selectedMission.kocmission_id}</span>
-            </p>
-            <form onSubmit={submitStageUpdate} className="space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-[#8C8880] mb-2">選擇新階段</label>
-                <select
-                  value={newStage}
-                  onChange={(e) => setNewStage(e.target.value)}
-                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all shadow-sm"
-                >
-                  {STAGE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-2.5 sm:gap-3 pt-3 sm:pt-4">
-                <button type="button" onClick={() => setShowUpdateModal(false)} className="flex-1 px-4 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#8C8880] rounded-xl font-bold text-xs sm:text-sm hover:bg-[#F8F9FA] transition-colors">取消</button>
-                <button type="submit" disabled={updatingStage} className="flex-1 px-4 py-2.5 sm:py-3 bg-[#1A1A18] text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-[#333] transition-all shadow-md disabled:opacity-50">
-                  {updatingStage ? '更新中...' : '確認更新'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* 任務例外處理（強制結案 / 退回上一階段） */}
+      {selectedMission && (
+        <MissionActionModal
+          mission={{
+            id: selectedMission.kocmission_id,
+            stage: Number(selectedMission.stage),
+            title: selectedMission.koc_name,
+          }}
+          onClose={() => setSelectedMission(null)}
+          onDone={() => {
+            setSelectedMission(null);
+            fetchMissions();
+          }}
+        />
       )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-4">
@@ -235,7 +178,7 @@ export default function AdminMissions() {
                   onClick={() => handleUpdateClick(mission)}
                   className="w-full inline-flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#333] transition-all shadow-sm"
                 >
-                  <Edit size={14} /> 更新階段
+                  <Edit size={14} /> 例外處理
                 </button>
               </div>
             ))}
@@ -285,7 +228,7 @@ export default function AdminMissions() {
                         onClick={() => handleUpdateClick(mission)}
                         className="inline-flex items-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#333] transition-all shadow-sm"
                       >
-                        <Edit size={12} /> 更新階段
+                        <Edit size={12} /> 例外處理
                       </button>
                     </td>
                   </tr>
@@ -298,94 +241,13 @@ export default function AdminMissions() {
 
       {/* 成效追蹤表格 (Performance) */}
       {activeTab === 'performance' && (
-        <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-          <div className="p-4 sm:p-5 border-b border-[#E2DDD4] bg-[#F8F9FA]">
-            <p className="text-xs sm:text-sm font-bold text-[#8C8880]">追蹤由推薦碼 (Promotion Code) 帶來的實際轉換訂單</p>
-          </div>
-          
-          <div className="md:hidden flex flex-col divide-y divide-[#E2DDD4]">
-            {trackingLoading && <div className="p-10 text-center text-sm font-bold text-[#8C8880]">載入中...</div>}
-            {!trackingLoading && trackingError && <div className="p-10 text-center text-sm font-bold text-red-500">{trackingError}</div>}
-            {!trackingLoading && !trackingError && tracking.length === 0 && (
-              <div className="p-10 text-center text-sm font-bold text-[#8C8880]">目前沒有分潤追蹤資料</div>
-            )}
-            
-            {!trackingLoading && !trackingError && tracking.map((item, idx) => (
-              <div key={`${item.order_id}-${idx}`} className="p-5 sm:p-6 hover:bg-[#F8F9FA] transition-colors">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">推薦碼</div>
-                    <div className="text-sm font-black text-[#1A1A18]">{item.promotion_code}</div>
-                  </div>
-                  <span className={`inline-block whitespace-nowrap text-[9px] sm:text-[10px] font-bold px-2 py-1 rounded-md border tracking-widest uppercase ${
-                    EARNINGS_STATUS_STYLES[item.status] || 'bg-[#E2DDD4] text-[#8C8880]'
-                  }`}>
-                    {EARNINGS_STATUS_LABELS[item.status] || item.status}
-                  </span>
-                </div>
-                
-                <div className="bg-[#F5F0E8]/50 rounded-xl p-3.5 flex flex-col gap-2.5 border border-[#E2DDD4]/50 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">歸屬 KOC</span>
-                    <span className="font-bold text-[#C8522A]">{item.koc_name || '未知'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#8C8880]">綁定訂單</span>
-                    <span className="font-bold text-[#1A1A18]">{item.order_id}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-[#E2DDD4]/50 pt-2.5 mt-0.5">
-                    <span className="font-bold text-[#8C8880]">分潤金額</span>
-                    <span className="font-black text-[#1A1A18]">NT$ {item.amount.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden md:block overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="bg-white border-b border-[#E2DDD4]">
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">推薦碼</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">歸屬 KOC</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">綁定訂單</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤金額</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">分潤狀態</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E2DDD4]">
-                {trackingLoading && (
-                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">載入中...</td></tr>
-                )}
-                {!trackingLoading && trackingError && (
-                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-red-500">{trackingError}</td></tr>
-                )}
-                {!trackingLoading && !trackingError && tracking.length === 0 && (
-                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">目前沒有分潤追蹤資料</td></tr>
-                )}
-
-                {!trackingLoading && !trackingError && tracking.map((item, idx) => (
-                  <tr key={`${item.order_id}-${idx}`} className="hover:bg-[#F8F9FA] transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-black text-[#1A1A18]">{item.promotion_code}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#C8522A]">{item.koc_name || '未知'}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#1A1A18]">{item.order_id}</td>
-                    <td className="px-6 py-4 font-black text-[#1A1A18] text-sm">NT$ {item.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-block whitespace-nowrap text-[10px] font-bold px-2.5 py-1 rounded-md border tracking-widest uppercase ${
-                        EARNINGS_STATUS_STYLES[item.status] || 'bg-[#E2DDD4] text-[#8C8880]'
-                      }`}>
-                        {EARNINGS_STATUS_LABELS[item.status] || item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CommissionTracking
+          tracking={tracking}
+          loading={trackingLoading}
+          error={trackingError}
+        />
       )}
+
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, Copy, Check, MessageCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle, Upload } from 'lucide-react';
 import api from '../api/index';
 import { buildPromoLink } from '../config';
 import { formatApiError } from '../errorMessage';
+import TierProgressCard from './TierProgressCard';
+import AiCheckPanel from './AiCheckPanel';
 
 // 小問號圖示，滑鼠移上去顯示說明文字；用具名 group（group/tooltip）避免跟
 // 長條圖那邊既有的 group-hover（放大長條）互相干擾。
@@ -62,6 +64,26 @@ function AnalyticsBarChart({ data, gradientClass }) {
   );
 }
 
+// KOC 自用的文案撰寫區入口：存草稿、AI 檢測，不會送給廠商
+function CopyDraftCard({ draftContent, onOpen, compact = false }) {
+  return (
+    <div
+      onClick={onOpen}
+      className={`w-full bg-white border border-dashed border-[#E2DDD4] rounded-xl xl:rounded-2xl ${compact ? 'p-4' : 'p-5 xl:p-6 mb-4 xl:mb-6'} cursor-pointer hover:border-[#C8522A] transition-all group flex items-center gap-3`}
+    >
+      <div className="w-9 h-9 bg-[#F5F0E8] rounded-full flex items-center justify-center text-[#1A1A18] group-hover:text-[#C8522A] shrink-0">
+        <Edit3 size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-bold text-[#1A1A18]">文案撰寫區・AI 文案檢測</div>
+        <div className="text-[11px] xl:text-xs text-[#8C8880] truncate">
+          {draftContent ? `目前草稿：${draftContent}` : '撰寫貼文、存草稿，並用 AI 自行檢查有沒有違反廣告法規（不會送給廠商）'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 成效分析：推廣中／已完成的任務共用同一份區塊，資料來自 GET /koc/analytics/getDetail
 function AnalyticsSection({
   usageCount, totalCommission, clickCount, epc,
@@ -100,9 +122,9 @@ function AnalyticsSection({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 xl:gap-4 mb-4 xl:mb-6">
         <StatTile
-          label="有效帶貨數量"
+          label="有效訂單數"
           value={usageCount}
-          tooltip="有效帶貨數量：消費者已完成取貨且無退貨的有效訂單，分潤將以此數字進行計算。"
+          tooltip="有效訂單數：消費者已完成取貨且沒有退貨的訂單筆數，從任務開始累計、不分月份。分潤級距看的是「本月售出的商品件數」，一張訂單買 3 件會算 3 件，所以兩個數字可能不同。"
         />
         <StatTile label="累積分潤" value={`NT$ ${totalCommission.toLocaleString()}`} />
         <StatTile label="連結點擊次數" value={clickCount} />
@@ -148,8 +170,11 @@ export default function TaskDetailPage({ task, onBack }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [copyText, setCopyText] = useState('');
   const [linkText, setLinkText] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -161,6 +186,7 @@ export default function TaskDetailPage({ task, onBack }) {
   const [totalCommission, setTotalCommission] = useState(0);
   const [clickCount, setClickCount] = useState(0);
   const [epc, setEpc] = useState(0);
+  const [commissionTier, setCommissionTier] = useState(null);
   const [chartPeriod, setChartPeriod] = useState('month');
   const [chartLoading, setChartLoading] = useState(true);
 
@@ -176,6 +202,8 @@ export default function TaskDetailPage({ task, onBack }) {
         });
         if (res.data.success) {
           setDetail(res.data);
+          // 如果有草稿內容，預填進文字框
+          setCopyText(res.data.draft_content || '');
         } else {
           setLoadError(formatApiError(res.data.err) || '任務載入失敗');
         }
@@ -208,6 +236,7 @@ export default function TaskDetailPage({ task, onBack }) {
           setTotalCommission(res.data.total_commision);
           setClickCount(res.data.click_count ?? 0);
           setEpc(res.data.epc ?? 0);
+          setCommissionTier(res.data.commission_tier || null);
         }
       } catch (err) {
         if (!cancelled) console.error('載入成效分析失敗', err);
@@ -253,9 +282,12 @@ export default function TaskDetailPage({ task, onBack }) {
     </div>
   );
 
-  // API 回傳 2=publishing, 3=promoting, 4=completed（任務建立時直接進入 publishing）
-  const STAGE_NUM_TO_KEY = { 2: 'publishing', 3: 'promoting', 4: 'completed' };
+  // API 回傳 0=writing, 1=reviewing, 2=publishing, 3=promoting, 4=completed。
+  // KOC 已不再提交文案給廠商審核，writing / reviewing 停用，萬一遇到舊資料一律當成待發佈顯示。
+  const STAGE_NUM_TO_KEY = ['publishing', 'publishing', 'publishing', 'promoting', 'completed'];
   const stage = STAGE_NUM_TO_KEY[detail.stage];
+  // 作品連結被平台退回時的原因（見管理員「退回上一階段」）
+  const linkFeedback = stage === 'publishing' ? detail?.vendor_feedback : null;
   const promoCode = detail?.promotion_code || task.promoCode || null;
 
   const handleCopyPromoLink = () => {
@@ -268,9 +300,32 @@ export default function TaskDetailPage({ task, onBack }) {
   const earningsTotal = detail?.earnings_total || 0;
 
   // 畫面邏輯
-  const isWaitUpload = stage === 'publishing';                                           // 上傳作品
+  const isWaitUpload = stage === 'publishing';                                           // 發文並上傳作品連結
   const isPromoting = stage === 'promoting';                                             // 推廣中
   const isCompleted = stage === 'completed';                                             // 已結案
+
+  // 儲存草稿
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      const res = await api.post('/koc/mission/saveDraft', {
+        KOCMission_id: task.id,
+        submission_type: '0',
+        text_content: copyText,
+      });
+      if (res.data.success) {
+        setDetail(prev => ({ ...prev, draft_content: copyText }));
+        alert('草稿已成功儲存！');
+      } else {
+        alert(formatApiError(res.data.err) || '儲存失敗');
+      }
+    } catch (err) {
+      console.error('儲存草稿失敗:', err);
+      alert('草稿儲存失敗，請稍後再試。');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // 提交連結
   const handleSubmitLink = async () => {
@@ -387,9 +442,9 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
               <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
               <div className="col-span-2 md:col-span-1 border-t border-[#8C8880]/30 md:border-0 pt-3 md:pt-0">
-                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">{isPromoting || isCompleted ? '目前累積分潤' : '預估分潤收益'}</p>
+                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">{isPromoting ? '目前累積分潤' : '預估分潤收益'}</p>
                 <p className="font-bold text-sm xl:text-base">
-                  {isPromoting || isCompleted ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
+                  {isPromoting ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
                 </p>
               </div>
             </div>
@@ -408,19 +463,34 @@ export default function TaskDetailPage({ task, onBack }) {
 
         <div className="flex-1 bg-white rounded-2xl xl:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-6 xl:p-10 flex flex-col overflow-y-auto custom-scrollbar min-h-[400px]">
           
-          {/* 情境 3：上傳作品 */}
+          {/* 情境 1：發文並上傳作品連結 */}
           {isWaitUpload && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
               <div className="flex items-center gap-2 xl:gap-3 mb-6 xl:mb-8">
                 <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#FDF0ED] rounded-full flex items-center justify-center text-[#C8522A]">
-                  <CheckCircle2 size={16} className="xl:w-[18px] xl:h-[18px]" />
+                  <Upload size={16} className="xl:w-[18px] xl:h-[18px]" />
                 </div>
-                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">任務已確認！</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">發佈貼文並上傳作品連結</h3>
               </div>
+
+              {linkFeedback && (
+                <div className="mb-4 xl:mb-6 bg-[#FDF0ED] rounded-xl xl:rounded-2xl px-4 xl:px-6 py-4 flex gap-2.5 xl:gap-3">
+                  <AlertCircle size={18} className="text-[#C8522A] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[#C8522A] font-black text-[10px] xl:text-xs tracking-wider mb-1 block">作品連結被退回</span>
+                    <span className="text-xs xl:text-sm text-[#1A1A18] font-bold leading-relaxed">{linkFeedback}</span>
+                  </div>
+                </div>
+              )}
+
+              <CopyDraftCard
+                draftContent={detail?.draft_content}
+                onOpen={() => setShowModal(true)}
+              />
 
               <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-5 xl:p-8 border border-[#E2DDD4]">
                 <p className="text-[#1A1A18] font-bold text-xs xl:text-sm mb-4 xl:mb-6 flex items-start gap-1.5 xl:gap-2 leading-relaxed">
-                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" /> 優惠碼已生效！請將完成的貼文發佈至社群，並上傳作品連結。
+                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" /> 請在貼文中置入專屬優惠碼或推廣連結，發佈至社群後上傳作品連結，優惠碼即會生效。
                 </p>
                 <div className="flex flex-col gap-3 xl:gap-4">
                   <input
@@ -450,6 +520,16 @@ export default function TaskDetailPage({ task, onBack }) {
                 活動截止日後，將自動結案並計算最終分潤
               </p>
 
+              <TierProgressCard tier={commissionTier} />
+
+              <div className="mt-6 xl:mt-8">
+                <CopyDraftCard
+                  draftContent={detail?.draft_content}
+                  onOpen={() => setShowModal(true)}
+                  compact
+                />
+              </div>
+
               <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection
                 usageCount={usageCount}
@@ -472,9 +552,9 @@ export default function TaskDetailPage({ task, onBack }) {
                 <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#E2DDD4]">
                   <CheckCircle2 size={32} className="text-[#8C8880] xl:w-12 xl:h-12" />
                 </div>
-                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">推廣已完成</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">任務已完成</h3>
                 <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed">
-                  感謝您的合作！目前已經順利結案，分潤將依實際轉換計算，完成後會顯示在可提領餘額裡，屆時請記得填寫勞務報酬單才能順利提款。
+                  感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
                 </p>
               </div>
 
@@ -515,6 +595,78 @@ export default function TaskDetailPage({ task, onBack }) {
           </div>
         )}
       </div>
+
+      {/* 文案撰寫彈出視窗 */}
+      {showModal && (
+        <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
+          <div className="bg-white rounded-[1.5rem] xl:rounded-[2rem] p-6 xl:p-10 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
+            <div className="flex justify-between items-center mb-4 xl:mb-6 shrink-0">
+              <h3 className="text-lg xl:text-xl font-bold text-[#1A1A18]">文案撰寫區</h3>
+              <button onClick={() => setShowModal(false)} className="xl:hidden p-1 text-[#8C8880] hover:text-[#1A1A18]">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1">
+              <p className="text-[11px] xl:text-xs text-[#8C8880] mb-3 leading-relaxed">
+                這裡的文案只供您自己撰寫、存草稿與 AI 檢測，不會送給廠商。
+              </p>
+
+              <textarea
+                value={copyText}
+                onChange={(e) => setCopyText(e.target.value)}
+                placeholder="請輸入欲發佈的圖文內容草稿...."
+                className="w-full min-h-[200px] xl:h-64 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl xl:rounded-[1.5rem] p-4 xl:p-6 outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none mb-3 text-[13px] xl:text-sm text-[#1A1A18] leading-relaxed transition-all placeholder:text-[#8C8880] font-medium shadow-inner custom-scrollbar"
+              />
+
+              <div className="mb-4">
+                <AiCheckPanel missionId={task.id} text={copyText} />
+              </div>
+
+              <div className="flex justify-between items-end mb-6 xl:mb-8 bg-[#F5F0E8] p-3 xl:p-4 rounded-xl border border-[#E2DDD4]">
+                <div className="text-[10px] xl:text-xs font-bold text-[#8C8880] space-y-1 xl:space-y-1.5 ml-1 xl:ml-2">
+                  <p className="text-[#1A1A18] mb-0.5 xl:mb-1">發佈規範：</p>
+                  <p>• 文案長度建議大於 50 字</p>
+                  <p className="flex flex-wrap items-center gap-1">• 請務必包含專屬優惠碼：
+                    <span className="text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4]">
+                      {promoCode || '無'}
+                    </span>
+                  </p>
+                  {promoCode && (
+                    <p className="flex flex-wrap items-center gap-1">• 或直接分享推廣連結：
+                      <button
+                        type="button"
+                        onClick={handleCopyPromoLink}
+                        className="flex items-center gap-1 text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4] hover:border-[#C8522A] transition-all"
+                      >
+                        {linkCopied ? <Check size={11} /> : <Copy size={11} />}
+                        {linkCopied ? '已複製' : '複製連結'}
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 xl:gap-4 shrink-0 pt-2">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#F8F9FA] transition-all text-xs xl:text-sm order-2 sm:order-1"
+              >
+                關閉
+              </button>
+              <button
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs xl:text-sm tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 order-1 sm:order-2"
+              >
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
+                {isSaving ? '儲存中...' : '儲存草稿'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 取消任務確認視窗 */}
       {showCancelModal && (

@@ -28,17 +28,22 @@ class UpdateKOCProfileSerializer(serializers.Serializer):
 class InfluencerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = '__all__'
+        # 密碼雜湊不能輸出給前端
+        exclude = ['password']
 
   
 class MissionSubmitSerializer(serializers.Serializer):
     KOCMission_id = serializers.IntegerField(required=True)
-    submission_type = serializers.ChoiceField(choices=['1'], required=True)
+    submission_type = serializers.ChoiceField(choices=['0', '1'], required=True)
+    text_content = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     content_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, data):
-        if not data.get('content_url'):
-            raise serializers.ValidationError("content_url 為必填")
+        submission_type = data.get('submission_type')
+        if submission_type == '0' and not data.get('text_content'):
+            raise serializers.ValidationError("submission_type=0 (文案) 時，text_content 為必填")
+        if submission_type == '1' and not data.get('content_url'):
+            raise serializers.ValidationError("submission_type=1 (作品連結) 時，content_url 為必填")
         return data
 
 class ApplicationListItemSerializer(serializers.Serializer):
@@ -61,6 +66,8 @@ class MissionListItemSerializer(serializers.Serializer):
 
 class MissionStageCountsSerializer(serializers.Serializer):
     qualification = serializers.IntegerField()
+    writing = serializers.IntegerField()
+    reviewing = serializers.IntegerField()
     publishing = serializers.IntegerField()
     completed = serializers.IntegerField()
 
@@ -80,6 +87,12 @@ class AnalyticsListItemSerializer(serializers.Serializer):
 class AnalyticsDetailSerializer(serializers.Serializer):
     KOCMission_id = serializers.IntegerField(required=True)
     period = serializers.ChoiceField(choices=['week', 'month'], required=True)
+
+class SaveDraftSerializer(serializers.Serializer):
+    KOCMission_id = serializers.IntegerField(required=True)
+    submission_type = serializers.ChoiceField(choices=['0', '1'], required=True)
+    text_content = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    content_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 class KOCApplySerializer(serializers.Serializer):
     user_id = serializers.CharField(required=True)
@@ -149,9 +162,3 @@ class PlatformKOCListItemSerializer(serializers.Serializer):
 class PlatformKOCDetailSerializer(serializers.Serializer):
     koc_id = serializers.CharField(required=True)
 
-class KOCMissionStageUpdateSerializer(serializers.Serializer):
-    KOCMisson_id = serializers.IntegerField(required=True)
-    Stage = serializers.ChoiceField(
-        choices=['publishing', 'promoting', 'completed'],
-        required=True
-    )

@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -135,6 +138,34 @@ def retrieve_similar_cases(text, category, top_k=5):
 class AnalyzeRequest(BaseModel):
     text: str
     category: str
+
+
+# ---------------------------------------------------------------------------
+# KOC 平台的檢測通行證（見 backend/api/views/ai_check.py 的 sign_ai_check_token）
+# KOC 必須先在平台同意免責條款，平台後端才會發通行證；瀏覽器帶著通行證
+# （X-AiCheck-Token header）直接呼叫這裡。
+# 有設定 AI_CHECK_SHARED_SECRET 時一律要求有效通行證；沒設定時不檢查
+# （本機開發、或單獨使用 ad-checker 自己的前端時）。
+# ---------------------------------------------------------------------------
+AI_CHECK_SHARED_SECRET = os.getenv("AI_CHECK_SHARED_SECRET", "")
+MAX_ANALYZE_TEXT_LENGTH = 5000
+
+
+def verify_ai_check_token(token):
+    """驗證通過回傳 payload（dict），否則丟 HTTPException。"""
+    if not token or "." not in token:
+        raise HTTPException(status_code=401, detail="請先在平台同意 AI 文案檢測使用條款")
+    body, signature = token.rsplit(".", 1)
+    expected = hmac.new(AI_CHECK_SHARED_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(status_code=401, detail="檢測通行證無效，請重新整理頁面後再試")
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    except Exception:
+        raise HTTPException(status_code=401, detail="檢測通行證無效，請重新整理頁面後再試")
+    if int(payload.get("exp", 0)) < time.time():
+        raise HTTPException(status_code=401, detail="檢測通行證已過期，請再按一次檢測")
+    return payload
 
 
 class Violation(BaseModel):
@@ -436,7 +467,13 @@ def rules_for_category(category: str):
 
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest):
+def analyze(req: AnalyzeRequest, x_aicheck_token: Optional[str] = Header(default=None)):
+    if AI_CHECK_SHARED_SECRET:
+        payload = verify_ai_check_token(x_aicheck_token)
+        # 商品廣告類別以平台發的通行證為準，不信任前端送來的值
+        req.category = payload.get("c") or req.category
+        if len(req.text) > MAX_ANALYZE_TEXT_LENGTH:
+            raise HTTPException(status_code=400, detail=f"文案長度請在 {MAX_ANALYZE_TEXT_LENGTH} 字以內")
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="文案內容不得為空")
     if req.category not in CATEGORY_NAMES:

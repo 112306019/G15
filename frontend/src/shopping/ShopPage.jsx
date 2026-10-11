@@ -1,9 +1,10 @@
 import { API_BASE_URL } from '../config';
+import { addProductToCart } from './cartApi';
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import KOCVideo from '../assets/KOC_ad.mp4';
 import { getErrorMessage } from '../errorMessage';
 
-function formatNTD(amount) {
+export function formatNTD(amount) {
   const value = Number(amount);
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
 }
@@ -53,8 +54,12 @@ function ShoppingBagIcon() {
 }
 
 // 商品卡片
-function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick }) {
+export function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D8D4CC,#C4BDB4)", imageUrl, onAdd, onClick, isBundle = false, bundleItems = [] }) {
   const isSoldOut = Number(stock) <= 0;
+  // 組合商品：卡片上顯示「內含 A x2、B x1」
+  const bundleSummary = isBundle
+    ? bundleItems.map((item) => `${item.Product_name} x${item.quantity}`).join("、")
+    : "";
 
   return (
     <div className="group flex flex-col gap-2 md:gap-3 cursor-pointer" onClick={onClick}>
@@ -76,6 +81,12 @@ function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D
           </svg>
         )}
 
+        {isBundle && (
+          <span className="absolute top-2 left-2 md:top-3 md:left-3 z-10 rounded-full bg-[#C8522A] px-2 py-0.5 text-[10px] md:text-[11px] font-bold tracking-wider text-white shadow-sm">
+            組合
+          </span>
+        )}
+
         {/* 購物車按鈕：售罄時不給加入購物車 */}
         {!isSoldOut && (
           // [RWD 優化] 手機版縮小按鈕與圖標，且不隱藏(直接顯示)
@@ -92,6 +103,11 @@ function ProductCard({ name, price, stock, gradient = "linear-gradient(135deg,#D
         <h3 className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug md:leading-relaxed transition-colors group-hover:text-[#C8522A] min-h-[36px] md:min-h-[40px]">
           {name}
         </h3>
+        {bundleSummary && (
+          <div className="text-[10px] md:text-xs text-[#8C8880] line-clamp-1" title={`內含：${bundleSummary}`}>
+            內含：{bundleSummary}
+          </div>
+        )}
         <div className="mt-0.5 md:mt-1 text-sm md:text-base font-black tracking-wide text-[#8C8880]">
           {isSoldOut ? "已售罄" : price}
         </div>
@@ -366,35 +382,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
       return;
     }
 
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("token");
-
     try {
-      const cartRes = await fetch(`${API_BASE_URL}/api/consumer/cart/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ User_id: userId }),
-      });
-      const cartData = await cartRes.json();
-      const cartId = cartData.Cart_id;
-
-      const addRes = await fetch(`${API_BASE_URL}/api/consumer/cart/item/add`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          Cart_id: cartId,
-          Product_id: productId,
-          Quantity: 1,
-        }),
-      });
-
-      if (addRes.ok) {
+      if (await addProductToCart(productId)) {
         showToast("✓ 已成功加入購物車！");
         onAddToCart?.();
       } else {
@@ -639,6 +628,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={formatNTD(p.discounted_price || p.price)}
                       stock={p.stock}
+                      isBundle={Boolean(p.is_bundle)}
+                      bundleItems={p.bundle_items || []}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -664,6 +655,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                       name={p.Product_name}
                       price={formatNTD(p.discounted_price || p.price)}
                       stock={p.stock}
+                      isBundle={Boolean(p.is_bundle)}
+                      bundleItems={p.bundle_items || []}
                       gradient={p.gradient}
                       imageUrl={p.image_url}
                       onAdd={() => handleAdd(p.Product_id)}
@@ -707,6 +700,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     name={p.Product_name}
                     price={formatNTD(p.discounted_price || p.price)}
                     stock={p.stock}
+                    isBundle={Boolean(p.is_bundle)}
+                    bundleItems={p.bundle_items || []}
                     gradient={p.gradient}
                     imageUrl={p.image_url}
                     onAdd={() => handleAdd(p.Product_id)}

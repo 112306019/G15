@@ -13,8 +13,10 @@ from api.error_messages import internal_error_message, serializer_error_message
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import (
+    STAGE_ALLOWED_SUBMISSION_TYPE,
     sync_expired_promoting_missions,
     restore_order_stock,
+    resync_bundle_stock,
     SUBMISSION_REMINDER_DAYS,
     KOC_COMMISSION_RATE_PERCENT,
     VENDOR_SETTLEMENT_RATE_PERCENT,
@@ -25,9 +27,9 @@ from api.models import (
     Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
-    VendorInvoice,
+    VendorInvoice, ProductBundleItem,
 )
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
 from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
@@ -39,9 +41,11 @@ from api.vendor_serializers import (
     VendorProductCreateSerializer,
     VendorProductUpdateSerializer,
     VendorProductStatusSerializer,
+    VendorBundleSaveSerializer,
     VendorCampaignCreateSerializer,
     VendorCampaignUpdateSerializer,
     VendorApplicationReviewSerializer,
+    VendorSubmissionReviewSerializer,
 )
 
 from api.views.shipping import (
@@ -84,7 +88,7 @@ def vendor_register(request):
         if existing_vendor.is_verified:
             return Response({
                 "success": False,
-                "err": "Email already exists"
+                "err": "這個 Email 已經註冊過了"
             }, status=status.HTTP_400_BAD_REQUEST)
         else:
             # 之前註冊過但沒完成信箱驗證，視為未完成的舊紀錄，
@@ -95,7 +99,7 @@ def vendor_register(request):
     if Vendor.objects.filter(tax_id=tax_id).exists():
         return Response({
             "success": False,
-            "err": "Tax ID already exists"
+            "err": "這個統一編號已經註冊過了"
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
@@ -248,20 +252,21 @@ def vendor_login(request):
     try:
         vendor = Vendor.objects.get(vendor_id=vendor_id)
     except Vendor.DoesNotExist:
+        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
         return Response({
             "success": False,
-            "err": "Vendor not found"
-        }, status=status.HTTP_404_NOT_FOUND)
+            "err": "帳號或密碼錯誤"
+        }, status=status.HTTP_401_UNAUTHORIZED)
 
-    # 正式註冊的密碼會是 hash，所以用 check_password
-    # 如果你資料庫裡原本有明文密碼，也暫時允許直接比對，方便測試
-    password_correct = check_password(password, vendor.password) or password == vendor.password
+    # 密碼一律以雜湊比對；原本允許明文比對的後門已移除，
+    # 資料庫裡的明文測試密碼已全部轉成雜湊（密碼本身不變）
+    password_correct = check_password(password, vendor.password)
 
     if not password_correct:
         return Response({
             "success": False,
-            "err": "Invalid password"
-        }, status=status.HTTP_400_BAD_REQUEST)
+            "err": "帳號或密碼錯誤"
+        }, status=status.HTTP_401_UNAUTHORIZED)
 
     # 信箱還沒驗證不能登入，前端要能分辨這種情況去導去驗證流程。
     # 廠商登入表單只收 vendor_id（不像消費者登入收 email），前端沒有信箱可以直接開驗證彈窗，
@@ -439,6 +444,13 @@ def vendor_product_update(request):
             "err": "Product not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
+    # 組合商品的庫存是算出來的，不能從一般商品編輯直接改
+    if product.is_bundle:
+        return Response({
+            "success": False,
+            "err": "組合商品請到「組合商品」頁面修改"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     serializer = VendorProductUpdateSerializer(
         product,
         data=request.data,
@@ -452,6 +464,9 @@ def vendor_product_update(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     serializer.save()
+
+    # 單品庫存變了，用到它的組合可售組數也要跟著更新
+    resync_bundle_stock(component_ids=[product.product_id])
 
     return Response({
         "success": True,
@@ -495,6 +510,10 @@ def vendor_product_update_status(request):
 
     product.status = new_status
     product.save()
+
+    # 組成商品下架時，用到它的組合可售組數會變 0；重新上架再算回來
+    if not product.is_bundle:
+        resync_bundle_stock(component_ids=[product.product_id])
 
     return Response({
         "success": True,
@@ -548,6 +567,15 @@ def vendor_product_delete(request):
             "err": "此商品已綁定活動，無法刪除；請改為下架商品"
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    # 被組合商品用到，不允許刪除（組合內容會憑空少一項）
+    if ProductBundleItem.objects.filter(
+        component=product
+    ).exists():
+        return Response({
+            "success": False,
+            "err": "此商品已被組合商品使用，請先從組合中移除，或改為下架商品"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     # 已有訂單紀錄，不允許刪除
     if OrderItem.objects.filter(
         product=product
@@ -576,6 +604,8 @@ def vendor_product_getlist(request):
     """
     vendor_id = request.GET.get("vendor_id")
     product_status = request.GET.get("status")
+    # 預設只列一般商品；組合商品有自己的頁面（/vendor/bundle/getlist）
+    include_bundles = request.GET.get("include_bundles") in ("1", "true", "True")
 
     if not vendor_id:
         return Response({
@@ -584,6 +614,9 @@ def vendor_product_getlist(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     products = Product.objects.filter(vendor_id=vendor_id)
+
+    if not include_bundles:
+        products = products.filter(is_bundle=False)
 
     if product_status:
         products = products.filter(status=product_status)
@@ -627,6 +660,8 @@ def vendor_product_getlist(request):
         .values_list("product_id", flat=True)
     )
 
+    bound_campaign_map = _bound_campaigns_by_product(vendor_id)
+
     product_list = []
 
     for product in products:
@@ -646,6 +681,8 @@ def vendor_product_getlist(request):
             "quantity_sold": sold_info["quantity_sold"],
             "total_sales": int(sold_info["total_sales"]),
             "is_promoting": product.product_id in promoting_product_ids,
+            "bound_campaigns": bound_campaign_map.get(product.product_id, []),
+            "is_bundle": product.is_bundle,
             "category": product.category,
             "status": product.status,
         })
@@ -656,6 +693,521 @@ def vendor_product_getlist(request):
         "products": product_list
     }, status=status.HTTP_200_OK)
 
+
+
+# ──────────────────────────────────────────────
+# 商品 ↔ 活動 綁定限制：同一商品同一時間只能綁一個活動
+# ──────────────────────────────────────────────
+#
+# 「佔用期間」= 活動 start_date ~ end_date。
+# 不加 promo_days：constants.sync_expired_promoting_missions() 在 end_date 一過
+# 就會把該活動的優惠碼改成 expired、任務轉 completed、活動轉 closed，
+# 實際上 end_date 之後折扣碼已經不能用，商品也就不再被這個活動推廣。
+#
+# 不佔用商品的狀態：
+# - draft：兩個草稿可以選同一商品，先發佈的佔住，後發佈的在發佈時被擋。
+# - closed：只會由 sync 在 end_date 過後寫入（沒有手動結案流程），代表已結束。
+
+CAMPAIGN_NON_OCCUPYING_STATUSES = ("draft", "closed")
+
+
+def _campaign_occupied_until(campaign):
+    return campaign.end_date
+
+
+def find_product_campaign_conflict(
+    product_id,
+    start_datetime,
+    end_datetime,
+    exclude_campaign_id=None,
+):
+    """
+    回傳與 [start_datetime, end_datetime] 期間重疊、
+    且已綁定同一商品的其他已發佈活動；沒有衝突回傳 None。
+    """
+    new_until = end_datetime
+
+    campaign_products = (
+        CampaignProduct.objects
+        .filter(product_id=product_id)
+        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
+        .select_related("campaign")
+    )
+
+    if exclude_campaign_id is not None:
+        campaign_products = campaign_products.exclude(
+            campaign_id=exclude_campaign_id
+        )
+
+    for campaign_product in campaign_products:
+        other = campaign_product.campaign
+        if (
+            other.start_date <= new_until
+            and start_datetime <= _campaign_occupied_until(other)
+        ):
+            return other
+
+    return None
+
+
+def product_campaign_conflict_message(campaign):
+    occupied_until = timezone.localtime(
+        _campaign_occupied_until(campaign)
+    ).date().isoformat()
+    start = timezone.localtime(campaign.start_date).date().isoformat()
+
+    return (
+        f"此商品已綁定活動「{campaign.name}」"
+        f"（{start} ~ {occupied_until}），"
+        f"同一商品同一時間只能參加一個活動，請調整活動日期或改選其他商品"
+    )
+
+
+def _bound_campaigns_by_product(vendor_id):
+    """
+    {product_id: [目前或之後會佔用該商品的已發佈活動（依開始日排序）]}
+    給建立活動精靈判斷「選的日期是否跟既有活動重疊」用，一般商品與組合商品共用。
+    """
+    now = timezone.now()
+    bound_campaign_map = {}
+
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(product__vendor_id=vendor_id)
+        .exclude(campaign__status__in=CAMPAIGN_NON_OCCUPYING_STATUSES)
+        .select_related("campaign")
+    ):
+        campaign = campaign_product.campaign
+        occupied_until = _campaign_occupied_until(campaign)
+
+        if occupied_until < now:
+            continue
+
+        bound_campaign_map.setdefault(campaign_product.product_id, []).append({
+            "campaign_id": str(campaign.campaign_id),
+            "name": campaign.name,
+            "start_date": timezone.localtime(campaign.start_date).date().isoformat(),
+            "occupied_until": timezone.localtime(occupied_until).date().isoformat(),
+        })
+
+    for bound_list in bound_campaign_map.values():
+        bound_list.sort(key=lambda item: item["start_date"])
+
+    return bound_campaign_map
+
+
+# ──────────────────────────────────────────────
+# Vendor 組合商品（例：A 商品 x2 + B 商品 x1）
+# ──────────────────────────────────────────────
+#
+# 組合本身是一筆 Product（is_bundle=True），所以購物車、訂單、活動綁定、優惠碼、
+# 月結、「一個商品一次只能綁一個活動」都直接沿用一般商品的流程。
+# 組成內容記在 ProductBundleItem；庫存規則見 constants.py「庫存（含組合商品）」。
+
+
+def _apply_product_description(product, data):
+    """活動精靈裡改了既有商品 / 組合的商品簡介時，寫回 Product.description（商城商品頁同一份）"""
+    description = data.get("product_description")
+
+    if description is None:
+        return
+
+    description = description.strip()
+
+    if description != (product.description or ""):
+        product.description = description
+        product.save(update_fields=["description"])
+
+
+def _bundle_contents_map(product_ids):
+    """{bundle_id: [(組成商品 Product, 每組數量)]}，給訂單明細展開組合內容用"""
+    contents = {}
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=list(set(product_ids)))
+        .select_related("component")
+        .order_by("bundle_item_id")
+    ):
+        contents.setdefault(bundle_item.bundle_id, []).append(
+            (bundle_item.component, bundle_item.quantity)
+        )
+    return contents
+
+
+def _order_item_bundle_contents(order_item, bundle_map):
+    """
+    訂單品項若是組合，回傳出貨時要裝的內容（數量已乘上購買組數）：
+    買 2 組「防曬乳 x2 + 卸妝油 x1」→ 防曬乳 x4、卸妝油 x2
+    """
+    if not order_item.product.is_bundle:
+        return []
+    return [
+        {
+            "product_id": component.product_id,
+            "product_name": component.product_name,
+            "quantity_per_bundle": per_bundle,
+            "quantity": per_bundle * order_item.quantity,
+        }
+        for component, per_bundle in bundle_map.get(order_item.product_id, [])
+    ]
+
+
+def _validate_bundle_components(vendor_id, items):
+    """
+    確認組成商品都是這個廠商的一般商品（不能放別人的商品，也不能組合裡再放組合）。
+    回傳 (錯誤訊息 or None, {product_id: Product})
+    """
+    product_ids = [item["product_id"] for item in items]
+
+    components = {
+        product.product_id: product
+        for product in Product.objects.filter(
+            product_id__in=product_ids,
+            vendor_id=vendor_id,
+            is_bundle=False
+        )
+    }
+
+    if len(components) != len(product_ids):
+        return "組合只能選擇自己商品庫中的一般商品（不能放入其他組合）", components
+
+    return None, components
+
+
+def _bundle_return_policy(components):
+    """組成商品只要有一個不適用七天鑑賞期，整組就不適用，原因沿用該商品的原因。"""
+    for product in components:
+        if not product.is_returnable:
+            return False, product.non_returnable_reason
+    return True, None
+
+
+def _bundle_ad_category(components):
+    """組成商品廣告類別都一樣就沿用，不一樣就歸類為 other。"""
+    categories = {product.ad_category for product in components}
+    return categories.pop() if len(categories) == 1 else "other"
+
+
+def _serialize_bundle(bundle, bundle_items, bound_campaign_map, sold_info, has_orders):
+    items = [
+        {
+            "product_id": bundle_item.component.product_id,
+            "product_name": bundle_item.component.product_name,
+            "price": bundle_item.component.price,
+            "stock": bundle_item.component.stock,
+            "status": bundle_item.component.status,
+            "image_url": bundle_item.component.image_url,
+            "quantity": bundle_item.quantity,
+        }
+        for bundle_item in bundle_items
+    ]
+
+    return {
+        "bundle_id": bundle.product_id,
+        "product_id": bundle.product_id,
+        "product_name": bundle.product_name,
+        "description": bundle.description,
+        "price": bundle.price,
+        "discounted_price": bundle.discounted_price,
+        "image_url": bundle.image_url,
+        "category": bundle.category,
+        "status": bundle.status,
+        "is_bundle": True,
+        # 可售組數（由組成商品庫存換算）
+        "stock": bundle.stock,
+        "items": items,
+        "items_total_price": sum(item["price"] * item["quantity"] for item in items),
+        # 已有訂單的組合不能再改組成內容，否則舊訂單取消時會加回錯的庫存
+        "items_locked": has_orders,
+        "quantity_sold": sold_info["quantity_sold"],
+        "total_sales": int(sold_info["total_sales"]),
+        "bound_campaigns": bound_campaign_map.get(bundle.product_id, []),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_bundle_getlist(request):
+    """
+    組合商品清單
+    URL: /vendor/bundle/getlist?vendor_id=&status=
+    """
+    vendor_id = request.GET.get("vendor_id")
+    bundle_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    bundles = Product.objects.filter(vendor_id=vendor_id, is_bundle=True).order_by("-product_id")
+
+    if bundle_status:
+        bundles = bundles.filter(status=bundle_status)
+
+    bundles = list(bundles)
+    bundle_ids = [bundle.product_id for bundle in bundles]
+
+    items_by_bundle = {}
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=bundle_ids)
+        .select_related("component")
+        .order_by("bundle_item_id")
+    ):
+        items_by_bundle.setdefault(bundle_item.bundle_id, []).append(bundle_item)
+
+    ordered_bundle_ids = set(
+        OrderItem.objects
+        .filter(product_id__in=bundle_ids)
+        .values_list("product_id", flat=True)
+    )
+
+    sold_map = {
+        row["product_id"]: {
+            "quantity_sold": row["quantity_sold"] or 0,
+            "total_sales": row["total_sales"] or 0,
+        }
+        for row in (
+            OrderItem.objects
+            .filter(
+                product_id__in=bundle_ids,
+                order__payment_status__in=["paid", "completed"]
+            )
+            .values("product_id")
+            .annotate(quantity_sold=Sum("quantity"), total_sales=Sum("subtotal"))
+        )
+    }
+
+    bound_campaign_map = _bound_campaigns_by_product(vendor_id)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundles": [
+            _serialize_bundle(
+                bundle,
+                items_by_bundle.get(bundle.product_id, []),
+                bound_campaign_map,
+                sold_map.get(bundle.product_id, {"quantity_sold": 0, "total_sales": 0}),
+                bundle.product_id in ordered_bundle_ids,
+            )
+            for bundle in bundles
+        ]
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_create(request):
+    """
+    建立組合商品
+    URL: /vendor/bundle/create
+    body: { vendor_id, product_name, description, price, category, image_url,
+            items: [{ product_id, quantity }, ...] }
+    """
+    serializer = VendorBundleSaveSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    vendor_id = data["vendor_id"]
+
+    if not Vendor.objects.filter(vendor_id=vendor_id).exists():
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    err, components = _validate_bundle_components(vendor_id, data["items"])
+    if err:
+        return Response({"success": False, "err": err}, status=status.HTTP_400_BAD_REQUEST)
+
+    is_returnable, non_returnable_reason = _bundle_return_policy(components.values())
+
+    try:
+        with transaction.atomic():
+            bundle = Product.objects.create(
+                vendor_id=vendor_id,
+                product_name=data["product_name"],
+                description=data.get("description") or "",
+                price=data["price"],
+                discounted_price=None,
+                stock=0,
+                category=data.get("category") or None,
+                image_url=data.get("image_url") or None,
+                status="active",
+                is_bundle=True,
+                ad_category=_bundle_ad_category(components.values()),
+                is_returnable=is_returnable,
+                non_returnable_reason=non_returnable_reason,
+            )
+
+            ProductBundleItem.objects.bulk_create([
+                ProductBundleItem(
+                    bundle=bundle,
+                    component=components[item["product_id"]],
+                    quantity=item["quantity"],
+                )
+                for item in data["items"]
+            ])
+
+            resync_bundle_stock(bundle_ids=[bundle.product_id])
+
+    except Exception:
+        return Response({
+            "success": False,
+            "err": internal_error_message("組合商品建立失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": bundle.product_id,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_update(request):
+    """
+    修改組合商品（名稱、價格、說明、圖片、組成內容）
+    URL: /vendor/bundle/update
+    已有訂單的組合只能改名稱/價格/說明/圖片，組成內容不能改。
+    """
+    serializer = VendorBundleSaveSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    vendor_id = data["vendor_id"]
+    bundle_id = data.get("bundle_id")
+
+    if not bundle_id:
+        return Response({
+            "success": False,
+            "err": "bundle_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        bundle = Product.objects.get(product_id=bundle_id, vendor_id=vendor_id, is_bundle=True)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到這個組合商品"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    err, components = _validate_bundle_components(vendor_id, data["items"])
+    if err:
+        return Response({"success": False, "err": err}, status=status.HTTP_400_BAD_REQUEST)
+
+    current_items = {
+        bundle_item.component_id: bundle_item.quantity
+        for bundle_item in ProductBundleItem.objects.filter(bundle=bundle)
+    }
+    new_items = {item["product_id"]: item["quantity"] for item in data["items"]}
+    items_changed = current_items != new_items
+
+    if items_changed and OrderItem.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已有訂單，組成內容不能再修改（名稱、價格、說明、圖片可以改）；要換內容請另建新組合"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    is_returnable, non_returnable_reason = _bundle_return_policy(components.values())
+
+    try:
+        with transaction.atomic():
+            bundle.product_name = data["product_name"]
+            bundle.description = data.get("description") or ""
+            bundle.price = data["price"]
+            bundle.category = data.get("category") or None
+            bundle.image_url = data.get("image_url") or None
+            bundle.ad_category = _bundle_ad_category(components.values())
+            bundle.is_returnable = is_returnable
+            bundle.non_returnable_reason = non_returnable_reason
+            bundle.save()
+
+            if items_changed:
+                ProductBundleItem.objects.filter(bundle=bundle).delete()
+                ProductBundleItem.objects.bulk_create([
+                    ProductBundleItem(
+                        bundle=bundle,
+                        component=components[item["product_id"]],
+                        quantity=item["quantity"],
+                    )
+                    for item in data["items"]
+                ])
+
+            resync_bundle_stock(bundle_ids=[bundle.product_id])
+
+    except Exception:
+        return Response({
+            "success": False,
+            "err": internal_error_message("組合商品更新失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": bundle.product_id,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_bundle_delete(request):
+    """
+    刪除組合商品（規則同一般商品：沒綁活動、沒訂單才能刪；否則請下架）
+    URL: /vendor/bundle/delete
+    上架 / 下架沿用 /vendor/product/updateStatus。
+    """
+    vendor_id = request.data.get("vendor_id")
+    bundle_id = request.data.get("bundle_id")
+
+    if not vendor_id or not bundle_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id 與 bundle_id 為必填"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        bundle = Product.objects.get(product_id=bundle_id, vendor_id=vendor_id, is_bundle=True)
+    except Product.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到這個組合商品"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if CampaignProduct.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已綁定活動，無法刪除；請改為下架"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if OrderItem.objects.filter(product=bundle).exists():
+        return Response({
+            "success": False,
+            "err": "此組合已有訂單紀錄，無法刪除；請改為下架"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # ProductBundleItem.bundle 是 CASCADE，組成明細會一起刪掉
+    bundle.delete()
+
+    return Response({
+        "success": True,
+        "err": "",
+        "bundle_id": int(bundle_id),
+    }, status=status.HTTP_200_OK)
 
 
 # ──────────────────────────────────────────────
@@ -763,9 +1315,25 @@ def vendor_campaign_create(request):
     try:
         with transaction.atomic():
 
-            # 既有商品直接使用前面查到的資料
+            # 既有商品：鎖住商品列再檢查，避免兩個請求同時把同一商品綁進不同活動
             if existing_product is not None:
-                product = existing_product
+                product = Product.objects.select_for_update().get(
+                    product_id=existing_product.product_id
+                )
+
+                conflict = find_product_campaign_conflict(
+                    product_id=product.product_id,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
+                )
+
+                if conflict is not None:
+                    return Response({
+                        "success": False,
+                        "err": product_campaign_conflict_message(conflict)
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                _apply_product_description(product, data)
 
             # 新商品現在才寫入資料庫
             else:
@@ -796,6 +1364,7 @@ def vendor_campaign_create(request):
                 vendor=vendor,
                 name=data["name"],
                 description=data.get("description", ""),
+                promo_copy=(data.get("promo_copy") or "").strip(),
                 budget=data["budget"],
                 reward_type=data.get(
                     "reward_type",
@@ -962,7 +1531,40 @@ def vendor_campaign_update(request):
         with transaction.atomic():
 
             if existing_product is not None:
-                product = existing_product
+                product = Product.objects.select_for_update().get(
+                    product_id=existing_product.product_id
+                )
+
+                # 只有「換商品 / 草稿→發佈 / 改日期」才需要重新檢查，
+                # 單純改名稱、預算之類不檢查，避免舊資料裡已重疊的活動連改名都改不了。
+                product_changed = (
+                    campaign_product is None
+                    or campaign_product.product_id != product.product_id
+                )
+                publishing = (
+                    campaign.status in CAMPAIGN_NON_OCCUPYING_STATUSES
+                    and data["status"] not in CAMPAIGN_NON_OCCUPYING_STATUSES
+                )
+                period_changed = (
+                    campaign.start_date != start_datetime
+                    or campaign.end_date != end_datetime
+                )
+
+                if product_changed or publishing or period_changed:
+                    conflict = find_product_campaign_conflict(
+                        product_id=product.product_id,
+                        start_datetime=start_datetime,
+                        end_datetime=end_datetime,
+                        exclude_campaign_id=campaign.campaign_id,
+                    )
+
+                    if conflict is not None:
+                        return Response({
+                            "success": False,
+                            "err": product_campaign_conflict_message(conflict)
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                _apply_product_description(product, data)
             else:
                 product = Product.objects.create(
                     vendor_id=vendor_id,
@@ -992,6 +1594,7 @@ def vendor_campaign_update(request):
                 "description",
                 ""
             )
+            campaign.promo_copy = (data.get("promo_copy") or "").strip()
             campaign.budget = data["budget"]
             campaign.reward_type = data.get(
                 "reward_type",
@@ -1151,6 +1754,7 @@ def vendor_campaign_getlist(request):
                 "category": product.category,
                 "image_url": product.image_url,
                 "status": product.status,
+                "is_bundle": product.is_bundle,
 
                 "discount_type": campaign_product.discount_type,
                 "discount_value": str(
@@ -1164,6 +1768,7 @@ def vendor_campaign_getlist(request):
             "vendor_id": campaign.vendor_id,
             "name": campaign.name,
             "description": campaign.description,
+            "promo_copy": campaign.promo_copy,
             "budget": str(campaign.budget),
             "reward_type": campaign.reward_type,
             "promo_days": campaign.promo_days,
@@ -1368,6 +1973,11 @@ def generate_promotion_code(koc_id):
             return code
 
 
+SUBMISSION_TYPE_TO_STAGE = {
+    submission_type: stage
+    for stage, submission_type in STAGE_ALLOWED_SUBMISSION_TYPE.items()
+}
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_application_review(request):
@@ -1481,10 +2091,9 @@ def vendor_application_review(request):
                             # koc 是 ForeignKey，
                             # 使用 koc_id 指定實際主鍵值
                             "koc_id": application.koc_id,
-                            # 任務建立時直接進入待發佈階段（不經撰寫文案/審核文案），
-                            # 對齊 constants.STAGE_CODE_MAP 的 "publishing"
+                            # 任務建立時直接進入待發佈：KOC 不再提交文案給廠商審核，
+                            # 自行發文後上傳作品連結即可（對齊 STAGE_CODE_MAP 的 "publishing"）
                             "stage": "publishing",
-                            "publishing_started_at": timezone.now(),
                             # 進入 publishing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
                             "submission_deadline_at": timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS),
                         }
@@ -1501,11 +2110,9 @@ def vendor_application_review(request):
 
                 if not mission.stage:
                     mission.stage = "publishing"
-                    mission.publishing_started_at = timezone.now()
                     mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
                     mission.submission_reminder_sent = False
                     mission_fields_to_update.append("stage")
-                    mission_fields_to_update.append("publishing_started_at")
                     mission_fields_to_update.append("submission_deadline_at")
                     mission_fields_to_update.append("submission_reminder_sent")
 
@@ -1616,6 +2223,251 @@ def vendor_application_review(request):
     }, status=status.HTTP_200_OK)
 
 
+
+# ──────────────────────────────────────────────
+# Vendor 投稿 / 任務成果審核
+# ──────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_mission_get_submission_detail(request):
+    sync_expired_promoting_missions()
+
+    vendor_id = request.GET.get("vendor_id")
+    submission_id = request.GET.get("submission_id")
+    kocmission_id = request.GET.get("kocmission_id")
+    submission_type = request.GET.get("submission_type")
+    submission_status = request.GET.get("status")
+
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "vendor_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    submissions = Submissions.objects.filter(
+        kocmission__application__campaign__vendor_id=vendor_id
+    )
+
+    if submission_id:
+        submissions = submissions.filter(submission_id=submission_id)
+
+    if kocmission_id:
+        submissions = submissions.filter(kocmission__kocmission_id=kocmission_id)
+
+    if submission_status:
+        submissions = submissions.filter(status=submission_status)
+
+    if submission_type:
+        submissions = submissions.filter(submission_type=submission_type)
+
+    submission_list = []
+
+    for submission in submissions:
+        mission = submission.kocmission
+        application = mission.application
+        campaign = application.campaign
+
+        coupon = CouponNew.objects.filter(
+            kocmission=mission
+        ).first()
+
+        submission_list.append({
+            "submission_id": submission.submission_id,
+            "submission_type": submission.submission_type,
+            "content_url": submission.content_url,
+            "text_content": submission.text_content,
+            "status": submission.status,
+            "vendor_feedback": submission.vendor_feedback,
+            "submitted_time": submission.submitted_time,
+            "reviewed_time": submission.reviewed_time,
+
+            "kocmission_id": mission.kocmission_id,
+            "stage": mission.stage,
+            "koc_id": mission.koc_id,
+
+            "application_id": application.application_id,
+            "campaign_id": campaign.campaign_id,
+            "campaign_name": campaign.name,
+
+            "promotion_code": (
+                coupon.promotion_code
+                if coupon
+                else None
+            ),
+            "coupon_status": (
+                coupon.status
+                if coupon
+                else None
+            ),
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submissions": submission_list
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_mission_review_submission(request):
+    serializer = VendorSubmissionReviewSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor_id = serializer.validated_data["vendor_id"]
+    submission_id = serializer.validated_data["submission_id"]
+    review_result = serializer.validated_data["status"]
+    vendor_feedback = serializer.validated_data.get(
+        "vendor_feedback",
+        ""
+    )
+
+    # 對應 Submissions.STATUS_CHOICES
+    if review_result not in ["approved", "revising"]:
+        return Response({
+            "success": False,
+            "err": "Invalid review result"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        submission = Submissions.objects.select_related(
+            "kocmission__application__campaign"
+        ).get(
+            submission_id=submission_id
+        )
+    except Submissions.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "Submission not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    campaign = submission.kocmission.application.campaign
+
+    if str(campaign.vendor_id) != str(vendor_id):
+        return Response({
+            "success": False,
+            "err": "This submission does not belong to this vendor"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    mission = submission.kocmission
+
+    # 只有 KOC 提交、進入待審核（reviewing）的任務才能被廠商審核，
+    # 避免在錯誤的 stage 下誤觸發 stage 轉移
+    if mission.stage != "reviewing":
+        return Response({
+            "success": False,
+            "err": (
+                "This mission is not currently awaiting review "
+                f"(current stage: {mission.stage})"
+            )
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    coupon = CouponNew.objects.filter(
+        kocmission=submission.kocmission
+    ).first()
+
+    # model 中 text 代表文案
+    should_activate_coupon = (
+        review_result == "approved"
+        and submission.submission_type == "text"
+    )
+
+    # 文案審核通過前，先確認優惠碼存在
+    if should_activate_coupon and not coupon:
+        return Response({
+            "success": False,
+            "err": "Coupon not found for this KOC mission"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    submission.status = review_result
+    submission.vendor_feedback = vendor_feedback
+    submission.reviewed_time = timezone.now()
+    submission.save(
+        update_fields=[
+            "status",
+            "vendor_feedback",
+            "reviewed_time"
+        ]
+    )
+
+    if review_result == "approved":
+        if submission.submission_type == "text":
+            # 文案審核通過：進入待發佈，重新起算交件提醒期限
+            mission.stage = "publishing"
+            mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+            mission.submission_reminder_sent = False
+            mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
+            # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
+            try:
+                send_submission_approved_email(submission)
+            except Exception as e:
+                print(f"文案審核通過通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
+        # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
+        # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
+        # "reviewing"，會被上面的檢查擋掉。
+
+    elif review_result == "revising":
+        # 審核退回：依 submission 的類型回到對應的撰寫階段
+        # ('text' -> 'writing'，'link' -> 'publishing')
+        # 而不是不分類型都退回 "writing"，同時重新起算交件提醒期限
+        mission.stage = SUBMISSION_TYPE_TO_STAGE.get(
+            submission.submission_type,
+            "writing"
+        )
+        mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+        mission.submission_reminder_sent = False
+        mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
+
+        # 設定 3 天修改期限，並寄信通知 KOC；寄信失敗不影響審核本身成功與否。
+        submission.revising_deadline = timezone.now() + timedelta(days=3)
+        submission.revising_reminder_sent = False
+        submission.save(update_fields=["revising_deadline", "revising_reminder_sent"])
+        try:
+            send_submission_revising_email(submission)
+        except Exception as e:
+            print(f"文案退回通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
+
+    # 只有文案審核通過才啟用優惠碼
+    if should_activate_coupon:
+        coupon.status = "active"
+        coupon.save(update_fields=["status"])
+
+    submission_type_label = "文案" if submission.submission_type == "text" else "作品連結"
+    if mission.koc:
+        create_notification(
+            user=mission.koc.user,
+            category="koc",
+            title=f"{submission_type_label}審核通過" if review_result == "approved" else f"{submission_type_label}被退回",
+            body=(
+                f"您提交的{submission_type_label}已通過審核。"
+                if review_result == "approved"
+                else f"您提交的{submission_type_label}被退回，請依廠商意見修改後重新提交。"
+            ),
+            reference_type="koc_home",
+        )
+
+    return Response({
+        "success": True,
+        "err": "",
+        "submission_id": submission.submission_id,
+        "submission_type": submission.submission_type,
+        "status": submission.status,
+        "vendor_feedback": submission.vendor_feedback,
+        "reviewed_time": submission.reviewed_time,
+        "kocmission_id": mission.kocmission_id,
+        "stage": mission.stage,
+        "coupon_id": coupon.coupon_id if coupon else None,
+        "promotion_code": coupon.promotion_code if coupon else None,
+        "coupon_status": coupon.status if coupon else None,
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_order_getlist(request):
@@ -1663,6 +2515,8 @@ def vendor_order_getlist(request):
             order_id__in=order_ids
         )
     }
+
+    bundle_map = _bundle_contents_map([item.product_id for item in order_items])
 
     order_map = {}
 
@@ -1727,7 +2581,9 @@ def vendor_order_getlist(request):
             "quantity": item.quantity,
             "unit_price": str(item.unit_price),
             "subtotal": str(item.subtotal),
-            "apply_status": item.apply_status
+            "apply_status": item.apply_status,
+            "is_bundle": item.product.is_bundle,
+            "bundle_items": _order_item_bundle_contents(item, bundle_map),
         })
 
     return Response({
@@ -2062,6 +2918,8 @@ def vendor_order_get_detail(request):
             "shipping_status": shipment.shipping_status,
         }
 
+    bundle_map = _bundle_contents_map([item.product_id for item in order_items])
+
     items = []
 
     for item in order_items:
@@ -2072,7 +2930,9 @@ def vendor_order_get_detail(request):
             "quantity": item.quantity,
             "unit_price": str(item.unit_price),
             "subtotal": str(item.subtotal),
-            "apply_status": item.apply_status
+            "apply_status": item.apply_status,
+            "is_bundle": item.product.is_bundle,
+            "bundle_items": _order_item_bundle_contents(item, bundle_map),
         })
 
     # 舊版 Payment model 只有走過綠界前的模擬結帳流程才會有紀錄，改成一律從
@@ -4898,11 +5758,91 @@ def _attach_link_clicks(funnel, coupon_qs, start_date, end_date):
     link["summary"]["clicks"] = sum(clicks.values())
 
 
+def _db_coupon_checkout_stats(codes, start_date, end_date):
+    """
+    從資料庫統計每組優惠碼的「開始結帳」與「完成購買」（不靠 GA4）：
+    - 開始結帳：期間內用這組優惠碼建立的訂單（不論後來有沒有付款），與 GA4 begin_checkout 同一時機
+    - 完成購買：其中付款狀態為已付款的訂單（已退款不算），營收為這些訂單的總金額
+    GA4 只收得到瀏覽器送出的事件，被廣告攔截器擋掉、或不是走網站結帳流程的訂單都會漏算；
+    這兩步改用資料庫才會跟 KOC 分潤、廠商帳務對得上。
+    回傳 {優惠碼: {begin_checkout_events, begin_checkout_users, purchases, purchase_users, revenue}}
+    """
+    if not codes:
+        return {}
+
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(_resolve_ga4_date(start_date), time.min), tz)
+    end_dt = timezone.make_aware(
+        datetime.combine(_resolve_ga4_date(end_date) + timedelta(days=1), time.min), tz
+    )
+
+    stats = {}
+    orders = Order.objects.filter(
+        promotion_code__in=codes,
+        created_at__gte=start_dt,
+        created_at__lt=end_dt,
+    ).values('promotion_code', 'user_id', 'payment_status', 'total_amount')
+
+    for order in orders:
+        row = stats.setdefault(order['promotion_code'], {
+            'begin_checkout_events': 0,
+            'checkout_users': set(),
+            'purchases': 0,
+            'purchase_user_set': set(),
+            'revenue': 0.0,
+        })
+        row['begin_checkout_events'] += 1
+        row['checkout_users'].add(order['user_id'])
+        if order['payment_status'] in ('paid', 'completed'):
+            row['purchases'] += 1
+            row['purchase_user_set'].add(order['user_id'])
+            row['revenue'] += float(order['total_amount'] or 0)
+
+    return {
+        code: {
+            'begin_checkout_events': row['begin_checkout_events'],
+            'begin_checkout_users': len(row['checkout_users']),
+            'purchases': row['purchases'],
+            'purchase_users': len(row['purchase_user_set']),
+            'revenue': row['revenue'],
+        }
+        for code, row in stats.items()
+    }
+
+
+def _apply_db_checkout_stats(funnel, codes, db_stats):
+    """用資料庫的結帳／購買數字覆蓋優惠碼漏斗，並重算總計與轉換率。套用次數仍來自 GA4。"""
+    keys = ('begin_checkout_events', 'begin_checkout_users', 'purchases', 'purchase_users', 'revenue')
+    rows_by_code = {row['code']: row for row in funnel.get('by_code', [])}
+    by_code = []
+    for code in codes:
+        row = rows_by_code.get(code, {'code': code, 'promotion_uses': None})
+        stat = db_stats.get(code, {})
+        for key in keys:
+            row[key] = stat.get(key, 0.0 if key == 'revenue' else 0)
+        by_code.append(row)
+
+    summary = funnel.setdefault('summary', {})
+    for key in keys:
+        summary[key] = sum(row[key] for row in by_code)
+    checkout_users = summary['begin_checkout_users']
+    summary['checkout_cvr'] = (
+        min(summary['purchase_users'] / checkout_users, 1.0) if checkout_users else None
+    )
+    summary['abandonment_rate'] = (
+        1 - summary['checkout_cvr'] if summary['checkout_cvr'] is not None else None
+    )
+    funnel['by_code'] = by_code
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def vendor_analytics_funnel(request):
     """
-    廠商的 KOC 優惠碼電商漏斗（資料來源：GA4 Data API）。
+    廠商的 KOC 優惠碼電商漏斗。
+    - 套用優惠碼次數、推廣連結漏斗：GA4 Data API
+    - 開始結帳、完成購買、營收：資料庫（見 _db_coupon_checkout_stats）
+    GA4 讀取失敗時仍回傳資料庫的數字，套用次數為 null，並附上 ga4_error。
     URL: GET /vendor/analytics/funnel?vendor_id=...&start_date=...&end_date=...
 
     只追蹤「KOC 優惠碼帶來的流量」：先查出這個廠商所有活動底下的優惠碼，
@@ -4931,23 +5871,30 @@ def vendor_analytics_funnel(request):
         )
     codes = list(coupon_qs.values_list("promotion_code", flat=True))
 
+    ga4_error = ""
     try:
         funnel = get_coupon_funnel(codes, start_date, end_date)
-        _attach_link_clicks(funnel, coupon_qs, start_date, end_date)
     except GA4NotConfigured as error:
-        return Response({
-            "success": False,
-            "err": str(error)
-        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        funnel, ga4_error = None, str(error)
     except Exception as error:
+        funnel, ga4_error = None, friendly_error(error, "優惠碼")
+    if funnel is None:
+        # GA4 讀不到時，資料庫的結帳／購買數字照樣顯示，套用次數與推廣連結漏斗留空
+        funnel = {"summary": {"promotion_uses": None}, "by_code": [], "link": None, "link_error": ga4_error}
+
+    try:
+        _apply_db_checkout_stats(funnel, codes, _db_coupon_checkout_stats(codes, start_date, end_date))
+        _attach_link_clicks(funnel, coupon_qs, start_date, end_date)
+    except Exception:
         return Response({
             "success": False,
-            "err": friendly_error(error, "優惠碼")
-        }, status=status.HTTP_502_BAD_GATEWAY)
+            "err": internal_error_message("優惠碼成效讀取失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({
         "success": True,
         "err": "",
         "coupon_count": len(codes),
+        "ga4_error": ga4_error,
         **funnel,
     }, status=status.HTTP_200_OK)

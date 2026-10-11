@@ -10,13 +10,13 @@ from django.db import transaction
 from django.utils import timezone
 from api.error_messages import internal_error_message
 from api.r2_storage import upload_image_to_r2
-from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest
+from api.models import Product, Cart, CartItem, Wishlist, CouponNew, Guest, Order, OrderItem, Transactions, Payment, Campaigns, CampaignProduct, User, Vendor, Address, ShipmentInfo, ReturnRequest, ProductBundleItem
 from .platform import (
     calculate_order_commission,
     create_vendor_settlement_items,
     create_vendor_receivables,
 )
-from .constants import restore_order_stock, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable, PRODUCT_CATEGORY_CHOICES
+from .constants import restore_order_stock, find_stock_shortage, deduct_stock_for_lines, is_return_window_open, has_unresolved_return_request, RETURN_REQUEST_WINDOW_DAYS, is_order_auto_completable, PRODUCT_CATEGORY_CHOICES
 from payments.models import PaymentTransaction
 from payments.services import is_payment_effectively_failed, pick_relevant_payment, get_order_payment_status, mark_payment_refund_pending
 
@@ -182,17 +182,7 @@ def get_products(request):
     category = request.query_params.get('category', None)
     product_status = request.query_params.get('status', None)
 
-    products = Product.objects.filter(status='active')
-
-    # 只顯示目前有「進行中」活動的商品——活動狀態要是 active，
-    # 而且現在時間要落在 start_date ~ end_date 之間，跟廠商端判斷「推廣中」用同一套規則。
-    now = timezone.now()
-    promoted_product_ids = CampaignProduct.objects.filter(
-        campaign__status='active',
-        campaign__start_date__lte=now,
-        campaign__end_date__gte=now
-    ).values_list('product_id', flat=True)
-    products = products.filter(product_id__in=promoted_product_ids)
+    products = _shop_listed_products()
     # 過濾條件
     if product_name:
         products = products.filter(product_name__icontains=product_name)
@@ -201,24 +191,103 @@ def get_products(request):
     if product_status:
         products = products.filter(status=product_status)
 
-    result = []
-    for p in products:
-        vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
-        result.append({
-            'Product_id': p.product_id,
-            'Vendor_id': p.vendor_id,
-            'Vendor_name': vendor.company_name if vendor else p.vendor_id,
-            'Product_name': p.product_name,
-            'description': p.description,
-            'price': p.price,
-            'discounted_price': p.discounted_price,
-            'stock': p.stock,
-            'category': p.category,
-            'image_url': p.image_url,
-            'status': p.status,
-        })
+    vendor_names = dict(
+        Vendor.objects.filter(vendor_id__in={p.vendor_id for p in products})
+        .values_list('vendor_id', 'company_name')
+    )
+    bundle_map = _bundle_items_map(products)
+    result = [_serialize_shop_product(p, vendor_names.get(p.vendor_id), bundle_map) for p in products]
 
     return Response(result, status=status.HTTP_200_OK)
+
+
+def _shop_listed_products():
+    """
+    商城上架中的商品：商品本身 active，而且目前有「進行中」的活動——活動狀態要是 active，
+    現在時間落在 start_date ~ end_date 之間，跟廠商端判斷「推廣中」用同一套規則。
+    商城列表與廠商商店頁共用，兩邊列出的商品才會一致。
+    """
+    now = timezone.now()
+    promoted_product_ids = CampaignProduct.objects.filter(
+        campaign__status='active',
+        campaign__start_date__lte=now,
+        campaign__end_date__gte=now
+    ).values_list('product_id', flat=True)
+    return Product.objects.filter(status='active', product_id__in=promoted_product_ids)
+
+
+def _bundle_items_map(products):
+    """一次查出列表中所有組合商品的組成內容：{bundle_id: [{Product_id, Product_name, quantity}]}"""
+    bundle_ids = [p.product_id for p in products if p.is_bundle]
+    result = {}
+    if not bundle_ids:
+        return result
+
+    for bundle_item in (
+        ProductBundleItem.objects
+        .filter(bundle_id__in=bundle_ids)
+        .select_related('component')
+        .order_by('bundle_item_id')
+    ):
+        result.setdefault(bundle_item.bundle_id, []).append({
+            'Product_id': bundle_item.component.product_id,
+            'Product_name': bundle_item.component.product_name,
+            'quantity': bundle_item.quantity,
+        })
+    return result
+
+
+def _serialize_shop_product(p, vendor_name=None, bundle_map=None):
+    return {
+        'Product_id': p.product_id,
+        'Vendor_id': p.vendor_id,
+        'Vendor_name': vendor_name or p.vendor_id,
+        'Product_name': p.product_name,
+        'description': p.description,
+        'price': p.price,
+        'discounted_price': p.discounted_price,
+        'stock': p.stock,
+        'category': p.category,
+        'image_url': p.image_url,
+        'status': p.status,
+        'is_bundle': p.is_bundle,
+        'bundle_items': (bundle_map or {}).get(p.product_id, []),
+    }
+
+
+## 廠商商店頁：廠商公開資訊 + 該廠商在商城上架中的所有商品
+## GET /consumer/vendor/store?Vendor_id=
+## 只回傳可公開的欄位（公司名稱、加入時間），聯絡人、Email、統編、銀行帳戶等一律不給
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_vendor_store(request):
+    vendor_id = request.query_params.get('Vendor_id')
+    if not vendor_id:
+        return Response(
+            {'success': False, 'err': 'Vendor_id 為必填'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    vendor = Vendor.objects.filter(vendor_id=vendor_id, status='approved').first()
+    if not vendor:
+        return Response(
+            {'success': False, 'err': '找不到這個廠商'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    products = list(_shop_listed_products().filter(vendor_id=vendor.vendor_id).order_by('-product_id'))
+    bundle_map = _bundle_items_map(products)
+
+    return Response({
+        'success': True,
+        'err': '',
+        'vendor': {
+            'Vendor_id': vendor.vendor_id,
+            'Vendor_name': vendor.company_name,
+            'joined_at': vendor.created_at,
+        },
+        'products': [_serialize_shop_product(p, vendor.company_name, bundle_map) for p in products],
+    }, status=status.HTTP_200_OK)
 
 ## 商品詳細資料
 @api_view(['GET'])
@@ -248,6 +317,25 @@ def get_product_detail(request):
 
     vendor = Vendor.objects.filter(vendor_id=p.vendor_id).first()
 
+    # 組合商品：附上組成內容，商品頁可以顯示「內含 A x2、B x1」
+    bundle_items = []
+    if p.is_bundle:
+        bundle_items = [
+            {
+                'Product_id': bundle_item.component.product_id,
+                'Product_name': bundle_item.component.product_name,
+                'image_url': bundle_item.component.image_url,
+                'price': bundle_item.component.price,
+                'quantity': bundle_item.quantity,
+            }
+            for bundle_item in (
+                ProductBundleItem.objects
+                .filter(bundle=p)
+                .select_related('component')
+                .order_by('bundle_item_id')
+            )
+        ]
+
     return Response({
         'Product_id': p.product_id,
         'Vendor_id': p.vendor_id,
@@ -260,6 +348,8 @@ def get_product_detail(request):
         'category': p.category,
         'image_url': p.image_url,
         'status': p.status,
+        'is_bundle': p.is_bundle,
+        'bundle_items': bundle_items,
     }, status=status.HTTP_200_OK)
 
 ## 建立購物車
@@ -645,6 +735,18 @@ def delete_wishlist(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_coupon(request):
+    response = _verify_coupon(request)
+    # 結帳頁從推廣連結自動帶入優惠碼失敗時，畫面上不顯示錯誤；
+    # 把被拒絕的原因印到 log，排查時才知道是哪一種情況
+    if response.status_code >= 400:
+        print(
+            f"優惠碼驗證未通過：code={request.data.get('Promotion_code')} "
+            f"user={request.data.get('User_id')} 原因={response.data.get('err')}"
+        )
+    return response
+
+
+def _verify_coupon(request):
     promotion_code = request.data.get('Promotion_code')
     user_id = request.data.get('User_id')
 
@@ -932,6 +1034,9 @@ def create_order(request):
         )
     }
 
+    # 組合商品要展開成組成商品再檢查一次總量（見 constants.find_stock_shortage）
+    stock_lines = []
+
     for item in items_data:
         product_id = item.get('Product_id')
 
@@ -978,6 +1083,20 @@ def create_order(request):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        stock_lines.append((product, quantity))
+
+    # 單項都夠，但「組合 + 組合裡的單品」一起買時，組成商品的總需求可能超過庫存
+    shortages = find_stock_shortage(stock_lines)
+
+    if shortages:
+        return Response(
+            {
+                'success': False,
+                'err': f'{"、".join(shortages)} 庫存不足'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     # ============================
     # 後端重新計算金額
@@ -1295,16 +1414,11 @@ def create_order(request):
                 order_item
             )
 
-            # 扣庫存
-            product.stock = max(
-                0,
-                product.stock
-                - line['quantity']
-            )
-
-            product.save(
-                update_fields=['stock']
-            )
+        # 扣庫存：組合商品展開扣組成商品，並更新組合的可售組數
+        deduct_stock_for_lines([
+            (line['product'], line['quantity'])
+            for line in line_items
+        ])
 
     # ============================
     # Response

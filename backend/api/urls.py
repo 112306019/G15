@@ -7,6 +7,7 @@ from .views.auth import (
 )
 from .views.platform import (
     admin_login,
+    admin_create_account,
     get_consumers,
     get_consumer_orders,
     get_payments,
@@ -17,18 +18,22 @@ from .views.platform import (
     koc_get_pending_list,  
     koc_get_list,       
     koc_get_detail,     
-    koc_mission_stage_update,  
+    admin_force_close_mission,
+    admin_revert_mission_stage,
     admin_vendor_list,      
     admin_vendor_detail,    
     admin_vendor_audit,     
     admin_vendor_review,    
-    admin_overview,         
+    admin_overview,
+    admin_site_traffic,         
     admin_coupon_usage,     
     admin_performance,
     get_all_missions,
     get_earnings_tracking,
     admin_settle_campaign_earnings,
     admin_generate_vendor_settlement,
+    admin_list_vendor_review_overdue,
+    admin_notify_vendor_review_overdue,
     admin_list_vendor_invoices,
     admin_confirm_vendor_settlement_remittance,
     admin_list_settleable_vendors,
@@ -52,6 +57,7 @@ from .views.platform import (
 
 from .views.consumer import (
     get_products,
+    get_vendor_store,
     get_product_detail,
     get_product_categories,
     create_cart,
@@ -84,6 +90,7 @@ from .views.vendor import vendor_upload_image
 from .views import shipping
 from .views import support
 from .views import order_chat
+from .views import inquiry
 from .views import notifications as notification_views
 
 urlpatterns = [
@@ -118,6 +125,10 @@ urlpatterns = [
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
     path('koc/insights/topProducts', views.koc_top_products, name='koc-insights-top-products'),
     path('koc/insights/recommendations', views.koc_recommended_products, name='koc-insights-recommendations'),
+    path('koc/mission/saveDraft', views.save_draft, name='koc-mission-save-draft'),
+    path('koc/aiCheck/terms', views.ai_check_terms, name='koc-ai-check-terms'),
+    path('koc/aiCheck/consent', views.ai_check_consent, name='koc-ai-check-consent'),
+    path('koc/aiCheck/token', views.ai_check_token, name='koc-ai-check-token'),
     path('koc/apply', views.koc_apply, name='koc-apply'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
@@ -135,7 +146,8 @@ urlpatterns = [
     path('platform/koc/getPendingList', koc_get_pending_list, name='platform-koc-get-pending-list'),
     path('platform/koc/getList', koc_get_list, name='platform-koc-get-list'),
     path('platform/koc/getDetail', koc_get_detail, name='platform-koc-get-detail'),
-    path('platform/kocmission/stage/update', koc_mission_stage_update, name='platform-kocmission-stage-update'),
+    path('platform/kocmission/forceClose', admin_force_close_mission, name='platform-kocmission-force-close'),
+    path('platform/kocmission/revertStage', admin_revert_mission_stage, name='platform-kocmission-revert-stage'),
     path('platform/mission/getAll', get_all_missions, name='platform-mission-get-all'),
     path('platform/mission/getEarningsTracking', get_earnings_tracking, name='platform-mission-get-earnings-tracking'),
     path('platform/campaign/settle-earnings', admin_settle_campaign_earnings, name='platform-campaign-settle-earnings'),
@@ -159,6 +171,8 @@ urlpatterns = [
     path('platform/vendor/payout/confirm', admin_confirm_vendor_settlement_payment, name='platform-vendor-payout-confirm-legacy'),
     path('platform/vendor/run-monthly-payouts', admin_generate_vendor_settlement, name='platform-vendor-run-monthly-payouts-legacy'),
 
+    path('platform/vendor/review-overdue', admin_list_vendor_review_overdue, name='platform-vendor-review-overdue'),
+    path('platform/vendor/review-overdue/notify', admin_notify_vendor_review_overdue, name='platform-vendor-review-overdue-notify'),
     path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
     path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
@@ -185,6 +199,7 @@ urlpatterns = [
     path('platform/taxForms/review', admin_review_tax_form, name='platform-tax-forms-review'),
     # consumer - 商品
     path('consumer/products', get_products, name='get-products'),
+    path('consumer/vendor/store', get_vendor_store, name='consumer-vendor-store'),
     path('consumer/product/categories', get_product_categories, name='get-product-categories'),
     path('consumer/product/detail', get_product_detail, name='get-product-detail'),
     # consumer - 購物車
@@ -231,6 +246,10 @@ urlpatterns = [
 
     # Vendor 商品 API
     path('vendor/product/create', vendor.vendor_product_create, name='vendor-product-create'),
+    path('vendor/bundle/getlist', vendor.vendor_bundle_getlist, name='vendor-bundle-getlist'),
+    path('vendor/bundle/create', vendor.vendor_bundle_create, name='vendor-bundle-create'),
+    path('vendor/bundle/update', vendor.vendor_bundle_update, name='vendor-bundle-update'),
+    path('vendor/bundle/delete', vendor.vendor_bundle_delete, name='vendor-bundle-delete'),
     path('vendor/product/update', vendor.vendor_product_update, name='vendor-product-update'),
     path('vendor/product/updateStatus', vendor.vendor_product_update_status, name='vendor-product-update-status'),
     path( 'vendor/product/delete', vendor.vendor_product_delete, name="vendor-product-delete"), 
@@ -246,6 +265,10 @@ urlpatterns = [
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),
     path('vendor/application/review', vendor.vendor_application_review, name='vendor-application-review'),
+
+    # Vendor 投稿 / 任務成果審核 API
+    path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
+    path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
 
     # Vendor 訂單 API
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),
@@ -314,8 +337,18 @@ urlpatterns = [
     # 訂單聊天室 API（消費者 - 廠商，針對特定訂單直接溝通）
     path('user/orderChat/getMessages', order_chat.user_order_chat_get_messages, name='user-order-chat-get-messages'),
     path('user/orderChat/sendMessage', order_chat.user_order_chat_send_message, name='user-order-chat-send-message'),
+    path('user/orderChat/list', order_chat.user_order_chat_list, name='user-order-chat-list'),
     path('vendor/orderChat/getMessages', order_chat.vendor_order_chat_get_messages, name='vendor-order-chat-get-messages'),
     path('vendor/orderChat/sendMessage', order_chat.vendor_order_chat_send_message, name='vendor-order-chat-send-message'),
+    path('vendor/orderChat/list', order_chat.vendor_order_chat_list, name='vendor-order-chat-list'),
+
+    # 商品詢問（不用下單的消費者 ↔ 廠商對話）
+    path('consumer/inquiry/getMessages', inquiry.consumer_inquiry_get_messages, name='consumer-inquiry-get-messages'),
+    path('consumer/inquiry/sendMessage', inquiry.consumer_inquiry_send_message, name='consumer-inquiry-send-message'),
+    path('consumer/inquiry/list', inquiry.consumer_inquiry_list, name='consumer-inquiry-list'),
+    path('vendor/inquiry/list', inquiry.vendor_inquiry_list, name='vendor-inquiry-list'),
+    path('vendor/inquiry/getMessages', inquiry.vendor_inquiry_get_messages, name='vendor-inquiry-get-messages'),
+    path('vendor/inquiry/sendMessage', inquiry.vendor_inquiry_send_message, name='vendor-inquiry-send-message'),
 
     # Admin API
     # Platform Admin 平台端 API
@@ -323,7 +356,9 @@ urlpatterns = [
     path('platform/vendor/detail', admin_vendor_detail, name='admin-vendor-detail'),
     path('platform/vendor/audit', admin_vendor_audit, name='admin-vendor-audit'),
     path('platform/vendor/review', admin_vendor_review, name='admin-vendor-review'),
+    path('platform/admins/create', admin_create_account, name='admin-create-account'),
     path('platform/overview', admin_overview, name='admin-overview'),
+    path('platform/analytics/traffic', admin_site_traffic, name='admin-site-traffic'),
     path('platform/coupons', admin_coupon_usage, name='admin-coupon-usage'),
     path('platform/performance', admin_performance, name='admin-performance'),
     

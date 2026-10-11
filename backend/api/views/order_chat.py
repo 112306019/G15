@@ -3,8 +3,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
-from api.models import Order, OrderChatRoom, OrderMessage, OrderItem
-from api.notifications import create_notification
+from django.db.models import Count, Max, Q
+
+from api.models import Order, OrderChatRoom, OrderMessage, OrderItem, Vendor
+from api.notifications import create_notification, notify_new_chat_message
 
 
 def _serialize_message(message):
@@ -68,7 +70,7 @@ def user_order_chat_get_messages(request):
 
     room.messages.filter(sender_role="vendor", is_read=False).update(is_read=True)
 
-    messages = [_serialize_message(m) for m in room.messages.all()]
+    messages = [_serialize_message(m) for m in room.messages.order_by('created_at', 'message_id')]
 
     return Response({
         "success": True,
@@ -124,6 +126,18 @@ def user_order_chat_send_message(request):
         content=content,
     )
 
+    # 通知廠商（同一張訂單還有未讀通知時不重複發），點通知會直接打開這張訂單的聊天
+    vendor = Vendor.objects.filter(vendor_id=_order_vendor_id(order)).first()
+    if vendor:
+        notify_new_chat_message(
+            vendor=vendor,
+            category="order",
+            title="消費者傳來訂單訊息",
+            body=content,
+            reference_type="vendor_order_chat",
+            reference_id=order.order_id,
+        )
+
     return Response({
         "success": True,
         "err": "",
@@ -170,7 +184,7 @@ def vendor_order_chat_get_messages(request):
 
     room.messages.filter(sender_role="user", is_read=False).update(is_read=True)
 
-    messages = [_serialize_message(m) for m in room.messages.all()]
+    messages = [_serialize_message(m) for m in room.messages.order_by('created_at', 'message_id')]
 
     return Response({
         "success": True,
@@ -240,3 +254,117 @@ def vendor_order_chat_send_message(request):
         "err": "",
         "message": _serialize_message(message),
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_order_chat_list(request):
+    """
+    廠商所有有訊息的訂單聊天（統一聊天室的「訂單訊息」分頁、訂單列表的未讀紅點用）。
+    URL: /vendor/orderChat/list?vendor_id=...
+    依最後一則訊息時間由新到舊排序。
+    """
+    vendor_id = request.GET.get("vendor_id")
+    if not vendor_id:
+        return Response({
+            "success": False,
+            "err": "缺少廠商資訊，請重新登入"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    rooms = (
+        OrderChatRoom.objects
+        .filter(order__items__product__vendor_id=vendor_id)
+        .distinct()
+        .select_related("order__user")
+        .annotate(
+            message_count=Count("messages", distinct=True),
+            last_message_at=Max("messages__created_at"),
+            unread_count=Count(
+                "messages",
+                filter=Q(messages__sender_role="user", messages__is_read=False),
+                distinct=True,
+            ),
+        )
+        .filter(message_count__gt=0)
+        .order_by("-last_message_at")
+    )
+
+    result = []
+    for room in rooms:
+        last = room.messages.order_by("-created_at", "-message_id").first()
+        buyer = room.order.user
+        result.append({
+            "room_id": room.room_id,
+            "order_id": str(room.order.order_id),
+            "buyer_name": (getattr(buyer, "display_name", "") or buyer.name) if buyer else "",
+            "last_message": last.content if last else "",
+            "last_sender_role": last.sender_role if last else None,
+            "last_message_at": last.created_at if last else None,
+            "unread_count": room.unread_count,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "rooms": result,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def user_order_chat_list(request):
+    """
+    消費者所有有訊息的訂單聊天（前台「我的訊息」頁的「訂單訊息」分頁）。
+    URL: /user/orderChat/list?user_id=...
+    """
+    user_id = request.GET.get("user_id")
+    if not user_id:
+        return Response({
+            "success": False,
+            "err": "請先登入"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    rooms = (
+        OrderChatRoom.objects
+        .filter(order__user_id=user_id)
+        .select_related("order")
+        .annotate(
+            message_count=Count("messages", distinct=True),
+            last_message_at=Max("messages__created_at"),
+            unread_count=Count(
+                "messages",
+                filter=Q(messages__sender_role="vendor", messages__is_read=False),
+                distinct=True,
+            ),
+        )
+        .filter(message_count__gt=0)
+        .order_by("-last_message_at")
+    )
+
+    vendor_ids = {room.order_id: _order_vendor_id(room.order) for room in rooms}
+    vendor_names = dict(
+        Vendor.objects.filter(vendor_id__in={v for v in vendor_ids.values() if v})
+        .values_list("vendor_id", "company_name")
+    )
+
+    result = []
+    for room in rooms:
+        last = room.messages.order_by("-created_at", "-message_id").first()
+        vendor_id = vendor_ids.get(room.order_id)
+        result.append({
+            "room_id": room.room_id,
+            "order_id": str(room.order_id),
+            "vendor_id": vendor_id,
+            "vendor_name": vendor_names.get(vendor_id, ""),
+            "last_message": last.content if last else "",
+            "last_sender_role": last.sender_role if last else None,
+            "last_message_at": last.created_at if last else None,
+            "unread_count": room.unread_count,
+        })
+
+    return Response({
+        "success": True,
+        "err": "",
+        "rooms": result,
+    }, status=status.HTTP_200_OK)
+

@@ -3,13 +3,13 @@ import csv
 import io
 from django.conf import settings
 from django.http import HttpResponse
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, make_password
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
 
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Min
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -52,11 +52,18 @@ from api.models import (
 
 )
 
-from api.serializers import KOCApproveSerializer, KOCRejectSerializer, KOCMissionStageUpdateSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT
-from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.serializers import KOCApproveSerializer, KOCRejectSerializer
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMINDER_DAYS, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT
+from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email, send_vendor_review_overdue_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
+from api.koc_commission import (
+    commission_amount_for,
+    commission_month_of,
+    get_month_quantity,
+    get_tier_rate,
+    recalculate_mission_month,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +146,13 @@ def require_admin_role(request, allowed_roles, source='data'):
 # ==============================================================================
 
 def calculate_order_commission(order):
-    """訂單完成後建立 KOC 5% 待結算分潤。
+    """訂單完成後建立 KOC 待結算分潤（階梯式月結，見 api/koc_commission.py）。
 
-    新制：訂單完成時只建立 pending Earnings，並放入 KOCWallet.balance_frozen；
+    訂單完成時建立 pending Earnings，並放入 KOCWallet.balance_frozen；
     等該訂單所屬 Vendor 的 VendorSettlement 確認 paid 後，才轉成 withdrawable。
     分潤基礎只計算該 Campaign 綁定、且屬於該 Campaign Vendor 的商品小計，不含運費。
+    分潤率依「這個任務」當月（含這筆）累計的活動商品件數決定；這筆讓任務升級時，
+    同任務同月其他 pending 分潤會一起調整到新級距。
     """
     promotion_code = (order.promotion_code or "").strip()
     if not promotion_code:
@@ -195,22 +204,32 @@ def calculate_order_commission(order):
         product_id__in=campaign_product_ids,
         product__vendor_id=campaign.vendor_id,
     )
+    eligible_items = list(eligible_items)
     commission_base = sum((Decimal(str(i.subtotal)) for i in eligible_items), Decimal('0.00'))
+    item_quantity = sum((i.quantity or 0) for i in eligible_items)
     if commission_base <= 0:
         return {"created": False, "earning_id": None, "commission_amount": 0, "message": "沒有符合活動的訂單商品"}
 
-    raw = commission_base * Decimal(str(KOC_COMMISSION_RATE_PERCENT)) / Decimal('100')
-    commission_amount = int(raw.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
-    if commission_amount <= 0:
-        return {"created": False, "earning_id": None, "commission_amount": 0, "message": "計算後分潤為 0"}
+    commission_month = commission_month_of(order.completed_at)
 
     with transaction.atomic():
+        # 先用「當月目前件數 + 這筆件數」決定分潤率；建立後再整月重算一次，
+        # 處理跨級時同月其他分潤的調整（也順便處理同時完成的訂單）
+        month_quantity = get_month_quantity(mission, commission_month) + item_quantity
+        commission_rate = get_tier_rate(month_quantity)
+        commission_amount = commission_amount_for(commission_base, commission_rate)
+
         earning = Earnings.objects.create(
             user=mission.koc.user,
             kocmission=mission,
             order=order,
             amount=commission_amount,
+            original_amount=commission_amount,
             status=EARNINGS_STATUS_CHOICES_MAP["pending"],
+            commission_base=commission_base,
+            item_quantity=item_quantity,
+            commission_rate=commission_rate,
+            commission_month=commission_month,
         )
         wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=mission.koc)
         wallet.balance_frozen += commission_amount
@@ -225,11 +244,15 @@ def calculate_order_commission(order):
         coupon.usage_count = (coupon.usage_count or 0) + 1
         coupon.save(update_fields=["usage_count"])
 
+        recalculate_mission_month(mission, commission_month)
+        earning.refresh_from_db(fields=["amount", "commission_rate"])
+
     return {
         "created": True,
         "earning_id": earning.earnings_id,
-        "commission_amount": commission_amount,
+        "commission_amount": earning.amount,
         "commission_base": str(commission_base),
+        "commission_rate": str(earning.commission_rate),
         "message": "分潤已建立，待廠商完成平台結算後轉為可提領",
     }
 
@@ -515,12 +538,31 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                .first())
     if earning and earning.kocmission and earning.kocmission.koc:
         wallet, _ = KocWallet.objects.get_or_create(koc=earning.kocmission.koc)
+        # 階梯式分潤（commission_base 有值）：部分退款時同步扣掉計算基礎與件數，
+        # 分潤金額用「剩下的基礎 × 目前分潤率」重算；舊資料維持按比例扣
+        tiered = earning.commission_base is not None and earning.commission_rate is not None
+        new_base = new_quantity = None
         if full_refund:
             delta = int(earning.amount)
         else:
             base = sum((Decimal(str(i.subtotal)) for i in OrderItem.objects.filter(order=order)), Decimal('0.00'))
             ratio = min(Decimal('1'), refunded_amount / base) if base > 0 else Decimal('0')
-            delta = int((Decimal(str(earning.amount)) * ratio).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+            if tiered:
+                new_base = (Decimal(str(earning.commission_base)) * (Decimal('1') - ratio)).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                )
+                new_quantity = earning.item_quantity or 0
+                returned_item = return_request.order_item
+                if returned_item and returned_item.product_id and earning.kocmission.application:
+                    campaign = earning.kocmission.application.campaign
+                    is_campaign_item = CampaignProduct.objects.filter(
+                        campaign=campaign, product_id=returned_item.product_id
+                    ).exists()
+                    if is_campaign_item:
+                        new_quantity = max(0, new_quantity - (return_request.quantity or returned_item.quantity or 0))
+                delta = earning.amount - commission_amount_for(new_base, earning.commission_rate)
+            else:
+                delta = int((Decimal(str(earning.amount)) * ratio).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
         if delta > 0:
             with transaction.atomic():
@@ -543,7 +585,18 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                     earning.save(update_fields=['status', 'cancelled_by_return_request'])
                 else:
                     earning.amount = max(0, earning.amount - delta)
-                    earning.save(update_fields=['amount'])
+                    update_fields = ['amount']
+                    if tiered:
+                        earning.commission_base = new_base
+                        earning.item_quantity = new_quantity
+                        update_fields += ['commission_base', 'item_quantity']
+                    earning.save(update_fields=update_fields)
+
+                # 退貨讓當月件數減少，級距可能往下調；月份已結束則鎖定不動
+                if tiered:
+                    recalculate_mission_month(earning.kocmission, earning.commission_month)
+                    # 重算可能改到這筆自己的金額，下面同步廠商結算明細前要用最新值
+                    earning.refresh_from_db(fields=['amount', 'status'])
             results['earning_adjustment'] = {'earnings_id': earning.earnings_id, 'deducted': delta, 'status': earning.status}
 
     qs = VendorSettlementItem.objects.select_related('settlement', 'vendor').filter(order=order)
@@ -2834,6 +2887,10 @@ def admin_overview(request):
     payment_count = Order.objects.filter(payment_status='paid').count()
     ticket_count = ServiceTickets.objects.count()
     kocmission_count = KOCMissionNew.objects.count()
+    # 總覽卡片右上角的成長標籤：近 30 天新增的會員與廠商
+    recent_since = timezone.now() - timedelta(days=30)
+    new_user_count = User.objects.filter(created_at__gte=recent_since).count()
+    new_vendor_count = Vendor.objects.filter(created_at__gte=recent_since).count()
 
     return Response({
         "success": True,
@@ -2845,9 +2902,58 @@ def admin_overview(request):
             "KOCMission_count": kocmission_count,
             "Payment_count": payment_count,
             "Ticket_count": ticket_count,
+            "New_user_count_30d": new_user_count,
+            "New_vendor_count_30d": new_vendor_count,
         }
     }, status=status.HTTP_200_OK)
 
+
+
+# ==============================================================================
+# Platform Admin - 網站流量趨勢（資料來源：GA4）
+# GET /platform/analytics/traffic?range=7d|30d|year
+# ==============================================================================
+
+TRAFFIC_RANGE_DAYS = {"7d": 7, "30d": 30}
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_site_traffic(request):
+    from api.ga4_client import get_site_traffic, GA4NotConfigured, friendly_error
+
+    range_key = request.GET.get("range") or "7d"
+    today = timezone.localdate()
+    if range_key == "year":
+        start_date = date(today.year, 1, 1)
+    elif range_key in TRAFFIC_RANGE_DAYS:
+        # 「近 7 天」含今天共 7 天
+        start_date = today - timedelta(days=TRAFFIC_RANGE_DAYS[range_key] - 1)
+    else:
+        return Response({
+            "success": False,
+            "err": "不支援的時間範圍"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        traffic = get_site_traffic(start_date, today)
+    except GA4NotConfigured as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except Exception as error:
+        return Response({
+            "success": False,
+            "err": friendly_error(error, "網站流量")
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "range": range_key,
+        **traffic,
+    }, status=status.HTTP_200_OK)
 
 
 # ==============================================================================
@@ -3756,56 +3862,197 @@ from rest_framework.response import Response
 from rest_framework import status
 from api.models import Admins, User, Order, Transactions, AdminAuditLogs
 
-# 手動更新koc任務階段
-@api_view(['PATCH'])
-@permission_classes([AllowAny])
-def koc_mission_stage_update(request):
-    sync_expired_promoting_missions()
+# ==============================================================================
+# KOC 任務的管理員例外處理
+#
+# 任務階段平常由流程自動推進（廠商核准申請 → 撰寫文案 → KOC 交文案 → 審核中 →
+# 廠商通過 → 待發佈 → KOC 交連結 → 推廣中 → 活動結束自動結案），管理員不能再
+# 任意指定階段，只保留兩種例外操作，且都必須填寫原因並寫入操作紀錄：
+#   POST /platform/kocmission/forceClose   強制結案（違規、廠商要求終止等）
+#   POST /platform/kocmission/revertStage  退回上一階段（更正誤操作）
+# Body: Admin_id, KOCMission_id, Reason
+# ==============================================================================
 
-    serializer = KOCMissionStageUpdateSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response({
-            "success": False,
-            "err": serializer_error_message(serializer.errors)
+MISSION_ADMIN_ROLES = {'super_admin', 'reviewer'}
+MISSION_STAGE_LABELS = {
+    'writing': '撰寫文案',
+    'reviewing': '文案審核中',
+    'publishing': '待發佈',
+    'promoting': '推廣中',
+    'completed': '已結案',
+}
+# 可以退回的階段 → 退回後的階段。
+# KOC 不再提交文案給廠商審核（任務核准後直接進入待發佈），所以只剩推廣中可以退回待發佈。
+MISSION_REVERT_TARGET = {
+    'promoting': 'publishing',
+}
+
+
+def _get_mission_for_admin_action(request):
+    """共用檢查：管理員角色、任務存在、原因必填。回傳 (admin, mission, reason, err)。"""
+    admin_obj, err = require_admin_role(request, MISSION_ADMIN_ROLES, source='data')
+    if err:
+        return None, None, None, err
+
+    reason = (request.data.get('Reason') or '').strip()
+    if not reason:
+        return None, None, None, Response({
+            'success': False,
+            'err': '請填寫處理原因'
         }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    data = serializer.validated_data
 
     try:
         mission = KOCMissionNew.objects.select_related(
-            'application__campaign__vendor',
-            'koc__user'
-        ).get(pk=data['KOCMisson_id'])
-    except KOCMissionNew.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的 KOC 任務"
+            'application__campaign__vendor', 'koc__user'
+        ).get(pk=request.data.get('KOCMission_id'))
+    except (KOCMissionNew.DoesNotExist, ValueError, TypeError):
+        return None, None, None, Response({
+            'success': False,
+            'err': '找不到對應的 KOC 任務'
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    # 更新 stage
-    mission.stage = data['Stage']
-    mission.save()
+    return admin_obj, mission, reason, None
 
-    # 取得相關資料
+
+def _notify_mission_parties(mission, title, body):
+    """通知任務的 KOC 與廠商；通知失敗不影響操作本身。"""
     campaign = mission.application.campaign
-    vendor = campaign.vendor
-    campaign_product = CampaignProduct.objects.filter(
-        campaign=campaign
-    ).select_related('product').first()
-    product_id = campaign_product.product.product_id if campaign_product else None
+    if mission.koc and mission.koc.user:
+        create_notification(
+            user=mission.koc.user,
+            category='koc',
+            title=title,
+            body=body,
+            reference_type='koc_home',
+            reference_id=str(mission.kocmission_id),
+        )
+    if campaign.vendor:
+        create_notification(
+            vendor=campaign.vendor,
+            category='koc',
+            title=title,
+            body=body,
+        )
 
-    coupon = CouponNew.objects.filter(kocmission=mission).first()
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_force_close_mission(request):
+    sync_expired_promoting_missions()
+
+    admin_obj, mission, reason, err = _get_mission_for_admin_action(request)
+    if err:
+        return err
+
+    if mission.stage == 'completed':
+        return Response({
+            'success': False,
+            'err': '這個任務已經結束了'
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    previous_stage = mission.stage
+    campaign = mission.application.campaign
+
+    with transaction.atomic():
+        mission.stage = 'completed'
+        mission.end_reason = 'admin_closed'
+        mission.save(update_fields=['stage', 'end_reason'])
+
+        # 結案後優惠碼與推廣連結不能再使用
+        CouponNew.objects.filter(kocmission=mission).update(status='inactive')
+
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='admin_close_mission',
+            tasks_id=str(mission.kocmission_id),
+            koc=mission.koc,
+            vendor=campaign.vendor,
+            action_reason=f'{MISSION_STAGE_LABELS.get(previous_stage, previous_stage)} → 強制結案：{reason}',
+        )
+
+    _notify_mission_parties(
+        mission,
+        title='任務已由平台終止',
+        body=f'案件「{campaign.name}」的任務已由平台終止，原因：{reason}',
+    )
 
     return Response({
-        "success": True,
-        "err": "",
-        "KOCMisson_id": str(mission.kocmission_id),
-        "Mission_id": str(campaign.campaign_id),
-        "User_id": mission.koc.user.user_id if mission.koc else None,
-        "Brand_id": str(vendor.vendor_id),
-        "Product_id": str(product_id) if product_id else None,
-        "Promotion_code": coupon.promotion_code if coupon else None,
-        "Stage": STAGE_CODE_MAP.get(mission.stage),
+        'success': True,
+        'err': '',
+        'KOCMission_id': mission.kocmission_id,
+        'Stage': STAGE_CODE_MAP.get(mission.stage),
+    }, status=http_status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_revert_mission_stage(request):
+    sync_expired_promoting_missions()
+
+    admin_obj, mission, reason, err = _get_mission_for_admin_action(request)
+    if err:
+        return err
+
+    previous_stage = mission.stage
+    target_stage = MISSION_REVERT_TARGET.get(previous_stage)
+    if not target_stage:
+        return Response({
+            'success': False,
+            'err': f'「{MISSION_STAGE_LABELS.get(previous_stage, previous_stage)}」階段的任務無法退回'
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    campaign = mission.application.campaign
+    submissions = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time')
+    platform_feedback = f'平台退回：{reason}'
+
+    with transaction.atomic():
+        update_fields = ['stage']
+        mission.stage = target_stage
+
+        if previous_stage == 'promoting':
+            # 推廣中 → 待發佈：作品連結標成退回，KOC 要重新提交連結；
+            # 優惠碼是在提交連結時啟用的，一起停用，重新提交連結後會再啟用
+            latest_link = submissions.filter(submission_type='link').first()
+            if latest_link:
+                latest_link.status = 'revising'
+                latest_link.vendor_feedback = platform_feedback
+                latest_link.save(update_fields=['status', 'vendor_feedback'])
+            CouponNew.objects.filter(kocmission=mission).update(status='inactive')
+
+        # 回到需要 KOC 交件的階段時，比照正常流程重新起算交件提醒期限
+        if target_stage in ('writing', 'publishing'):
+            mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
+            mission.submission_reminder_sent = False
+            update_fields += ['submission_deadline_at', 'submission_reminder_sent']
+
+        mission.save(update_fields=update_fields)
+
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='admin_revert_mission_stage',
+            tasks_id=str(mission.kocmission_id),
+            koc=mission.koc,
+            vendor=campaign.vendor,
+            action_reason=(
+                f'{MISSION_STAGE_LABELS[previous_stage]} → '
+                f'{MISSION_STAGE_LABELS[target_stage]}：{reason}'
+            ),
+        )
+
+    _notify_mission_parties(
+        mission,
+        title='任務階段已由平台調整',
+        body=(
+            f'案件「{campaign.name}」的任務已由平台退回到'
+            f'「{MISSION_STAGE_LABELS[target_stage]}」，原因：{reason}'
+        ),
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'KOCMission_id': mission.kocmission_id,
+        'Stage': STAGE_CODE_MAP.get(mission.stage),
     }, status=http_status.HTTP_200_OK)
 
 
@@ -3855,27 +4102,59 @@ def get_earnings_tracking(request):
         .order_by('-created_at')
     )
 
-    # 🔥 批次查出所有推薦碼對應的 KOC 姓名（CouponNew -> KOCMissionNew -> KOC -> User），避免迴圈內逐一查詢
+    # 批次查出推薦碼對應的 KOC 與任務（CouponNew -> KOCMissionNew -> KOC / 活動），
+    # 前端依 KOC → 任務 → 訂單分組顯示；避免迴圈內逐一查詢
     promotion_codes = {earning.order.promotion_code for earning in earnings_list}
     coupons = CouponNew.objects.filter(
         promotion_code__in=promotion_codes
-    ).select_related('kocmission__koc__user')
+    ).select_related(
+        'kocmission__koc__user',
+        'kocmission__application__campaign__vendor',
+    )
 
-    koc_name_map = {}
+    coupon_info_map = {}
     for coupon in coupons:
-        if coupon.promotion_code in koc_name_map:
+        if coupon.promotion_code in coupon_info_map:
             continue
-        if coupon.kocmission and coupon.kocmission.koc and coupon.kocmission.koc.user:
-            koc_name_map[coupon.promotion_code] = coupon.kocmission.koc.user.name
+        mission = coupon.kocmission
+        koc_user = mission.koc.user if mission and mission.koc else None
+        campaign = (
+            mission.application.campaign
+            if mission and mission.application else None
+        )
+        coupon_info_map[coupon.promotion_code] = {
+            "koc_user_id": koc_user.user_id if koc_user else None,
+            "koc_name": (koc_user.display_name or koc_user.name) if koc_user else None,
+            "kocmission_id": mission.kocmission_id if mission else None,
+            "campaign_name": campaign.name if campaign else None,
+            "vendor_name": (
+                campaign.vendor.company_name
+                if campaign and campaign.vendor else None
+            ),
+        }
 
     result = []
     for earning in earnings_list:
         promotion_code = earning.order.promotion_code
+        info = coupon_info_map.get(promotion_code, {})
         result.append({
             "promotion_code": promotion_code,
-            "koc_name": koc_name_map.get(promotion_code),
+            # 推薦碼查不到對應任務時（舊資料），KOC 改用分潤紀錄本身的 user
+            "koc_user_id": info.get("koc_user_id") or earning.user_id,
+            "koc_name": info.get("koc_name"),
+            "kocmission_id": info.get("kocmission_id"),
+            "campaign_name": info.get("campaign_name"),
+            "vendor_name": info.get("vendor_name"),
             "order_id": str(earning.order.order_id),
+            "order_total": float(earning.order.total_amount),
+            "order_created_at": earning.order.created_at,
             "amount": earning.amount,
+            # 舊資料沒有 original_amount，以 amount 代替；部分退款時兩者會不同
+            "original_amount": (
+                earning.original_amount
+                if earning.original_amount is not None
+                else earning.amount
+            ),
             "status": earning.status,
         })
 
@@ -3929,6 +4208,71 @@ def admin_login(request):
     }, status=status.HTTP_200_OK)
 
 
+# ── 新增管理員帳號（只有 super_admin 可以） ──
+# POST /platform/admins/create
+# Body: Admin_id（操作者）, Name, Email, Password, Role（reviewer / finance / super_admin）
+ADMIN_ACCOUNT_ROLES = {'reviewer', 'finance', 'super_admin'}
+ADMIN_ROLE_LABELS = {'reviewer': '審核員', 'finance': '財務管理', 'super_admin': '超級管理員'}
+ADMIN_PASSWORD_MIN_LENGTH = 8
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_create_account(request):
+    operator, err = require_admin_role(request, {'super_admin'}, source='data')
+    if err:
+        return err
+
+    name = (request.data.get('Name') or '').strip()
+    email = (request.data.get('Email') or '').strip().lower()
+    password = request.data.get('Password') or ''
+    role = normalize_admin_role(request.data.get('Role'))
+
+    if not name or not email or not password:
+        return Response({
+            'success': False,
+            'err': '姓名、信箱與初始密碼皆為必填'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    if role not in ADMIN_ACCOUNT_ROLES:
+        return Response({
+            'success': False,
+            'err': '請選擇有效的管理員角色'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    if len(password) < ADMIN_PASSWORD_MIN_LENGTH:
+        return Response({
+            'success': False,
+            'err': f'初始密碼至少需要 {ADMIN_PASSWORD_MIN_LENGTH} 個字元'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    if Admins.objects.filter(email__iexact=email).exists():
+        return Response({
+            'success': False,
+            'err': '這個信箱已經是管理員帳號'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        new_admin = Admins.objects.create(
+            name=name,
+            email=email,
+            password=make_password(password),
+            role=role,
+            status='active',
+        )
+        AdminAuditLogs.objects.create(
+            admin_id=operator,
+            action_type='create_admin',
+            action_reason=f'建立{ADMIN_ROLE_LABELS[role]}帳號：{name}（{email}）',
+        )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'Admin_id': new_admin.admin_id,
+        'Name': new_admin.name,
+        'Email': new_admin.email,
+        'Role': new_admin.role,
+    }, status=status.HTTP_201_CREATED)
+
+
 # ── 查看一般使用者列表 ──
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -3953,7 +4297,6 @@ def get_consumers(request):
             'Role': u.role,
             'Name': u.name,
             'Email': u.email,
-            'Password': u.password,
             'Phone': u.phone,
             'Created_At': u.created_at,
         })
@@ -4124,7 +4467,33 @@ def get_transactions(request):
     return Response(result, status=status.HTTP_200_OK)
 
 
+# 操作紀錄 action_type 的中文名稱（平台總覽「最新系統動態」顯示用）
+AUDIT_ACTION_LABELS = {
+    'approve_koc': '核准 KOC 申請',
+    'reject_koc': '退回 KOC 申請',
+    'approve_vendor': '核准廠商入駐',
+    'reject_vendor': '退回廠商申請',
+    'review_vendor': '更新廠商審核狀態',
+    'generate_vendor_monthly_settlement': '產生廠商貨款月結單',
+    'confirm_vendor_settlement_paid': '確認廠商貨款已撥付',
+    'confirm_vendor_settlement_failed': '廠商貨款撥付失敗',
+    'generate_vendor_monthly_payout_batch': '產生廠商月撥款批次',
+    'confirm_vendor_monthly_payout': '確認廠商月撥款',
+    'vendor_monthly_payout_failed': '廠商月撥款失敗',
+    'confirm_koc_payout_completed': '確認 KOC 撥款完成',
+    'confirm_koc_payout_failed': 'KOC 撥款失敗',
+    'settle_campaign_earnings': '結算活動分潤',
+    'resolve_return_dispute_approve': '退貨爭議：同意退款',
+    'resolve_return_dispute_reject': '退貨爭議：維持拒絕',
+    'notify_vendor_review_overdue': '提醒廠商審核逾期',
+    'create_admin': '新增管理員帳號',
+    'admin_close_mission': '強制結案 KOC 任務',
+    'admin_revert_mission_stage': '退回 KOC 任務階段',
+}
+
+
 # ── 查看管理員操作紀錄 ──
+# 選填 limit：只取最新 N 筆（平台總覽用）
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_audit_logs(request):
@@ -4132,8 +4501,9 @@ def get_audit_logs(request):
     action_type = request.query_params.get('Action_type', None)
     vendor_id = request.query_params.get('Vendor_id', None)
     influencer_id = request.query_params.get('Influencer_id', None)
+    limit = request.query_params.get('limit', None)
 
-    logs = AdminAuditLogs.objects.select_related('admin_id')
+    logs = AdminAuditLogs.objects.select_related('admin_id').order_by('-created_at')
 
     if admin_id:
         logs = logs.filter(admin_id=admin_id)
@@ -4143,13 +4513,17 @@ def get_audit_logs(request):
         logs = logs.filter(vendor_id=vendor_id)
     if influencer_id:
         logs = logs.filter(koc_id=influencer_id)
+    if limit and limit.isdigit():
+        logs = logs[:int(limit)]
 
     result = []
     for log in logs:
         result.append({
             'Log_id': log.log_id,
             'Admin_id': log.admin_id.admin_id,
+            'Admin_name': log.admin_id.name,
             'Action_type': log.action_type,
+            'Action_label': AUDIT_ACTION_LABELS.get(log.action_type, log.action_type),
             'Submission_id': log.submission_id,
             'Tasks_id': log.tasks_id,
             'Influencer_id': log.koc_id,
@@ -4463,3 +4837,130 @@ def admin_review_tax_form(request):
         'status': form.status,
     }, status=status.HTTP_200_OK)
 
+
+# ==============================================================================
+# 廠商審核逾期列表：後台用，列出「底下有待審文案、且最早一筆已超過 5 天未審完」
+# 的廠商，給後台一個總覽 + 一顆手動重寄提醒信按鈕。
+# GET /platform/vendor/review-overdue
+# ==============================================================================
+
+VENDOR_REVIEW_DEADLINE_DAYS = 5
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def admin_list_vendor_review_overdue(request):
+    _admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='query')
+    if err:
+        return err
+
+    now = timezone.now()
+
+    earliest_by_vendor = (
+        Submissions.objects
+        .filter(status="pending", submitted_time__isnull=False)
+        .values("kocmission__application__campaign__vendor_id")
+        .annotate(earliest_submitted=Min("submitted_time"))
+    )
+
+    result = []
+    for row in earliest_by_vendor:
+        vendor_id = row["kocmission__application__campaign__vendor_id"]
+        earliest_submitted = row["earliest_submitted"]
+        deadline = earliest_submitted + timedelta(days=VENDOR_REVIEW_DEADLINE_DAYS)
+
+        if now < deadline:
+            continue
+
+        vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+        if not vendor:
+            continue
+
+        pending_count = Submissions.objects.filter(
+            status="pending",
+            kocmission__application__campaign__vendor_id=vendor_id,
+        ).count()
+
+        result.append({
+            'vendor_id': vendor.vendor_id,
+            'vendor_name': vendor.company_name,
+            'pending_count': pending_count,
+            'earliest_submitted_at': earliest_submitted,
+            'deadline': deadline,
+            'overdue_days': (now - deadline).days,
+        })
+
+    result.sort(key=lambda r: r['earliest_submitted_at'])
+
+    return Response({
+        'success': True,
+        'err': '',
+        'vendors': result,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# 手動重新寄送廠商審核逾期提醒信：後台用，不受排程指令的「同一批只提醒一次」限制，
+# 管理員可以隨時手動再寄一次。
+# POST /platform/vendor/review-overdue/notify
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_notify_vendor_review_overdue(request):
+    admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+    if err:
+        return err
+
+    vendor_id = request.data.get('vendor_id')
+    if not vendor_id:
+        return Response({
+            'success': False,
+            'err': 'vendor_id 為必填',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        vendor = Vendor.objects.get(vendor_id=vendor_id)
+    except Vendor.DoesNotExist:
+        return Response({
+            'success': False,
+            'err': '找不到此廠商',
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    pending_submissions = Submissions.objects.filter(
+        status="pending",
+        kocmission__application__campaign__vendor_id=vendor_id,
+    )
+    pending_count = pending_submissions.count()
+
+    if pending_count == 0:
+        return Response({
+            'success': False,
+            'err': '此廠商目前沒有待審核文案',
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    earliest_submitted = pending_submissions.filter(submitted_time__isnull=False).order_by('submitted_time').first().submitted_time
+
+    try:
+        send_vendor_review_overdue_email(vendor, pending_count, earliest_submitted)
+    except Exception:
+        return Response({
+            'success': False,
+            'err': internal_error_message('提醒信寄送失敗'),
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    # 手動重寄後，也更新記錄，避免排程指令緊接著又寄一次重複的信
+    vendor.last_review_reminder_batch_time = earliest_submitted
+    vendor.save(update_fields=['last_review_reminder_batch_time'])
+
+    AdminAuditLogs.objects.create(
+        admin_id=admin_obj,
+        action_type='notify_vendor_review_overdue',
+        vendor=vendor,
+        action_reason=f'手動重新寄送審核逾期提醒信，待審文案 {pending_count} 筆',
+    )
+
+    return Response({
+        'success': True,
+        'err': '',
+    }, status=status.HTTP_200_OK)

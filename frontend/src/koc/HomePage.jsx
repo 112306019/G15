@@ -3,11 +3,13 @@ import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Clock
 import api from '../api/index';
 import { formatApiError } from '../errorMessage';
 
+// 分頁 id 會被其他頁面拿來指定跳轉（例如任務頁返回時 onBack(4)），維持原本編號。
+// 「撰寫文案」(id 2) 已移除：KOC 不再提交文案給廠商審核，任務核准後直接進入上傳作品。
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
-  { id: 2, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
-  { id: 3, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 4, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
+  { id: 3, label: '上傳作品', icon: Upload, desc: '發文後上傳連結' },
+  { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
+  { id: 5, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
@@ -26,12 +28,12 @@ function getDaysUntilRemoval(deadline) {
   return diffDays;
 }
 
-// stage 對照表：前端分頁 id(1-4) <-> 後端 KOCMissionNew.stage 數字
+// 分頁 id → 後端 stage 代碼
 const STAGE_MAP = {
   1: null,        // 資格審核：從 Application 撈
-  2: 2,           // 上傳作品：stage=2(publishing)
-  3: 3,           // 推廣中：stage=3(promoting)
-  4: 4,           // 已結案：stage=4(completed)
+  3: 2,           // 上傳作品：stage=2(publishing)
+  4: 3,           // 推廣中：stage=3(promoting)
+  5: 4,           // 已結案：stage=4(completed)
 };
 
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
@@ -39,6 +41,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [activeStage, setActiveStage] = useState(1);
   const [stageCounts, setStageCounts] = useState({
     qualification: 0,
+    writing: 0,
+    reviewing: 0,
     publishing: 0,
     promoting: 0,
     completed: 0,
@@ -59,7 +63,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   // 從 TaskDetailPage 跳回時，如果有指定要切換的分頁就切過去
   useEffect(() => {
     if (jumpToStage) {
-      setActiveStage(jumpToStage);
+      // 舊的「撰寫文案」分頁已移除，指定跳到那裡的一律改到上傳作品
+      setActiveStage(jumpToStage === 2 ? 3 : jumpToStage);
       onJumpHandled?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,7 +157,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           setTasks([...pending, ...rejected]);
 
         } else {
-          // 上傳作品(2) / 推廣中(3) / 已結案(4)
+          // 上傳作品(3) / 推廣中(4) / 已結案(5)
           const stage = STAGE_MAP[activeStage];
           const res = await api.get('/koc/mission/getlist', {
             params: { User_id: user_id, stage }
@@ -168,6 +173,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               vendor: m.vendor_name,
               deadline: m.deadline,
               stage: activeStage,
+              promoCode: null,
               earningsTotal: m.earnings_total,
               isExpired: m.is_expired || false,
               endReason: m.end_reason || null,
@@ -276,13 +282,13 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             <Clock size={16}/> 廠商審核中
           </button>
         );
-      case 2:
+      case 3:
         return (
           <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
             <Upload size={16}/> 上傳作品連結
           </button>
         );
-      case 3:
+      case 4:
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
             <div className="flex items-center justify-between px-1 md:px-2">
@@ -297,7 +303,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         );
-      case 4: {
+      case 5: {
         const daysUntilRemoval = getDaysUntilRemoval(task.deadline);
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
@@ -327,15 +333,15 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const getStageCount = (stageId) => {
     switch(stageId) {
       case 1: return stageCounts.qualification;
-      case 2: return stageCounts.publishing;
-      case 3: return stageCounts.promoting;
-      case 4: return stageCounts.completed;
+      case 3: return stageCounts.publishing;
+      case 4: return stageCounts.promoting;
+      case 5: return stageCounts.completed;
       default: return 0;
     }
   };
 
   // 已結束分頁要再依「已結案／已取消」子分頁篩選一次，其餘分頁照舊全部顯示
-  const visibleTasks = activeStage === 4
+  const visibleTasks = activeStage === 5
     ? tasks.filter(t => (endedSubTab === 'completed' ? !t.endReason : !!t.endReason))
     : tasks;
 
@@ -355,7 +361,9 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 text-[11px] md:text-sm font-bold text-[#F5F0E8]/80">
             <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">1</span> 申請接案</span>
             <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
-            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-[10px] md:text-xs shadow-md">2</span> 發布貼文賺獎金</span>
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">2</span> 發文並上傳連結</span>
+            <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-[10px] md:text-xs shadow-md">3</span> 發布貼文賺獎金</span>
           </div>
         </div>
       </div>
@@ -387,7 +395,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end mb-4 md:mb-6 px-1 md:px-2 gap-3 md:gap-4">
-        {activeStage !== 1 && activeStage !== 4 && (
+        {activeStage !== 1 && activeStage !== 5 && (
           <h3 className="text-lg md:text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
@@ -418,7 +426,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           </div>
         )}
 
-        {activeStage === 4 && (
+        {activeStage === 5 && (
           <div className="flex gap-2">
             <button
               onClick={() => setEndedSubTab('completed')}
@@ -512,11 +520,11 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   <span className="text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
                     已過期
                   </span>
-                ) : task.stage === 4 && task.endReason ? (
+                ) : task.stage === 5 && task.endReason ? (
                   <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${
                     task.endReason === 'expired' ? 'bg-[#F5F0E8] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A]'
                   }`}>
-                    {task.endReason === 'expired' ? '已過期' : '自行取消'}
+                    {task.endReason === 'expired' ? '已過期' : task.endReason === 'admin_closed' ? '平台終止' : '自行取消'}
                   </span>
                 ) : null}
               </div>
@@ -565,7 +573,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <XCircle size={20} className="md:w-6 md:h-6" />
             </div>
             <h3 className="text-base md:text-lg font-bold text-[#1A1A18] mb-1">
-              申請未通過
+              {viewingReason.type === 'revising' ? '文案退回，請修改' : '申請未通過'}
             </h3>
             <p className="text-[10px] md:text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
             <div className="bg-[#F8F9FA] rounded-xl md:rounded-2xl p-4 md:p-5 text-xs md:text-sm text-[#1A1A18] leading-relaxed mb-5 md:mb-6 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">

@@ -23,8 +23,10 @@ from ..serializers import (
     RevenueHistoryItemSerializer,
     AnalyticsListItemSerializer,
     AnalyticsDetailSerializer,
+    SaveDraftSerializer,  
     KOCApplySerializer,
 )
+from api.koc_commission import format_commission_rate, get_mission_tier_progress
 from api.error_messages import internal_error_message, serializer_error_message
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
@@ -35,12 +37,12 @@ from .constants import (
     SUBMISSION_TYPE_MAP,
     SUBMISSION_STATUS_CODE_MAP,
     STAGE_ALLOWED_SUBMISSION_TYPE,
+    STAGES_ALLOWING_TEXT_DRAFT,
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP,
     REMUNERATION_SERVICE_CONTENT,
     CROSS_BANK_TRANSFER_FEE,
     MIN_PAYOUT_AMOUNT,
-    KOC_COMMISSION_RATE_PERCENT,
     MAX_VIOLATION_COUNT,
     is_probably_bot_click,
     sync_expired_promoting_missions,
@@ -458,7 +460,7 @@ def apply_mission(request):
             "status": "pending"
         }, status=500)
     
-#繳交作品連結
+#繳交、修改文案/作品
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def mission_submit(request):
@@ -480,6 +482,11 @@ def mission_submit(request):
         }, status=http_status.HTTP_404_NOT_FOUND)
 
     submission_type_db = SUBMISSION_TYPE_MAP[data['submission_type']]
+    if submission_type_db == 'text':
+        return Response({
+            "success": False,
+            "err": "已不需要提交文案給廠商審核，請直接發佈貼文並上傳作品連結"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
 
     # 驗證目前 stage 是否允許這種提交類型
     allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
@@ -515,28 +522,100 @@ def mission_submit(request):
     submission = Submissions.objects.create(
         kocmission=mission,
         submission_type=submission_type_db,
+        text_content=data.get('text_content'),
         content_url=data.get('content_url'),
         status='pending',
         submitted_time=timezone.now(),
     )
 
-    # 連結提交後，優惠碼立刻啟用，進入推廣中，等活動截止日到期才會自動轉為已結案
-    try:
-        coupon = CouponNew.objects.get(kocmission=mission)
-        if coupon.status == 'inactive':
-            coupon.status = 'active'
-            coupon.save()
-    except CouponNew.DoesNotExist:
-        # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
-        pass
-    mission.stage = 'promoting'
-    mission.save()
+    # 依提交類型，推進任務 stage（文案已不再提交，只剩作品連結）
+    if submission_type_db == 'link':
+        # 連結提交後，優惠碼立刻啟用(解法一：不等廠商審核)
+        try:
+            coupon = CouponNew.objects.get(kocmission=mission)
+            if coupon.status == 'inactive':
+                coupon.status = 'active'
+                coupon.save()
+        except CouponNew.DoesNotExist:
+            # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
+            pass
+        # 連結提交後進入推廣中，等活動截止日到期才會自動轉為已結案
+        mission.stage = 'promoting'
+        mission.save()
 
     return Response({
         "success": True,
         "err": "",
         "submission_id": str(submission.submission_id),
         "status": SUBMISSION_STATUS_CODE_MAP[submission.status]
+    }, status=http_status.HTTP_200_OK)
+
+# 儲存草稿
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def save_draft(request):
+    serializer = SaveDraftSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    try:
+        mission = KOCMissionNew.objects.get(pk=data['KOCMission_id'])
+    except KOCMissionNew.DoesNotExist:
+        return Response({
+            "success": False,
+            "err": "找不到對應的 KOC 任務"
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+    submission_type_db = SUBMISSION_TYPE_MAP[data['submission_type']]
+
+    # 文案草稿是 KOC 自己的撰寫區（可搭配 AI 檢測），不會送給廠商，待發佈／推廣中都能存；
+    # 連結草稿仍照 mission_submit 的階段規則
+    if submission_type_db == 'text':
+        allowed_type = 'text' if mission.stage in STAGES_ALLOWING_TEXT_DRAFT else None
+    else:
+        allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
+    if allowed_type is None:
+        return Response({
+            "success": False,
+            "err": "目前任務階段不允許儲存草稿"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+    if submission_type_db != allowed_type:
+        return Response({
+            "success": False,
+            "err": "提交類型與目前任務階段不符"
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+
+    # 如果已經有草稿，直接更新；沒有就新建一筆
+    # 注意：這裡只針對 draft 狀態，不會動到 pending/approved 的資料
+    draft = Submissions.objects.filter(
+        kocmission=mission,
+        submission_type=submission_type_db,
+        status='draft'
+    ).first()
+
+    if draft:
+        # 更新既有草稿
+        draft.text_content = data.get('text_content')
+        draft.content_url = data.get('content_url')
+        draft.save()
+    else:
+        # 新建草稿
+        draft = Submissions.objects.create(
+            kocmission=mission,
+            submission_type=submission_type_db,
+            text_content=data.get('text_content'),
+            content_url=data.get('content_url'),
+            status='draft',
+        )
+
+    return Response({
+        "success": True,
+        "err": "",
     }, status=http_status.HTTP_200_OK)
 
 
@@ -650,10 +729,18 @@ def mission_get_detail(request):
             "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
+    #latest_submission = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time').first()
     latest_submission = Submissions.objects.filter(
         kocmission=mission,
         status__in=['pending', 'revising', 'approved']
     ).order_by('-submission_id').first()
+
+    # 另外查草稿(只查 text 類型的草稿，因為文字框只對應文案草稿)
+    draft = Submissions.objects.filter(
+        kocmission=mission,
+        submission_type='text',
+        status='draft'
+    ).first()
 
     # 查詢這個任務對應的優惠碼
     coupon = CouponNew.objects.filter(kocmission=mission).first()
@@ -672,7 +759,10 @@ def mission_get_detail(request):
         "campaign_name": mission.application.campaign.name,
         "campaign_description": mission.application.campaign.description,
         "stage": STAGE_CODE_MAP[mission.stage],
+        "text_content": latest_submission.text_content if latest_submission else None,
         "file_url": latest_submission.content_url if latest_submission else None,
+        "vendor_feedback": latest_submission.vendor_feedback if latest_submission else None,
+        "draft_content": draft.text_content if draft else None,  # 新增這個
         "promotion_code": coupon.promotion_code if coupon else None,
         "coupon_status": coupon.status if coupon else None,
         "earnings_total": earnings_total,
@@ -744,17 +834,34 @@ def get_mission_list(request):
     )
     earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
 
+    # 🔥 批次查出「文案被退回、還沒重新提交」的任務，讓撰寫文案分頁能顯示「文案退回，請修改」
+    # 而不是跟全新任務一樣顯示「撰寫中」。同一個任務可能被退回過好幾次，只留最新一筆的意見。
+    writing_mission_ids = [
+        mission.kocmission_id for mission in missions
+        if mission.stage == 'writing'
+    ]
+    revising_feedback_map = {}
+    revising_submissions = Submissions.objects.filter(
+        kocmission_id__in=writing_mission_ids,
+        submission_type='text',
+        status='revising'
+    ).order_by('kocmission_id', '-submission_id')
+    for submission in revising_submissions:
+        if submission.kocmission_id not in revising_feedback_map:
+            revising_feedback_map[submission.kocmission_id] = submission.vendor_feedback
+
     today = timezone.localdate()
 
     result = []
     for mission in missions:
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
+        vendor_feedback = revising_feedback_map.get(mission.kocmission_id)
 
         # 任務是否已過期：不管卡在哪個階段，只要現在日期超過「活動截止日 + 推廣寬限天數」
         # 就算過期。已結案(completed)代表任務本身有正常跑完，不算過期；
         # promoting 階段另外有 sync_expired_promoting_missions 用 end_date（不含寬限期）
-        # 提早轉成 completed，所以實務上這裡主要會抓到卡在上傳作品階段沒完成的任務。
+        # 提早轉成 completed，所以實務上這裡主要會抓到卡在撰寫/審核/上傳階段沒完成的任務。
         is_expired = (
             mission.stage != 'completed'
             and campaign.end_date is not None
@@ -769,6 +876,8 @@ def get_mission_list(request):
             "vendor_name": campaign.vendor.company_name,
             "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
             "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage in ('promoting', 'completed') else 0,
+            "is_revising": vendor_feedback is not None,
+            "vendor_feedback": vendor_feedback,
             "is_expired": is_expired,
             "end_reason": mission.end_reason,
         })
@@ -784,7 +893,7 @@ def get_mission_list(request):
 @permission_classes([AllowAny])
 def cancel_mission(request):
     """
-    KOC 自行取消尚未結束的任務（上傳作品/推廣中都可以取消）。
+    KOC 自行取消尚未結束的任務（撰寫文案/上傳作品/推廣中都可以取消）。
     URL: /koc/mission/cancel
 
     取消後任務直接進入「已結束」（stage='completed'），end_reason 標記為
@@ -1084,6 +1193,8 @@ def get_mission_stage_counts(request):
         "success": True,
         "err": "",
         "qualification": qualification_count,
+        "writing": mission_result['writing'],
+        "reviewing": mission_result['reviewing'],
         "publishing": mission_result['publishing'],
         "promoting": mission_result['promoting'],
         "completed": mission_result['completed'],
@@ -1334,11 +1445,12 @@ def get_revenue_history(request):
     for earning in earnings:
         result.append({
             "amount": earning.amount,
-            # 分潤比例：固定顯示 KOC_COMMISSION_RATE_PERCENT，不再讀
-            # CampaignProduct.koc_commission_rate——calculate_order_commission
-            # 已經改成不管廠商在活動商品上設定的值是多少，一律固定抽這個比例，
-            # 顯示廠商設定的舊值只會誤導 KOC（跟實際拿到的分潤金額對不上）。
-            "commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
+            # 分潤比例：顯示這筆分潤實際套用的級距分潤率（階梯式月結）；
+            # 舊資料沒有記錄分潤率，是固定 5% 時期建立的
+            "commission_rate": (
+                format_commission_rate(earning.commission_rate)
+                if earning.commission_rate is not None else "5"
+            ),
             "KOCMission_id": str(earning.kocmission.kocmission_id) if earning.kocmission else None,
             "campaign_name": earning.kocmission.application.campaign.name if earning.kocmission else None,
             "status": EARNINGS_STATUS_CODE_MAP[earning.status],
@@ -1628,6 +1740,8 @@ def get_analytics_detail(request):
         "click_count": click_count,
         "epc": epc,
         "click_chart_data": click_chart_data,
+        # 階梯式月結分潤：這個任務本月的級距與升級進度
+        "commission_tier": get_mission_tier_progress(mission),
     }, status=http_status.HTTP_200_OK)
 
 
@@ -1906,6 +2020,21 @@ def send_chat_message(request):
         sender_id=sender_id,
         content=content,
     )
+
+    # KOC 傳訊息時通知廠商（同一個任務還有未讀通知時不重複發）；
+    # 廠商傳給 KOC 的通知在 vendor.vendor_chatroom_send_message
+    if sender_role == 'koc':
+        from api.notifications import notify_new_chat_message
+        campaign = room.kocmission.application.campaign if room.kocmission and room.kocmission.application else None
+        if campaign and campaign.vendor_id:
+            notify_new_chat_message(
+                vendor=campaign.vendor,
+                category='koc',
+                title=f'KOC 在「{campaign.name}」傳來新訊息',
+                body=content,
+                reference_type='vendor_koc_chat',
+                reference_id=room.room_id,
+            )
 
     return Response({
         "success": True,

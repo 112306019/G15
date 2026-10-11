@@ -1,10 +1,12 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Heart, ShoppingBag, Star } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Heart, ShoppingBag, Star, Store, ChevronRight, MessageCircle } from 'lucide-react';
 
 export default function ProductDetailPage({
   onBack, onGoCart, onBuyNow, onAddToCart, userRole, onNavigate, product,
 }) {
+  const navigate = useNavigate();
   const [toastMsg, setToastMsg] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
@@ -50,6 +52,7 @@ export default function ProductDetailPage({
         rating: 4.8,
         description: product.description || "",
         reviewsCount: 0,
+        vendorId: product.Vendor_id || "",
         vendorName: product.Vendor_name || product.Vendor_id || "",
         promoDesc: "",
         gradient: product.gradient || "linear-gradient(135deg,#D8D4CC,#C4BDB4)",
@@ -69,7 +72,7 @@ export default function ProductDetailPage({
       .then(res => res.json())
       .then(data => {
         if (cancelled || !Array.isArray(data)) return;
-        setIsFavorited(data.some(item => item.Product_id === productDetail?.id));
+        setIsFavorited(data.some(item => String(item.Product_id) === String(productDetail?.id)));
       })
       .catch(() => { });
 
@@ -222,6 +225,7 @@ export default function ProductDetailPage({
         price: `NTD$ ${rawPrice}`,
         rawPrice,
         description: p.description || "",
+        vendorId: p.Vendor_id || "",
         vendorName: p.Vendor_name || p.Vendor_id || "",
         imageUrl: p.image_url || "",
       }));
@@ -229,6 +233,15 @@ export default function ProductDetailPage({
       setQuantity(1);
       setIsLoading(false);
     }, 400);
+  };
+
+  const handleContactVendor = () => {
+    if (userRole === 'guest') {
+      showToast("需先登入或註冊才能傳訊息給廠商喔！");
+      return;
+    }
+    // 帶上商品編號，詢問頁會把這個商品附在第一則訊息上
+    navigate(`/inquiry/${productDetail.vendorId}?product=${productDetail.id}`);
   };
 
   const handleHeartClick = async () => {
@@ -240,20 +253,23 @@ export default function ProductDetailPage({
     const userId = localStorage.getItem("userId");
 
     try {
+      // 後端確認成功才更新愛心，避免畫面顯示已收藏、重新整理後卻不見
       if (!isFavorited) {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
         });
+        if (!res.ok) throw new Error(`wishlist add failed: ${res.status}`);
         setIsFavorited(true);
         showToast("✓ 已加入收藏清單");
       } else {
-        await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
+        const res = await fetch(`${API_BASE_URL}/api/consumer/wishlist/delete`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ User_id: userId, Product_id: productDetail.id }),
         });
+        if (!res.ok) throw new Error(`wishlist delete failed: ${res.status}`);
         setIsFavorited(false);
         showToast("已從收藏清單移除");
       }
@@ -292,6 +308,26 @@ export default function ProductDetailPage({
           </div>
 
           <div className="w-full md:w-[55%] flex flex-col justify-center">
+            {productDetail.vendorId && (
+              <div className="mb-2 md:mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Link
+                  to={`/store/${productDetail.vendorId}`}
+                  className="inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
+                >
+                  <Store size={14} className="md:w-4 md:h-4" />
+                  {productDetail.vendorName}
+                  <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleContactVendor}
+                  className="inline-flex items-center gap-1 text-xs md:text-sm font-bold text-[#C8522A] hover:underline"
+                >
+                  <MessageCircle size={14} className="md:w-4 md:h-4" /> 詢問廠商
+                </button>
+              </div>
+            )}
+
             <div className="flex items-start justify-between gap-4 mb-3 md:mb-4">
               <h1 className="font-serif text-xl md:text-3xl leading-snug pr-2">{productDetail.name}</h1>
               <button
@@ -342,7 +378,13 @@ export default function ProductDetailPage({
             <div className="text-xs md:text-sm text-[#8C8880] leading-relaxed space-y-4">
               <div>
                 <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">廠商</h3>
-                <p>{productDetail.vendorName}</p>
+                {productDetail.vendorId ? (
+                  <Link to={`/store/${productDetail.vendorId}`} className="text-[#C8522A] font-bold hover:underline">
+                    {productDetail.vendorName}（查看這個廠商的所有商品）
+                  </Link>
+                ) : (
+                  <p>{productDetail.vendorName}</p>
+                )}
               </div>
               {campaignData ? (
                 <>

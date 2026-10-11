@@ -15,6 +15,16 @@ const NOTIFICATION_PATH_MAP = {
   vendor_order: '/vendor/orders',
 };
 
+// 聊天訊息通知：直接打開統一聊天室裡對應的對話
+const CHAT_NOTIFICATION_PATH = {
+  vendor_order_chat: id => `/vendor/chat?tab=order&order=${encodeURIComponent(id)}`,
+  vendor_inquiry: id => `/vendor/chat?tab=inquiry&room=${encodeURIComponent(id)}`,
+  vendor_koc_chat: id => `/vendor/chat?room=${encodeURIComponent(id)}`,
+};
+
+const notificationPath = (n) =>
+  CHAT_NOTIFICATION_PATH[n.reference_type]?.(n.reference_id) || NOTIFICATION_PATH_MAP[n.reference_type];
+
 const EMPTY_NOTIF_DATA = {
   unread_count: 0,
   order_notifications: [],
@@ -85,7 +95,7 @@ export default function VendorHeader() {
       }
     }
 
-    const path = NOTIFICATION_PATH_MAP[n.reference_type];
+    const path = notificationPath(n);
     if (path) handleNavigate(path);
   };
 

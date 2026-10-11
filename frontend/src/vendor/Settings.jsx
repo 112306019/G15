@@ -17,7 +17,6 @@ import {
   getPostalCode,
   normalizeCityName,
 } from '../taiwanAddress'
-import { getErrorMessage } from '../errorMessage'
 
 
 function Card({ children, className = '' }) {
@@ -174,7 +173,9 @@ export default function Settings() {
         })
       } catch (err) {
         setError(
-          getErrorMessage(err, '廠商資料載入失敗')
+          err.response?.data?.err ||
+          err.message ||
+          '廠商資料載入失敗'
         )
       } finally {
         setLoading(false)
@@ -314,9 +315,16 @@ export default function Settings() {
 
       setMessage('資料更新成功')
     } catch (err) {
+      const apiError =
+        err.response?.data?.err
 
       setError(
-        getErrorMessage(err, '公司資料更新失敗')
+        typeof apiError === 'string'
+          ? apiError
+          : apiError
+          ? JSON.stringify(apiError)
+          : err.message ||
+            '公司資料更新失敗'
       )
     } finally {
       setSaving(false)
@@ -530,16 +538,14 @@ export default function Settings() {
                     請選擇鄉鎮市區
                   </option>
 
-                  {senderDistrictOptions.map(
-                    district => (
-                      <option
-                        key={district}
-                        value={district}
-                      >
-                        {district}
-                      </option>
-                    )
-                  )}
+                  {senderDistrictOptions.map(item => (
+                    <option
+                      key={`${item.district}-${item.postalCode}`}
+                      value={item.district}
+                    >
+                      {item.district}
+                    </option>
+                  ))}
                 </Select>
 
                 <Input

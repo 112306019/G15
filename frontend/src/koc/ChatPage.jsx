@@ -22,9 +22,11 @@ import {
   getKocChatrooms,
   getChatHistory,
   sendChatMessage,
-  markKocChatroomRead
+  markKocChatroomRead,
+  getOrCreateChatRoom
 } from '../api/koc'
 import { getErrorMessage } from '../errorMessage'
+import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
 
 
 function cn(...classes) {
@@ -313,17 +315,36 @@ export default function ChatPage() {
     })
   }, [messages, activeRoomId])
 
+  // 從接案詳情頁帶 ?mission= 進來、但這個任務還沒有聊天室時，只自動建立一次，避免失敗時無限重試
+  const ensuredMissionRef = useRef(null)
 
-  async function loadChatrooms() {
+  // 背景輪詢比對新舊訊息時要讀最新的 state
+  const messagesByRoomRef = useRef(messagesByRoom)
+  messagesByRoomRef.current = messagesByRoom
+
+  // 準即時同步：打開的聊天室定時抓新訊息，聊天室清單同步最後一則訊息與未讀數
+  usePolling(async () => {
+    if (activeRoomId) {
+      await loadMessages(activeRoomId, { silent: true })
+    }
+    await loadChatrooms({ silent: true })
+  }, CHAT_POLL_INTERVAL_MS, Boolean(userId))
+
+
+  // silent：背景輪詢用，不顯示載入中與錯誤、不改變目前選中的聊天室
+  async function loadChatrooms({ silent = false } = {}) {
     if (!userId) {
+      if (silent) return
       setError('尚未登入 KOC 帳號')
       setRoomLoading(false)
       return
     }
 
     try {
-      setRoomLoading(true)
-      setError('')
+      if (!silent) {
+        setRoomLoading(true)
+        setError('')
+      }
 
       const response =
         await getKocChatrooms(
@@ -389,6 +410,8 @@ export default function ChatPage() {
 
       setRooms(mappedRooms)
 
+      if (silent) return
+
       const missionIdParam =
         new URLSearchParams(location.search).get('mission')
 
@@ -404,6 +427,14 @@ export default function ChatPage() {
         // 帶 ?mission= 進來（來自接案詳情頁或站內通知），直接選中該任務的房間，
         // 手機版也一起跳過列表頁直接進對話。
         selectRoom(targetRoom)
+      } else if (missionIdParam && ensuredMissionRef.current !== missionIdParam) {
+        // 這個任務還沒有聊天室（舊資料可能沒建）：建立後重新載入並選中
+        ensuredMissionRef.current = missionIdParam
+        const created = await getOrCreateChatRoom(missionIdParam)
+        if (created.data?.success !== false && created.data?.room_id) {
+          await loadChatrooms()
+          return
+        }
       } else {
         const selectedRoomStillExists =
           mappedRooms.some(
@@ -421,6 +452,7 @@ export default function ChatPage() {
         }
       }
     } catch (requestError) {
+      if (silent) return
       console.error(
         '聊天室清單載入失敗：',
         requestError
@@ -431,17 +463,20 @@ export default function ChatPage() {
         getErrorMessage(requestError, '聊天室清單載入失敗')
       )
     } finally {
-      setRoomLoading(false)
+      if (!silent) setRoomLoading(false)
     }
   }
 
 
-  async function loadMessages(roomId) {
+  // silent：背景輪詢用，不顯示載入中與錯誤；沒有新訊息就不更新畫面、不重複標記已讀
+  async function loadMessages(roomId, { silent = false } = {}) {
     if (!roomId) return
 
     try {
-      setMessageLoading(true)
-      setMessageError('')
+      if (!silent) {
+        setMessageLoading(true)
+        setMessageError('')
+      }
 
       const response =
         await getChatHistory(
@@ -483,6 +518,15 @@ export default function ChatPage() {
             message.created_at
         }))
 
+      if (silent) {
+        const current = messagesByRoomRef.current[roomId] || []
+        const unchanged =
+          current.length === mappedMessages.length &&
+          current[current.length - 1]?.messageId ===
+            mappedMessages[mappedMessages.length - 1]?.messageId
+        if (unchanged) return
+      }
+
       setMessagesByRoom(previous => ({
         ...previous,
         [roomId]: mappedMessages
@@ -490,6 +534,7 @@ export default function ChatPage() {
 
       await markRoomRead(roomId)
     } catch (requestError) {
+      if (silent) return
       console.error(
         '聊天室訊息載入失敗：',
         requestError
@@ -500,7 +545,7 @@ export default function ChatPage() {
         getErrorMessage(requestError, '聊天室訊息載入失敗')
       )
     } finally {
-      setMessageLoading(false)
+      if (!silent) setMessageLoading(false)
     }
   }
 
@@ -675,7 +720,10 @@ export default function ChatPage() {
   function handleInputKeyDown(event) {
     if (
       event.key === 'Enter' &&
-      !event.shiftKey
+      !event.shiftKey &&
+      // 中文輸入法選字時按的 Enter 不送出
+      !event.nativeEvent.isComposing &&
+      event.keyCode !== 229
     ) {
       event.preventDefault()
       sendMessage()

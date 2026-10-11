@@ -142,6 +142,10 @@ class Campaigns(models.Model):
     # 累計人數達到上限時，前台要顯示「已額滿」，不能再申請。
     recruit_limit = models.IntegerField(null=True, blank=True, db_column='recruit_limit')
 
+    # 廠商提供給 KOC 的制式推廣文案（KOC 發文時可參考或直接引用）；
+    # 商品簡介則沿用 Product.description，跟商城商品頁同一份。
+    promo_copy = models.TextField(blank=True, default='', db_column='promo_copy')
+
     class Meta:
         db_table = 'Campaigns'
 
@@ -302,6 +306,7 @@ class KOCMissionNew(models.Model):
     END_REASON_CHOICES = [
         ('expired', '已過期'),
         ('cancelled', 'KOC取消'),
+        ('admin_closed', '平台終止'),  # 管理員強制結案（見 platform.admin_force_close_mission）
     ]
 
     kocmission_id = models.AutoField(primary_key=True, db_column='kocmission_id')
@@ -314,7 +319,8 @@ class KOCMissionNew(models.Model):
     stage = models.CharField(max_length=50, db_column='stage')
     # 只有 stage='completed' 時才有意義：null/blank 代表案件正常跑完（已結案）；
     # 'expired' 代表推廣期滿前沒完成該做的事就被系統自動結案（已取消）；
-    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）。
+    # 'cancelled' 代表 KOC 自己主動取消任務（也算已取消）；
+    # 'admin_closed' 代表平台管理員強制結案（例如違規、廠商要求終止）。
     end_reason = models.CharField(
         max_length=20, choices=END_REASON_CHOICES, blank=True, null=True, db_column='end_reason'
     )
@@ -615,6 +621,11 @@ class Product(models.Model):
     category = models.CharField(max_length=100, blank=True, null=True)
     image_url = models.CharField(max_length=500, blank=True, null=True)
     status = models.CharField(max_length=50)
+
+    # 組合商品：本身不記實體庫存，stock 是由組成商品換算出來的「可售組數」快取值
+    # （見 constants.resync_bundle_stock），組成內容記在 ProductBundleItem。
+    is_bundle = models.BooleanField(default=False, db_column='is_bundle')
+
     AD_CATEGORY_CHOICES = [
         ('food', '食品'),
         ('cosmetic', '化粧品'),
@@ -654,6 +665,39 @@ class Product(models.Model):
 
     def __str__(self):
         return self.product_name
+
+
+class ProductBundleItem(models.Model):
+    """
+    組合商品的組成明細：一列 = 組合裡的一種商品 + 需要幾個。
+    例：「防曬組」= 防曬乳 x2 + 卸妝油 x1 → 兩列。
+    """
+
+    bundle_item_id = models.AutoField(primary_key=True, db_column='bundle_item_id')
+
+    bundle = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        db_column='bundle_product_id',
+        related_name='bundle_items'
+    )
+
+    # PROTECT：被組合用到的商品不能直接刪掉，避免組合內容憑空少一項
+    component = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        db_column='component_product_id',
+        related_name='used_in_bundles'
+    )
+
+    quantity = models.PositiveIntegerField(default=1, db_column='quantity')
+
+    class Meta:
+        db_table = 'Product_Bundle_Item'
+        unique_together = ('bundle', 'component')
+
+    def __str__(self):
+        return f"Bundle {self.bundle_id}: {self.component_id} x{self.quantity}"
 
 
 class Cart(models.Model):
@@ -1922,6 +1966,16 @@ class Earnings(models.Model):
     # original_amount：第一次計算出來、從未被退款調整過的原始金額。
     # 舊資料沒有這個值，view 層讀取時如果是 None 就以 amount 當作 original_amount。
     original_amount = models.IntegerField(null=True, blank=True)
+    # 階梯式月結分潤（見 api/koc_commission.py）。舊資料這四個欄位都是 null，
+    # 代表是固定 5% 時期建立的分潤，不參與級距重算。
+    # commission_base：計算基礎＝活動商品折扣後小計（扣掉部分退款）
+    # item_quantity：這張訂單的活動商品件數，加總後決定當月級距
+    # commission_rate：目前套用的分潤率（%）
+    # commission_month：歸屬月份（訂單完成日所在月份的 1 號，台灣時間）
+    commission_base = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    item_quantity = models.IntegerField(null=True, blank=True)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    commission_month = models.DateField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
     # 這筆分潤有沒有被納入某一張已申報的勞務報酬單。KOC 每次申報時會把當下所有還是
     # null 的分潤一次加總開單，開單後這裡就會指到那張單，之後不會再被算進下一張。
@@ -2439,3 +2493,75 @@ class ReturnRequest(models.Model):
 
     def __str__(self):
         return f"ReturnRequest {self.return_id} for Order {self.order_id} ({self.status})"
+
+class AiCheckConsent(models.Model):
+    """
+    KOC 使用「AI 文案檢測」前同意免責條款的紀錄（條款內容見
+    constants.AI_CHECK_TERMS）。
+
+    同一位使用者對同一版條款只需同意一次；條款改版（AI_CHECK_TERMS_VERSION
+    變更）後要重新同意。紀錄保留同意當下的 IP 與瀏覽器資訊，日後有爭議時
+    可以證明是哪個帳號、何時、同意了哪一版內容。
+    """
+    consent_id = models.AutoField(primary_key=True, db_column='consent_id')
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='user_id',
+        related_name='ai_check_consents'
+    )
+    terms_version = models.CharField(max_length=20, db_column='terms_version')
+    agreed_at = models.DateTimeField(auto_now_add=True, db_column='agreed_at')
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_column='ip_address')
+    user_agent = models.CharField(max_length=500, blank=True, default='', db_column='user_agent')
+
+    class Meta:
+        db_table = 'Ai_Check_Consent'
+        unique_together = ('user', 'terms_version')
+
+    def __str__(self):
+        return f"AiCheckConsent user={self.user_id} v{self.terms_version}"
+
+
+class InquiryRoom(models.Model):
+    """
+    消費者與廠商的「商品詢問」對話：不用先下單，從廠商頁或商品頁發起。
+    每位消費者跟每家廠商只有一個對話（訂單相關的溝通走 OrderChatRoom）。
+    """
+    room_id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='inquiry_rooms')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='inquiry_rooms')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Inquiry_Room'
+        unique_together = ('user', 'vendor')
+
+    def __str__(self):
+        return f"InquiryRoom {self.room_id} user={self.user_id} vendor={self.vendor_id}"
+
+
+class InquiryMessage(models.Model):
+    SENDER_ROLE_CHOICES = [
+        ('user', '消費者'),
+        ('vendor', '廠商'),
+    ]
+
+    message_id = models.AutoField(primary_key=True)
+    room = models.ForeignKey(InquiryRoom, on_delete=models.CASCADE, db_column='room_id', related_name='messages')
+    # 從商品頁發起詢問時，第一則訊息附上詢問的是哪個商品（從廠商頁發起則為空）
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, db_column='product_id', null=True, blank=True, related_name='inquiry_messages'
+    )
+    sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
+    sender_id = models.CharField(max_length=50, db_column='sender_id')
+    content = models.TextField(db_column='content')
+    is_read = models.BooleanField(default=False, db_column='is_read')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Inquiry_Message'
+        ordering = ['created_at', 'message_id']
+
+    def __str__(self):
+        return f"InquiryMessage {self.message_id} in room {self.room_id}"

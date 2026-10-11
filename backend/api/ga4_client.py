@@ -8,6 +8,7 @@ GA4 Data API 串接：查詢 KOC 優惠碼帶來的電商漏斗數據。
 
 import json
 import os
+from datetime import timedelta
 
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import (
@@ -258,3 +259,57 @@ def get_coupon_funnel(codes, start_date="30daysAgo", end_date="today"):
         funnel["link_error"] = friendly_error(error, "推廣連結")
 
     return funnel
+
+
+def get_site_traffic(start_date, end_date):
+    """
+    全站流量（平台總覽的趨勢圖用）。start_date / end_date 是 datetime.date。
+    回傳：
+    {
+      "daily": [{"date": "YYYY-MM-DD", "page_views": 瀏覽量, "visitors": 訪客數}, ...],
+      "totals": {"page_views": 期間總瀏覽量, "visitors": 期間不重複訪客數}
+    }
+    GA4 不會回傳沒有資料的日期，這裡補 0，讓折線圖的日期是連續的。
+    """
+    client = _get_client()
+    property_id = os.getenv("GA4_PROPERTY_ID")
+    date_range = DateRange(
+        start_date=start_date.isoformat(), end_date=end_date.isoformat()
+    )
+    metrics = [Metric(name="screenPageViews"), Metric(name="activeUsers")]
+
+    daily_response = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        dimensions=[Dimension(name="date")],
+        metrics=metrics,
+        date_ranges=[date_range],
+    ))
+    by_date = {}
+    for row in daily_response.rows:
+        raw = row.dimension_values[0].value  # GA4 的 date 維度格式是 YYYYMMDD
+        by_date[f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"] = (
+            int(row.metric_values[0].value),
+            int(row.metric_values[1].value),
+        )
+
+    daily = []
+    day = start_date
+    while day <= end_date:
+        key = day.isoformat()
+        page_views, visitors = by_date.get(key, (0, 0))
+        daily.append({"date": key, "page_views": page_views, "visitors": visitors})
+        day += timedelta(days=1)
+
+    # 期間訪客數要另外查：每日訪客相加會把連續幾天都來的人重複計算
+    total_response = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        metrics=metrics,
+        date_ranges=[date_range],
+    ))
+    total_row = total_response.rows[0] if total_response.rows else None
+    totals = {
+        "page_views": int(total_row.metric_values[0].value) if total_row else 0,
+        "visitors": int(total_row.metric_values[1].value) if total_row else 0,
+    }
+
+    return {"daily": daily, "totals": totals}
