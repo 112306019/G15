@@ -29,8 +29,6 @@ from .views.platform import (
     get_earnings_tracking,
     admin_settle_campaign_earnings,
     admin_generate_vendor_settlement,
-    admin_list_vendor_review_overdue,
-    admin_notify_vendor_review_overdue,
     admin_list_vendor_invoices,
     admin_confirm_vendor_settlement_remittance,
     admin_list_settleable_vendors,
@@ -120,7 +118,6 @@ urlpatterns = [
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
     path('koc/insights/topProducts', views.koc_top_products, name='koc-insights-top-products'),
     path('koc/insights/recommendations', views.koc_recommended_products, name='koc-insights-recommendations'),
-    path('koc/mission/saveDraft', views.save_draft, name='koc-mission-save-draft'),
     path('koc/apply', views.koc_apply, name='koc-apply'),
     path('koc/profile/updateProfile', views.update_koc_profile, name='update-koc-profile'),
     path('koc/application/getAvailableList', views.get_available_campaign_list, name='get_available_campaign_list'),
@@ -162,8 +159,6 @@ urlpatterns = [
     path('platform/vendor/payout/confirm', admin_confirm_vendor_settlement_payment, name='platform-vendor-payout-confirm-legacy'),
     path('platform/vendor/run-monthly-payouts', admin_generate_vendor_settlement, name='platform-vendor-run-monthly-payouts-legacy'),
 
-    path('platform/vendor/review-overdue', admin_list_vendor_review_overdue, name='platform-vendor-review-overdue'),
-    path('platform/vendor/review-overdue/notify', admin_notify_vendor_review_overdue, name='platform-vendor-review-overdue-notify'),
     path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
     path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
@@ -251,11 +246,6 @@ urlpatterns = [
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),
     path('vendor/application/review', vendor.vendor_application_review, name='vendor-application-review'),
-
-    # Vendor 投稿 / 任務成果審核 API
-    path('vendor/mission/getSubmissionDetail', vendor.vendor_mission_get_submission_detail, name='vendor-mission-get-submission-detail'),
-    path('vendor/mission/reviewSubmission', vendor.vendor_mission_review_submission, name='vendor-mission-review-submission'),
-    path('vendor/mission/submission/saveAiResult', vendor.vendor_submission_save_ai_result, name='vendor-submission-save-ai-result'),
 
     # Vendor 訂單 API
     path('vendor/order/getlist', vendor.vendor_order_getlist, name='vendor-order-getlist'),

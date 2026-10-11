@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Edit3, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Ticket, Send, Copy, Check } from 'lucide-react';
+import { Search, Calendar, Image as ImageIcon, ChevronRight, CheckCircle2, Clock, Upload, TrendingUp, XCircle, Trash2, AlertCircle, RotateCcw, Send } from 'lucide-react';
 import api from '../api/index';
-import { buildPromoLink } from '../config';
 import { formatApiError } from '../errorMessage';
 
 const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
-  { id: 2, label: '撰寫文案', icon: Edit3, desc: '請提交文案' },
-  { id: 3, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
-  { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 5, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
+  { id: 2, label: '上傳作品', icon: Upload, desc: '請上傳連結' },
+  { id: 3, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
+  { id: 4, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
@@ -28,14 +26,12 @@ function getDaysUntilRemoval(deadline) {
   return diffDays;
 }
 
-// stage 對照表：撰寫文案分頁要合併 writing(0) + reviewing(1) 兩種後端 stage，
-// 所以這個分頁的值是陣列，其餘分頁維持單一數字
+// stage 對照表：前端分頁 id(1-4) <-> 後端 KOCMissionNew.stage 數字
 const STAGE_MAP = {
   1: null,        // 資格審核：從 Application 撈
-  2: [0, 1],      // 撰寫文案（含已繳交子狀態）：writing(0) + reviewing(1)
-  3: 2,           // 上傳作品：stage=2(publishing)
-  4: 3,           // 推廣中：stage=3(promoting)
-  5: 4,           // 已結案：stage=4(completed)
+  2: 2,           // 上傳作品：stage=2(publishing)
+  3: 3,           // 推廣中：stage=3(promoting)
+  4: 4,           // 已結案：stage=4(completed)
 };
 
 export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
@@ -43,8 +39,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [activeStage, setActiveStage] = useState(1);
   const [stageCounts, setStageCounts] = useState({
     qualification: 0,
-    writing: 0,
-    reviewing: 0,
     publishing: 0,
     promoting: 0,
     completed: 0,
@@ -52,13 +46,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewingReason, setViewingReason] = useState(null);
-  const [copiedPromoCode, setCopiedPromoCode] = useState(null);
-
-  const handleCopyPromoLink = (promoCode) => {
-    navigator.clipboard.writeText(buildPromoLink(promoCode));
-    setCopiedPromoCode(promoCode);
-    setTimeout(() => setCopiedPromoCode((c) => (c === promoCode ? null : c)), 2000);
-  };
 
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
@@ -164,41 +151,8 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
 
           setTasks([...pending, ...rejected]);
 
-        } else if (activeStage === 2) {
-          // 撰寫文案：合併 writing(0) + reviewing(1)
-          const [writingRes, reviewingRes] = await Promise.all([
-            api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 0 } }),
-            api.get('/koc/mission/getlist', { params: { User_id: user_id, stage: 1 } }),
-          ]);
-
-          if (cancelled) return;
-
-          const mapMission = (m, isSubmitted) => ({
-            id: m.KOCMission_id,
-            productName: m.campaign_name,
-            campaignImage: m.campaign_image,
-            vendor: m.vendor_name,
-            deadline: m.deadline,
-            stage: 2,
-            isSubmitted,
-            isRevising: m.is_revising || false,
-            vendorFeedback: m.vendor_feedback || null,
-            promoCode: null,
-            earningsTotal: m.earnings_total,
-            isExpired: m.is_expired || false,
-          });
-
-          const writing = writingRes.data.success
-            ? writingRes.data.missions.map(m => mapMission(m, false))
-            : [];
-          const reviewing = reviewingRes.data.success
-            ? reviewingRes.data.missions.map(m => mapMission(m, true))
-            : [];
-
-          setTasks([...writing, ...reviewing]);
-
         } else {
-          // 上傳作品(3) / 推廣中(4) / 已結案(5)
+          // 上傳作品(2) / 推廣中(3) / 已結案(4)
           const stage = STAGE_MAP[activeStage];
           const res = await api.get('/koc/mission/getlist', {
             params: { User_id: user_id, stage }
@@ -214,7 +168,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               vendor: m.vendor_name,
               deadline: m.deadline,
               stage: activeStage,
-              promoCode: null,
               earningsTotal: m.earnings_total,
               isExpired: m.is_expired || false,
               endReason: m.end_reason || null,
@@ -324,59 +277,12 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           </button>
         );
       case 2:
-        if (task.isSubmitted) {
-          return (
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all flex items-center justify-center gap-1.5 md:gap-2">
-              <Search size={16}/> 已繳交，查看審核進度
-            </button>
-          );
-        }
-        if (task.isRevising) {
-          return (
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => setViewingReason({ type: 'revising', productName: task.productName, rejectReason: task.vendorFeedback })}
-                className="bg-[#FDF0ED] text-[#C8522A] p-2.5 md:p-3 rounded-xl text-xs font-bold border border-[#FDF0ED] flex items-center justify-between gap-1.5 md:gap-2 hover:bg-[#FDF0ED]/70 transition-colors text-left"
-              >
-                <span className="flex items-center gap-1.5 md:gap-2">
-                  <XCircle size={14} className="shrink-0" />
-                  文案退回，請修改
-                </span>
-                <span className="text-[10px] underline underline-offset-2 shrink-0">查看原因</span>
-              </button>
-              <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
-                <Edit3 size={16}/> 前往修改文案
-              </button>
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-col gap-2.5 md:gap-3">
-            {task.promoCode && (
-              <div className="bg-[#FDF0ED]/50 border border-[#C8522A]/20 text-[#C8522A] py-2.5 px-3 rounded-xl text-[10px] md:text-xs font-bold flex items-center justify-center flex-wrap gap-1.5 shadow-sm">
-                <Ticket size={14} /> 需置入專屬優惠碼：{task.promoCode}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleCopyPromoLink(task.promoCode); }}
-                  className="flex items-center gap-1 bg-white border border-[#C8522A]/30 px-2 py-0.5 rounded-full hover:border-[#C8522A] transition-all"
-                >
-                  {copiedPromoCode === task.promoCode ? <Check size={11} /> : <Copy size={11} />}
-                  {copiedPromoCode === task.promoCode ? '已複製' : '複製連結'}
-                </button>
-              </div>
-            )}
-            <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
-              <Edit3 size={16}/> 前往撰寫文案
-            </button>
-          </div>
-        );
-      case 3:
         return (
           <button onClick={() => handleGoToDetail(task)} className="w-full bg-[#C8522A] text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 md:gap-2">
             <Upload size={16}/> 上傳作品連結
           </button>
         );
-      case 4:
+      case 3:
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
             <div className="flex items-center justify-between px-1 md:px-2">
@@ -391,7 +297,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
             </button>
           </div>
         );
-      case 5: {
+      case 4: {
         const daysUntilRemoval = getDaysUntilRemoval(task.deadline);
         return (
           <div className="flex flex-col gap-2.5 md:gap-3">
@@ -421,16 +327,15 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   const getStageCount = (stageId) => {
     switch(stageId) {
       case 1: return stageCounts.qualification;
-      case 2: return stageCounts.writing + stageCounts.reviewing;
-      case 3: return stageCounts.publishing;
-      case 4: return stageCounts.promoting;
-      case 5: return stageCounts.completed;
+      case 2: return stageCounts.publishing;
+      case 3: return stageCounts.promoting;
+      case 4: return stageCounts.completed;
       default: return 0;
     }
   };
 
   // 已結束分頁要再依「已結案／已取消」子分頁篩選一次，其餘分頁照舊全部顯示
-  const visibleTasks = activeStage === 5
+  const visibleTasks = activeStage === 4
     ? tasks.filter(t => (endedSubTab === 'completed' ? !t.endReason : !!t.endReason))
     : tasks;
 
@@ -450,9 +355,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-4 text-[11px] md:text-sm font-bold text-[#F5F0E8]/80">
             <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">1</span> 申請接案</span>
             <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
-            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-white/10 flex items-center justify-center text-white text-[10px] md:text-xs">2</span> 撰寫文案</span>
-            <ChevronRight size={12} className="text-[#8C8880] md:w-3.5 md:h-3.5" />
-            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-[10px] md:text-xs shadow-md">3</span> 發布貼文賺獎金</span>
+            <span className="flex items-center gap-1 md:gap-1.5"><span className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-[#C8522A] flex items-center justify-center text-white text-[10px] md:text-xs shadow-md">2</span> 發布貼文賺獎金</span>
           </div>
         </div>
       </div>
@@ -484,7 +387,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end mb-4 md:mb-6 px-1 md:px-2 gap-3 md:gap-4">
-        {activeStage !== 1 && activeStage !== 5 && (
+        {activeStage !== 1 && activeStage !== 4 && (
           <h3 className="text-lg md:text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
@@ -515,7 +418,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           </div>
         )}
 
-        {activeStage === 5 && (
+        {activeStage === 4 && (
           <div className="flex gap-2">
             <button
               onClick={() => setEndedSubTab('completed')}
@@ -609,17 +512,13 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
                   <span className="text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 bg-[#F5F0E8] text-[#8C8880]">
                     已過期
                   </span>
-                ) : task.stage === 5 && task.endReason ? (
+                ) : task.stage === 4 && task.endReason ? (
                   <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${
                     task.endReason === 'expired' ? 'bg-[#F5F0E8] text-[#8C8880]' : 'bg-[#FDF0ED] text-[#C8522A]'
                   }`}>
                     {task.endReason === 'expired' ? '已過期' : '自行取消'}
                   </span>
-                ) : task.stage === 2 && (
-                  <span className={`text-[9px] md:text-[10px] font-black px-2 py-1 rounded-md shrink-0 ${task.isSubmitted || task.isRevising ? 'bg-[#FDF0ED] text-[#C8522A]' : 'bg-[#F5F0E8] text-[#8C8880]'}`}>
-                    {task.isSubmitted ? '已繳交・審核中' : task.isRevising ? '文案退回，請修改' : '撰寫中'}
-                  </span>
-                )}
+                ) : null}
               </div>
 
               <div className="flex items-center gap-3 md:gap-4 mb-5 md:mb-6">
@@ -666,7 +565,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
               <XCircle size={20} className="md:w-6 md:h-6" />
             </div>
             <h3 className="text-base md:text-lg font-bold text-[#1A1A18] mb-1">
-              {viewingReason.type === 'revising' ? '文案退回，請修改' : '申請未通過'}
+              申請未通過
             </h3>
             <p className="text-[10px] md:text-xs font-bold text-[#8C8880] mb-4">{viewingReason.productName}</p>
             <div className="bg-[#F8F9FA] rounded-xl md:rounded-2xl p-4 md:p-5 text-xs md:text-sm text-[#1A1A18] leading-relaxed mb-5 md:mb-6 whitespace-pre-wrap max-h-[40vh] overflow-y-auto">

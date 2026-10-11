@@ -7,9 +7,9 @@ APPLICATION_STATUS_CODE_MAP = {
 APPLICATION_STATUS_REVERSE_MAP = {v: k for k, v in APPLICATION_STATUS_CODE_MAP.items()}
 
 # KOCMissionNew.stage: 資料庫字串 <-> API 對外 integer
+# 拿掉撰寫文案/審核文案功能後，任務建立時直接進入 publishing，
+# 0/1 不再使用（數字刻意不重新編號，降低改動範圍）。
 STAGE_CODE_MAP = {
-    'writing': 0,
-    'reviewing': 1,
     'publishing': 2,
     'promoting': 3,
     'completed': 4,
@@ -155,7 +155,7 @@ def sync_expired_promoting_missions():
     1. 把 stage='promoting' 且所屬 Campaign.end_date 已過期的任務，
        轉成 stage='completed'（正常跑完整個推廣期，算「已結案」，
        end_reason 留空）。
-    1b. 把還卡在 writing/reviewing/publishing（還沒進入 promoting，
+    1b. 把還卡在 publishing（還沒進入 promoting，
        代表任務根本沒能正式推廣）、但所屬 Campaign.end_date 已過期的
        任務，同樣轉成 stage='completed'，但標記 end_reason='expired'
        （算「已取消」，跟正常跑完整個推廣期的情況要分開），同時記一次
@@ -202,7 +202,7 @@ def sync_expired_promoting_missions():
     # is_expired 判斷一致——否則寬限期內的任務會被這裡提早結案、提早記違規。
     stuck_mission_candidates = list(
         KOCMissionNew.objects.filter(
-            stage__in=['writing', 'reviewing', 'publishing'],
+            stage__in=['publishing'],
             application__campaign__end_date__date__lt=today
         ).select_related('koc__user', 'application__campaign')
     )
@@ -271,14 +271,13 @@ def sync_expired_promoting_missions():
 
 def sync_submission_deadline_reminders():
     """
-    Lazy-write：任務進入 writing（待交文案）或 publishing（待交作品連結）階段
-    時，會設定 submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
-    （見 vendor.py 建立任務／審核退回／文案審核通過的地方）。這裡檢查有沒有
-    任務已經過了這個時間點、卻還停在同一個階段沒交件，發一次逾期提醒通知
-    （publishing 階段額外寄一封提醒信，見 send_publishing_overdue_email）。
+    Lazy-write：任務進入 publishing（待交作品連結）階段時，會設定
+    submission_deadline_at = 進入當下 + SUBMISSION_REMINDER_DAYS 天
+    （見 vendor.py 建立任務的地方）。這裡檢查有沒有任務已經過了這個時間點、
+    卻還停在 publishing 沒交件，發一次逾期提醒通知＋一封提醒信
+    （見 send_publishing_overdue_email）。
 
-    submission_reminder_sent 確保同一次停留期間只提醒一次；重新進入
-    writing/publishing（例如審核退回）會把它歸零，所以下一輪逾期還是會再提醒。
+    submission_reminder_sent 確保同一次停留期間只提醒一次。
     跟 sync_expired_promoting_missions 的「過期」是兩件事——那邊是整個推廣期
     已經結束，這裡只是同一階段內拖太久沒交件。
 
@@ -291,7 +290,7 @@ def sync_submission_deadline_reminders():
 
     overdue_missions = list(
         KOCMissionNew.objects.filter(
-            stage__in=['writing', 'publishing'],
+            stage__in=['publishing'],
             submission_deadline_at__lt=timezone.now(),
             submission_reminder_sent=False,
         ).select_related('koc__user', 'application__campaign')
@@ -301,7 +300,7 @@ def sync_submission_deadline_reminders():
         if not mission.koc:
             continue
 
-        item_label = '文案' if mission.stage == 'writing' else '作品連結'
+        item_label = '作品連結'
         campaign_name = (
             mission.application.campaign.name
             if mission.application and mission.application.campaign else ''
@@ -318,13 +317,10 @@ def sync_submission_deadline_reminders():
             reference_type='koc_home',
         )
 
-        # publishing（待提交作品連結以開始推廣）階段逾期額外寄信提醒，
-        # writing（待交文案）階段沿用站內通知即可，不寄信。
-        if mission.stage == 'publishing':
-            try:
-                send_publishing_overdue_email(mission, SUBMISSION_REMINDER_DAYS)
-            except Exception:
-                pass
+        try:
+            send_publishing_overdue_email(mission, SUBMISSION_REMINDER_DAYS)
+        except Exception:
+            pass
 
         mission.submission_reminder_sent = True
         mission.save(update_fields=['submission_reminder_sent'])
@@ -369,7 +365,6 @@ COUPON_STATUS_CODE_MAP = {
     'expired': 2,    # 已過期
 }
 STAGE_ALLOWED_SUBMISSION_TYPE = {
-    'writing': 'text',   # 撰寫文案階段，只能交文案
     'publishing': 'link',  # 待發佈階段，只能交連結
 }
 

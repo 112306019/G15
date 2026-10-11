@@ -1,7 +1,6 @@
 from datetime import timedelta
 from urllib.parse import urlencode
 
-import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -24,7 +23,6 @@ from ..serializers import (
     RevenueHistoryItemSerializer,
     AnalyticsListItemSerializer,
     AnalyticsDetailSerializer,
-    SaveDraftSerializer,  
     KOCApplySerializer,
 )
 from api.error_messages import internal_error_message, serializer_error_message
@@ -460,7 +458,7 @@ def apply_mission(request):
             "status": "pending"
         }, status=500)
     
-#繳交、修改文案/作品
+#繳交作品連結
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def mission_submit(request):
@@ -517,142 +515,28 @@ def mission_submit(request):
     submission = Submissions.objects.create(
         kocmission=mission,
         submission_type=submission_type_db,
-        text_content=data.get('text_content'),
         content_url=data.get('content_url'),
         status='pending',
         submitted_time=timezone.now(),
     )
 
-    # 文字類型的提交，自動打 AdGuard 做一次 AI 合規分析，
-    # 存進 ai_result，讓廠商打開審核頁面時可以直接看到結果，不用手動再按一次。
-    if submission_type_db == 'text' and data.get('text_content'):
-        try:
-            ad_category = 'other'
-            campaign_product = CampaignProduct.objects.filter(
-                campaign=mission.application.campaign
-            ).select_related('product').first()
-            if campaign_product and campaign_product.product:
-                ad_category = campaign_product.product.ad_category or 'other'
-
-            ai_resp = requests.post(
-                'http://127.0.0.1:8001/api/analyze',
-                json={'text': data.get('text_content'), 'category': ad_category},
-                timeout=30,
-            )
-            if ai_resp.ok:
-                submission.ai_result = ai_resp.json()
-                submission.save()
-        except Exception as e:
-            print(f"自動 AI 審核失敗（submission_id={submission.submission_id}）: {e}")
-
-    # 依提交類型，推進任務 stage
-    if submission_type_db == 'text':
-        # 文案提交後，立刻從 writing 推進到 reviewing
-        mission.stage = 'reviewing'
-        mission.save()
-
-        # 通知廠商有新的文案需要審核；通知寫入失敗不影響提交本身成功與否。
-        try:
-            from api.notifications import create_notification
-            campaign = mission.application.campaign if mission.application else None
-            if campaign and campaign.vendor_id:
-                koc_name = (
-                    (mission.koc.user.display_name or mission.koc.user.name)
-                    if mission.koc and mission.koc.user else ''
-                )
-                create_notification(
-                    vendor=campaign.vendor,
-                    category='koc',
-                    title='有新的文案需要審核',
-                    body=f'{koc_name} 在案件「{campaign.name}」提交了文案，請盡快審核。',
-                    reference_type='vendor_review',
-                    reference_id=str(mission.kocmission_id),
-                )
-        except Exception:
-            pass
-    elif submission_type_db == 'link':
-        # 連結提交後，優惠碼立刻啟用(解法一：不等廠商審核)
-        try:
-            coupon = CouponNew.objects.get(kocmission=mission)
-            if coupon.status == 'inactive':
-                coupon.status = 'active'
-                coupon.save()
-        except CouponNew.DoesNotExist:
-            # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
-            pass
-        # 連結提交後進入推廣中，等活動截止日到期才會自動轉為已結案
-        mission.stage = 'promoting'
-        mission.save()
+    # 連結提交後，優惠碼立刻啟用，進入推廣中，等活動截止日到期才會自動轉為已結案
+    try:
+        coupon = CouponNew.objects.get(kocmission=mission)
+        if coupon.status == 'inactive':
+            coupon.status = 'active'
+            coupon.save()
+    except CouponNew.DoesNotExist:
+        # 這個任務沒有對應的優惠碼，跳過(不報錯，繼續正常回傳)
+        pass
+    mission.stage = 'promoting'
+    mission.save()
 
     return Response({
         "success": True,
         "err": "",
         "submission_id": str(submission.submission_id),
         "status": SUBMISSION_STATUS_CODE_MAP[submission.status]
-    }, status=http_status.HTTP_200_OK)
-
-# 儲存草稿
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def save_draft(request):
-    serializer = SaveDraftSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response({
-            "success": False,
-            "err": serializer_error_message(serializer.errors)
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    data = serializer.validated_data
-
-    try:
-        mission = KOCMissionNew.objects.get(pk=data['KOCMission_id'])
-    except KOCMissionNew.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的 KOC 任務"
-        }, status=http_status.HTTP_404_NOT_FOUND)
-
-    submission_type_db = SUBMISSION_TYPE_MAP[data['submission_type']]
-
-    # 驗證目前 stage 是否允許這種提交類型(跟 mission_submit 一樣的檢查)
-    allowed_type = STAGE_ALLOWED_SUBMISSION_TYPE.get(mission.stage)
-    if allowed_type is None:
-        return Response({
-            "success": False,
-            "err": "目前任務階段不允許儲存草稿"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-    if submission_type_db != allowed_type:
-        return Response({
-            "success": False,
-            "err": "提交類型與目前任務階段不符"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    # 如果已經有草稿，直接更新；沒有就新建一筆
-    # 注意：這裡只針對 draft 狀態，不會動到 pending/approved 的資料
-    draft = Submissions.objects.filter(
-        kocmission=mission,
-        submission_type=submission_type_db,
-        status='draft'
-    ).first()
-
-    if draft:
-        # 更新既有草稿
-        draft.text_content = data.get('text_content')
-        draft.content_url = data.get('content_url')
-        draft.save()
-    else:
-        # 新建草稿
-        draft = Submissions.objects.create(
-            kocmission=mission,
-            submission_type=submission_type_db,
-            text_content=data.get('text_content'),
-            content_url=data.get('content_url'),
-            status='draft',
-        )
-
-    return Response({
-        "success": True,
-        "err": "",
     }, status=http_status.HTTP_200_OK)
 
 
@@ -766,18 +650,10 @@ def mission_get_detail(request):
             "err": "此任務已超過顯示期限"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    #latest_submission = Submissions.objects.filter(kocmission=mission).order_by('-submitted_time').first()
     latest_submission = Submissions.objects.filter(
         kocmission=mission,
         status__in=['pending', 'revising', 'approved']
     ).order_by('-submission_id').first()
-
-    # 另外查草稿(只查 text 類型的草稿，因為文字框只對應文案草稿)
-    draft = Submissions.objects.filter(
-        kocmission=mission,
-        submission_type='text',
-        status='draft'
-    ).first()
 
     # 查詢這個任務對應的優惠碼
     coupon = CouponNew.objects.filter(kocmission=mission).first()
@@ -796,10 +672,7 @@ def mission_get_detail(request):
         "campaign_name": mission.application.campaign.name,
         "campaign_description": mission.application.campaign.description,
         "stage": STAGE_CODE_MAP[mission.stage],
-        "text_content": latest_submission.text_content if latest_submission else None,
         "file_url": latest_submission.content_url if latest_submission else None,
-        "vendor_feedback": latest_submission.vendor_feedback if latest_submission else None,
-        "draft_content": draft.text_content if draft else None,  # 新增這個
         "promotion_code": coupon.promotion_code if coupon else None,
         "coupon_status": coupon.status if coupon else None,
         "earnings_total": earnings_total,
@@ -871,34 +744,17 @@ def get_mission_list(request):
     )
     earnings_map = {row['kocmission_id']: row['total'] for row in earnings_totals}
 
-    # 🔥 批次查出「文案被退回、還沒重新提交」的任務，讓撰寫文案分頁能顯示「文案退回，請修改」
-    # 而不是跟全新任務一樣顯示「撰寫中」。同一個任務可能被退回過好幾次，只留最新一筆的意見。
-    writing_mission_ids = [
-        mission.kocmission_id for mission in missions
-        if mission.stage == 'writing'
-    ]
-    revising_feedback_map = {}
-    revising_submissions = Submissions.objects.filter(
-        kocmission_id__in=writing_mission_ids,
-        submission_type='text',
-        status='revising'
-    ).order_by('kocmission_id', '-submission_id')
-    for submission in revising_submissions:
-        if submission.kocmission_id not in revising_feedback_map:
-            revising_feedback_map[submission.kocmission_id] = submission.vendor_feedback
-
     today = timezone.localdate()
 
     result = []
     for mission in missions:
         campaign = mission.application.campaign
         campaign_image = image_map.get(campaign.campaign_id)
-        vendor_feedback = revising_feedback_map.get(mission.kocmission_id)
 
         # 任務是否已過期：不管卡在哪個階段，只要現在日期超過「活動截止日 + 推廣寬限天數」
         # 就算過期。已結案(completed)代表任務本身有正常跑完，不算過期；
         # promoting 階段另外有 sync_expired_promoting_missions 用 end_date（不含寬限期）
-        # 提早轉成 completed，所以實務上這裡主要會抓到卡在撰寫/審核/上傳階段沒完成的任務。
+        # 提早轉成 completed，所以實務上這裡主要會抓到卡在上傳作品階段沒完成的任務。
         is_expired = (
             mission.stage != 'completed'
             and campaign.end_date is not None
@@ -913,8 +769,6 @@ def get_mission_list(request):
             "vendor_name": campaign.vendor.company_name,
             "deadline": campaign.end_date.strftime('%Y-%m-%d') if campaign.end_date else None,
             "earnings_total": earnings_map.get(mission.kocmission_id, 0) if mission.stage in ('promoting', 'completed') else 0,
-            "is_revising": vendor_feedback is not None,
-            "vendor_feedback": vendor_feedback,
             "is_expired": is_expired,
             "end_reason": mission.end_reason,
         })
@@ -930,7 +784,7 @@ def get_mission_list(request):
 @permission_classes([AllowAny])
 def cancel_mission(request):
     """
-    KOC 自行取消尚未結束的任務（撰寫文案/上傳作品/推廣中都可以取消）。
+    KOC 自行取消尚未結束的任務（上傳作品/推廣中都可以取消）。
     URL: /koc/mission/cancel
 
     取消後任務直接進入「已結束」（stage='completed'），end_reason 標記為
@@ -1230,8 +1084,6 @@ def get_mission_stage_counts(request):
         "success": True,
         "err": "",
         "qualification": qualification_count,
-        "writing": mission_result['writing'],
-        "reviewing": mission_result['reviewing'],
         "publishing": mission_result['publishing'],
         "promoting": mission_result['promoting'],
         "completed": mission_result['completed'],

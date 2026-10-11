@@ -125,31 +125,6 @@ export const reviewVendorApplication = (data) => {
 }
 
 // ======================================================
-// 投稿 / 任務成果
-// ======================================================
-
-export const getVendorSubmissions = (
-  vendorId,
-  submissionType = ''
-) => {
-  const params = {
-    vendor_id: vendorId,
-  }
-
-  if (submissionType) {
-    params.submission_type = submissionType
-  }
-
-  return api.get('/vendor/mission/getSubmissionDetail', {
-    params,
-  })
-}
-
-export const reviewVendorSubmission = (data) => {
-  return api.post('/vendor/mission/reviewSubmission', data)
-}
-
-// ======================================================
 // 訂單
 // ======================================================
 

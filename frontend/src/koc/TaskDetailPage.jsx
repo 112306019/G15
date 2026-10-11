@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, Copy, Check, MessageCircle } from 'lucide-react';
 import api from '../api/index';
 import { buildPromoLink } from '../config';
 import { formatApiError } from '../errorMessage';
@@ -148,11 +148,8 @@ export default function TaskDetailPage({ task, onBack }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [copyText, setCopyText] = useState('');
   const [linkText, setLinkText] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -179,8 +176,6 @@ export default function TaskDetailPage({ task, onBack }) {
         });
         if (res.data.success) {
           setDetail(res.data);
-          // 如果有草稿內容，預填進文字框
-          setCopyText(res.data.draft_content || '');
         } else {
           setLoadError(formatApiError(res.data.err) || '任務載入失敗');
         }
@@ -258,11 +253,9 @@ export default function TaskDetailPage({ task, onBack }) {
     </div>
   );
 
-  // API 回傳 0=writing, 1=reviewing, 2=publishing, 3=promoting, 4=completed
-  const STAGE_NUM_TO_KEY = ['writing', 'reviewing', 'publishing', 'promoting', 'completed'];
+  // API 回傳 2=publishing, 3=promoting, 4=completed（任務建立時直接進入 publishing）
+  const STAGE_NUM_TO_KEY = { 2: 'publishing', 3: 'promoting', 4: 'completed' };
   const stage = STAGE_NUM_TO_KEY[detail.stage];
-  const vendorFeedback = detail?.vendor_feedback;
-  const draftContent = detail?.draft_content;
   const promoCode = detail?.promotion_code || task.promoCode || null;
 
   const handleCopyPromoLink = () => {
@@ -275,62 +268,9 @@ export default function TaskDetailPage({ task, onBack }) {
   const earningsTotal = detail?.earnings_total || 0;
 
   // 畫面邏輯
-  const isEditable = stage === 'writing' || (stage === 'reviewing' && vendorFeedback);  // 撰寫中，或已繳交被退回
-  const isReviewing = stage === 'reviewing' && !vendorFeedback;                          // 已繳交，廠商審核中
   const isWaitUpload = stage === 'publishing';                                           // 上傳作品
   const isPromoting = stage === 'promoting';                                             // 推廣中
   const isCompleted = stage === 'completed';                                             // 已結案
-
-  // 儲存草稿
-  const handleSaveDraft = async () => {
-    setIsSaving(true);
-    try {
-      const res = await api.post('/koc/mission/saveDraft', {
-        KOCMission_id: task.id,
-        submission_type: '0',
-        text_content: copyText,
-      });
-      if (res.data.success) {
-        alert('草稿已成功儲存！');
-      } else {
-        alert(formatApiError(res.data.err) || '儲存失敗');
-      }
-    } catch (err) {
-      console.error('儲存草稿失敗:', err);
-      alert('草稿儲存失敗，請稍後再試。');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // 提交文案
-  const handleSubmitCopy = async () => {
-    if (!copyText.trim()) {
-      alert('請輸入文案內容');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const res = await api.post('/koc/mission/submit', {
-        KOCMission_id: task.id,
-        submission_type: '0',
-        text_content: copyText,
-      });
-      if (res.data.success) {
-        setShowModal(false);
-        // 更新 detail 狀態，讓畫面切換到「審核中」
-        setDetail(prev => ({ ...prev, stage: 1, vendor_feedback: null }));
-        alert('文案已送出審核！');
-      } else {
-        alert(formatApiError(res.data.err) || '提交失敗');
-      }
-    } catch (err) {
-      console.error('提交失敗', err);
-      alert('提交失敗，請稍後再試');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   // 提交連結
   const handleSubmitLink = async () => {
@@ -447,9 +387,9 @@ export default function TaskDetailPage({ task, onBack }) {
               </div>
               <div className="hidden md:block w-px h-8 bg-[#8C8880]/30"></div>
               <div className="col-span-2 md:col-span-1 border-t border-[#8C8880]/30 md:border-0 pt-3 md:pt-0">
-                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">{isPromoting ? '目前累積分潤' : '預估分潤收益'}</p>
+                <p className="text-[#8C8880] text-[10px] xl:text-xs font-bold mb-1">{isPromoting || isCompleted ? '目前累積分潤' : '預估分潤收益'}</p>
                 <p className="font-bold text-sm xl:text-base">
-                  {isPromoting ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
+                  {isPromoting || isCompleted ? `NT$ ${earningsTotal.toLocaleString()}` : `NT$ ${task.reward || '依實際轉換計算'}`}
                 </p>
               </div>
             </div>
@@ -468,58 +408,6 @@ export default function TaskDetailPage({ task, onBack }) {
 
         <div className="flex-1 bg-white rounded-2xl xl:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-6 xl:p-10 flex flex-col overflow-y-auto custom-scrollbar min-h-[400px]">
           
-          {/* 情境 1：可以填寫/修改文案 */}
-          {isEditable && (
-            <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
-              <div className="flex items-center gap-2 xl:gap-3 mb-4 xl:mb-6">
-                <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#F5F0E8] rounded-full flex items-center justify-center text-[#1A1A18]">
-                  <Edit3 size={16} className="xl:w-[18px] xl:h-[18px]" />
-                </div>
-                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">撰寫文案草稿</h3>
-              </div>
-
-              {vendorFeedback && (
-                <div className="mb-4 xl:mb-6 bg-[#FDF0ED] border border-[#FDF0ED] rounded-xl xl:rounded-2xl px-4 xl:px-6 py-4 xl:py-5 flex gap-2.5 xl:gap-3 shadow-sm">
-                  <AlertCircle size={18} className="text-[#C8522A] shrink-0 mt-0.5 xl:w-5 xl:h-5" />
-                  <div>
-                    <span className="text-[#C8522A] font-black text-[10px] xl:text-xs uppercase tracking-wider mb-1 block">廠商要求修改</span>
-                    <span className="text-xs xl:text-sm text-[#1A1A18] font-bold leading-relaxed">{vendorFeedback}</span>
-                  </div>
-                </div>
-              )}
-              
-              <div
-                onClick={() => setShowModal(true)}
-                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl xl:rounded-2xl p-5 xl:p-6 min-h-[140px] xl:min-h-[160px] cursor-pointer hover:border-[#C8522A] hover:bg-white transition-all group flex flex-col justify-center items-center gap-2.5 xl:gap-3 shadow-sm text-center"
-              >
-                <Edit3 size={20} className="text-[#8C8880] group-hover:text-[#C8522A] transition-colors xl:w-6 xl:h-6" />
-                <span className="text-sm xl:text-base text-[#8C8880] font-bold group-hover:text-[#1A1A18] transition-colors">
-                  {draftContent
-                    ? '偵測到您有儲存的草稿，點此繼續編輯...'
-                    : (vendorFeedback ? '點此修改您的文案草稿...' : '點擊開始撰寫您的文案草稿...')}
-                </span>
-                {draftContent && (
-                  <span className="text-[10px] xl:text-xs text-[#8C8880] bg-[#F5F0E8] px-2.5 py-1 rounded-md line-clamp-2 xl:line-clamp-1 max-w-md">
-                    目前內容：{draftContent}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 情境 2：廠商審核中 */}
-          {isReviewing && (
-            <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center h-full text-center max-w-md mx-auto">
-              <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#FDF0ED] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#C8522A]/20">
-                <CheckCircle2 size={32} className="text-[#C8522A] xl:w-12 xl:h-12" />
-              </div>
-              <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">文案已送出審核</h3>
-              <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed">
-                廠商正在確認您的文案內容。<br/>審核通過後，任務將會自動移至「作品上傳」階段。
-              </p>
-            </div>
-          )}
-
           {/* 情境 3：上傳作品 */}
           {isWaitUpload && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
@@ -527,7 +415,7 @@ export default function TaskDetailPage({ task, onBack }) {
                 <div className="w-8 h-8 xl:w-10 xl:h-10 bg-[#FDF0ED] rounded-full flex items-center justify-center text-[#C8522A]">
                   <CheckCircle2 size={16} className="xl:w-[18px] xl:h-[18px]" />
                 </div>
-                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">文案審核已通過！</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18]">任務已確認！</h3>
               </div>
 
               <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-5 xl:p-8 border border-[#E2DDD4]">
@@ -584,9 +472,9 @@ export default function TaskDetailPage({ task, onBack }) {
                 <div className="w-16 h-16 xl:w-24 xl:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 xl:mb-6 shadow-inner border border-[#E2DDD4]">
                   <CheckCircle2 size={32} className="text-[#8C8880] xl:w-12 xl:h-12" />
                 </div>
-                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">任務已完成</h3>
+                <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3">推廣已完成</h3>
                 <p className="text-xs xl:text-sm text-[#8C8880] font-medium leading-relaxed">
-                  感謝您的合作！這個任務已經順利結案，分潤將依實際轉換計算，完成後會出現在您的收益明細中。
+                  感謝您的合作！目前已經順利結案，分潤將依實際轉換計算，完成後會顯示在可提領餘額裡，屆時請記得填寫勞務報酬單才能順利提款。
                 </p>
               </div>
 
@@ -627,78 +515,6 @@ export default function TaskDetailPage({ task, onBack }) {
           </div>
         )}
       </div>
-
-      {/* 文案撰寫彈出視窗 */}
-      {showModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[1.5rem] xl:rounded-[2rem] p-6 xl:p-10 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
-            <div className="flex justify-between items-center mb-4 xl:mb-6 shrink-0">
-              <h3 className="text-lg xl:text-xl font-bold text-[#1A1A18]">編輯文案草稿</h3>
-              <button onClick={() => setShowModal(false)} className="xl:hidden p-1 text-[#8C8880] hover:text-[#1A1A18]">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto pr-1">
-              {vendorFeedback && (
-                <div className="mb-4 xl:mb-6 bg-[#FDF0ED] text-[#C8522A] px-4 xl:px-6 py-3 xl:py-4 rounded-xl xl:rounded-2xl text-[13px] xl:text-sm font-bold border border-[#FDF0ED] leading-relaxed shadow-sm">
-                  <span className="text-[10px] xl:text-xs uppercase tracking-tighter block mb-1 opacity-80">廠商要求修改：</span>
-                  {vendorFeedback}
-                </div>
-              )}
-
-              <textarea
-                value={copyText}
-                onChange={(e) => setCopyText(e.target.value)}
-                placeholder="請輸入欲發佈的圖文內容草稿...."
-                className="w-full min-h-[200px] xl:h-64 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl xl:rounded-[1.5rem] p-4 xl:p-6 outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none mb-4 xl:mb-6 text-[13px] xl:text-sm text-[#1A1A18] leading-relaxed transition-all placeholder:text-[#8C8880] font-medium shadow-inner custom-scrollbar"
-              />
-
-              <div className="flex justify-between items-end mb-6 xl:mb-8 bg-[#F5F0E8] p-3 xl:p-4 rounded-xl border border-[#E2DDD4]">
-                <div className="text-[10px] xl:text-xs font-bold text-[#8C8880] space-y-1 xl:space-y-1.5 ml-1 xl:ml-2">
-                  <p className="text-[#1A1A18] mb-0.5 xl:mb-1">發佈規範：</p>
-                  <p>• 文案長度建議大於 50 字</p>
-                  <p className="flex flex-wrap items-center gap-1">• 請務必包含專屬優惠碼：
-                    <span className="text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4]">
-                      {promoCode || '無'}
-                    </span>
-                  </p>
-                  {promoCode && (
-                    <p className="flex flex-wrap items-center gap-1">• 或直接分享推廣連結：
-                      <button
-                        type="button"
-                        onClick={handleCopyPromoLink}
-                        className="flex items-center gap-1 text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4] hover:border-[#C8522A] transition-all"
-                      >
-                        {linkCopied ? <Check size={11} /> : <Copy size={11} />}
-                        {linkCopied ? '已複製' : '複製連結'}
-                      </button>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2.5 xl:gap-4 shrink-0 pt-2">
-              <button
-                onClick={handleSaveDraft}
-                disabled={isSaving || isSubmitting}
-                className="flex-1 bg-white border-2 border-[#1A1A18] text-[#1A1A18] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#1A1A18] hover:text-[#F5F0E8] transition-all text-xs xl:text-sm flex items-center justify-center gap-2 disabled:opacity-50 order-2 sm:order-1"
-              >
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
-                {isSaving ? '儲存中...' : '儲存草稿'}
-              </button>
-              <button
-                onClick={handleSubmitCopy}
-                disabled={isSaving || isSubmitting}
-                className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 xl:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs xl:text-sm tracking-widest disabled:opacity-50 order-1 sm:order-2"
-              >
-                {isSubmitting ? '送出中...' : '確認送出審核'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 取消任務確認視窗 */}
       {showCancelModal && (

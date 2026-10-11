@@ -7,12 +7,10 @@ import {
 import { getKOCList, getKOCDetail, updateKOCMissionStage } from '../api/platform';
 import { formatApiError } from '../errorMessage';
 
-const STAGE_LABELS = { 0: '撰寫文案', 1: '文案審核中', 2: '待發佈', 3: '推廣中', 4: '已結案' };
-const STAGE_CODE_TO_VALUE = { 0: 'writing', 1: 'reviewing', 2: 'publishing', 3: 'promoting', 4: 'completed' };
+const STAGE_LABELS = { 2: '待發佈', 3: '推廣中', 4: '已結案' };
+const STAGE_CODE_TO_VALUE = { 2: 'publishing', 3: 'promoting', 4: 'completed' };
 
 const STAGE_OPTIONS = [
-  { value: 'writing', label: '撰寫文案' },
-  { value: 'reviewing', label: '文案審核中' },
   { value: 'publishing', label: '待發佈' },
   { value: 'promoting', label: '推廣中' },
   { value: 'completed', label: '已結案' },
@@ -31,7 +29,7 @@ export default function AdminKocDetail() {
   const [missionsError, setMissionsError] = useState(null);
 
   const [stageTarget, setStageTarget] = useState(null);
-  const [newStage, setNewStage] = useState('writing');
+  const [newStage, setNewStage] = useState('publishing');
   const [updatingStage, setUpdatingStage] = useState(false);
 
   // 若不是從列表頁點擊過來（沒有 state），退而求其次用列表 API 找出基本資料
@@ -79,7 +77,7 @@ export default function AdminKocDetail() {
 
   const openStageModal = (mission) => {
     setStageTarget(mission);
-    setNewStage(STAGE_CODE_TO_VALUE[mission.Stage] || 'writing');
+    setNewStage(STAGE_CODE_TO_VALUE[mission.Stage] || 'publishing');
   };
 
   const submitStageUpdate = async (e) => {

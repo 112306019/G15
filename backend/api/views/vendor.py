@@ -13,7 +13,6 @@ from api.error_messages import internal_error_message, serializer_error_message
 from api.r2_storage import upload_image_to_r2
 
 from api.views.constants import (
-    STAGE_ALLOWED_SUBMISSION_TYPE,
     sync_expired_promoting_missions,
     restore_order_stock,
     SUBMISSION_REMINDER_DAYS,
@@ -28,7 +27,7 @@ from api.models import (
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
     VendorInvoice,
 )
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email, send_submission_revising_email, send_submission_approved_email
+from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
 from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
@@ -43,7 +42,6 @@ from api.vendor_serializers import (
     VendorCampaignCreateSerializer,
     VendorCampaignUpdateSerializer,
     VendorApplicationReviewSerializer,
-    VendorSubmissionReviewSerializer,
 )
 
 from api.views.shipping import (
@@ -1370,11 +1368,6 @@ def generate_promotion_code(koc_id):
             return code
 
 
-SUBMISSION_TYPE_TO_STAGE = {
-    submission_type: stage
-    for stage, submission_type in STAGE_ALLOWED_SUBMISSION_TYPE.items()
-}
-
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_application_review(request):
@@ -1488,10 +1481,11 @@ def vendor_application_review(request):
                             # koc 是 ForeignKey，
                             # 使用 koc_id 指定實際主鍵值
                             "koc_id": application.koc_id,
-                            # 任務建立時進入撰寫文案階段，
-                            # 對齊 constants.STAGE_CODE_MAP 的 "writing"
-                            "stage": "writing",
-                            # 進入 writing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
+                            # 任務建立時直接進入待發佈階段（不經撰寫文案/審核文案），
+                            # 對齊 constants.STAGE_CODE_MAP 的 "publishing"
+                            "stage": "publishing",
+                            "publishing_started_at": timezone.now(),
+                            # 進入 publishing 起算 SUBMISSION_REMINDER_DAYS 天的交件提醒期限
                             "submission_deadline_at": timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS),
                         }
                     )
@@ -1506,10 +1500,12 @@ def vendor_application_review(request):
                     mission_fields_to_update.append("koc")
 
                 if not mission.stage:
-                    mission.stage = "writing"
+                    mission.stage = "publishing"
+                    mission.publishing_started_at = timezone.now()
                     mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
                     mission.submission_reminder_sent = False
                     mission_fields_to_update.append("stage")
+                    mission_fields_to_update.append("publishing_started_at")
                     mission_fields_to_update.append("submission_deadline_at")
                     mission_fields_to_update.append("submission_reminder_sent")
 
@@ -1617,286 +1613,6 @@ def vendor_application_review(request):
         ),
         "chatroom_created": chatroom_created,
 
-    }, status=status.HTTP_200_OK)
-
-
-
-# ──────────────────────────────────────────────
-# Vendor 投稿 / 任務成果審核
-# ──────────────────────────────────────────────
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def vendor_mission_get_submission_detail(request):
-    sync_expired_promoting_missions()
-
-    vendor_id = request.GET.get("vendor_id")
-    submission_id = request.GET.get("submission_id")
-    kocmission_id = request.GET.get("kocmission_id")
-    submission_type = request.GET.get("submission_type")
-    submission_status = request.GET.get("status")
-
-    if not vendor_id:
-        return Response({
-            "success": False,
-            "err": "vendor_id is required"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    submissions = Submissions.objects.filter(
-        kocmission__application__campaign__vendor_id=vendor_id
-    )
-
-    if submission_id:
-        submissions = submissions.filter(submission_id=submission_id)
-
-    if kocmission_id:
-        submissions = submissions.filter(kocmission__kocmission_id=kocmission_id)
-
-    if submission_status:
-        submissions = submissions.filter(status=submission_status)
-
-    if submission_type:
-        submissions = submissions.filter(submission_type=submission_type)
-
-    submission_list = []
-
-    for submission in submissions:
-        mission = submission.kocmission
-        application = mission.application
-        campaign = application.campaign
-
-        coupon = CouponNew.objects.filter(
-            kocmission=mission
-        ).first()
-
-        submission_list.append({
-            "submission_id": submission.submission_id,
-            "submission_type": submission.submission_type,
-            "content_url": submission.content_url,
-            "text_content": submission.text_content,
-            "status": submission.status,
-            "vendor_feedback": submission.vendor_feedback,
-            "submitted_time": submission.submitted_time,
-            "reviewed_time": submission.reviewed_time,
-            "ai_result": submission.ai_result,
-
-            "kocmission_id": mission.kocmission_id,
-            "stage": mission.stage,
-            "koc_id": mission.koc_id,
-
-            "application_id": application.application_id,
-            "campaign_id": campaign.campaign_id,
-            "campaign_name": campaign.name,
-
-            "promotion_code": (
-                coupon.promotion_code
-                if coupon
-                else None
-            ),
-            "coupon_status": (
-                coupon.status
-                if coupon
-                else None
-            ),
-        })
-
-    return Response({
-        "success": True,
-        "err": "",
-        "submissions": submission_list
-    }, status=status.HTTP_200_OK)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def vendor_submission_save_ai_result(request):
-    """
-    廠商手動重新跑 AI 審核後，把最新結果存回 submission，
-    覆蓋掉之前（不管是自動跑的還是之前手動跑的）舊結果。
-    URL: /vendor/mission/submission/saveAiResult
-    """
-    submission_id = request.data.get("submission_id")
-    ai_result = request.data.get("ai_result")
-
-    if not submission_id or ai_result is None:
-        return Response({
-            "success": False,
-            "err": "submission_id 與 ai_result 為必填"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        submission = Submissions.objects.get(submission_id=submission_id)
-    except Submissions.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的投稿紀錄"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    submission.ai_result = ai_result
-    submission.save()
-
-    return Response({
-        "success": True,
-        "err": ""
-    }, status=status.HTTP_200_OK)
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def vendor_mission_review_submission(request):
-    serializer = VendorSubmissionReviewSerializer(data=request.data)
-
-    if not serializer.is_valid():
-        return Response({
-            "success": False,
-            "err": serializer_error_message(serializer.errors)
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    vendor_id = serializer.validated_data["vendor_id"]
-    submission_id = serializer.validated_data["submission_id"]
-    review_result = serializer.validated_data["status"]
-    vendor_feedback = serializer.validated_data.get(
-        "vendor_feedback",
-        ""
-    )
-
-    # 對應 Submissions.STATUS_CHOICES
-    if review_result not in ["approved", "revising"]:
-        return Response({
-            "success": False,
-            "err": "Invalid review result"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        submission = Submissions.objects.select_related(
-            "kocmission__application__campaign"
-        ).get(
-            submission_id=submission_id
-        )
-    except Submissions.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "Submission not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    campaign = submission.kocmission.application.campaign
-
-    if str(campaign.vendor_id) != str(vendor_id):
-        return Response({
-            "success": False,
-            "err": "This submission does not belong to this vendor"
-        }, status=status.HTTP_403_FORBIDDEN)
-
-    mission = submission.kocmission
-
-    # 只有 KOC 提交、進入待審核（reviewing）的任務才能被廠商審核，
-    # 避免在錯誤的 stage 下誤觸發 stage 轉移
-    if mission.stage != "reviewing":
-        return Response({
-            "success": False,
-            "err": (
-                "This mission is not currently awaiting review "
-                f"(current stage: {mission.stage})"
-            )
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    coupon = CouponNew.objects.filter(
-        kocmission=submission.kocmission
-    ).first()
-
-    # model 中 text 代表文案
-    should_activate_coupon = (
-        review_result == "approved"
-        and submission.submission_type == "text"
-    )
-
-    # 文案審核通過前，先確認優惠碼存在
-    if should_activate_coupon and not coupon:
-        return Response({
-            "success": False,
-            "err": "Coupon not found for this KOC mission"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    submission.status = review_result
-    submission.vendor_feedback = vendor_feedback
-    submission.reviewed_time = timezone.now()
-    submission.save(
-        update_fields=[
-            "status",
-            "vendor_feedback",
-            "reviewed_time"
-        ]
-    )
-
-    if review_result == "approved":
-        if submission.submission_type == "text":
-            # 文案審核通過：進入待發佈，重新起算交件提醒期限
-            mission.stage = "publishing"
-            mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
-            mission.submission_reminder_sent = False
-            mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
-            # 寄信通知 KOC 可以去提交貼文連結了；寄信失敗不影響審核本身成功與否。
-            try:
-                send_submission_approved_email(submission)
-            except Exception as e:
-                print(f"文案審核通過通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
-        # link 投稿不會經過這裡：連結提交後直接進 promoting（見 koc.py
-        # mission_submit），不經廠商審核，mission.stage 到這裡一定不是
-        # "reviewing"，會被上面的檢查擋掉。
-
-    elif review_result == "revising":
-        # 審核退回：依 submission 的類型回到對應的撰寫階段
-        # ('text' -> 'writing'，'link' -> 'publishing')
-        # 而不是不分類型都退回 "writing"，同時重新起算交件提醒期限
-        mission.stage = SUBMISSION_TYPE_TO_STAGE.get(
-            submission.submission_type,
-            "writing"
-        )
-        mission.submission_deadline_at = timezone.now() + timedelta(days=SUBMISSION_REMINDER_DAYS)
-        mission.submission_reminder_sent = False
-        mission.save(update_fields=["stage", "submission_deadline_at", "submission_reminder_sent"])
-
-        # 設定 3 天修改期限，並寄信通知 KOC；寄信失敗不影響審核本身成功與否。
-        submission.revising_deadline = timezone.now() + timedelta(days=3)
-        submission.revising_reminder_sent = False
-        submission.save(update_fields=["revising_deadline", "revising_reminder_sent"])
-        try:
-            send_submission_revising_email(submission)
-        except Exception as e:
-            print(f"文案退回通知信寄送失敗（submission_id={submission.submission_id}）: {e}")
-
-    # 只有文案審核通過才啟用優惠碼
-    if should_activate_coupon:
-        coupon.status = "active"
-        coupon.save(update_fields=["status"])
-
-    submission_type_label = "文案" if submission.submission_type == "text" else "作品連結"
-    if mission.koc:
-        create_notification(
-            user=mission.koc.user,
-            category="koc",
-            title=f"{submission_type_label}審核通過" if review_result == "approved" else f"{submission_type_label}被退回",
-            body=(
-                f"您提交的{submission_type_label}已通過審核。"
-                if review_result == "approved"
-                else f"您提交的{submission_type_label}被退回，請依廠商意見修改後重新提交。"
-            ),
-            reference_type="koc_home",
-        )
-
-    return Response({
-        "success": True,
-        "err": "",
-        "submission_id": submission.submission_id,
-        "submission_type": submission.submission_type,
-        "status": submission.status,
-        "vendor_feedback": submission.vendor_feedback,
-        "reviewed_time": submission.reviewed_time,
-        "kocmission_id": mission.kocmission_id,
-        "stage": mission.stage,
-        "coupon_id": coupon.coupon_id if coupon else None,
-        "promotion_code": coupon.promotion_code if coupon else None,
-        "coupon_status": coupon.status if coupon else None,
     }, status=status.HTTP_200_OK)
 
 
