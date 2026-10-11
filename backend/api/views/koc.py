@@ -758,6 +758,7 @@ def mission_get_detail(request):
         "KOCMission_id": str(mission.kocmission_id),
         "campaign_name": mission.application.campaign.name,
         "campaign_description": mission.application.campaign.description,
+        "promo_copy": mission.application.campaign.promo_copy,
         "stage": STAGE_CODE_MAP[mission.stage],
         "text_content": latest_submission.text_content if latest_submission else None,
         "file_url": latest_submission.content_url if latest_submission else None,

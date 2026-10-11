@@ -567,14 +567,3 @@ class VendorApplicationReviewSerializer(serializers.Serializer):
     application_id = serializers.IntegerField()
     status = serializers.CharField()
     reject_reason = serializers.CharField(required=False, allow_blank=True)
-
-
-# ──────────────────────────────────────────────
-# Vendor 投稿 / 任務成果審核
-# ──────────────────────────────────────────────
-
-class VendorSubmissionReviewSerializer(serializers.Serializer):
-    vendor_id = serializers.CharField()
-    submission_id = serializers.IntegerField()
-    status = serializers.CharField()
-    vendor_feedback = serializers.CharField(required=False, allow_blank=True)
