@@ -7,8 +7,6 @@ import { formatApiError } from '../errorMessage';
 import TierProgressCard from './TierProgressCard';
 import AiCheckPanel from './AiCheckPanel';
 
-// 小問號圖示，滑鼠移上去顯示說明文字；用具名 group（group/tooltip）避免跟
-// 長條圖那邊既有的 group-hover（放大長條）互相干擾。
 function InfoTooltip({ text }) {
   return (
     <span className="relative inline-flex items-center group/tooltip">
@@ -64,7 +62,6 @@ function AnalyticsBarChart({ data, gradientClass }) {
   );
 }
 
-// KOC 自用的文案撰寫區入口：存草稿、AI 檢測，不會送給廠商
 function CopyDraftCard({ draftContent, onOpen, compact = false }) {
   return (
     <div
@@ -84,7 +81,6 @@ function CopyDraftCard({ draftContent, onOpen, compact = false }) {
   );
 }
 
-// 成效分析：推廣中／已完成的任務共用同一份區塊，資料來自 GET /koc/analytics/getDetail
 function AnalyticsSection({
   usageCount, totalCommission, clickCount, epc,
   chartData, clickChartData, chartPeriod, setChartPeriod, chartLoading,
@@ -132,7 +128,7 @@ function AnalyticsSection({
 
       <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl xl:rounded-2xl px-4 py-3 xl:px-6 xl:py-4 mb-4 xl:mb-6 text-center">
         <p className="text-xs xl:text-sm font-bold text-[#1A1A18]">
-          你的連結每被點擊一次，平均就能幫你賺進 <span className="text-[#C8522A] font-black">NT$ {epc}</span> 元！
+          你的連結每被點擊一次，平均就能幫你賺進 <span className="text-[#C8522A] font-black">NT\$ {epc}</span> 元！
         </p>
       </div>
 
@@ -166,7 +162,7 @@ function AnalyticsSection({
 
 export default function TaskDetailPage({ task, onBack }) {
   const navigate = useNavigate();
-  const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
+  const user_id = localStorage.getItem('userId');
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -179,7 +175,16 @@ export default function TaskDetailPage({ task, onBack }) {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  // 推廣中／已完成畫面用的成效分析數據（出單數、累積分潤、點擊數、EPC、銷量與點擊走勢圖）
+  // 控制自訂提示框 (Toast)
+  const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ show: true, msg, type });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 3000);
+  };
+
   const [chartData, setChartData] = useState([]);
   const [clickChartData, setClickChartData] = useState([]);
   const [usageCount, setUsageCount] = useState(0);
@@ -190,7 +195,6 @@ export default function TaskDetailPage({ task, onBack }) {
   const [chartPeriod, setChartPeriod] = useState('month');
   const [chartLoading, setChartLoading] = useState(true);
 
-  // 載入任務詳情
   useEffect(() => {
     if (!task) return;
     const fetchDetail = async () => {
@@ -202,7 +206,6 @@ export default function TaskDetailPage({ task, onBack }) {
         });
         if (res.data.success) {
           setDetail(res.data);
-          // 如果有草稿內容，預填進文字框
           setCopyText(res.data.draft_content || '');
         } else {
           setLoadError(formatApiError(res.data.err) || '任務載入失敗');
@@ -217,7 +220,6 @@ export default function TaskDetailPage({ task, onBack }) {
     fetchDetail();
   }, [task]);
 
-  // 推廣中（stage=3）或已完成（stage=4）都要撈成效分析：出單數、累積分潤、點擊數、EPC、兩張走勢圖
   useEffect(() => {
     if (!task || (detail?.stage !== 3 && detail?.stage !== 4)) return;
 
@@ -251,7 +253,6 @@ export default function TaskDetailPage({ task, onBack }) {
     };
   }, [task, detail?.stage, chartPeriod]);
 
-  // 從商城熱銷榜點進來（task.openAnalytics）時，成效資料載完後自動捲到成效分析區塊，只捲一次
   const analyticsRef = useRef(null);
   const scrolledToAnalytics = useRef(false);
   useEffect(() => {
@@ -282,11 +283,8 @@ export default function TaskDetailPage({ task, onBack }) {
     </div>
   );
 
-  // API 回傳 0=writing, 1=reviewing, 2=publishing, 3=promoting, 4=completed。
-  // KOC 已不再提交文案給廠商審核，writing / reviewing 停用，萬一遇到舊資料一律當成待發佈顯示。
   const STAGE_NUM_TO_KEY = ['publishing', 'publishing', 'publishing', 'promoting', 'completed'];
   const stage = STAGE_NUM_TO_KEY[detail.stage];
-  // 作品連結被平台退回時的原因（見管理員「退回上一階段」）
   const linkFeedback = stage === 'publishing' ? detail?.vendor_feedback : null;
   const promoCode = detail?.promotion_code || task.promoCode || null;
 
@@ -296,15 +294,14 @@ export default function TaskDetailPage({ task, onBack }) {
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
+  
   const deadline = task.deadline || detail?.deadline;
   const earningsTotal = detail?.earnings_total || 0;
 
-  // 畫面邏輯
-  const isWaitUpload = stage === 'publishing';                                           // 發文並上傳作品連結
-  const isPromoting = stage === 'promoting';                                             // 推廣中
-  const isCompleted = stage === 'completed';                                             // 已結案
+  const isWaitUpload = stage === 'publishing';
+  const isPromoting = stage === 'promoting';
+  const isCompleted = stage === 'completed';
 
-  // 儲存草稿
   const handleSaveDraft = async () => {
     setIsSaving(true);
     try {
@@ -315,21 +312,23 @@ export default function TaskDetailPage({ task, onBack }) {
       });
       if (res.data.success) {
         setDetail(prev => ({ ...prev, draft_content: copyText }));
-        alert('草稿已成功儲存！');
+        showToast('草稿已成功儲存！', 'success');
       } else {
-        alert(formatApiError(res.data.err) || '儲存失敗');
+        showToast(formatApiError(res.data.err) || '儲存失敗', 'error');
       }
     } catch (err) {
       console.error('儲存草稿失敗:', err);
-      alert('草稿儲存失敗，請稍後再試。');
+      showToast('草稿儲存失敗，請稍後再試。', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 提交連結
   const handleSubmitLink = async () => {
-    if (!linkText.trim()) return alert('請輸入連結！');
+    if (!linkText.trim()) {
+      showToast('請輸入連結！', 'error');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await api.post('/koc/mission/submit', {
@@ -338,21 +337,19 @@ export default function TaskDetailPage({ task, onBack }) {
         content_url: linkText,
       });
       if (res.data.success) {
-        alert('已成功提交連結，優惠碼已生效，開始推廣囉！');
-        // 跳回任務列表，並通知 HomePage 切換到「推廣中」分頁 (activeStage = 4)
-        onBack(4);
+        showToast('已成功提交連結，優惠碼已生效，開始推廣囉！', 'success');
+        setTimeout(() => onBack(4), 1500); // 延遲跳轉，讓使用者看到提示
       } else {
-        alert(formatApiError(res.data.err) || '提交失敗');
+        showToast(formatApiError(res.data.err) || '提交失敗', 'error');
       }
     } catch (err) {
       console.error('提交連結失敗', err);
-      alert('提交失敗，請稍後再試');
+      showToast('提交失敗，請稍後再試', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // KOC 自行取消尚未結束的任務
   const handleCancelMission = async () => {
     setCancelling(true);
     try {
@@ -362,7 +359,8 @@ export default function TaskDetailPage({ task, onBack }) {
       });
 
       if (!res.data.success) {
-        alert(formatApiError(res.data.err) || '取消失敗，請稍後再試');
+        showToast(formatApiError(res.data.err) || '取消失敗，請稍後再試', 'error');
+        setCancelling(false);
         return;
       }
 
@@ -372,23 +370,21 @@ export default function TaskDetailPage({ task, onBack }) {
         const untilText = res.data.suspended_until
           ? new Date(res.data.suspended_until).toLocaleDateString('zh-TW')
           : '';
-        alert(`接案已取消。由於違規次數已達 ${res.data.max_violation_count} 次，您的接案權限已被凍結${untilText ? `至 ${untilText}` : ''}。`);
+        showToast(`接案已取消。由於違規次數已達 ${res.data.max_violation_count} 次，您的接案權限已被凍結${untilText ? `至 \${untilText}` : ''}。`, 'error');
       } else {
-        alert('接案已取消。');
+        showToast('接案已取消。', 'success');
       }
 
-      // 跳回接案中心，並切到「已結束」分頁 (activeStage = 5)
-      onBack(5);
+      setTimeout(() => onBack(5), 2000); // 延遲跳轉
     } catch (err) {
       console.error('取消任務失敗', err);
-      alert('取消失敗，請稍後再試');
-    } finally {
+      showToast('取消失敗，請稍後再試', 'error');
       setCancelling(false);
-    }
+    } 
   };
 
   return (
-    <div className="flex flex-col min-h-screen max-w-4xl mx-auto animate-in fade-in duration-300 gap-6 p-4 xl:p-0 pb-12 xl:pb-8">
+    <div className="flex flex-col min-h-screen max-w-4xl mx-auto animate-in fade-in duration-300 gap-6 p-4 xl:p-0 pb-12 xl:pb-8 relative">
 
       <div className="flex flex-col">
 
@@ -463,7 +459,6 @@ export default function TaskDetailPage({ task, onBack }) {
 
         <div className="flex-1 bg-white rounded-2xl xl:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-6 xl:p-10 flex flex-col overflow-y-auto custom-scrollbar min-h-[400px]">
           
-          {/* 情境 1：發文並上傳作品連結 */}
           {isWaitUpload && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col justify-center">
               <div className="flex items-center gap-2 xl:gap-3 mb-6 xl:mb-8">
@@ -512,7 +507,6 @@ export default function TaskDetailPage({ task, onBack }) {
             </div>
           )}
 
-          {/* 情境 4：推廣中 */}
           {isPromoting && (
             <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
               <h3 className="text-xl xl:text-2xl font-bold text-[#1A1A18] mb-2 xl:mb-3 text-center">已繳交作品連結，推廣進行中！</h3>
@@ -545,7 +539,6 @@ export default function TaskDetailPage({ task, onBack }) {
             </div>
           )}
 
-          {/* 情境 5：已完成 */}
           {isCompleted && (
             <div className="animate-in fade-in duration-500 max-w-2xl mx-auto w-full mt-2 xl:mt-4 flex-1 flex flex-col">
               <div className="flex flex-col items-center text-center max-w-md mx-auto">
@@ -596,7 +589,6 @@ export default function TaskDetailPage({ task, onBack }) {
         )}
       </div>
 
-      {/* 文案撰寫彈出視窗 */}
       {showModal && (
         <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
           <div className="bg-white rounded-[1.5rem] xl:rounded-[2rem] p-6 xl:p-10 max-w-2xl w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
@@ -626,14 +618,14 @@ export default function TaskDetailPage({ task, onBack }) {
               <div className="flex justify-between items-end mb-6 xl:mb-8 bg-[#F5F0E8] p-3 xl:p-4 rounded-xl border border-[#E2DDD4]">
                 <div className="text-[10px] xl:text-xs font-bold text-[#8C8880] space-y-1 xl:space-y-1.5 ml-1 xl:ml-2">
                   <p className="text-[#1A1A18] mb-0.5 xl:mb-1">發佈規範：</p>
-                  <p>• 文案長度建議大於 50 字</p>
-                  <p className="flex flex-wrap items-center gap-1">• 請務必包含專屬優惠碼：
+                  <p>文案長度建議大於 50 字</p>
+                  <p className="flex flex-wrap items-center gap-1">請務必包含專屬優惠碼：
                     <span className="text-[#C8522A] bg-white px-2 py-0.5 rounded-md border border-[#E2DDD4]">
                       {promoCode || '無'}
                     </span>
                   </p>
                   {promoCode && (
-                    <p className="flex flex-wrap items-center gap-1">• 或直接分享推廣連結：
+                    <p className="flex flex-wrap items-center gap-1">或直接分享推廣連結：
                       <button
                         type="button"
                         onClick={handleCopyPromoLink}
@@ -668,7 +660,6 @@ export default function TaskDetailPage({ task, onBack }) {
         </div>
       )}
 
-      {/* 取消任務確認視窗 */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
           <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
@@ -700,6 +691,23 @@ export default function TaskDetailPage({ task, onBack }) {
                 確認取消
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 網頁內建小提示框 (Toast) */}
+      {toast.show && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top-5 fade-in duration-300">
+          <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl border text-sm font-bold transition-all ${
+            toast.type === 'success' 
+              ? 'bg-white border-green-200 text-green-700' 
+              : 'bg-white border-red-200 text-red-700'
+          }`}>
+            {toast.type === 'success' 
+              ? <CheckCircle2 size={18} className="text-green-500" /> 
+              : <AlertCircle size={18} className="text-red-500" />
+            }
+            {toast.msg}
           </div>
         </div>
       )}
