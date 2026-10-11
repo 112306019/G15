@@ -27,11 +27,6 @@ export const submitMission = (data) => {
   return api.post('/koc/mission/submit', data)
 }
 
-// 儲存草稿
-export const saveDraft = (data) => {
-  return api.post('/koc/mission/saveDraft', data)
-}
-
 // 獲取各階段任務數量
 export const getStageCounts = (userId) => {
   return api.get('/koc/mission/getStageCounts', {

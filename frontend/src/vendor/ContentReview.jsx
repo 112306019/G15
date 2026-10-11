@@ -270,7 +270,7 @@ export default function ContentReview() {
       title: `確定要${actionText}嗎？`,
       description:
         reviewStatus === 'approved'
-          ? '通過後系統會建立 KOC 任務並產生尚未啟用的優惠碼。'
+          ? '通過後系統會建立 KOC 任務並產生已啟用的優惠碼。'
           : 'KOC 會收到拒絕通知，此動作無法復原。',
       confirmText: reviewStatus === 'approved' ? '通過申請' : '拒絕申請',
       danger: reviewStatus === 'rejected'
@@ -304,7 +304,7 @@ export default function ContentReview() {
                 couponStatus:
                   response.data?.coupon_status ||
                   (reviewStatus === 'approved'
-                    ? 'inactive'
+                    ? 'active'
                     : item.couponStatus),
                 kocMissionId: response.data?.kocmission_id || null
               }
@@ -314,7 +314,7 @@ export default function ContentReview() {
 
       toast.success(
         reviewStatus === 'approved'
-          ? '接案申請已通過，任務與未啟用優惠碼已建立'
+          ? '接案申請已通過，任務與已啟用優惠碼已建立'
           : '接案申請已拒絕'
       )
 
@@ -543,7 +543,7 @@ export default function ContentReview() {
 
                   <div className="bg-[#FDF0ED] rounded-xl px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-bold text-[#C8522A] flex items-start gap-2 sm:gap-3">
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    審核通過後，系統會建立 KOC 任務並產生尚未啟用的優惠碼；文案審核通過後才會正式啟用。
+                    審核通過後，系統會建立 KOC 任務並產生已啟用的優惠碼，KOC 不需要等上傳作品連結就能先讓粉絲使用。
                   </div>
 
                   <div className="flex flex-col gap-1.5 sm:gap-2">
