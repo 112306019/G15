@@ -1981,7 +1981,7 @@ def vendor_application_review(request):
     通過時：
     1. Application 狀態改為 approved
     2. 建立 KOCMissionNew
-    3. 建立未啟用優惠碼
+    3. 建立優惠碼，直接啟用（KOC 不用等上傳作品連結就能先讓粉絲使用）
     4. 自動建立聊天室
 
     拒絕時：
@@ -2139,7 +2139,7 @@ def vendor_application_review(request):
                     coupon = CouponNew.objects.create(
                         kocmission=mission,
                         promotion_code=promotion_code,
-                        status="inactive",
+                        status="active",
                         usage_count=0,
                     )
 

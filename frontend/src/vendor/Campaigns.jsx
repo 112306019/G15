@@ -1344,7 +1344,7 @@ export default function Campaigns() {
     } else {
       const confirmed = await confirm({
         title: `確定要${actionText} KOC「${application.name}」的申請嗎？`,
-        description: '通過後系統會建立任務並產生尚未啟用的優惠碼。',
+        description: '通過後系統會建立任務並產生已啟用的優惠碼。',
         confirmText: '通過申請',
       })
       if (!confirmed) return
@@ -1386,7 +1386,7 @@ export default function Campaigns() {
 
       toast.success(
         reviewStatus === 'approved'
-          ? '申請已通過，已建立任務與未啟用優惠碼'
+          ? '申請已通過，已建立任務與已啟用優惠碼'
           : '申請已拒絕'
       )
     } catch (error) {

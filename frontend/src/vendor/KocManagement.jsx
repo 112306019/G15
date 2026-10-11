@@ -330,7 +330,7 @@ function CouponDetailModal({
           </div>
 
           <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-[10px] sm:text-xs font-bold text-[#8C8880] leading-relaxed">
-            優惠碼在 KOC 上傳作品連結前會維持「尚未啟用」；上傳連結後，系統會自動將優惠碼設為啟用。
+            優惠碼在廠商核准接案申請時即會自動啟用，KOC 不需要等上傳作品連結。
           </div>
         </div>
 

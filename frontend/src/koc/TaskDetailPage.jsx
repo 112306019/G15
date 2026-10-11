@@ -64,6 +64,45 @@ function AnalyticsBarChart({ data, gradientClass }) {
   );
 }
 
+// 廠商提供的制式文案＋發文注意事項，放在「文案撰寫區」入口上方，讓 KOC 不用點進去就能先看到
+function PromoCopyBlock({ promoCopy }) {
+  const [copied, setCopied] = useState(false);
+  if (!promoCopy) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(promoCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mb-4 xl:mb-6">
+      <div className="bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-xl xl:rounded-2xl p-4 xl:p-5 mb-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-sm xl:text-base font-black text-[#1A1A18]">請使用廠商提供的制式文案</span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 flex items-center gap-1 text-[10px] xl:text-xs font-bold text-[#C8522A] bg-white border border-[#C8522A]/30 hover:border-[#C8522A] px-2.5 py-1 rounded-full transition-all"
+          >
+            {copied ? <Check size={11} /> : <Copy size={11} />}
+            {copied ? '已複製' : '複製這份文案'}
+          </button>
+        </div>
+        <p className="text-[11px] xl:text-xs text-[#1A1A18] leading-relaxed whitespace-pre-wrap line-clamp-6">
+          {promoCopy}
+        </p>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl xl:rounded-2xl p-3.5 xl:p-4 flex gap-2.5">
+        <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-[11px] xl:text-xs text-amber-800 leading-relaxed">
+          <span className="font-bold">注意事項：</span>發文請務必使用上方廠商提供的制式文案。若另外加上自己的使用心得／推薦內容，建議先用「文案撰寫區」裡的 AI 文案檢測確認是否包含違規字詞——但 AI 檢測結果僅供輔助參考，無法保證完全合規，如後續衍生相關法律責任，平台與廠商均不負責，須由您自行承擔。
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // KOC 自用的文案撰寫區入口：存草稿、AI 檢測，不會送給廠商
 function CopyDraftCard({ draftContent, onOpen, compact = false }) {
   return (
@@ -338,7 +377,7 @@ export default function TaskDetailPage({ task, onBack }) {
         content_url: linkText,
       });
       if (res.data.success) {
-        alert('已成功提交連結，優惠碼已生效，開始推廣囉！');
+        alert('已成功提交連結，開始推廣囉！');
         // 跳回任務列表，並通知 HomePage 切換到「推廣中」分頁 (activeStage = 4)
         onBack(4);
       } else {
@@ -483,6 +522,8 @@ export default function TaskDetailPage({ task, onBack }) {
                 </div>
               )}
 
+              <PromoCopyBlock promoCopy={detail?.promo_copy} />
+
               <CopyDraftCard
                 draftContent={detail?.draft_content}
                 onOpen={() => setShowModal(true)}
@@ -490,7 +531,7 @@ export default function TaskDetailPage({ task, onBack }) {
 
               <div className="bg-[#F8F9FA] rounded-xl xl:rounded-2xl p-5 xl:p-8 border border-[#E2DDD4]">
                 <p className="text-[#1A1A18] font-bold text-xs xl:text-sm mb-4 xl:mb-6 flex items-start gap-1.5 xl:gap-2 leading-relaxed">
-                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" /> 請在貼文中置入專屬優惠碼或推廣連結，發佈至社群後上傳作品連結，優惠碼即會生效。
+                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" /> 優惠碼已經生效，請在貼文中置入專屬優惠碼或推廣連結，發佈至社群後上傳作品連結即可開始推廣。
                 </p>
                 <div className="flex flex-col gap-3 xl:gap-4">
                   <input
@@ -521,14 +562,6 @@ export default function TaskDetailPage({ task, onBack }) {
               </p>
 
               <TierProgressCard tier={commissionTier} />
-
-              <div className="mt-6 xl:mt-8">
-                <CopyDraftCard
-                  draftContent={detail?.draft_content}
-                  onOpen={() => setShowModal(true)}
-                  compact
-                />
-              </div>
 
               <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection
