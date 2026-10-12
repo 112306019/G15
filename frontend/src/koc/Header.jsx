@@ -133,8 +133,8 @@ export default function Header({
           >
             <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
             {cartCount > 0 && (
-              <span className="absolute top-0 right-0 md:top-1 md:right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {cartCount}
+              <span className="absolute top-0 right-0 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+                {cartCount > 99 ? '99+' : cartCount}
               </span>
             )}
           </div>
@@ -156,8 +156,8 @@ export default function Header({
             <Bell size={22} strokeWidth={2.5} className={notifOpen ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
             {notifications.unreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {notifications.unreadCount}
+              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+                {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
               </span>
             )}
           </div>
@@ -176,7 +176,7 @@ export default function Header({
                   </span>
                   {notifications.orderUnreadCount > 0 && (
                     <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
-                      {notifications.orderUnreadCount}
+                      {notifications.orderUnreadCount > 99 ? '99+' : notifications.orderUnreadCount}
                     </span>
                   )}
                 </button>
@@ -191,7 +191,7 @@ export default function Header({
                     </span>
                     {notifications.kocUnreadCount > 0 && (
                       <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
-                        {notifications.kocUnreadCount}
+                        {notifications.kocUnreadCount > 99 ? '99+' : notifications.kocUnreadCount}
                       </span>
                     )}
                   </button>
@@ -217,8 +217,8 @@ export default function Header({
             <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
             {supportUnreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {supportUnreadCount}
+              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+                {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
               </span>
             )}
           </div>
@@ -244,7 +244,7 @@ export default function Header({
                   </span>
                   {supportUnreadCount > 0 && (
                     <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
-                      {supportUnreadCount}
+                      {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
                     </span>
                   )}
                 </button>
@@ -378,8 +378,8 @@ export default function Header({
                 聯絡客服
               </div>
               {supportUnreadCount > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
-                  {supportUnreadCount}
+                <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                  {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
                 </span>
               )}
             </button>

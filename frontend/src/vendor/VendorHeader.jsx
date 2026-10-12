@@ -178,8 +178,8 @@ export default function VendorHeader() {
           >
             <Bell size={20} className="md:w-[22px] md:h-[22px]" />
             {notifData.unread_count > 0 && (
-              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] w-3.5 h-3.5 md:w-4 md:h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {notifData.unread_count > 9 ? '9+' : notifData.unread_count}
+              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+                {notifData.unread_count > 99 ? '99+' : notifData.unread_count}
               </span>
             )}
           </button>
@@ -235,8 +235,8 @@ export default function VendorHeader() {
         >
           <Headset size={20} className="md:w-[22px] md:h-[22px]" />
           {supportUnreadCount > 0 && (
-            <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] w-3.5 h-3.5 md:w-4 md:h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-              {supportUnreadCount}
+            <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+              {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
             </span>
           )}
         </button>
