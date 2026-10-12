@@ -18,7 +18,16 @@ from api.views.constants import (
     resync_bundle_stock,
     SUBMISSION_REMINDER_DAYS,
     KOC_COMMISSION_RATE_PERCENT,
+    KOC_COMMISSION_MIN_PERCENT,
+    KOC_COMMISSION_MAX_PERCENT,
+    KOC_COMMISSION_MAX_TIERS,
+    KOC_COMMISSION_PLATFORM_BASE_PERCENT,
     VENDOR_SETTLEMENT_RATE_PERCENT,
+)
+from api.koc_commission import (
+    CommissionSettingError,
+    campaign_commission_summary,
+    normalize_commission_setting,
 )
 from api.models import (
     Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew,
@@ -26,7 +35,7 @@ from api.models import (
     Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorPasswordResetCode, VendorLoginHistory, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
-    VendorInvoice, ProductBundleItem,
+    VendorInvoice, ProductBundleItem, KOC,
 )
 from api.emails import (
     send_vendor_email_verification_email, send_invoice_notification_email,
@@ -1432,6 +1441,24 @@ def vendor_bundle_delete(request):
 # Vendor 任務 / Campaign 管理
 # ──────────────────────────────────────────────
 
+
+def _commission_setting_from_request(data):
+    """
+    從建立／編輯活動的請求整理出分潤設定，回傳 (commission_mode, commission_tiers)。
+    沒帶 commission_mode 是舊的呼叫方式，當成固定分潤（固定制一律是平台基本分潤率 3%）。
+    設定不合規定時丟 CommissionSettingError（訊息可直接顯示給廠商）。
+    """
+    mode = data.get("commission_mode") or "fixed"
+    return normalize_commission_setting(
+        mode, rate=data.get("koc_commission_rate"), tiers=data.get("commission_tiers")
+    )
+
+
+def _commission_base_rate(commission_tiers):
+    """第一層的分潤率，寫進 CampaignProduct.koc_commission_rate 給舊畫面顯示用。"""
+    return Decimal(str(commission_tiers[0][1]))
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_campaign_create(request):
@@ -1467,6 +1494,14 @@ def vendor_campaign_create(request):
             "success": False,
             "err": "Vendor not found"
         }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        commission_mode, commission_tiers = _commission_setting_from_request(data)
+    except CommissionSettingError as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     start_datetime = timezone.make_aware(
         datetime.combine(
@@ -1580,6 +1615,8 @@ def vendor_campaign_create(request):
 
             campaign = Campaigns.objects.create(
                 vendor=vendor,
+                commission_mode=commission_mode,
+                commission_tiers=commission_tiers,
                 name=data["name"],
                 description=data.get("description", ""),
                 promo_copy=(data.get("promo_copy") or "").strip(),
@@ -1600,8 +1637,8 @@ def vendor_campaign_create(request):
                 product=product,
                 discount_type=data["discount_type"],
                 discount_value=data["discount_value"],
-                # KOC 分潤比例由平台統一固定，不接受 Vendor 自訂。
-                koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                # 分潤方式存在 Campaigns；這裡存第一層的分潤率給舊畫面顯示用
+                koc_commission_rate=_commission_base_rate(commission_tiers)
             )
 
     except Exception:
@@ -1669,6 +1706,31 @@ def vendor_campaign_update(request):
         kocmission__application__campaign=campaign,
         usage_count__gt=0
     ).exists()
+
+    # 分潤設定：已經有 KOC 接案（建立了任務）就鎖定，KOC 是看到這個條件才接案的，不能中途改。
+    # 沒帶 commission_mode（舊的呼叫方式、或前端因為鎖定而不送）就維持原本的設定。
+    commission_locked = KOCMissionNew.objects.filter(
+        application__campaign=campaign
+    ).exists()
+    new_commission = None
+
+    if data.get("commission_mode"):
+        try:
+            requested_commission = _commission_setting_from_request(data)
+        except CommissionSettingError as error:
+            return Response({
+                "success": False,
+                "err": str(error)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        current_commission = (campaign.commission_mode, campaign.commission_tiers)
+        if requested_commission != current_commission:
+            if commission_locked:
+                return Response({
+                    "success": False,
+                    "err": "此活動已有 KOC 接案，分潤設定無法再修改"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            new_commission = requested_commission
 
     if coupon_used and campaign_product:
         locked_field_changed = (
@@ -1822,7 +1884,14 @@ def vendor_campaign_update(request):
             campaign.start_date = start_datetime
             campaign.end_date = end_datetime
             campaign.status = data["status"]
+            if new_commission:
+                campaign.commission_mode, campaign.commission_tiers = new_commission
             campaign.save()
+
+            # 第一層的分潤率（舊活動沿用平台級距的基本分潤率），給舊畫面顯示用
+            base_commission_rate = Decimal(
+                campaign_commission_summary(campaign)["base_rate"]
+            )
 
             campaign_product = CampaignProduct.objects.filter(
                 campaign=campaign
@@ -1836,7 +1905,7 @@ def vendor_campaign_update(request):
                 campaign_product.discount_value = data[
                     "discount_value"
                 ]
-                campaign_product.koc_commission_rate = Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                campaign_product.koc_commission_rate = base_commission_rate
 
                 campaign_product.save(
                     update_fields=[
@@ -1852,7 +1921,7 @@ def vendor_campaign_update(request):
                     product=product,
                     discount_type=data["discount_type"],
                     discount_value=data["discount_value"],
-                    koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                    koc_commission_rate=base_commission_rate
                 )
 
     except Exception:
@@ -1970,6 +2039,13 @@ def vendor_campaign_getlist(request):
         .values_list("kocmission__application__campaign_id", flat=True)
     )
 
+    # 已經有 KOC 接案的活動，分潤設定鎖定不能改
+    commission_locked_campaign_ids = set(
+        KOCMissionNew.objects
+        .filter(application__campaign_id__in=campaign_ids)
+        .values_list("application__campaign_id", flat=True)
+    )
+
     approved_count_by_campaign = {
         row["campaign_id"]: row["total"]
         for row in (
@@ -1987,6 +2063,7 @@ def vendor_campaign_getlist(request):
             campaign.campaign_id, []
         )
         coupon_used = campaign.campaign_id in coupon_used_campaign_ids
+        commission = campaign_commission_summary(campaign)
 
         products = []
 
@@ -2008,7 +2085,7 @@ def vendor_campaign_getlist(request):
                 "discount_value": str(
                     campaign_product.discount_value
                 ),
-                "koc_commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
+                "koc_commission_rate": commission["base_rate"],
             })
 
         campaign_list.append({
@@ -2032,6 +2109,10 @@ def vendor_campaign_getlist(request):
             ),
             "status": campaign.status,
             "coupon_used": coupon_used,
+            # 分潤方式：mode（platform_tier 舊活動／fixed 固定／progressive 階層式累進）、
+            # label（一句話說明）、tiers（各層件數與分潤率）
+            "commission": commission,
+            "commission_locked": campaign.campaign_id in commission_locked_campaign_ids,
             "products": products,
             "recruit_limit": campaign.recruit_limit,
             "approved_count": approved_count_by_campaign.get(
@@ -2042,7 +2123,16 @@ def vendor_campaign_getlist(request):
     return Response({
         "success": True,
         "err": "",
-        "campaigns": campaign_list
+        "campaigns": campaign_list,
+        # 廠商設定分潤時的限制（建立活動的表單用）
+        "commission_limits": {
+            "min_rate": KOC_COMMISSION_MIN_PERCENT,
+            "max_rate": KOC_COMMISSION_MAX_PERCENT,
+            "max_tiers": KOC_COMMISSION_MAX_TIERS,
+            # 平台負擔的基本分潤（%）；超過的部分是廠商加碼，併入月結單
+            "platform_base_rate": KOC_COMMISSION_PLATFORM_BASE_PERCENT,
+            "service_fee_rate": VENDOR_SETTLEMENT_RATE_PERCENT,
+        },
     }, status=status.HTTP_200_OK)
 
 
@@ -2236,8 +2326,10 @@ def vendor_application_getlist(request):
             ),
 
             "koc_commission_rate": (
-                str(KOC_COMMISSION_RATE_PERCENT) if campaign_product else None
+                campaign_commission_summary(application.campaign)["base_rate"]
+                if campaign_product else None
             ),
+            "commission_label": campaign_commission_summary(application.campaign)["label"],
         })
 
     return Response({
@@ -2245,6 +2337,148 @@ def vendor_application_getlist(request):
         "err": "",
         "applications": application_list
     }, status=status.HTTP_200_OK)
+
+# 審核頁「接案紀錄」最多列出幾筆過往任務
+KOC_HISTORY_MISSION_LIMIT = 30
+
+
+def _mission_outcome(mission):
+    """把任務的 stage / end_reason 轉成審核頁看的結果：進行中、已完成、KOC 取消、逾期未完成、平台終止。"""
+    if mission.stage != "completed":
+        return "ongoing"
+    return {
+        "cancelled": "cancelled",
+        "expired": "expired",
+        "admin_closed": "admin_closed",
+    }.get(mission.end_reason, "completed")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_koc_history(request):
+    """
+    廠商審核接案申請時查看 KOC 的過往接案紀錄：違規次數、成效（平均一次接案賣出多少）、每次任務的結果。
+    URL: /vendor/koc/history?vendor_id=&koc_id=
+
+    只有收過這位 KOC 申請的廠商可以查看。別家廠商的活動不顯示活動名稱（只顯示「其他廠商的活動」），
+    成效數字則照實顯示，讓廠商判斷這位 KOC 的帶貨能力。
+    不提供 KOC 的社群帳號（IG / FB / Threads）：平台希望廠商依帶貨成效決定，而不是依名氣篩選。
+    """
+    vendor_id = request.GET.get("vendor_id")
+    koc_id = request.GET.get("koc_id")
+
+    if not vendor_id or not koc_id:
+        return Response({
+            "success": False,
+            "err": "缺少廠商或 KOC 資訊，請重新整理後再試"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not Application.objects.filter(campaign__vendor_id=vendor_id, koc_id=koc_id).exists():
+        return Response({
+            "success": False,
+            "err": "只能查看申請過您活動的 KOC"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    koc = KOC.objects.select_related("user").filter(koc_id=koc_id).first()
+    if not koc:
+        return Response({
+            "success": False,
+            "err": "找不到這位 KOC"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    missions = list(
+        KOCMissionNew.objects
+        .filter(koc_id=koc_id)
+        .select_related("application__campaign")
+        .order_by("-kocmission_id")
+    )
+
+    # 每個任務的成效：用任務綁定的優惠碼查出訂單數與銷售額（一次撈完再對照）
+    code_by_mission = {}
+    for kocmission_id, promotion_code in (
+        CouponNew.objects
+        .filter(kocmission_id__in=[m.kocmission_id for m in missions])
+        .order_by("coupon_id")
+        .values_list("kocmission_id", "promotion_code")
+    ):
+        code_by_mission.setdefault(kocmission_id, promotion_code)
+
+    sales_by_code = {
+        row["promotion_code"]: row
+        for row in (
+            Order.objects
+            .filter(promotion_code__in=set(code_by_mission.values()))
+            .values("promotion_code")
+            .annotate(orders=Count("pk"), total=Sum("total_amount"))
+        )
+    } if code_by_mission else {}
+
+    outcome_counts = {"ongoing": 0, "completed": 0, "cancelled": 0, "expired": 0, "admin_closed": 0}
+    total_orders = 0
+    total_sales = 0.0
+    # 平均一次接案賣出多少：只算真的有進入推廣的任務（promoting 或 completed），
+    # 跟審核列表上「平均接案銷售額」同一個算法
+    promoted_count = 0
+    promoted_sales = 0.0
+    mission_rows = []
+
+    for mission in missions:
+        campaign = mission.application.campaign
+        outcome = _mission_outcome(mission)
+        outcome_counts[outcome] += 1
+
+        sales = sales_by_code.get(code_by_mission.get(mission.kocmission_id)) or {}
+        orders = sales.get("orders") or 0
+        amount = float(sales.get("total") or 0)
+        total_orders += orders
+        total_sales += amount
+        if mission.stage in ("promoting", "completed"):
+            promoted_count += 1
+            promoted_sales += amount
+
+        if len(mission_rows) < KOC_HISTORY_MISSION_LIMIT:
+            is_own = str(campaign.vendor_id) == str(vendor_id)
+            mission_rows.append({
+                "kocmission_id": mission.kocmission_id,
+                "is_own_campaign": is_own,
+                "campaign_name": campaign.name if is_own else "其他廠商的活動",
+                "start_date": campaign.start_date.date().isoformat() if campaign.start_date else None,
+                "end_date": campaign.end_date.date().isoformat() if campaign.end_date else None,
+                "stage": mission.stage,
+                "outcome": outcome,
+                "missed_publishing_deadline": mission.missed_publishing_deadline,
+                "orders": orders,
+                "sales_amount": amount,
+            })
+
+    user = koc.user
+    return Response({
+        "success": True,
+        "err": "",
+        "koc": {
+            "koc_id": koc.koc_id,
+            "name": (user.display_name or user.name) if user else "",
+            # 故意不回傳 IG / FB / Threads 帳號：審核要看的是帶貨成效，
+            # 不希望廠商用社群名氣篩人，讓沒有名氣的 KOC 也有機會
+            "is_suspended": koc.is_suspended,
+        },
+        "summary": {
+            "total_missions": len(missions),
+            "ongoing_count": outcome_counts["ongoing"],
+            "completed_count": outcome_counts["completed"],
+            "cancelled_count": outcome_counts["cancelled"],
+            "expired_count": outcome_counts["expired"],
+            "admin_closed_count": outcome_counts["admin_closed"],
+            "violation_count": koc.total_violation_count,
+            "missed_publishing_count": sum(1 for m in missions if m.missed_publishing_deadline),
+            "total_orders": total_orders,
+            "total_sales_amount": total_sales,
+            "avg_sales_amount": (promoted_sales / promoted_count) if promoted_count else None,
+        },
+        "missions": mission_rows,
+        "missions_truncated": len(missions) > KOC_HISTORY_MISSION_LIMIT,
+    }, status=status.HTTP_200_OK)
+
 
 # 產生優惠碼
 def generate_promotion_code(koc_id):
@@ -3848,7 +4082,10 @@ def vendor_coupon_get_usage_list(request):
             kocmission__application__campaign__campaign_id=campaign_id
         )
 
-    if status_filter:
+    # 後台的「已到期」分頁：活動結束自動到期（expired）和廠商手動停用（disabled）都算
+    if status_filter == "expired":
+        coupons = coupons.filter(status__in=["expired", "disabled"])
+    elif status_filter:
         coupons = coupons.filter(status=status_filter)
 
     coupons = list(coupons)
@@ -3897,8 +4134,9 @@ def vendor_coupon_get_usage_list(request):
                 str(campaign_product.discount_value) if campaign_product else None
             ),
             "koc_commission_rate": (
-                str(KOC_COMMISSION_RATE_PERCENT) if campaign_product else None
+                campaign_commission_summary(campaign)["base_rate"] if campaign_product else None
             ),
+            "commission_label": campaign_commission_summary(campaign)["label"],
             "status": coupon.status,
             "usage_count": coupon.usage_count,
             "total_commission": commission_by_kocmission_id.get(mission.kocmission_id, 0),
@@ -5347,6 +5585,9 @@ def get_vendor_finance_overview(request):
             koc=Sum(
                 "koc_amount"
             ),
+            koc_bonus=Sum(
+                "koc_bonus_amount"
+            ),
             platform=Sum(
                 "platform_amount"
             ),
@@ -5378,6 +5619,10 @@ def get_vendor_finance_overview(request):
         ),
         "pending_koc_amount": float(
             pending_agg["koc"] or 0
+        ),
+        # 尚未出帳的金額裡，廠商加碼的 KOC 分潤有多少（已包含在 pending_settlement_amount 裡）
+        "pending_koc_bonus_amount": float(
+            pending_agg["koc_bonus"] or 0
         ),
         "pending_platform_amount": float(
             pending_agg["platform"] or 0
@@ -5544,6 +5789,10 @@ def get_vendor_finance_transactions(request):
                 "koc_amount": float(
                     item.koc_amount or 0
                 ),
+                # 廠商加碼的 KOC 分潤（已包含在 settlement_amount 裡）
+                "koc_bonus_amount": float(
+                    item.koc_bonus_amount or 0
+                ),
                 "platform_amount": float(
                     item.platform_amount or 0
                 ),
@@ -5616,6 +5865,10 @@ def get_vendor_finance_transactions(request):
             ),
             "koc_amount": float(
                 settlement.koc_amount or 0
+            ),
+            # 本期廠商加碼的 KOC 分潤（已包含在 amount_due 裡）
+            "koc_bonus_amount": float(
+                settlement.koc_bonus_amount or 0
             ),
             "platform_amount": float(
                 settlement.platform_amount
@@ -5707,6 +5960,9 @@ def get_vendor_finance_transactions(request):
         ),
         "koc_amount": float(
             item.koc_amount or 0
+        ),
+        "koc_bonus_amount": float(
+            item.koc_bonus_amount or 0
         ),
         "platform_amount": float(
             item.platform_amount or 0

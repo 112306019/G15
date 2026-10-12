@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { commissionTiersText } from '../commissionText';
 import { Image as ImageIcon, CheckCircle2, PackageCheck, Info } from 'lucide-react';
 import api from '../api/index';
 import { formatApiError } from '../errorMessage';
@@ -47,6 +48,7 @@ export default function ApplyPage() {
             recruitLimit: c.recruit_limit,
             approvedCount: c.approved_count,
             isFull: c.is_full,
+            commission: c.commission || null,
           })));
         }
 
@@ -193,6 +195,17 @@ export default function ApplyPage() {
                     {activeTab === 'pending' && product.recruitLimit != null && (
                       <div className="mt-1 text-xs font-bold text-[#8C8880]">
                         招募進度 {product.approvedCount}/{product.recruitLimit} 人
+                      </div>
+                    )}
+                    {/* 分潤條件：申請前就看得到是固定還是階層式、各層幾 % */}
+                    {activeTab === 'pending' && product.commission && (
+                      <div className="mt-1 text-xs font-bold text-[#C8522A]">
+                        分潤 {product.commission.label}
+                        {commissionTiersText(product.commission) && (
+                          <span className="block mt-0.5 text-[11px] font-medium text-[#8C8880]">
+                            {commissionTiersText(product.commission)}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

@@ -35,6 +35,7 @@ export default function VendorLogin() {
     contact_name: '',
     email: '',
     password: '',
+    confirm_password: '',
     tax_id: '',
   })
 
@@ -103,6 +104,7 @@ export default function VendorLogin() {
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotCode, setForgotCode] = useState('')
   const [forgotNewPw, setForgotNewPw] = useState('')
+  const [forgotConfirmPw, setForgotConfirmPw] = useState('')
   const [forgotError, setForgotError] = useState('')
   const [forgotSubmitting, setForgotSubmitting] = useState(false)
 
@@ -112,6 +114,7 @@ export default function VendorLogin() {
     setForgotEmail(form.email.trim())
     setForgotCode('')
     setForgotNewPw('')
+    setForgotConfirmPw('')
     setForgotError('')
   }
 
@@ -140,6 +143,10 @@ export default function VendorLogin() {
     setForgotError('')
     if (!forgotCode.trim() || forgotNewPw.length < 8) {
       setForgotError('請輸入驗證碼，新密碼需至少 8 位')
+      return
+    }
+    if (forgotNewPw !== forgotConfirmPw) {
+      setForgotError('兩次輸入的新密碼不相符')
       return
     }
     setForgotSubmitting(true)
@@ -185,6 +192,11 @@ export default function VendorLogin() {
 
         navigate('/vendor')
       } else {
+        if (form.password !== form.confirm_password) {
+          setError('兩次輸入的密碼不相符')
+          return
+        }
+
         const response = await registerVendor({
           company_name: form.company_name.trim(),
           contact_name: form.contact_name.trim(),
@@ -228,6 +240,7 @@ export default function VendorLogin() {
       contact_name: '',
       email: '',
       password: '',
+      confirm_password: '',
       tax_id: '',
     })
   }
@@ -410,6 +423,25 @@ export default function VendorLogin() {
               />
             </div>
 
+            {/* 註冊表單：再輸入一次密碼，避免打錯 */}
+            {!isLogin && (
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880] transition-colors duration-300 group-focus-within:text-[#C8522A]">
+                <Lock size={16} className="md:w-[18px] md:h-[18px]" strokeWidth={2.5} />
+              </div>
+              <input
+                type="password"
+                name="confirm_password"
+                value={form.confirm_password}
+                onChange={handleChange}
+                placeholder="再次輸入密碼"
+                autoComplete="new-password"
+                required
+                className="w-full bg-white/70 backdrop-blur-sm border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-11 pr-4 text-sm outline-none transition-all duration-300 placeholder:text-[#8C8880]/50 focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30 font-medium text-[#1A1A18]"
+              />
+            </div>
+            )}
+
             {isLogin && (
               <div className="flex justify-end -mt-1">
                 <button
@@ -497,7 +529,7 @@ export default function VendorLogin() {
                     className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
                   />
                 </div>
-                <div className="relative mb-4">
+                <div className="relative mb-3">
                   <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880]">
                     <Lock size={16} className="md:w-[18px] md:h-[18px]" />
                   </div>
@@ -506,6 +538,19 @@ export default function VendorLogin() {
                     value={forgotNewPw}
                     onChange={(event) => setForgotNewPw(event.target.value)}
                     placeholder="新密碼（至少 8 位）"
+                    autoComplete="new-password"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
+                  />
+                </div>
+                <div className="relative mb-4">
+                  <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880]">
+                    <Lock size={16} className="md:w-[18px] md:h-[18px]" />
+                  </div>
+                  <input
+                    type="password"
+                    value={forgotConfirmPw}
+                    onChange={(event) => setForgotConfirmPw(event.target.value)}
+                    placeholder="再次輸入新密碼"
                     autoComplete="new-password"
                     className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
                   />

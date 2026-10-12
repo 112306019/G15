@@ -508,3 +508,8 @@ export const getVendorFinanceTransactions =
 export const requestVendorPayout = (data) => {
   return api.post('/vendor/finance/requestPayout', data)
 }
+
+// 審核接案申請時查看 KOC 的過往接案紀錄（違規次數、成效、每次任務結果）
+export const getVendorKocHistory = (vendorId, kocId) => {
+  return api.get('/vendor/koc/history', { params: { vendor_id: vendorId, koc_id: kocId } })
+}

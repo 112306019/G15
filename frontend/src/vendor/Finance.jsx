@@ -947,7 +947,7 @@ export default function Finance() {
         <SectionTitle
           icon={ArrowUpRight}
           title="平台服務費"
-          description="每月依符合結算資格的有效成交額計算 15% 平台服務費。此筆款項與貨款撥付分開處理，不直接從貨款中扣除。"
+          description="每月依符合結算資格的有效成交額計算 15% 平台服務費；若您為活動設定的 KOC 分潤高於平台負擔的基本額度，超過的加碼獎勵也會併入同一張月結單。此筆款項與貨款撥付分開處理，不直接從貨款中扣除。"
           direction="廠商 → ShareBuy"
         />
 
@@ -1021,7 +1021,7 @@ export default function Finance() {
             </h3>
 
             <p className="mt-1 text-[10px] text-[#8C8880]">
-              每張月結單會列出本期有效成交額、15% 服務費與付款狀態。
+              每張月結單會列出本期有效成交額、應繳金額（15% 服務費加上您設定的 KOC 加碼獎勵）與付款狀態。
             </p>
           </div>
 
@@ -1043,7 +1043,7 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      15% 服務費
+                      應繳金額
                     </th>
 
                     <th className="px-5 py-3">
@@ -1165,7 +1165,7 @@ export default function Finance() {
                     </th>
 
                     <th className="px-5 py-3">
-                      15% 服務費
+                      應繳金額
                     </th>
 
                     <th className="px-5 py-3">
@@ -1201,6 +1201,11 @@ export default function Finance() {
                         <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
                           {money(
                             item.settlement_amount
+                          )}
+                          {Number(item.koc_bonus_amount) > 0 && (
+                            <span className="block mt-0.5 text-[9px] font-bold text-[#8C8880]">
+                              含 KOC 加碼 {money(item.koc_bonus_amount)}
+                            </span>
                           )}
                         </td>
 
@@ -1479,7 +1484,7 @@ export default function Finance() {
 
                 <div className="rounded-xl bg-[#F8F9FA] p-3">
                   <p className="text-[9px] font-bold text-[#8C8880]">
-                    15% 服務費
+                    本期應繳
                   </p>
 
                   <p className="mt-1 text-sm font-black text-[#C8522A]">
@@ -1487,6 +1492,20 @@ export default function Finance() {
                       selectedSettlement.amount_due
                     )}
                   </p>
+
+                  {/* 應繳金額 = 15% 平台服務費 + 您設定的 KOC 分潤超過平台基本額度的加碼 */}
+                  {Number(selectedSettlement.koc_bonus_amount) > 0 && (
+                    <p className="mt-1 text-[9px] font-bold text-[#8C8880] leading-relaxed">
+                      15% 服務費{' '}
+                      {money(
+                        Number(selectedSettlement.amount_due) -
+                          Number(selectedSettlement.koc_bonus_amount)
+                      )}
+                      <br />
+                      KOC 加碼獎勵{' '}
+                      {money(selectedSettlement.koc_bonus_amount)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="rounded-xl bg-[#F8F9FA] p-3">
@@ -1580,6 +1599,14 @@ export default function Finance() {
                               }
                               %
                             </p>
+
+                            {Number(item.koc_bonus_amount) > 0 && (
+                              <p className="col-span-2">
+                                KOC 加碼獎勵：
+                                {money(item.koc_bonus_amount)}
+                                （已含在上方金額）
+                              </p>
+                            )}
                           </div>
                         </div>
                       )

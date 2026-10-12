@@ -58,6 +58,7 @@ export default function LoginPage({
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotCode, setForgotCode] = useState("");
   const [forgotNewPw, setForgotNewPw] = useState("");
+  const [forgotConfirmPw, setForgotConfirmPw] = useState("");
   const [forgotError, setForgotError] = useState("");
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
 
@@ -238,6 +239,7 @@ export default function LoginPage({
     setForgotEmail(loginEmail.trim());
     setForgotCode("");
     setForgotNewPw("");
+    setForgotConfirmPw("");
     setForgotError("");
   };
 
@@ -275,6 +277,10 @@ export default function LoginPage({
     setForgotError("");
     if (!forgotCode.trim() || forgotNewPw.length < 8) {
       setForgotError("請輸入驗證碼，新密碼需至少 8 位");
+      return;
+    }
+    if (forgotNewPw !== forgotConfirmPw) {
+      setForgotError("兩次輸入的新密碼不相符");
       return;
     }
     setForgotSubmitting(true);
@@ -500,6 +506,7 @@ export default function LoginPage({
                 <p className="mb-6 md:mb-8 text-[10px] md:text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
                 <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={forgotCode} onChange={(e) => setForgotCode(e.target.value)} />
                 <InputField label="新密碼" icon={Lock} hint="至少8位" type="password" placeholder="請輸入新密碼" value={forgotNewPw} onChange={(e) => setForgotNewPw(e.target.value)} />
+                <InputField label="確認新密碼" icon={ShieldCheck} type="password" placeholder="再次輸入新密碼" value={forgotConfirmPw} onChange={(e) => setForgotConfirmPw(e.target.value)} />
                 {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-xs md:text-sm text-[#C8522A] font-bold">{forgotError}</div>}
                 <div className="flex gap-2 md:gap-3 mt-2 md:mt-4">
                   <button type="button" onClick={() => setForgotStep("email")} className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8]">上一步</button>
