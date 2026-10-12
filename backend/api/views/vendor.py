@@ -1724,19 +1724,49 @@ def vendor_campaign_getlist(request):
     if campaign_status:
         campaigns = campaigns.filter(status=campaign_status)
 
+    campaigns = list(campaigns)
+    campaign_ids = [campaign.campaign_id for campaign in campaigns]
+
+    # 下面三樣都一次撈出所有活動的份再分組，不要每個活動各查好幾次資料庫
+    campaign_products_by_campaign = {}
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(campaign_id__in=campaign_ids)
+        .select_related("product")
+        .order_by("pk")
+    ):
+        campaign_products_by_campaign.setdefault(
+            campaign_product.campaign_id, []
+        ).append(campaign_product)
+
+    # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
+    # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
+    coupon_used_campaign_ids = set(
+        CouponNew.objects
+        .filter(
+            kocmission__application__campaign_id__in=campaign_ids,
+            usage_count__gt=0
+        )
+        .values_list("kocmission__application__campaign_id", flat=True)
+    )
+
+    approved_count_by_campaign = {
+        row["campaign_id"]: row["total"]
+        for row in (
+            Application.objects
+            .filter(campaign_id__in=campaign_ids, status="approved")
+            .values("campaign_id")
+            .annotate(total=Count("pk"))
+        )
+    }
+
     campaign_list = []
 
     for campaign in campaigns:
-        campaign_products = CampaignProduct.objects.filter(
-            campaign=campaign
+        campaign_products = campaign_products_by_campaign.get(
+            campaign.campaign_id, []
         )
-
-        # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
-        # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
-        coupon_used = CouponNew.objects.filter(
-            kocmission__application__campaign=campaign,
-            usage_count__gt=0
-        ).exists()
+        coupon_used = campaign.campaign_id in coupon_used_campaign_ids
 
         products = []
 
@@ -1784,9 +1814,9 @@ def vendor_campaign_getlist(request):
             "coupon_used": coupon_used,
             "products": products,
             "recruit_limit": campaign.recruit_limit,
-            "approved_count": Application.objects.filter(
-                campaign=campaign, status="approved"
-            ).count(),
+            "approved_count": approved_count_by_campaign.get(
+                campaign.campaign_id, 0
+            ),
         })
 
     return Response({
@@ -1824,31 +1854,84 @@ def vendor_application_getlist(request):
     if application_status:
         applications = applications.filter(status=application_status)
 
+    # 以下資料都一次撈出所有申請的份再用 dict 對照，
+    # 不要每筆申請各查好幾次資料庫（申請一多會慢到二十幾秒）
+    # 排序固定下來（同一個活動的申請排在一起、依申請先後），跟改寫前資料庫預設回傳的順序一致
+    applications = list(
+        applications
+        .select_related("campaign", "koc", "koc__user")
+        .order_by("campaign_id", "application_id")
+    )
+
+    mission_by_application = {}
+    for mission in (
+        KOCMissionNew.objects
+        .filter(application_id__in=[a.application_id for a in applications])
+        .order_by("kocmission_id")
+    ):
+        mission_by_application.setdefault(mission.application_id, mission)
+
+    coupon_by_mission = {}
+    for coupon in (
+        CouponNew.objects
+        .filter(kocmission_id__in=[m.kocmission_id for m in mission_by_application.values()])
+        .order_by("coupon_id")
+    ):
+        coupon_by_mission.setdefault(coupon.kocmission_id, coupon)
+
+    # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位
+    campaign_product_by_campaign = {}
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(campaign_id__in={a.campaign_id for a in applications})
+        .select_related("product")
+        .order_by("pk")
+    ):
+        campaign_product_by_campaign.setdefault(
+            campaign_product.campaign_id, campaign_product
+        )
+
+    # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
+    # （stage 為 promoting 或 completed），用任務綁定的優惠碼
+    # 查出對應訂單，加總訂單金額後除以已完成任務數。
+    koc_ids = {a.koc_id for a in applications if a.koc_id}
+    completed_count_by_koc = {}
+    koc_by_completed_mission = {}
+    for kocmission_id, koc_id in (
+        KOCMissionNew.objects
+        .filter(koc_id__in=koc_ids, stage__in=["promoting", "completed"])
+        .values_list("kocmission_id", "koc_id")
+    ):
+        koc_by_completed_mission[kocmission_id] = koc_id
+        completed_count_by_koc[koc_id] = completed_count_by_koc.get(koc_id, 0) + 1
+
+    promo_codes_by_koc = {}
+    for kocmission_id, promotion_code in (
+        CouponNew.objects
+        .filter(kocmission_id__in=list(koc_by_completed_mission))
+        .values_list("kocmission_id", "promotion_code")
+    ):
+        promo_codes_by_koc.setdefault(
+            koc_by_completed_mission[kocmission_id], set()
+        ).add(promotion_code)
+
+    all_promo_codes = set().union(*promo_codes_by_koc.values()) if promo_codes_by_koc else set()
+    sales_by_promo_code = {
+        row["promotion_code"]: row["total"] or 0
+        for row in (
+            Order.objects
+            .filter(promotion_code__in=all_promo_codes)
+            .values("promotion_code")
+            .annotate(total=Sum("total_amount"))
+        )
+    } if all_promo_codes else {}
+
     application_list = []
 
     for application in applications:
-        mission = (
-            KOCMissionNew.objects
-            .filter(application=application)
-            .first()
-        )
-
-        coupon = None
-
-        if mission:
-            coupon = (
-                CouponNew.objects
-                .filter(kocmission=mission)
-                .first()
-            )
-
-        # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位
-        campaign_product = (
-            CampaignProduct.objects
-            .filter(campaign=application.campaign)
-            .select_related("product")
-            .first()
-        )
+        mission = mission_by_application.get(application.application_id)
+        coupon = coupon_by_mission.get(mission.kocmission_id) if mission else None
+        campaign_product = campaign_product_by_campaign.get(application.campaign_id)
 
         koc_name = ""
         if application.koc and application.koc.user:
@@ -1860,30 +1943,14 @@ def vendor_application_getlist(request):
 
         koc_violation_count = application.koc.total_violation_count if application.koc else 0
 
-        # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
-        # （stage 為 promoting 或 completed），用任務綁定的優惠碼
-        # 查出對應訂單，加總訂單金額後除以已完成任務數。
         koc_avg_sales_amount = None
-        if application.koc_id:
-            completed_missions = KOCMissionNew.objects.filter(
-                koc_id=application.koc_id,
-                stage__in=["promoting", "completed"],
+        completed_count = completed_count_by_koc.get(application.koc_id, 0)
+        if completed_count > 0:
+            total_sales = sum(
+                sales_by_promo_code.get(code, 0)
+                for code in promo_codes_by_koc.get(application.koc_id, ())
             )
-            completed_count = completed_missions.count()
-
-            if completed_count > 0:
-                promo_codes = list(
-                    CouponNew.objects
-                    .filter(kocmission__in=completed_missions)
-                    .values_list("promotion_code", flat=True)
-                )
-                total_sales = (
-                    Order.objects
-                    .filter(promotion_code__in=promo_codes)
-                    .aggregate(total=Sum("total_amount"))
-                    .get("total") or 0
-                )
-                koc_avg_sales_amount = float(total_sales) / completed_count
+            koc_avg_sales_amount = float(total_sales) / completed_count
 
         application_list.append({
             "application_id": application.application_id,

@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2, MessageCircle, Send, Store, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getErrorMessage } from '../errorMessage';
+import { OrderTag, showsOrderTag } from '../chatTags';
 import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling';
 
 function formatTime(value) {
@@ -201,7 +202,7 @@ export default function InquiryChatPage({ vendorId, onBack }) {
               <div className="text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
             </div>
           ) : messages.length > 0 ? (
-            messages.map((message) => {
+            messages.map((message, index) => {
               const isMine = message.sender_role === 'user';
               return (
                 <div key={message.message_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -212,6 +213,7 @@ export default function InquiryChatPage({ vendorId, onBack }) {
                         : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
                     }`}
                   >
+                    {showsOrderTag(messages, index) && <OrderTag order={message.order} inverted={isMine} />}
                     <InquiryProductCard product={message.product} inverted={isMine} />
                     {message.content}
                     <div className={`text-[10px] mt-1 ${isMine ? 'text-white/50 text-right' : 'text-[#8C8880]'}`}>

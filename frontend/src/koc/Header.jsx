@@ -118,24 +118,14 @@ export default function Header({
             </div>
           </HeaderPreview>
 
-          {/* KOC：接案聊天；其他使用者：我的訊息（跟廠商的商品詢問、訂單對話） */}
-          {userRole === 'koc' ? (
-            <div
-              className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-              onClick={() => handleNavigate('chat')}
-              title="接案聊天"
-            >
-              <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-            </div>
-          ) : (
-            <div
-              className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-              onClick={() => handleNavigate('messages')}
-              title="我的訊息"
-            >
-              <MessageCircle size={22} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-            </div>
-          )}
+          {/* 我的訊息：所有對話集中在這裡（KOC 的接案聊天也是裡面的一個分頁） */}
+          <div
+            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+            onClick={() => handleNavigate('messages')}
+            title="我的訊息"
+          >
+            <MessageCircle size={22} strokeWidth={2.5} className={['messages', 'chat'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+          </div>
         </div>
 
         {/* 購物車：手機版與電腦版都保留；電腦版滑鼠移上去會顯示購物車預覽 */}
@@ -376,16 +366,6 @@ export default function Header({
               <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#C8522A]' : ''} />
               我的訊息
             </button>
-
-            {userRole === 'koc' && (
-              <button
-                onClick={() => handleNavigate('chat')}
-                className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
-              >
-                <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'chat' ? 'text-[#C8522A]' : ''} />
-                接案聊天
-              </button>
-            )}
 
             <button
               onClick={() => handleNavigate('support')}

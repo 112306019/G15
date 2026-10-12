@@ -1,6 +1,7 @@
 """
-消費者與廠商的「商品詢問」聊天：不用先下單，從廠商頁或商品頁發起。
-每位消費者跟每家廠商只有一個對話（InquiryRoom，user + vendor 唯一）。
+消費者與廠商的聊天：每位消費者跟每家廠商只有一個對話（InquiryRoom，user + vendor 唯一）。
+不用先下單，從廠商頁或商品頁就能發起；從訂單頁傳的訊息（見 order_chat.py）也存在同一個對話裡，
+用訊息上的 order 標記是在講哪張訂單。
 
 消費者端
 GET  /consumer/inquiry/getMessages?user_id=&vendor_id=   開啟（沒有就建立）對話並讀訊息，廠商訊息標為已讀
@@ -44,6 +45,8 @@ def _serialize_message(message):
             "image_url": product.image_url,
             "price": product.discounted_price or product.price,
         } if product else None,
+        # 從訂單頁傳的訊息會標上訂單，前端在訊息上方顯示訂單標籤
+        "order": {"order_id": str(message.order_id)} if message.order_id else None,
     }
 
 
