@@ -795,12 +795,46 @@ class Admins(models.Model):
     role = models.CharField(max_length=50)
     status = models.CharField(max_length=50)
     last_login_at = models.DateTimeField(blank=True, null=True)
+    password_updated_at = models.DateTimeField(null=True, blank=True, db_column='password_updated_at')
 
     class Meta:
         db_table = 'Admins'
 
     def __str__(self):
         return self.name
+
+
+class AdminPasswordResetCode(models.Model):
+    """平台管理員忘記密碼流程用的驗證碼；錯誤次數達上限就作廢"""
+    reset_id = models.AutoField(primary_key=True)
+    admin = models.ForeignKey(Admins, on_delete=models.CASCADE, db_column='admin_id', related_name='password_reset_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'AdminPasswordResetCode'
+
+    def __str__(self):
+        return f"AdminPasswordResetCode for admin {self.admin_id}"
+
+
+class AdminLoginHistory(models.Model):
+    """平台管理員登入紀錄，給「登入與安全性」頁面顯示最近登入的裝置與 IP"""
+    log_id = models.AutoField(primary_key=True)
+    admin = models.ForeignKey(Admins, on_delete=models.CASCADE, db_column='admin_id', related_name='login_history')
+    ip_address = models.CharField(max_length=50, blank=True, default='')
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    login_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Admin_Login_History'
+        ordering = ['-login_at']
+
+    def __str__(self):
+        return f"admin {self.admin_id} - {self.login_at}"
 
 
 class Vendor(models.Model):

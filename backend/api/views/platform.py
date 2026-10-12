@@ -55,6 +55,7 @@ from api.models import (
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMINDER_DAYS, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.views.admin_auth import record_admin_login
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 from api.koc_commission import (
@@ -4195,7 +4196,9 @@ def admin_login(request):
         )
 
     admin.last_login_at = timezone.now()
-    admin.save()
+    admin.save(update_fields=['last_login_at'])
+    # 給「登入與安全性」頁面用；寫入失敗不影響登入（函式內部自己吞例外）
+    record_admin_login(admin, request)
 
     return Response({
         'success': True,
@@ -4836,4 +4839,3 @@ def admin_review_tax_form(request):
         'form_id': form.form_id,
         'status': form.status,
     }, status=status.HTTP_200_OK)
-
