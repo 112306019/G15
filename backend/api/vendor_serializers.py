@@ -21,8 +21,17 @@ class VendorRegisterSerializer(serializers.ModelSerializer):
 
 
 class VendorLoginSerializer(serializers.Serializer):
-    vendor_id = serializers.CharField()
+    # 登入改用 Email。vendor_id 保留給還沒改的舊呼叫端（兩者擇一即可）
+    email = serializers.CharField(required=False, allow_blank=True)
+    vendor_id = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField()
+
+    def validate(self, attrs):
+        attrs["email"] = (attrs.get("email") or "").strip()
+        attrs["vendor_id"] = (attrs.get("vendor_id") or "").strip()
+        if not attrs["email"] and not attrs["vendor_id"]:
+            raise serializers.ValidationError({"email": "請輸入 Email"})
+        return attrs
 
 
 class VendorProfileUpdateSerializer(serializers.ModelSerializer):

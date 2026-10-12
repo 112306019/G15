@@ -45,11 +45,11 @@ export function useMessageUnread(userRole) {
 }
 
 // 未讀數字的小紅點（跟通知鈴鐺同一個樣式）
-function CountBadge({ count, className = '' }) {
+function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
     <span className={`bg-[#C8522A] text-white text-[10px] font-bold flex items-center justify-center rounded-full ${className}`}>
-      {count > 99 ? '99+' : count}
+      {count > max ? `${max}+` : count}
     </span>
   );
 }
@@ -86,7 +86,8 @@ export default function HeaderMessages({ userRole, active = false, unread }) {
         title="我的訊息"
       >
         <MessageCircle size={22} strokeWidth={2.5} className={active || open ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-        <CountBadge count={unread.total} className="absolute top-1 right-1 min-w-4 h-4 px-0.5 border-2 border-white box-content" />
+        {/* 大小跟旁邊通知鈴鐺、購物車的數字圈一樣 */}
+        <CountBadge count={unread.total} max={9} className="absolute top-1 right-1 w-4 h-4 border-2 border-white" />
       </div>
 
       {open && (

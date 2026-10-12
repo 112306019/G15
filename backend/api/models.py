@@ -829,6 +829,8 @@ class Vendor(models.Model):
     # 跟 status（審核中/已通過/已拒絕，代表平台審核廠商資格）是兩件事：
     # is_verified 只代表「這個信箱真的存在、廠商收得到信」，審核通過與否是另一條流程。
     is_verified = models.BooleanField(default=True, db_column='is_verified')
+    # 上次更新密碼的時間（後台「登入與安全性」顯示用）；從沒改過密碼為空
+    password_updated_at = models.DateTimeField(null=True, blank=True, db_column='password_updated_at')
 
     # 金流：撥款銀行帳戶
     bank_code = models.CharField(max_length=10, blank=True, default='', db_column='bank_code')
@@ -1887,6 +1889,39 @@ class VendorEmailVerificationCode(models.Model):
 
     def __str__(self):
         return f"VendorEmailVerificationCode for {self.vendor_id}"
+
+
+class VendorLoginHistory(models.Model):
+    """廠商登入記錄，後台「登入與安全性」顯示用。跟消費者/KOC 的 LoginHistory 同樣結構，只是掛在 Vendor 底下。"""
+    log_id = models.AutoField(primary_key=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='login_history')
+    ip_address = models.CharField(max_length=50, blank=True, null=True)
+    user_agent = models.CharField(max_length=255, blank=True, null=True)
+    login_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Vendor_Login_History'
+        ordering = ['-login_at']
+
+    def __str__(self):
+        return f"{self.vendor_id} - {self.login_at}"
+
+
+class VendorPasswordResetCode(models.Model):
+    """廠商忘記密碼流程用的驗證碼，寄到廠商信箱後憑碼重設密碼。
+    結構跟消費者/KOC 用的 PasswordResetCode 一樣，只是掛在 Vendor 底下（Vendor 不是 User，沒辦法共用同一張表）。"""
+    reset_id = models.AutoField(primary_key=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id', related_name='password_reset_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'VendorPasswordResetCode'
+
+    def __str__(self):
+        return f"VendorPasswordResetCode for {self.vendor_id}"
 
 
 class CampaignParticipants(models.Model):
