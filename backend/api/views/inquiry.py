@@ -13,7 +13,8 @@ GET  /vendor/inquiry/list?vendor_id=                      廠商所有詢問對�
 GET  /vendor/inquiry/getMessages?vendor_id=&room_id=      讀訊息，消費者訊息標為已讀
 POST /vendor/inquiry/sendMessage {vendor_id, room_id, content}
 
-雙方傳訊息都會發站內通知給對方（同一個對話有未讀通知時不重複發）。
+傳訊息當下不發站內通知；對方超過 24 小時沒讀才會補一則通知（見 api/notifications.py 的
+sync_stale_chat_notifications）。聊天圖示上的未讀數字則是即時的。
 """
 
 from django.db.models import Count, Max, Q
@@ -23,7 +24,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from api.models import InquiryMessage, InquiryRoom, Product, User, Vendor
-from api.notifications import notify_new_chat_message
 
 MAX_MESSAGE_LENGTH = 2000
 
@@ -155,14 +155,6 @@ def consumer_inquiry_send_message(request):
     message = InquiryMessage.objects.create(
         room=room, sender_role="user", sender_id=str(user.pk), content=content, product=product,
     )
-    notify_new_chat_message(
-        vendor=vendor,
-        category="order",
-        title=f"{_user_display_name(user)} 傳來商品詢問",
-        body=content,
-        reference_type="vendor_inquiry",
-        reference_id=room.room_id,
-    )
     return Response({
         "success": True,
         "err": "",
@@ -239,14 +231,6 @@ def vendor_inquiry_send_message(request):
 
     message = InquiryMessage.objects.create(
         room=room, sender_role="vendor", sender_id=str(room.vendor_id), content=content,
-    )
-    notify_new_chat_message(
-        user=room.user,
-        category="order",
-        title=f"{room.vendor.company_name} 回覆了您的詢問",
-        body=content,
-        reference_type="inquiry",
-        reference_id=room.vendor_id,
     )
     return Response({
         "success": True,

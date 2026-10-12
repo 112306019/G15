@@ -4428,16 +4428,8 @@ def vendor_chatroom_send_message(request):
         is_read=False
     )
 
-    # 通知 KOC 有新訊息，reference_type='koc_chat' 帶 kocmission_id，前端點通知
-    # 直接跳去 /chat?mission=<id> 打開對應的聊天室（見 ChatPage.jsx）。
-    create_notification(
-        user=chatroom.kocmission.koc.user,
-        category="koc",
-        title=f"{campaign.vendor.company_name} 傳送了新訊息",
-        body=content,
-        reference_type="koc_chat",
-        reference_id=chatroom.kocmission_id,
-    )
+    # 傳訊息當下不發通知；KOC 超過 24 小時沒讀才補通知（見 notifications.sync_stale_chat_notifications），
+    # 通知的 reference_type='koc_chat' 帶 kocmission_id，前端點了會打開對應的聊天室。
 
     return Response({
         "success": True,

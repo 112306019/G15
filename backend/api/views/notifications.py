@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from api.models import Notification
+from api.notifications import sync_stale_chat_notifications
 
 # 下拉選單只需要看到最近幾筆，避免帳號用久了通知筆數無限增長拖慢查詢
 NOTIFICATION_LIST_LIMIT = 20
@@ -39,6 +40,12 @@ def list_notifications(request):
             "success": False,
             "err": "user_id or vendor_id is required"
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 聊天訊息不會一傳就通知：放超過 24 小時還沒讀的，在這裡才補上通知
+    if user_id:
+        sync_stale_chat_notifications(user_id=user_id)
+    else:
+        sync_stale_chat_notifications(vendor_id=vendor_id)
 
     if user_id:
         base_qs = Notification.objects.filter(user_id=user_id)

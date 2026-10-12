@@ -3,6 +3,7 @@ import { ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut, Be
 
 import LogoIcon from '../assets/logo.jpg';
 import HeaderPreview from './HeaderPreview';
+import HeaderMessages, { useMessageUnread } from './HeaderMessages';
 import LogoText from '../assets/ShareBuy.png';
 
 // 接收 cartCount
@@ -25,6 +26,8 @@ export default function Header({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // 右上角聊天圖示（電腦版）與手機選單「我的訊息」共用的未讀數
+  const messageUnread = useMessageUnread(userRole);
 
   const navItems = allNavItems.filter(item => {
     if (item.isKocOnly && userRole !== 'koc') return false;
@@ -118,14 +121,8 @@ export default function Header({
             </div>
           </HeaderPreview>
 
-          {/* 我的訊息：所有對話集中在這裡（KOC 的接案聊天也是裡面的一個分頁） */}
-          <div
-            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-            onClick={() => handleNavigate('messages')}
-            title="我的訊息"
-          >
-            <MessageCircle size={22} strokeWidth={2.5} className={['messages', 'chat'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-          </div>
+          {/* 我的訊息：有未讀顯示數字，滑鼠移上去展開接案聊天／廠商訊息，分別進對應的分頁 */}
+          <HeaderMessages userRole={userRole} active={['messages', 'chat'].includes(activeTab)} unread={messageUnread} />
         </div>
 
         {/* 購物車：手機版與電腦版都保留；電腦版滑鼠移上去會顯示購物車預覽 */}
@@ -365,6 +362,11 @@ export default function Header({
             >
               <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#C8522A]' : ''} />
               我的訊息
+              {messageUnread.total > 0 && (
+                <span className="ml-auto bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                  {messageUnread.total > 99 ? '99+' : messageUnread.total}
+                </span>
+              )}
             </button>
 
             <button
