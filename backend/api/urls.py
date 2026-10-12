@@ -264,6 +264,7 @@ urlpatterns = [
 
     # Vendor KOC 報名審核 API
     path('vendor/application/getlist', vendor.vendor_application_getlist, name='vendor-application-getlist'),
+    path('vendor/koc/history', vendor.vendor_koc_history, name='vendor-koc-history'),
     path('vendor/application/review', vendor.vendor_application_review, name='vendor-application-review'),
 
     # Vendor 訂單 API

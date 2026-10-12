@@ -26,7 +26,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.koc_commission import format_commission_rate, get_mission_tier_progress
+from api.koc_commission import campaign_commission_summary, format_commission_rate, get_mission_tier_progress
 from api.error_messages import internal_error_message, serializer_error_message
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
@@ -252,6 +252,8 @@ def get_available_campaign_list(request):
                 "recruit_limit": campaign.recruit_limit,
                 "approved_count": approved_count,
                 "is_full": is_full,
+                # 分潤條件：KOC 申請前就看得到這個活動是固定還是階層式、各層幾 %
+                "commission": campaign_commission_summary(campaign),
             })
 
         return Response({
