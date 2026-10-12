@@ -276,6 +276,7 @@ def vendor_order_chat_list(request):
         .filter(order__items__product__vendor_id=vendor_id)
         .distinct()
         .select_related("order__user")
+        .prefetch_related("messages")
         .annotate(
             message_count=Count("messages", distinct=True),
             last_message_at=Max("messages__created_at"),
@@ -291,7 +292,7 @@ def vendor_order_chat_list(request):
 
     result = []
     for room in rooms:
-        last = room.messages.order_by("-created_at", "-message_id").first()
+        last = max(room.messages.all(), key=lambda m: (m.created_at, m.pk), default=None)
         buyer = room.order.user
         result.append({
             "room_id": room.room_id,
@@ -328,6 +329,7 @@ def user_order_chat_list(request):
         OrderChatRoom.objects
         .filter(order__user_id=user_id)
         .select_related("order")
+        .prefetch_related("messages")
         .annotate(
             message_count=Count("messages", distinct=True),
             last_message_at=Max("messages__created_at"),
@@ -341,7 +343,16 @@ def user_order_chat_list(request):
         .order_by("-last_message_at")
     )
 
-    vendor_ids = {room.order_id: _order_vendor_id(room.order) for room in rooms}
+    # 一次查出每張訂單的廠商，不要每個對話各查一次
+    rooms = list(rooms)
+    vendor_ids = {}
+    for order_id, vendor_id in (
+        OrderItem.objects
+        .filter(order_id__in=[room.order_id for room in rooms])
+        .order_by("pk")
+        .values_list("order_id", "product__vendor_id")
+    ):
+        vendor_ids.setdefault(order_id, vendor_id)
     vendor_names = dict(
         Vendor.objects.filter(vendor_id__in={v for v in vendor_ids.values() if v})
         .values_list("vendor_id", "company_name")
@@ -349,7 +360,7 @@ def user_order_chat_list(request):
 
     result = []
     for room in rooms:
-        last = room.messages.order_by("-created_at", "-message_id").first()
+        last = max(room.messages.all(), key=lambda m: (m.created_at, m.pk), default=None)
         vendor_id = vendor_ids.get(room.order_id)
         result.append({
             "room_id": room.room_id,

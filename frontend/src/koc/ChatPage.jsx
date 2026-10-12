@@ -26,7 +26,7 @@ import {
   getOrCreateChatRoom
 } from '../api/koc'
 import { getErrorMessage } from '../errorMessage'
-import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
+import usePolling, { CHAT_LIST_POLL_EVERY, CHAT_POLL_INTERVAL_MS } from '../usePolling'
 
 
 function cn(...classes) {
@@ -323,11 +323,16 @@ export default function ChatPage() {
   messagesByRoomRef.current = messagesByRoom
 
   // 準即時同步：打開的聊天室定時抓新訊息，聊天室清單同步最後一則訊息與未讀數
+  const pollTickRef = useRef(0)
   usePolling(async () => {
+    pollTickRef.current += 1
     if (activeRoomId) {
       await loadMessages(activeRoomId, { silent: true })
     }
-    await loadChatrooms({ silent: true })
+    // 清單比較重，隔幾輪才抓一次
+    if (pollTickRef.current % CHAT_LIST_POLL_EVERY === 0) {
+      await loadChatrooms({ silent: true })
+    }
   }, CHAT_POLL_INTERVAL_MS, Boolean(userId))
 
 

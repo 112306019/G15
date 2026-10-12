@@ -72,6 +72,7 @@ def _room_summaries(rooms, unread_role):
     """對話列表共用：最後一則訊息、時間、對方未讀數。只回傳有訊息的對話。"""
     rooms = (
         rooms
+        .prefetch_related("messages")
         .annotate(
             message_count=Count("messages", distinct=True),
             last_message_at=Max("messages__created_at"),
@@ -86,7 +87,7 @@ def _room_summaries(rooms, unread_role):
     )
     result = []
     for room in rooms:
-        last = room.messages.order_by("-created_at", "-message_id").first()
+        last = max(room.messages.all(), key=lambda m: (m.created_at, m.pk), default=None)
         result.append({
             "room_id": room.room_id,
             "user_id": room.user_id,

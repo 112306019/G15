@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Loader2, MessageCircle, RefreshCw, Search, Send } from 'lucide-react'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
-import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
+import usePolling, { CHAT_LIST_POLL_EVERY, CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
 
 function formatTime(value) {
   if (!value) return ''
@@ -141,9 +141,14 @@ export default function ConversationPanel({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeKey])
 
+  const pollTickRef = useRef(0)
   usePolling(async () => {
+    pollTickRef.current += 1
     if (active) await loadMessages(active, { silent: true })
-    await loadList({ silent: true })
+    // 清單比較重，隔幾輪才抓一次
+    if (pollTickRef.current % CHAT_LIST_POLL_EVERY === 0) {
+      await loadList({ silent: true })
+    }
   }, CHAT_POLL_INTERVAL_MS)
 
   async function handleSend() {
