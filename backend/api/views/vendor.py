@@ -23,12 +23,15 @@ from api.views.constants import (
 from api.models import (
     Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew,
     Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message,
-    Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
+    Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorPasswordResetCode, VendorLoginHistory, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
     VendorInvoice, ProductBundleItem,
 )
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.emails import (
+    send_vendor_email_verification_email, send_invoice_notification_email,
+    send_vendor_password_reset_email,
+)
 from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
@@ -53,6 +56,11 @@ from api.views.shipping import (
 
 
 VENDOR_VERIFICATION_CODE_TTL_MINUTES = 10
+VENDOR_PASSWORD_RESET_CODE_TTL_MINUTES = 10
+VENDOR_PASSWORD_MIN_LENGTH = 8
+# 每個廠商保留幾筆登入記錄、畫面上顯示幾筆（跟消費者/KOC 的登入記錄一致）
+VENDOR_LOGIN_HISTORY_KEEP = 10
+VENDOR_LOGIN_HISTORY_SHOWN = 5
 
 
 def _generate_vendor_verification_code():
@@ -244,31 +252,34 @@ def vendor_login(request):
             "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    email = serializer.validated_data["email"]
     vendor_id = serializer.validated_data["vendor_id"]
     password = serializer.validated_data["password"]
 
-    try:
-        vendor = Vendor.objects.get(vendor_id=vendor_id)
-    except Vendor.DoesNotExist:
-        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
-        return Response({
-            "success": False,
-            "err": "帳號或密碼錯誤"
-        }, status=status.HTTP_401_UNAUTHORIZED)
+    # 用 Email 登入（不分大小寫）；沒帶 Email 才退回用廠商編號（舊的呼叫方式）。
+    # Vendor.email 在資料庫沒有設唯一，萬一有重複的信箱，就以密碼對得上的那個帳號為準。
+    if email:
+        candidates = Vendor.objects.filter(email__iexact=email).order_by("vendor_id")
+    else:
+        candidates = Vendor.objects.filter(vendor_id=vendor_id)
 
     # 密碼一律以雜湊比對；原本允許明文比對的後門已移除，
     # 資料庫裡的明文測試密碼已全部轉成雜湊（密碼本身不變）
-    password_correct = check_password(password, vendor.password)
+    vendor = next(
+        (candidate for candidate in candidates if check_password(password, candidate.password)),
+        None,
+    )
 
-    if not password_correct:
+    if not vendor:
+        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
         return Response({
             "success": False,
-            "err": "帳號或密碼錯誤"
+            "err": "Email 或密碼錯誤"
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     # 信箱還沒驗證不能登入，前端要能分辨這種情況去導去驗證流程。
-    # 廠商登入表單只收 vendor_id（不像消費者登入收 email），前端沒有信箱可以直接開驗證彈窗，
-    # 所以這裡把 email 一併帶回去——這個時間點密碼已經驗證正確，不是洩漏帳號資訊給不相關的人。
+    # 把帳號上登記的 email 一併帶回去給前端開驗證彈窗（用登記的那個，不用使用者輸入的大小寫）
+    # ——這個時間點密碼已經驗證正確，不是洩漏帳號資訊給不相關的人。
     if not vendor.is_verified:
         return Response({
             "success": False,
@@ -277,11 +288,220 @@ def vendor_login(request):
             "email": vendor.email,
         }, status=status.HTTP_403_FORBIDDEN)
 
+    # 記錄登入記錄（後台「登入與安全性」顯示用）；寫入失敗不影響登入
+    try:
+        VendorLoginHistory.objects.create(
+            vendor=vendor,
+            ip_address=request.META.get("REMOTE_ADDR", ""),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        old_ids = list(
+            VendorLoginHistory.objects
+            .filter(vendor=vendor)
+            .order_by("-login_at", "-log_id")
+            .values_list("log_id", flat=True)[VENDOR_LOGIN_HISTORY_KEEP:]
+        )
+        if old_ids:
+            VendorLoginHistory.objects.filter(log_id__in=old_ids).delete()
+    except Exception:
+        pass
+
     return Response({
         "success": True,
         "err": "",
         "vendor_id": vendor.vendor_id
     }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_login_history(request):
+    """
+    廠商後台「登入與安全性」：最近的登入記錄、上次更新密碼的時間
+    URL: /vendor/auth/loginHistory?vendor_id=
+    """
+    vendor = Vendor.objects.filter(vendor_id=request.GET.get("vendor_id")).first()
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到廠商資料，請重新登入"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    logs = (
+        VendorLoginHistory.objects
+        .filter(vendor=vendor)
+        .order_by("-login_at", "-log_id")[:VENDOR_LOGIN_HISTORY_SHOWN]
+    )
+    return Response({
+        "success": True,
+        "err": "",
+        "password_updated_at": vendor.password_updated_at,
+        "logs": [
+            {
+                "log_id": log.log_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "login_at": log.login_at,
+            }
+            for log in logs
+        ],
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_change_password(request):
+    """
+    廠商後台更新密碼：要先輸入目前密碼
+    URL: /vendor/auth/changePassword  {vendor_id, current_password, new_password}
+    """
+    vendor_id = request.data.get("vendor_id")
+    current_password = request.data.get("current_password") or ""
+    new_password = request.data.get("new_password") or ""
+
+    if not vendor_id or not current_password or not new_password:
+        return Response({
+            "success": False,
+            "err": "請輸入目前密碼與新密碼"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < VENDOR_PASSWORD_MIN_LENGTH:
+        return Response({
+            "success": False,
+            "err": f"新密碼需至少 {VENDOR_PASSWORD_MIN_LENGTH} 位"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到廠商資料，請重新登入"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if not check_password(current_password, vendor.password):
+        return Response({
+            "success": False,
+            "err": "目前密碼不正確"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+    vendor.password = make_password(new_password)
+    vendor.password_updated_at = timezone.now()
+    vendor.save(update_fields=["password", "password_updated_at"])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "password_updated_at": vendor.password_updated_at,
+    }, status=status.HTTP_200_OK)
+
+def _find_vendor_by_email(email):
+    """用 Email 找廠商（不分大小寫）；Vendor.email 沒有設唯一，萬一重複就取廠商編號最小的那個。"""
+    email = (email or "").strip()
+    if not email:
+        return None
+    return Vendor.objects.filter(email__iexact=email).order_by("vendor_id").first()
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_forgot_password(request):
+    """
+    廠商忘記密碼：寄驗證碼到廠商登記的信箱（流程比照消費者/KOC 的 user/password/forgot）
+    URL: /vendor/auth/password/forgot  {email}
+    """
+    email = (request.data.get("email") or "").strip()
+    if not email:
+        return Response({
+            "success": False,
+            "err": "請輸入 Email"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = _find_vendor_by_email(email)
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 重新申請時，之前還沒用掉的驗證碼一律作廢，只有最新寄出的那組有效
+    VendorPasswordResetCode.objects.filter(vendor=vendor, is_used=False).update(is_used=True)
+
+    code = _generate_vendor_verification_code()
+    VendorPasswordResetCode.objects.create(
+        vendor=vendor,
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=VENDOR_PASSWORD_RESET_CODE_TTL_MINUTES),
+    )
+
+    try:
+        send_vendor_password_reset_email(vendor, code)
+    except Exception:
+        return Response({
+            "success": False,
+            "err": "驗證碼寄送失敗，請稍後再試"
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_reset_password(request):
+    """
+    廠商忘記密碼：驗證驗證碼並重設密碼
+    URL: /vendor/auth/password/reset  {email, code, new_password}
+    """
+    email = (request.data.get("email") or "").strip()
+    code = str(request.data.get("code") or "").strip()
+    new_password = request.data.get("new_password") or ""
+
+    if not email or not code or not new_password:
+        return Response({
+            "success": False,
+            "err": "請輸入 Email、驗證碼與新密碼"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < VENDOR_PASSWORD_MIN_LENGTH:
+        return Response({
+            "success": False,
+            "err": f"密碼需至少 {VENDOR_PASSWORD_MIN_LENGTH} 位"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = _find_vendor_by_email(email)
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    reset_code = (
+        VendorPasswordResetCode.objects
+        .filter(vendor=vendor, code=code, is_used=False)
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not reset_code:
+        return Response({
+            "success": False,
+            "err": "驗證碼錯誤"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if reset_code.expires_at < timezone.now():
+        return Response({
+            "success": False,
+            "err": "驗證碼已過期，請重新申請"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor.password = make_password(new_password)
+    vendor.password_updated_at = timezone.now()
+    vendor.save(update_fields=["password", "password_updated_at"])
+
+    reset_code.is_used = True
+    reset_code.save(update_fields=["is_used"])
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])

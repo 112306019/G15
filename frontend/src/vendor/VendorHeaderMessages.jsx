@@ -9,11 +9,11 @@ const MESSAGE_UNREAD_POLL_MS = 20000;
 
 const sumUnread = (rows) => (rows || []).reduce((total, row) => total + Number(row.unread_count || 0), 0);
 
-function CountBadge({ count, className = '' }) {
+function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
     <span className={`bg-[#C8522A] text-white font-bold flex items-center justify-center rounded-full ${className}`}>
-      {count > 99 ? '99+' : count}
+      {count > max ? `${max}+` : count}
     </span>
   );
 }
@@ -65,9 +65,11 @@ export default function VendorHeaderMessages({ onNavigate }) {
         title="聊天室"
       >
         <MessageCircle size={20} className="md:w-[22px] md:h-[22px]" />
+        {/* 大小跟旁邊通知鈴鐺、客服的數字圈一樣 */}
         <CountBadge
           count={total}
-          className="absolute top-0.5 right-0.5 md:top-1 md:right-1 text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 border-2 border-white box-content"
+          max={9}
+          className="absolute top-0.5 right-0.5 md:top-1 md:right-1 text-[9px] md:text-[10px] w-3.5 h-3.5 md:w-4 md:h-4 border-2 border-white"
         />
       </button>
 

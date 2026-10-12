@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { cn } from './lib/utils'
+import SecuritySettings from './SecuritySettings'
 import {
   TAIWAN_CITIES,
   getDistrictsByCity,
@@ -748,16 +749,18 @@ export default function Settings() {
                 className="sm:w-5 sm:h-5 text-[#8C8880]"
               />
 
-              安全性設定
+              登入與安全性
 
             </h2>
 
             <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
-              管理您的帳號登入狀態
+              更新密碼、查看登入記錄與登出帳號
             </p>
 
           </div>
 
+          {/* 更新密碼、登入記錄 */}
+          <SecuritySettings />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl sm:rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-4 sm:p-5">
 

@@ -14,7 +14,9 @@ import {
   loginVendor,
   registerVendor,
   verifyVendorEmail,
-  resendVendorVerification
+  resendVendorVerification,
+  forgotVendorPassword,
+  resetVendorPassword
 } from '../api/vendor'
 
 import LogoIcon from '../assets/logo.jpg'
@@ -29,7 +31,6 @@ export default function VendorLogin() {
   const [error, setError] = useState('')
 
   const [form, setForm] = useState({
-    vendor_id: '',
     company_name: '',
     contact_name: '',
     email: '',
@@ -96,6 +97,66 @@ export default function VendorLogin() {
     }
   }
 
+  // 忘記密碼：輸入信箱 → 收驗證碼 → 設定新密碼（流程比照前台 LoginPage 的忘記密碼）
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotStep, setForgotStep] = useState('email') // email → reset → done
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotCode, setForgotCode] = useState('')
+  const [forgotNewPw, setForgotNewPw] = useState('')
+  const [forgotError, setForgotError] = useState('')
+  const [forgotSubmitting, setForgotSubmitting] = useState(false)
+
+  const openForgotModal = () => {
+    setForgotOpen(true)
+    setForgotStep('email')
+    setForgotEmail(form.email.trim())
+    setForgotCode('')
+    setForgotNewPw('')
+    setForgotError('')
+  }
+
+  const closeForgotModal = () => setForgotOpen(false)
+
+  const handleSendResetCode = async (event) => {
+    event.preventDefault()
+    setForgotError('')
+    if (!forgotEmail.trim()) {
+      setForgotError('請輸入公司聯絡信箱')
+      return
+    }
+    setForgotSubmitting(true)
+    try {
+      await forgotVendorPassword({ email: forgotEmail.trim() })
+      setForgotStep('reset')
+    } catch (err) {
+      setForgotError(getErrorMessage(err, '驗證碼寄送失敗，請稍後再試'))
+    } finally {
+      setForgotSubmitting(false)
+    }
+  }
+
+  const handleResetPassword = async (event) => {
+    event.preventDefault()
+    setForgotError('')
+    if (!forgotCode.trim() || forgotNewPw.length < 8) {
+      setForgotError('請輸入驗證碼，新密碼需至少 8 位')
+      return
+    }
+    setForgotSubmitting(true)
+    try {
+      await resetVendorPassword({
+        email: forgotEmail.trim(),
+        code: forgotCode.trim(),
+        new_password: forgotNewPw,
+      })
+      setForgotStep('done')
+    } catch (err) {
+      setForgotError(getErrorMessage(err, '重設密碼失敗，請稍後再試'))
+    } finally {
+      setForgotSubmitting(false)
+    }
+  }
+
   const handleChange = (event) => {
     const { name, value } = event.target
 
@@ -114,7 +175,7 @@ export default function VendorLogin() {
 
       if (isLogin) {
         const response = await loginVendor({
-          vendor_id: form.vendor_id.trim(),
+          email: form.email.trim(),
           password: form.password,
         })
 
@@ -147,10 +208,9 @@ export default function VendorLogin() {
       const apiError = err.response?.data?.err
 
       if (err.response?.data?.needsVerification) {
-        // 廠商登入表單只收 vendor_id，後端在這個錯誤裡多帶了 email，
-        // 才有辦法直接開驗證彈窗（不用另外請使用者輸入一次信箱）
+        // 後端在這個錯誤裡會帶回帳號登記的 email，直接用它開驗證彈窗
         setError(typeof apiError === 'string' ? apiError : '請先完成 Email 驗證')
-        openVerifyModal(err.response.data.email || '')
+        openVerifyModal(err.response.data.email || form.email.trim())
       } else {
         setError(getErrorMessage(err, '操作失敗，請稍後再試'))
       }
@@ -164,7 +224,6 @@ export default function VendorLogin() {
     setError('')
 
     setForm({
-      vendor_id: '',
       company_name: '',
       contact_name: '',
       email: '',
@@ -235,7 +294,7 @@ export default function VendorLogin() {
               {isLogin ? '歡迎回到後台' : '開啟您的行銷之旅'}
             </h2>
             <p className="text-[11px] md:text-xs font-bold text-[#8C8880]">
-              {isLogin ? '請輸入廠商編號與密碼' : '填寫公司資訊加入我們'}
+              {isLogin ? '請輸入公司聯絡信箱與密碼' : '填寫公司資訊加入我們'}
             </p>
           </div>
 
@@ -249,17 +308,18 @@ export default function VendorLogin() {
             
             {isLogin ? (
               <div className="animate-in slide-in-from-left-4 fade-in duration-300 flex flex-col gap-3 md:gap-4">
-                {/* 登入表單：廠商編號 */}
+                {/* 登入表單：Email */}
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880] transition-colors duration-300 group-focus-within:text-[#C8522A]">
-                    <Hash size={16} className="md:w-[18px] md:h-[18px]" strokeWidth={2.5} />
+                    <Mail size={16} className="md:w-[18px] md:h-[18px]" strokeWidth={2.5} />
                   </div>
                   <input
-                    type="text"
-                    name="vendor_id"
-                    value={form.vendor_id}
+                    type="email"
+                    name="email"
+                    value={form.email}
                     onChange={handleChange}
-                    placeholder="廠商編號 (例如: V00001)"
+                    placeholder="公司聯絡信箱"
+                    autoComplete="email"
                     required
                     className="w-full bg-white/70 backdrop-blur-sm border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-11 pr-4 text-sm outline-none transition-all duration-300 placeholder:text-[#8C8880]/50 focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30 font-medium text-[#1A1A18]"
                   />
@@ -350,6 +410,18 @@ export default function VendorLogin() {
               />
             </div>
 
+            {isLogin && (
+              <div className="flex justify-end -mt-1">
+                <button
+                  type="button"
+                  onClick={openForgotModal}
+                  className="text-xs font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors"
+                >
+                  忘記密碼？
+                </button>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -364,6 +436,122 @@ export default function VendorLogin() {
           </form>
         </div>
       </div>
+
+      {/* 廠商忘記密碼 */}
+      {forgotOpen && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={closeForgotModal}
+        >
+          <div
+            className="w-full max-w-md rounded-[2rem] md:rounded-[2.5rem] bg-white p-6 md:p-8 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {forgotStep === 'email' && (
+              <form onSubmit={handleSendResetCode}>
+                <h3 className="text-lg md:text-xl font-serif font-bold text-[#1A1A18] mb-2">忘記密碼</h3>
+                <p className="mb-4 md:mb-5 text-xs md:text-sm font-bold text-[#8C8880]">
+                  請輸入廠商帳號登記的信箱，我們會寄送驗證碼給您。
+                </p>
+                <div className="relative mb-4">
+                  <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880]">
+                    <Mail size={16} className="md:w-[18px] md:h-[18px]" />
+                  </div>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(event) => setForgotEmail(event.target.value)}
+                    placeholder="公司聯絡信箱"
+                    autoComplete="email"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
+                  />
+                </div>
+                {forgotError && <div className="mb-4 rounded-xl md:rounded-2xl border border-red-200 bg-red-50 p-3 md:p-4 text-xs md:text-sm font-bold text-red-700">{forgotError}</div>}
+                <div className="flex gap-2 md:gap-3">
+                  <button type="button" onClick={closeForgotModal} className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50">取消</button>
+                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] disabled:opacity-50">
+                    {forgotSubmitting ? '寄送中...' : '寄送驗證碼'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {forgotStep === 'reset' && (
+              <form onSubmit={handleResetPassword}>
+                <h3 className="text-lg md:text-xl font-serif font-bold text-[#1A1A18] mb-2">輸入驗證碼</h3>
+                <p className="mb-1 text-xs md:text-sm font-bold text-[#8C8880]">
+                  驗證碼已寄至 <span className="text-[#1A1A18] break-all">{forgotEmail}</span>，10 分鐘內有效。
+                </p>
+                <p className="mb-4 md:mb-5 text-[10px] md:text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
+                <div className="relative mb-3">
+                  <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880]">
+                    <Hash size={16} className="md:w-[18px] md:h-[18px]" />
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={forgotCode}
+                    onChange={(event) => setForgotCode(event.target.value)}
+                    placeholder="請輸入 6 位數驗證碼"
+                    autoComplete="one-time-code"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
+                  />
+                </div>
+                <div className="relative mb-4">
+                  <div className="absolute inset-y-0 left-0 pl-3 md:pl-4 flex items-center pointer-events-none text-[#8C8880]">
+                    <Lock size={16} className="md:w-[18px] md:h-[18px]" />
+                  </div>
+                  <input
+                    type="password"
+                    value={forgotNewPw}
+                    onChange={(event) => setForgotNewPw(event.target.value)}
+                    placeholder="新密碼（至少 8 位）"
+                    autoComplete="new-password"
+                    className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm outline-none focus:border-[#C8522A] font-medium"
+                  />
+                </div>
+                {forgotError && <div className="mb-4 rounded-xl md:rounded-2xl border border-red-200 bg-red-50 p-3 md:p-4 text-xs md:text-sm font-bold text-red-700">{forgotError}</div>}
+                <div className="flex gap-2 md:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotStep('email'); setForgotError('') }}
+                    className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
+                  >
+                    上一步
+                  </button>
+                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] disabled:opacity-50">
+                    {forgotSubmitting ? '處理中...' : '重設密碼'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {forgotStep === 'done' && (
+              <>
+                <div className="mb-4 flex justify-center">
+                  <CheckCircle2 size={32} className="text-[#6BBF6B] md:w-10 md:h-10" />
+                </div>
+                <h3 className="text-lg md:text-xl font-serif font-bold text-[#1A1A18] mb-2 text-center">密碼已重設！</h3>
+                <p className="mb-5 md:mb-6 text-xs md:text-sm font-bold text-[#8C8880] text-center">
+                  請使用新密碼重新登入。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeForgotModal()
+                    setIsLogin(true)
+                    setError('')
+                    setForm((previous) => ({ ...previous, email: forgotEmail.trim(), password: '' }))
+                  }}
+                  className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
+                >
+                  返回登入
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 廠商註冊信箱驗證 */}
       {verifyOpen && (
@@ -443,7 +631,7 @@ export default function VendorLogin() {
                     closeVerifyModal()
                     setIsLogin(true)
                     setError('')
-                    setForm((previous) => ({ ...previous, vendor_id: '', password: '' }))
+                    setForm((previous) => ({ ...previous, password: '' }))
                   }}
                   className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
                 >

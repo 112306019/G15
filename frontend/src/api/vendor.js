@@ -14,6 +14,26 @@ export const loginVendor = (data) => {
   return api.post('/vendor/auth/login', data)
 }
 
+// 廠商後台「登入與安全性」：登入記錄、上次更新密碼時間
+export const getVendorLoginHistory = (vendorId) => {
+  return api.get('/vendor/auth/loginHistory', { params: { vendor_id: vendorId } })
+}
+
+// 廠商後台更新密碼（要帶目前密碼）
+export const changeVendorPassword = (data) => {
+  return api.post('/vendor/auth/changePassword', data)
+}
+
+// 廠商忘記密碼：寄驗證碼到信箱
+export const forgotVendorPassword = (data) => {
+  return api.post('/vendor/auth/password/forgot', data)
+}
+
+// 廠商忘記密碼：憑驗證碼重設密碼
+export const resetVendorPassword = (data) => {
+  return api.post('/vendor/auth/password/reset', data)
+}
+
 // 廠商註冊信箱驗證
 export const verifyVendorEmail = (data) => {
   return api.post('/vendor/auth/verifyEmail', data)
