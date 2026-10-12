@@ -8,8 +8,7 @@ import { getKocChatrooms, getChatHistory, markKocChatroomRead, sendChatMessage }
 // KOC 多一個「接案聊天」（跟廠商的任務對話），排在最前面
 const KOC_TAB = { key: 'task', label: '接案聊天' };
 const TABS = [
-  { key: 'inquiry', label: '商品詢問' },
-  { key: 'order', label: '訂單訊息' },
+  { key: 'inquiry', label: '廠商訊息' },
 ];
 
 const throwIfFailed = (response, fallback) => {
@@ -28,9 +27,9 @@ async function getJson(url, options) {
 
 // 前台「我的訊息」：跟廠商的所有對話集中在這裡
 // - 接案聊天（只有 KOC）：KOC 接案任務跟廠商的對話
-// - 商品詢問：從廠商頁、商品頁按「傳訊息給廠商」發起，不用下單
-// - 訂單訊息：每張訂單跟廠商的對話
-// 網址參數 ?tab=task|inquiry|order，搭配 room（接案聊天）、vendor（商品詢問）或 order（訂單訊息）直接打開某個對話
+// - 廠商訊息：每家廠商一個對話，商品詢問（從廠商頁、商品頁發起）和訂單訊息（從訂單頁發起）
+//   都在同一個對話裡，訊息上會標出是在講哪個商品、哪張訂單
+// 網址參數 ?tab=task|inquiry，搭配 room（接案聊天）或 vendor（廠商訊息）直接打開某個對話
 export default function MessagesPage() {
   const userId = localStorage.getItem('userId');
   const isKoc = localStorage.getItem('role') === '1';
@@ -48,12 +47,13 @@ export default function MessagesPage() {
         <div>
           <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我的訊息</h2>
           <p className="text-xs text-[#8C8880]">
-            {isKoc ? '接案聊天、商品詢問與訂單對話都在這裡' : '跟廠商的商品詢問與訂單對話都在這裡'}
+            {isKoc ? '接案聊天、跟廠商的商品詢問與訂單對話都在這裡' : '跟每家廠商的對話都在這裡，商品詢問和訂單訊息不再分開'}
           </p>
         </div>
       </div>
 
-      <div className="flex gap-1 mb-3 border-b border-[#E2DDD4]">
+      {/* 只有一種對話（非 KOC）時不用顯示分頁列 */}
+      <div className={`flex gap-1 mb-3 border-b border-[#E2DDD4] ${tabs.length < 2 ? 'hidden' : ''}`}>
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -109,14 +109,13 @@ export default function MessagesPage() {
             mineRole="user"
             initialKey={searchParams.get('vendor')}
             searchPlaceholder="搜尋廠商或訊息…"
-            emptyListText="還沒有商品詢問"
-            emptyListHint="在廠商頁或商品頁按「傳訊息給廠商」就能直接詢問"
+            emptyListText="還沒有跟廠商的對話"
+            emptyListHint="在廠商頁、商品頁或訂單頁聯絡廠商，對話就會出現在這裡"
             fetchList={async () => {
               const data = await getJson(`${API_BASE_URL}/api/consumer/inquiry/list?user_id=${encodeURIComponent(userId)}`);
               return (data.rooms || []).map((r) => ({
                 key: r.vendor_id,
                 title: r.vendor_name || '廠商',
-                subtitle: '商品詢問',
                 lastMessage: r.last_message,
                 lastMessageAt: r.last_message_at,
                 unreadCount: r.unread_count,
@@ -133,42 +132,6 @@ export default function MessagesPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, vendor_id: conv.key, content }),
-              });
-              return data.message;
-            }}
-          />
-        )}
-
-        {tab === 'order' && (
-          <ConversationPanel
-            key="order"
-            mineRole="user"
-            initialKey={searchParams.get('order')}
-            searchPlaceholder="搜尋廠商或訂單編號…"
-            emptyListText="還沒有訂單訊息"
-            emptyListHint="在「我的訂單」點進訂單即可聯絡廠商"
-            fetchList={async () => {
-              const data = await getJson(`${API_BASE_URL}/api/user/orderChat/list?user_id=${encodeURIComponent(userId)}`);
-              return (data.rooms || []).map((r) => ({
-                key: r.order_id,
-                title: r.vendor_name || '廠商',
-                subtitle: `訂單 ${String(r.order_id).slice(0, 8).toUpperCase()}`,
-                lastMessage: r.last_message,
-                lastMessageAt: r.last_message_at,
-                unreadCount: r.unread_count,
-              }));
-            }}
-            fetchMessages={async (conv) => {
-              const data = await getJson(
-                `${API_BASE_URL}/api/user/orderChat/getMessages?order_id=${encodeURIComponent(conv.key)}&user_id=${encodeURIComponent(userId)}`
-              );
-              return data.messages || [];
-            }}
-            sendMessage={async (conv, content) => {
-              const data = await getJson(`${API_BASE_URL}/api/user/orderChat/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_id: conv.key, user_id: userId, content }),
               });
               return data.message;
             }}

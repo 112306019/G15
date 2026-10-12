@@ -80,7 +80,9 @@ export default function HeaderPreview({ kind, isGuest = false, onViewAll, refres
     try {
       setLoading(true);
       setFailed(false);
-      setItems(await config.fetchItems(userId));
+      // 後端是照加入順序回傳（舊的在前）：反過來讓新加入的排前面，已下架的一律排到最後
+      const fetched = (await config.fetchItems(userId)).reverse();
+      setItems([...fetched.filter((item) => !item.isDelisted), ...fetched.filter((item) => item.isDelisted)]);
     } catch {
       setFailed(true);
     } finally {

@@ -17,7 +17,8 @@ const NOTIFICATION_PATH_MAP = {
 
 // 聊天訊息通知：直接打開統一聊天室裡對應的對話
 const CHAT_NOTIFICATION_PATH = {
-  vendor_order_chat: id => `/vendor/chat?tab=order&order=${encodeURIComponent(id)}`,
+  // 舊的訂單訊息通知：訂單訊息已併入「顧客訊息」，直接開那個分頁
+  vendor_order_chat: () => '/vendor/chat?tab=inquiry',
   vendor_inquiry: id => `/vendor/chat?tab=inquiry&room=${encodeURIComponent(id)}`,
   vendor_koc_chat: id => `/vendor/chat?room=${encodeURIComponent(id)}`,
 };
@@ -182,8 +183,9 @@ export default function VendorHeader() {
             )}
           </button>
 
+          {/* 手機版：鈴鐺不在最右邊，用固定寬度往左展開會超出螢幕，改成貼齊螢幕左右兩側；電腦版維持原樣 */}
           {notifOpen && (
-            <div className="absolute right-0 top-full pt-2 w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="fixed left-3 right-3 top-14 pt-2 md:absolute md:left-auto md:right-0 md:top-full md:w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
                 <div className="px-5 py-3 border-b border-[#E2DDD4] text-sm font-bold text-[#1A1A18]">
                   通知

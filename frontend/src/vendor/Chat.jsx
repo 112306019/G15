@@ -21,9 +21,6 @@ import {
   getVendorChatMessages,
   sendVendorChatMessage,
   markVendorChatroomRead,
-  getVendorOrderChatList,
-  getVendorOrderChatMessages,
-  sendVendorOrderChatMessage,
   getVendorInquiryList,
   getVendorInquiryMessages,
   sendVendorInquiryMessage
@@ -917,13 +914,12 @@ function KocChatPanel({ initialRoomId = null }) {
 }
 
 
-// ─── 廠商統一聊天室：KOC 任務 / 訂單訊息 / 商品詢問 ─────────────────────
-// 網址參數：?tab=koc|order|inquiry，搭配 room（KOC 任務、商品詢問）或 order（訂單訊息）
-// 直接打開某個對話（站內通知點進來時使用）
+// ─── 廠商統一聊天室：KOC 任務 / 顧客訊息 ─────────────────────
+// 顧客訊息：每位顧客一個對話，商品詢問和訂單訊息都在裡面（訊息上會標出是哪個商品、哪張訂單）
+// 網址參數：?tab=koc|inquiry，搭配 room 直接打開某個對話（站內通知點進來時使用）
 const CHAT_TABS = [
   { key: 'koc', label: 'KOC 任務' },
-  { key: 'order', label: '訂單訊息' },
-  { key: 'inquiry', label: '商品詢問' },
+  { key: 'inquiry', label: '顧客訊息' },
 ]
 
 const throwIfFailed = (response, fallback) => {
@@ -935,20 +931,18 @@ export default function Chat() {
   const vendorId = localStorage.getItem('vendor_id')
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = CHAT_TABS.some(t => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'koc'
-  const [unread, setUnread] = useState({ koc: 0, order: 0, inquiry: 0 })
+  const [unread, setUnread] = useState({ koc: 0, inquiry: 0 })
 
-  // 分頁上的未讀數：三種對話一起輪詢（間隔比對話本身長一點）
+  // 分頁上的未讀數：兩種對話一起輪詢（間隔比對話本身長一點）
   const refreshUnread = async () => {
     if (!vendorId) return
     const sum = (rows, key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0)
-    const [koc, order, inquiry] = await Promise.all([
+    const [koc, inquiry] = await Promise.all([
       getVendorChatrooms(vendorId).then(r => sum(r.data?.chatrooms || [], 'unread_count')).catch(() => null),
-      getVendorOrderChatList(vendorId).then(r => sum(r.data?.rooms || [], 'unread_count')).catch(() => null),
       getVendorInquiryList(vendorId).then(r => sum(r.data?.rooms || [], 'unread_count')).catch(() => null),
     ])
     setUnread(prev => ({
       koc: koc ?? prev.koc,
-      order: order ?? prev.order,
       inquiry: inquiry ?? prev.inquiry,
     }))
   }
@@ -984,51 +978,18 @@ export default function Chat() {
       <div className="flex-1 min-h-0">
         {tab === 'koc' && <KocChatPanel initialRoomId={searchParams.get('room')} />}
 
-        {tab === 'order' && (
-          <ConversationPanel
-            key="order"
-            initialKey={searchParams.get('order')}
-            searchPlaceholder="搜尋消費者或訂單編號…"
-            emptyListText="目前沒有訂單訊息"
-            emptyListHint="消費者在訂單裡傳訊息給您時，會出現在這裡"
-            fetchList={async () => {
-              const data = throwIfFailed(await getVendorOrderChatList(vendorId), '訂單訊息載入失敗')
-              return (data.rooms || []).map(r => ({
-                key: r.order_id,
-                title: r.buyer_name || '消費者',
-                subtitle: `訂單 ${String(r.order_id).slice(0, 8).toUpperCase()}`,
-                lastMessage: r.last_message,
-                lastMessageAt: r.last_message_at,
-                unreadCount: r.unread_count,
-              }))
-            }}
-            fetchMessages={async conv => {
-              const data = throwIfFailed(await getVendorOrderChatMessages(conv.key, vendorId), '訊息載入失敗')
-              return data.messages || []
-            }}
-            sendMessage={async (conv, content) => {
-              const data = throwIfFailed(
-                await sendVendorOrderChatMessage({ order_id: conv.key, vendor_id: vendorId, content }),
-                '訊息傳送失敗'
-              )
-              return data.message
-            }}
-          />
-        )}
-
         {tab === 'inquiry' && (
           <ConversationPanel
             key="inquiry"
             initialKey={searchParams.get('room')}
             searchPlaceholder="搜尋消費者或訊息…"
-            emptyListText="目前沒有商品詢問"
-            emptyListHint="消費者在您的商店頁或商品頁按「傳訊息給廠商」時，會出現在這裡"
+            emptyListText="目前沒有顧客訊息"
+            emptyListHint="顧客從您的商店頁、商品頁或訂單頁傳訊息給您時，會出現在這裡"
             fetchList={async () => {
-              const data = throwIfFailed(await getVendorInquiryList(vendorId), '商品詢問載入失敗')
+              const data = throwIfFailed(await getVendorInquiryList(vendorId), '顧客訊息載入失敗')
               return (data.rooms || []).map(r => ({
                 key: String(r.room_id),
                 title: r.user_name || '消費者',
-                subtitle: '商品詢問',
                 lastMessage: r.last_message,
                 lastMessageAt: r.last_message_at,
                 unreadCount: r.unread_count,

@@ -2525,8 +2525,10 @@ class AiCheckConsent(models.Model):
 
 class InquiryRoom(models.Model):
     """
-    消費者與廠商的「商品詢問」對話：不用先下單，從廠商頁或商品頁發起。
-    每位消費者跟每家廠商只有一個對話（訂單相關的溝通走 OrderChatRoom）。
+    消費者與廠商的對話：每位消費者跟每家廠商只有一個對話。
+    不用先下單，從廠商頁或商品頁就能發起；從訂單頁傳的訊息也存在這裡
+    （訊息上用 InquiryMessage.order 標記是在講哪張訂單），不再依訂單拆成不同聊天室。
+    舊的 OrderChatRoom / OrderMessage 資料已由 migration 0064 搬過來，資料表保留不再使用。
     """
     room_id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id', related_name='inquiry_rooms')
@@ -2552,6 +2554,10 @@ class InquiryMessage(models.Model):
     # 從商品頁發起詢問時，第一則訊息附上詢問的是哪個商品（從廠商頁發起則為空）
     product = models.ForeignKey(
         Product, on_delete=models.SET_NULL, db_column='product_id', null=True, blank=True, related_name='inquiry_messages'
+    )
+    # 從訂單頁傳的訊息標記是在講哪張訂單（從廠商頁、商品頁發起則為空）
+    order = models.ForeignKey(
+        Order, on_delete=models.SET_NULL, db_column='order_id', null=True, blank=True, related_name='inquiry_messages'
     )
     sender_role = models.CharField(max_length=20, choices=SENDER_ROLE_CHOICES, db_column='sender_role')
     sender_id = models.CharField(max_length=50, db_column='sender_id')
