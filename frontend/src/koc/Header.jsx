@@ -6,6 +6,20 @@ import HeaderPreview from './HeaderPreview';
 import HeaderMessages, { useMessageUnread } from './HeaderMessages';
 import LogoText from '../assets/ShareBuy.png';
 
+// 通知下拉最多列出幾則，更早的到完整的通知頁看
+const NOTIFICATION_DROPDOWN_LIMIT = 20;
+
+// 「剛剛」「5 分鐘前」「3 小時前」，超過一天顯示日期
+function formatNotifTime(isoString) {
+  const then = new Date(isoString);
+  const diffMinutes = Math.floor((Date.now() - then.getTime()) / 60000);
+  if (diffMinutes < 1) return '剛剛';
+  if (diffMinutes < 60) return `${diffMinutes} 分鐘前`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} 小時前`;
+  return then.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+}
+
 // 接收 cartCount
 export default function Header({
   activeTab,
@@ -16,6 +30,7 @@ export default function Header({
   onLogout,
   notifications = { unreadCount: 0, orderUnreadCount: 0, kocUnreadCount: 0 },
   onRefreshNotifications,
+  onOpenNotification,
 }) {
 
   const allNavItems = [
@@ -26,6 +41,10 @@ export default function Header({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // 通知下拉要列出的通知：訂單通知與接案通知合在一起，新的在前面
+  const allNotifications = [...(notifications.order || []), ...(notifications.koc || [])]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   // 右上角聊天圖示（電腦版）與手機選單「我的訊息」共用的未讀數
   const messageUnread = useMessageUnread(userRole);
 
@@ -162,40 +181,71 @@ export default function Header({
             )}
           </div>
 
-          {/* 通知下拉選單 */}
+          {/* 通知下拉：直接列出最近的通知（做法比照廠商後台），點一則就標為已讀並跳到對應頁面 */}
+          {/* 手機版鈴鐺不在最右邊，固定寬度往左展開會超出螢幕，改成貼齊螢幕左右兩側 */}
           {notifOpen && (
-            <div className="absolute right-0 top-full pt-2 w-56 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
-                <button
-                  onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'order'); }}
-                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
-                >
-                  <span className="flex items-center gap-3">
-                    <Package size={16} strokeWidth={2.5} />
-                    訂單通知
-                  </span>
-                  {notifications.orderUnreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
-                      {notifications.orderUnreadCount > 99 ? '99+' : notifications.orderUnreadCount}
-                    </span>
+            <div className="fixed left-3 right-3 top-14 pt-2 md:absolute md:left-auto md:right-0 md:top-full md:w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#E2DDD4] text-sm font-bold text-[#1A1A18]">
+                  通知
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {allNotifications.length === 0 ? (
+                    <div className="px-5 py-8 text-center text-xs font-bold text-[#8C8880]">
+                      目前沒有通知
+                    </div>
+                  ) : (
+                    allNotifications.slice(0, NOTIFICATION_DROPDOWN_LIMIT).map((n) => (
+                      <button
+                        key={n.notification_id}
+                        onClick={() => { setNotifOpen(false); onOpenNotification?.(n); }}
+                        className={`w-full text-left px-5 py-3 border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors flex items-start gap-2 ${
+                          !n.is_read ? 'bg-[#FDF0ED]/40' : ''
+                        }`}
+                      >
+                        {!n.is_read && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#C8522A] mt-1.5 shrink-0" />
+                        )}
+                        <div className={`min-w-0 ${n.is_read ? 'ml-3.5' : ''}`}>
+                          <div className="text-xs font-bold text-[#1A1A18]">{n.title}</div>
+                          {n.body && (
+                            <div className="text-[11px] text-[#8C8880] mt-0.5 line-clamp-2">{n.body}</div>
+                          )}
+                          <div className="text-[10px] text-[#B8B4AC] mt-1">{formatNotifTime(n.created_at)}</div>
+                        </div>
+                      </button>
+                    ))
                   )}
-                </button>
-                {userRole === 'koc' && (
+                </div>
+                {/* 完整的通知頁：訂單通知、接案通知（只有 KOC）分開兩頁 */}
+                <div className="flex border-t border-[#E2DDD4] text-xs font-bold text-[#8C8880]">
                   <button
-                    onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'koc'); }}
-                    className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                    onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'order'); }}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-3 hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors"
                   >
-                    <span className="flex items-center gap-3">
-                      <Briefcase size={16} strokeWidth={2.5} />
-                      接案通知
-                    </span>
-                    {notifications.kocUnreadCount > 0 && (
-                      <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
-                        {notifications.kocUnreadCount > 99 ? '99+' : notifications.kocUnreadCount}
+                    <Package size={14} strokeWidth={2.5} />
+                    全部訂單通知
+                    {notifications.orderUnreadCount > 0 && (
+                      <span className="bg-[#C8522A] text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
+                        {notifications.orderUnreadCount}
                       </span>
                     )}
                   </button>
-                )}
+                  {userRole === 'koc' && (
+                    <button
+                      onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'koc'); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 border-l border-[#E2DDD4] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors"
+                    >
+                      <Briefcase size={14} strokeWidth={2.5} />
+                      全部接案通知
+                      {notifications.kocUnreadCount > 0 && (
+                        <span className="bg-[#C8522A] text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
+                          {notifications.kocUnreadCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}

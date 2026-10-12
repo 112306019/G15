@@ -712,7 +712,8 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
       end_date: form.recruitEndDate,
-      recruit_limit: form.recruitLimit ? Number(form.recruitLimit) : null,
+      // 活動不再設定招募人數上限（欄位已從表單拿掉），新活動一律不限制
+      recruit_limit: null,
       status: campaignStatus
     }
 
@@ -776,7 +777,6 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         {step === 0 && <>
           <Input label="任務名稱 *" value={form.name} onChange={set('name')} placeholder="例：夏季防曬大作戰" />
           <Input label="總預算 (NT$) *" type="number" value={form.budget} onChange={set('budget')} placeholder="50000" />
-          <Input label="招募人數上限（留空代表不限制）" type="number" min="1" value={form.recruitLimit} onChange={set('recruitLimit')} placeholder="例：10" />
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input 
