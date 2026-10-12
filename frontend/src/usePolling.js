@@ -5,10 +5,10 @@ import { useEffect, useRef } from 'react';
 // - callback 永遠用最新的版本（存在 ref 裡），呼叫端不用處理閉包過期的問題
 // - 上一次還沒跑完就不重複呼叫，避免網路慢時請求越疊越多
 export const CHAT_POLL_INTERVAL_MS = 4000;
-// 對話清單（最後一則訊息、未讀數）不用跟打開的對話一樣即時：每 3 輪才更新一次（約 12 秒）
-export const CHAT_LIST_POLL_EVERY = 3;
-// 分頁、訂單列表上的未讀紅點：20 秒更新一次
-export const UNREAD_POLL_INTERVAL_MS = 20000;
+// 對話清單（最後一則訊息、未讀數）不用跟打開的對話一樣即時：每 2 輪才更新一次（約 8 秒）
+export const CHAT_LIST_POLL_EVERY = 2;
+// 分頁、訂單列表上的未讀紅點：10 秒更新一次
+export const UNREAD_POLL_INTERVAL_MS = 10000;
 
 export default function usePolling(callback, intervalMs, enabled = true) {
   const callbackRef = useRef(callback);

@@ -128,7 +128,29 @@ def _complete_order_with_finance(order):
     )
 
 
-def sync_auto_completed_orders():
+# sync_auto_completed_orders 的節流：自動完成是「送達滿 7 天」才觸發，晚一分鐘沒有差別，
+# 但它掛在「我的訂單」最前面，每次開頁面都要多等一次遠端資料庫查詢。
+# 同一個程序在這段時間內只實際執行一次。
+SYNC_AUTO_COMPLETE_MIN_INTERVAL_SECONDS = 60
+_last_sync_auto_complete_at = 0.0
+
+
+def sync_auto_completed_orders(force=False):
+    """節流版入口：實際邏輯在 _sync_auto_completed_orders。force=True 可強制立刻執行。"""
+    import sys
+    import time
+    global _last_sync_auto_complete_at
+
+    # 跑測試時不節流，測試才能立刻看到同步結果
+    throttled = not force and 'test' not in sys.argv[1:2]
+    now = time.monotonic()
+    if throttled and now - _last_sync_auto_complete_at < SYNC_AUTO_COMPLETE_MIN_INTERVAL_SECONDS:
+        return 0
+    _last_sync_auto_complete_at = now
+    return _sync_auto_completed_orders()
+
+
+def _sync_auto_completed_orders():
     """
     Lazy sync：把已送達超過 7 天、沒有未結案退貨申請的訂單自動完成。
 
@@ -476,23 +498,6 @@ def view_cart(request):
     if cart_id:
         carts = carts.filter(cart_id=cart_id)
 
-    result = []
-    for cart in carts:
-        items = CartItem.objects.filter(cart=cart)
-        for item in items:
-            result.append({
-                'Cart_id': cart.cart_id,
-                'User_id': cart.user.user_id,
-                'Created_at': cart.created_at,
-                'Updated_at': cart.updated_at,
-                'status': cart.status,
-                'Cart_item_id': item.cart_item_id,
-                'Product_id': item.product.product_id,
-                'quantity': item.quantity,
-                'Unit_price': item.unit_price,
-                'subtotal': item.subtotal,
-            })
-
     if not carts.exists():
         return Response({'Cart_id': None, 'items': []}, status=status.HTTP_200_OK)
 
@@ -522,6 +527,7 @@ def view_cart(request):
             'Cart_item_id': item.cart_item_id,
             'Product_id': item.product.product_id,
             'product_name': item.product.product_name,
+            'image_url': item.product.image_url,
             'Unit_price': item.unit_price,
             'Quantity': item.quantity,
             'subtotal': item.subtotal,
@@ -1494,7 +1500,8 @@ def view_order(request):
     guest_id = request.query_params.get('Guest_id', None)
     order_id = request.query_params.get('Order_id', None)
 
-    orders = Order.objects.all().prefetch_related('payment_transactions')
+    # 收件地址跟訂單一起 JOIN 回來，少一次查詢
+    orders = Order.objects.all().select_related('address').prefetch_related('payment_transactions')
 
     if user_id:
         orders = orders.filter(user_id=user_id)
@@ -1543,13 +1550,6 @@ def view_order(request):
         for shipment in ShipmentInfo.objects.filter(order_id__in=order_ids)
     }
 
-    # 收件地址同樣一次撈出所有訂單用到的份，不要逐筆訂單各查一次
-    address_ids = [order.address_id for order in order_list if order.address_id]
-    address_by_id = {
-        address.pk: address
-        for address in Address.objects.filter(pk__in=address_ids)
-    }
-
     result = []
 
     for order in order_list:
@@ -1564,7 +1564,7 @@ def view_order(request):
         recipient_data = None
 
         if order.address_id:
-            address = address_by_id.get(order.address_id)
+            address = order.address
 
             if address:
                 recipient_data = {

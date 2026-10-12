@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShoppingCart, User, Heart, MessageCircle, Headset, Settings, LogOut, Bell, Package, Briefcase, Menu, X, TrendingUp, Sparkles, FileText, Lock } from 'lucide-react';
 
 import LogoIcon from '../assets/logo.jpg';
+import HeaderPreview from './HeaderPreview';
 import LogoText from '../assets/ShareBuy.png';
 
 // 接收 cartCount
@@ -107,12 +108,15 @@ export default function Header({
       <div className="flex items-center gap-2 md:gap-5">
 
         <div className="hidden md:flex items-center gap-2 md:gap-5">
-          <div
-            className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
-            onClick={() => handleNavigate('favorites')}
-          >
-            <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-          </div>
+          {/* 滑鼠移上去會顯示收藏預覽，點圖示一樣進收藏頁 */}
+          <HeaderPreview kind="favorites" isGuest={userRole === 'guest'} onViewAll={() => handleNavigate('favorites')}>
+            <div
+              className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+              onClick={() => handleNavigate('favorites')}
+            >
+              <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            </div>
+          </HeaderPreview>
 
           {/* KOC：接案聊天；其他使用者：我的訊息（跟廠商的商品詢問、訂單對話） */}
           {userRole === 'koc' ? (
@@ -134,18 +138,20 @@ export default function Header({
           )}
         </div>
 
-        {/* 購物車：手機版與電腦版都保留 */}
-        <div
-          className="relative cursor-pointer hover:bg-[#F5F0E8] p-2 md:p-2.5 rounded-full transition-colors"
-          onClick={() => handleNavigate('cart')}
-        >
-          <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-          {cartCount > 0 && (
-            <span className="absolute top-0 right-0 md:top-1 md:right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-              {cartCount}
-            </span>
-          )}
-        </div>
+        {/* 購物車：手機版與電腦版都保留；電腦版滑鼠移上去會顯示購物車預覽 */}
+        <HeaderPreview kind="cart" isGuest={userRole === 'guest'} onViewAll={() => handleNavigate('cart')} refreshKey={cartCount}>
+          <div
+            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2 md:p-2.5 rounded-full transition-colors"
+            onClick={() => handleNavigate('cart')}
+          >
+            <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            {cartCount > 0 && (
+              <span className="absolute top-0 right-0 md:top-1 md:right-1 bg-[#C8522A] text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
+                {cartCount}
+              </span>
+            )}
+          </div>
+        </HeaderPreview>
 
         {/* 通知鈴鐺：手機版與電腦版都保留 */}
         <div

@@ -5,7 +5,7 @@ import { getAdminAuditLogs } from '../api/platform';
 import { getErrorMessage } from '../errorMessage';
 import { getAuditActionLabel } from './auditActionLabels';
 
-const RECENT_LIMIT = 3;
+const RECENT_LIMIT = 4;
 
 // 2026-10-03T10:00:00 → 「10 分鐘前」；超過 7 天顯示日期
 const fmtRelativeTime = value => {

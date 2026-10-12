@@ -59,6 +59,7 @@ export default function CartPage({
   pointsDiscountAmount = 7.66,
 }) {
   const [items, setItems] = useState([]);
+  const [brokenImages, setBrokenImages] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [coupon, setCoupon] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
@@ -104,6 +105,7 @@ export default function CartPage({
             cartItemId: item.Cart_item_id,
             productId: item.Product_id,
             name: item.product_name || `商品 ${item.Product_id}`,
+            imageUrl: item.image_url || "",
             price: parseFloat(item.Unit_price),
             qty: item.Quantity,
             wish: wishedProductIds.has(String(item.Product_id)),
@@ -421,8 +423,18 @@ export default function CartPage({
                               className="h-4 w-4 md:h-5 md:w-5 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer disabled:cursor-not-allowed"
                             />
                           </div>
-                          <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-xl md:rounded-2xl bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60 shadow-inner ${it.isDelisted ? "grayscale" : ""}`}>
-                            <ImgIcon />
+                          <div className={`h-14 w-14 md:h-16 md:w-16 shrink-0 overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br ${it.gradient} flex items-center justify-center text-white/60 shadow-inner ${it.isDelisted ? "grayscale" : ""}`}>
+                            {/* 沒有圖片或圖片載入失敗時，退回原本的色塊圖示 */}
+                            {it.imageUrl && !brokenImages.has(it.id) ? (
+                              <img
+                                src={it.imageUrl}
+                                alt={it.name}
+                                className="h-full w-full object-cover"
+                                onError={() => setBrokenImages((prev) => new Set(prev).add(it.id))}
+                              />
+                            ) : (
+                              <ImgIcon />
+                            )}
                           </div>
                           
                           <div className="flex flex-col gap-1 md:gap-0 min-w-0 flex-1">

@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config';
 import React, { useState, useEffect, useRef } from 'react'
-import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List, AlertCircle } from 'lucide-react'
+import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Upload, Package, X, Eye, FileText, ArrowRight, Instagram, CheckCircle2, Clock, Save, Trash2, Loader2, Timer, Edit3, Lock, LayoutGrid, List, AlertCircle, ChevronDown } from 'lucide-react'
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorBundles, createVendorBundle, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
@@ -1200,6 +1200,8 @@ export default function Campaigns() {
   const confirm = useConfirm()
   const [kocList, setKocList] = useState([])
   const [view, setView] = useState('grid')
+  // 已結案的活動獨立放在下方一區，可以收合
+  const [showClosed, setShowClosed] = useState(true)
   const [kocLoading, setKocLoading] = useState(false)
   const [kocError, setKocError] = useState('')
   const vendorId = localStorage.getItem('vendor_id')
@@ -1509,6 +1511,13 @@ export default function Campaigns() {
     )
   }
 
+  const openItems = items.filter(c => c.status !== 'closed')
+  const closedItems = items.filter(c => c.status === 'closed')
+  const campaignSections = [
+    { key: 'open', items: openItems, show: true },
+    { key: 'closed', items: closedItems, show: showClosed },
+  ].filter(section => section.items.length > 0)
+
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
       
@@ -1551,9 +1560,31 @@ export default function Campaigns() {
         </div>
       )}
 
-      {view === 'grid' && items.length > 0 && (
+      {items.length > 0 && openItems.length === 0 && (
+        <div className="py-10 text-center text-sm font-bold text-[#8C8880]">
+          目前沒有進行中的活動
+        </div>
+      )}
+
+      {/* 進行中（含草稿、排程中）在上，已結案的獨立一區放在下面 */}
+      {campaignSections.map(section => (
+      <React.Fragment key={section.key}>
+      {section.key === 'closed' && (
+        <button
+          type="button"
+          onClick={() => setShowClosed(prev => !prev)}
+          className="w-full flex items-center gap-3 pt-4 sm:pt-6 border-t border-[#E2DDD4] text-left group"
+        >
+          <span className="w-1.5 h-5 bg-[#E2DDD4] rounded-full inline-block"></span>
+          <span className="text-base sm:text-lg font-serif font-bold text-[#8C8880] group-hover:text-[#1A1A18] transition-colors">已結案</span>
+          <span className="text-xs font-bold text-[#8C8880] bg-[#F8F9FA] border border-[#E2DDD4] px-2.5 py-0.5 rounded-full">{section.items.length}</span>
+          <ChevronDown size={16} className={cn('ml-auto text-[#8C8880] transition-transform', showClosed && 'rotate-180')} />
+        </button>
+      )}
+
+      {view === 'grid' && section.show && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        {items.map(c => {
+        {section.items.map(c => {
           const pct = budgetUsedPct(c.spent, c.budget)
           
           let displayStatus = c.status;
@@ -1611,7 +1642,7 @@ export default function Campaigns() {
       </div>
       )}
 
-      {view === 'list' && items.length > 0 && (
+      {view === 'list' && section.show && (
         <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
           <div className="overflow-x-auto w-full">
             <table className="w-full text-left border-collapse min-w-[700px]">
@@ -1623,7 +1654,7 @@ export default function Campaigns() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2DDD4]">
-                {items.map(c => {
+                {section.items.map(c => {
                   const pct = budgetUsedPct(c.spent, c.budget)
 
                   let displayStatus = c.status
@@ -1688,6 +1719,8 @@ export default function Campaigns() {
           </div>
         </div>
       )}
+      </React.Fragment>
+      ))}
 
       <CampaignWizard
         open={wizardOpen}

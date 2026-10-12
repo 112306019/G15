@@ -272,6 +272,15 @@ export default function OrdersPage({
   useEffect(() => {
     const fetchOrders = async () => {
       try {
+        // 訂單與退貨狀態同時抓，不要等訂單回來才抓退貨狀態
+        const returnsPromise = fetch(
+          `${API_BASE_URL}/api/consumer/order/return/list?User_id=${userId}`
+        )
+          .then((returnRes) => returnRes.json())
+          .catch((returnErr) => {
+            console.error("退貨退款狀態載入失敗", returnErr);
+            return null;
+          });
         const res = await fetch(
           `${API_BASE_URL}/api/consumer/order/view?User_id=${userId}`
         );
@@ -279,20 +288,13 @@ export default function OrdersPage({
         if (Array.isArray(data)) {
           setOrders(data);
 
-          try {
-            const returnRes = await fetch(
-              `${API_BASE_URL}/api/consumer/order/return/list?User_id=${userId}`
-            );
-            const returnData = await returnRes.json();
-            if (Array.isArray(returnData)) {
-              const map = {};
-              returnData.forEach((item) => {
-                if (!map[item.order_id]) map[item.order_id] = item;
-              });
-              setReturnByOrder(map);
-            }
-          } catch (returnErr) {
-            console.error("退貨退款狀態載入失敗", returnErr);
+          const returnData = await returnsPromise;
+          if (Array.isArray(returnData)) {
+            const map = {};
+            returnData.forEach((item) => {
+              if (!map[item.order_id]) map[item.order_id] = item;
+            });
+            setReturnByOrder(map);
           }
         }
       } catch (err) {
