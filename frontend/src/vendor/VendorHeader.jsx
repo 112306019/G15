@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, MessageCircle, Headset, Bell, Settings, LogOut, Menu, X } from 'lucide-react';
+import { User, Headset, Bell, Settings, LogOut, Menu, X } from 'lucide-react';
 
 import { getVendorSupportUnreadCount } from '../api/vendor';
+import VendorHeaderMessages from './VendorHeaderMessages';
 import { API_BASE_URL } from '../config';
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
@@ -223,15 +224,8 @@ export default function VendorHeader() {
           )}
         </div>
 
-        {/* 聊天室按鈕 */}
-        <button
-          onClick={() => handleNavigate('/vendor/chat')}
-          className="relative p-2 md:p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
-          title="聊天室"
-        >
-          <MessageCircle size={20} className="md:w-[22px] md:h-[22px]" />
-          <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 w-2 h-2 bg-[#C8522A] rounded-full border border-white shadow-sm" />
-        </button>
+        {/* 聊天室：有未讀顯示數字，滑鼠移上去展開 KOC 任務／顧客訊息，分別進對應的分頁 */}
+        <VendorHeaderMessages onNavigate={handleNavigate} />
 
         {/* 客服按鈕 */}
         <button

@@ -24,7 +24,6 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from api.models import InquiryMessage, InquiryRoom, Order, OrderItem, Vendor
-from api.notifications import notify_new_chat_message
 from api.views.inquiry import _serialize_message, _user_display_name
 
 
@@ -146,16 +145,6 @@ def user_order_chat_send_message(request):
         room=room, order=order, sender_role="user", sender_id=str(user_id), content=content,
     )
 
-    # 通知廠商（同一個對話還有未讀通知時不重複發），點通知會打開統一聊天室裡這位顧客的對話
-    notify_new_chat_message(
-        vendor=vendor,
-        category="order",
-        title=f"{_user_display_name(order.user)} 傳來訂單訊息",
-        body=content,
-        reference_type="vendor_inquiry",
-        reference_id=room.room_id,
-    )
-
     return Response({
         "success": True,
         "err": "",
@@ -240,16 +229,6 @@ def vendor_order_chat_send_message(request):
 
     message = InquiryMessage.objects.create(
         room=room, order=order, sender_role="vendor", sender_id=str(vendor_id), content=content,
-    )
-
-    # 通知買家（同一張訂單還有未讀通知時不重複發），點通知會打開這張訂單的對話
-    notify_new_chat_message(
-        user=order.user,
-        category="order",
-        title="廠商回覆了您的訂單訊息",
-        body=content,
-        reference_type="order_chat",
-        reference_id=order.order_id,
     )
 
     return Response({
