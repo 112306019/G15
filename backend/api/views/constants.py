@@ -149,7 +149,29 @@ def record_koc_violation(koc):
     return suspended, suspended_until
 
 
-def sync_expired_promoting_missions():
+# sync_expired_promoting_missions 的節流：過期與否是依「日期」判斷，結果一天才會變一次，
+# 但它被很多 view 在最前面呼叫（聊天室每幾秒輪詢一次也會經過），每次都要對遠端資料庫
+# 做好幾次查詢與更新。同一個程序在這段時間內只實際執行一次，其餘直接跳過。
+SYNC_EXPIRED_MIN_INTERVAL_SECONDS = 60
+_last_sync_expired_at = 0.0
+
+
+def sync_expired_promoting_missions(force=False):
+    """節流版入口：實際邏輯在 _sync_expired_promoting_missions。force=True 可強制立刻執行。"""
+    import sys
+    import time
+    global _last_sync_expired_at
+
+    # 跑測試時不節流，測試才能立刻看到同步結果
+    throttled = not force and 'test' not in sys.argv[1:2]
+    now = time.monotonic()
+    if throttled and now - _last_sync_expired_at < SYNC_EXPIRED_MIN_INTERVAL_SECONDS:
+        return None
+    _last_sync_expired_at = now
+    return _sync_expired_promoting_missions()
+
+
+def _sync_expired_promoting_missions():
     """
     Lazy-write：
     1. 把 stage='promoting' 且所屬 Campaign.end_date 已過期的任務，

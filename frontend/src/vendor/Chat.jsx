@@ -32,7 +32,7 @@ import {
 import { Avatar } from './components/ui'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
-import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
+import usePolling, { CHAT_LIST_POLL_EVERY, CHAT_POLL_INTERVAL_MS, UNREAD_POLL_INTERVAL_MS } from '../usePolling'
 import { useSearchParams } from 'react-router-dom'
 import ConversationPanel from './ConversationPanel'
 
@@ -181,11 +181,16 @@ function KocChatPanel({ initialRoomId = null }) {
   messagesByRoomRef.current = messagesByRoom
 
   // 準即時同步：打開的聊天室定時抓新訊息，聊天室清單同步最後一則訊息與未讀數
+  const pollTickRef = useRef(0)
   usePolling(async () => {
+    pollTickRef.current += 1
     if (activeRoomId) {
       await loadMessages(activeRoomId, { silent: true })
     }
-    await loadChatrooms({ silent: true })
+    // 清單比較重，隔幾輪才抓一次
+    if (pollTickRef.current % CHAT_LIST_POLL_EVERY === 0) {
+      await loadChatrooms({ silent: true })
+    }
   }, CHAT_POLL_INTERVAL_MS, Boolean(vendorId))
 
   // silent：背景輪詢用，不顯示載入中與錯誤、不改變目前選中的聊天室
@@ -951,7 +956,7 @@ export default function Chat() {
     refreshUnread()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
-  usePolling(refreshUnread, CHAT_POLL_INTERVAL_MS * 2, Boolean(vendorId))
+  usePolling(refreshUnread, UNREAD_POLL_INTERVAL_MS, Boolean(vendorId))
 
   const switchTab = key => setSearchParams(key === 'koc' ? {} : { tab: key })
 

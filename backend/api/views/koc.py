@@ -2083,16 +2083,17 @@ def koc_chatroom_getlist(request):
         campaign = mission.application.campaign
         vendor = campaign.vendor
 
-        last_message = (
-            chatroom.messages
-            .order_by("-created_at")
-            .first()
+        # 用 prefetch 好的訊息在記憶體裡算，不要每個聊天室再各查兩次資料庫
+        room_messages = list(chatroom.messages.all())
+        last_message = max(
+            room_messages,
+            key=lambda m: (m.created_at, m.pk),
+            default=None,
         )
-
-        unread_count = chatroom.messages.filter(
-            sender_role="vendor",
-            is_read=False
-        ).count()
+        unread_count = sum(
+            1 for m in room_messages
+            if m.sender_role == "vendor" and not m.is_read
+        )
 
         chatroom_list.append({
             "room_id": chatroom.room_id,
