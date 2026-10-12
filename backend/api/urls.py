@@ -5,6 +5,10 @@ from .views.auth import (
     user_signup, user_login, get_login_history, change_password,
     forgot_password, reset_password, verify_email, resend_verification_code,
 )
+from .views.admin_auth import (
+    admin_forgot_password, admin_reset_password,
+    admin_security_info, admin_login_history, admin_change_password,
+)
 from .views.platform import (
     admin_login,
     admin_create_account,
@@ -186,6 +190,11 @@ urlpatterns = [
     path('user/resendVerification', resend_verification_code, name='user-resend-verification'),
     # platform
     path('platform/login', admin_login, name='platform-login'),
+    path('platform/password/forgot', admin_forgot_password, name='platform-password-forgot'),
+    path('platform/password/reset', admin_reset_password, name='platform-password-reset'),
+    path('platform/security/info', admin_security_info, name='platform-security-info'),
+    path('platform/security/loginHistory', admin_login_history, name='platform-security-login-history'),
+    path('platform/security/changePassword', admin_change_password, name='platform-security-change-password'),
     path('platform/consumers', get_consumers, name='platform-consumers'),
     path('platform/consumer/orders', get_consumer_orders, name='platform-consumer-orders'),
     path('platform/payments', get_payments, name='platform-payments'),
