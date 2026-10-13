@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ReceiptText,
   XCircle,
+  X
 } from 'lucide-react'
 
 import {
@@ -376,6 +377,35 @@ export default function AdminFinance() {
   const [kocPayouts, setKocPayouts] =
     useState([])
 
+  // --- 網頁內建彈窗狀態 (Modal & Toast) ---
+  const [toast, setToast] = useState({ show: false, msg: '', type: 'success' })
+  const [modal, setModal] = useState({
+    show: false,
+    type: 'confirm', // 'confirm' 或 'prompt'
+    title: '',
+    msg: '',
+    danger: false,
+    requireInput: false,
+    placeholder: '',
+    onConfirm: null,
+  })
+  const [promptValue, setPromptValue] = useState('')
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ show: true, msg, type })
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }
+
+  const openModal = (config) => {
+    setPromptValue('')
+    setModal({ ...config, show: true })
+  }
+
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, show: false }))
+  }
 
   // ======================================================
   // 載入
@@ -614,418 +644,296 @@ export default function AdminFinance() {
   // 貨款月結操作
   // ======================================================
 
-  const handleGenerateGoodsBatch =
-    async (vendor) => {
-      const vendorId =
-        vendor.Vendor_id
+  const handleGenerateGoodsBatch = (vendor) => {
+    const vendorId = vendor.Vendor_id
+    const vendorName = vendor.Vendor_name
+    const amount = vendor.Amount_due
 
-      const vendorName =
-        vendor.Vendor_name
+    openModal({
+      type: 'confirm',
+      title: '產生貨款月結單',
+      msg: `確定要產生 ${vendorName} 的 ${monthLabel(selectedMonth)}貨款月結單嗎？\n\n本期應撥：${money(amount)}`,
+      onConfirm: async () => {
+        closeModal()
+        const key = `goods-generate-${vendorId}`
+        setProcessingKey(key)
 
-      const amount =
-        vendor.Amount_due
-
-      if (
-        !window.confirm(
-          `確定要產生 ${vendorName} 的 ${monthLabel(
-            selectedMonth
-          )}貨款月結單嗎？\n\n本期應撥：${money(
-            amount
-          )}`
-        )
-      ) {
-        return
-      }
-
-      const key =
-        `goods-generate-${vendorId}`
-
-      setProcessingKey(key)
-
-      try {
-        const res =
-          await generateVendorPayoutBatch({
+        try {
+          const res = await generateVendorPayoutBatch({
             Admin_id: adminId,
             vendor_id: vendorId,
             month: selectedMonth,
           })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              '產生貨款月結單失敗'
-          )
+          if (res.data?.success === false) {
+            throw new Error(res.data.err || '產生貨款月結單失敗')
+          }
+
+          showToast(`${monthLabel(selectedMonth)}貨款月結單已產生。`, 'success')
+          await loadAll(false)
+        } catch (err) {
+          showToast(getErrorMessage(err, '產生貨款月結單失敗'), 'error')
+        } finally {
+          setProcessingKey('')
         }
-
-        alert(
-          `${monthLabel(
-            selectedMonth
-          )}貨款月結單已產生。`
-        )
-
-        await loadAll(false)
-      } catch (err) {
-        alert(
-          getErrorMessage(err, '產生貨款月結單失敗')
-        )
-      } finally {
-        setProcessingKey('')
       }
-    }
+    })
+  }
 
 
-  const handleGenerateAllGoods =
-    async () => {
-      if (
-        !window.confirm(
-          `確定要產生 ${monthLabel(
-            selectedMonth
-          )}所有符合資格廠商的貨款月結單嗎？`
-        )
-      ) {
-        return
-      }
+  const handleGenerateAllGoods = () => {
+    openModal({
+      type: 'confirm',
+      title: '批次產生月結單',
+      msg: `確定要產生 ${monthLabel(selectedMonth)} 所有符合資格廠商的貨款月結單嗎？`,
+      onConfirm: async () => {
+        closeModal()
+        const key = 'goods-generate-all'
+        setProcessingKey(key)
 
-      const key =
-        'goods-generate-all'
-
-      setProcessingKey(key)
-
-      try {
-        const res =
-          await generateVendorPayoutBatch({
+        try {
+          const res = await generateVendorPayoutBatch({
             Admin_id: adminId,
             month: selectedMonth,
           })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              '批次產生貨款月結單失敗'
-          )
-        }
+          if (res.data?.success === false) {
+            throw new Error(res.data.err || '批次產生貨款月結單失敗')
+          }
 
-        const batches =
-          res.data?.batches || []
-
-        const successCount =
-          batches.filter(
-            (item) =>
-              !item.skipped &&
-              !item.already_existed
+          const batches = res.data?.batches || []
+          const successCount = batches.filter(
+            (item) => !item.skipped && !item.already_existed
           ).length
 
-        alert(
-          `已產生 ${successCount} 張貨款月結單。`
-        )
-
-        await loadAll(false)
-      } catch (err) {
-        alert(
-          getErrorMessage(err, '批次產生貨款月結單失敗')
-        )
-      } finally {
-        setProcessingKey('')
+          showToast(`已產生 ${successCount} 張貨款月結單。`, 'success')
+          await loadAll(false)
+        } catch (err) {
+          showToast(getErrorMessage(err, '批次產生貨款月結單失敗'), 'error')
+        } finally {
+          setProcessingKey('')
+        }
       }
-    }
+    })
+  }
 
 
-  const handleConfirmGoodsBatch =
-    async (batch, newStatus) => {
-      const batchId =
-        batch.Batch_id
+  const handleConfirmGoodsBatch = (batch, newStatus) => {
+    const batchId = batch.Batch_id
+    const vendorName = batch.Vendor_name
+    const amount = batch.Amount_due
+    const success = newStatus === 'completed'
 
-      const vendorName =
-        batch.Vendor_name
-
-      const amount =
-        batch.Amount_due
-
-      const success =
-        newStatus === 'completed'
-
-      const message = success
-        ? `確定已將 ${money(
-            amount
-          )} 匯給 ${vendorName} 嗎？`
-        : `確定要將 ${vendorName} 的這期貨款標記為撥款失敗嗎？`
-
-      if (!window.confirm(message)) {
-        return
-      }
-
-      let reference = ''
-
-      if (success) {
-        reference =
-          window.prompt(
-            '可輸入銀行交易編號／匯款備註（可留空）',
-            ''
-          ) || ''
-      }
-
-      const key =
-        `goods-confirm-${batchId}`
-
+    const processConfirm = async (reference) => {
+      closeModal()
+      const key = `goods-confirm-${batchId}`
       setProcessingKey(key)
 
       try {
-        const res =
-          await confirmVendorPayoutBatch({
-            Admin_id: adminId,
-            batch_id: batchId,
-            status: newStatus,
-            transaction_reference:
-              reference,
-          })
+        const res = await confirmVendorPayoutBatch({
+          Admin_id: adminId,
+          batch_id: batchId,
+          status: newStatus,
+          transaction_reference: reference,
+        })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              '處理貨款月結失敗'
-          )
+        if (res.data?.success === false) {
+          throw new Error(res.data.err || '處理貨款月結失敗')
         }
 
+        showToast('處理貨款月結成功！', 'success')
         await loadAll(false)
       } catch (err) {
-        alert(
-          getErrorMessage(err, '處理貨款月結失敗')
-        )
+        showToast(getErrorMessage(err, '處理貨款月結失敗'), 'error')
       } finally {
         setProcessingKey('')
       }
     }
+
+    if (success) {
+      openModal({
+        type: 'prompt',
+        title: '確認匯款完成',
+        msg: `確定已將 ${money(amount)} 匯給 ${vendorName} 嗎？`,
+        placeholder: '可輸入銀行交易編號／匯款備註（可留空）',
+        requireInput: false,
+        onConfirm: processConfirm
+      })
+    } else {
+      openModal({
+        type: 'confirm',
+        title: '標記撥款失敗',
+        msg: `確定要將 ${vendorName} 的這期貨款標記為撥款失敗嗎？`,
+        danger: true,
+        onConfirm: () => processConfirm('')
+      })
+    }
+  }
 
 
   // ======================================================
   // 服務費月結操作
   // ======================================================
 
-  const handleGenerateSettlement =
-    async (vendor) => {
-      const vendorId =
-        vendor.Vendor_id
+  const handleGenerateSettlement = (vendor) => {
+    const vendorId = vendor.Vendor_id
+    const vendorName = vendor.Vendor_name
+    const serviceFee = vendor.Eligible_amount
 
-      const vendorName =
-        vendor.Vendor_name
+    openModal({
+      type: 'confirm',
+      title: '產生服務費月結單',
+      msg: `確定要產生 ${vendorName} 的 ${monthLabel(selectedMonth)}服務費月結單嗎？\n\n15% 服務費：${money(serviceFee)}`,
+      onConfirm: async () => {
+        closeModal()
+        const key = `settlement-generate-${vendorId}`
+        setProcessingKey(key)
 
-      const serviceFee =
-        vendor.Eligible_amount
-
-      if (
-        !window.confirm(
-          `確定要產生 ${vendorName} 的 ${monthLabel(
-            selectedMonth
-          )}服務費月結單嗎？\n\n15% 服務費：${money(
-            serviceFee
-          )}`
-        )
-      ) {
-        return
-      }
-
-      const key =
-        `settlement-generate-${vendorId}`
-
-      setProcessingKey(key)
-
-      try {
-        const res =
-          await generateVendorSettlement({
+        try {
+          const res = await generateVendorSettlement({
             Admin_id: adminId,
             vendor_id: vendorId,
             month: selectedMonth,
           })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              '產生服務費月結單失敗'
-          )
+          if (res.data?.success === false) {
+            throw new Error(res.data.err || '產生服務費月結單失敗')
+          }
+
+          showToast(`${monthLabel(selectedMonth)}服務費月結單已產生。`, 'success')
+          await loadAll(false)
+        } catch (err) {
+          showToast(getErrorMessage(err, '產生服務費月結單失敗'), 'error')
+        } finally {
+          setProcessingKey('')
         }
-
-        alert(
-          `${monthLabel(
-            selectedMonth
-          )}服務費月結單已產生。`
-        )
-
-        await loadAll(false)
-      } catch (err) {
-        alert(
-          getErrorMessage(err, '產生服務費月結單失敗')
-        )
-      } finally {
-        setProcessingKey('')
       }
-    }
+    })
+  }
 
 
-  const handleGenerateAllSettlements =
-    async () => {
-      if (
-        !window.confirm(
-          `確定要產生 ${monthLabel(
-            selectedMonth
-          )}所有符合資格廠商的服務費月結單嗎？`
-        )
-      ) {
-        return
-      }
+  const handleGenerateAllSettlements = () => {
+    openModal({
+      type: 'confirm',
+      title: '批次產生服務費月結單',
+      msg: `確定要產生 ${monthLabel(selectedMonth)} 所有符合資格廠商的服務費月結單嗎？`,
+      onConfirm: async () => {
+        closeModal()
+        const key = 'settlement-generate-all'
+        setProcessingKey(key)
 
-      const key =
-        'settlement-generate-all'
-
-      setProcessingKey(key)
-
-      try {
-        const res =
-          await generateVendorSettlement({
+        try {
+          const res = await generateVendorSettlement({
             Admin_id: adminId,
             month: selectedMonth,
           })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              '批次產生服務費月結單失敗'
-          )
+          if (res.data?.success === false) {
+            throw new Error(res.data.err || '批次產生服務費月結單失敗')
+          }
+
+          showToast(`已完成 ${monthLabel(selectedMonth)} 服務費月結。`, 'success')
+          await loadAll(false)
+        } catch (err) {
+          showToast(getErrorMessage(err, '批次產生服務費月結單失敗'), 'error')
+        } finally {
+          setProcessingKey('')
         }
-
-        alert(
-          `已完成 ${monthLabel(
-            selectedMonth
-          )}服務費月結。`
-        )
-
-        await loadAll(false)
-      } catch (err) {
-        alert(
-          getErrorMessage(err, '批次產生服務費月結單失敗')
-        )
-      } finally {
-        setProcessingKey('')
       }
-    }
+    })
+  }
 
 
-  const handleConfirmSettlementRemittance =
-    async (paymentId, action) => {
-      let actionReason = null
-
-      if (action === 'reject') {
-        actionReason = window.prompt(
-          '請輸入退回原因（會顯示給廠商看）：'
-        )
-        if (actionReason === null) return
-      } else if (
-        !window.confirm(
-          '確定已經收到這筆匯款，要確認並視情況開立服務費發票嗎？'
-        )
-      ) {
-        return
-      }
-
+  const handleConfirmSettlementRemittance = (paymentId, action) => {
+    const processConfirm = async (actionReason) => {
+      closeModal()
       const key = `settlement-remittance-${paymentId}`
       setProcessingKey(key)
 
       try {
-        const res =
-          await confirmVendorSettlementRemittance({
-            Admin_id: adminId,
-            payment_id: paymentId,
-            action,
-            Action_reason: actionReason,
-          })
+        const res = await confirmVendorSettlementRemittance({
+          Admin_id: adminId,
+          payment_id: paymentId,
+          action,
+          Action_reason: actionReason,
+        })
 
         if (res.data?.success === false) {
-          throw new Error(
-            res.data.err || '處理失敗'
-          )
+          throw new Error(res.data.err || '處理失敗')
         }
 
+        showToast('服務費確認處理成功！', 'success')
         await loadAll(false)
       } catch (err) {
-        alert(
-          getErrorMessage(err, '確認廠商服務費失敗')
-        )
+        showToast(getErrorMessage(err, '確認廠商服務費失敗'), 'error')
       } finally {
         setProcessingKey('')
       }
     }
+
+    if (action === 'reject') {
+      openModal({
+        type: 'prompt',
+        title: '退回服務費',
+        msg: '請輸入退回原因（會顯示給廠商看）：',
+        placeholder: '請輸入原因',
+        requireInput: true,
+        danger: true,
+        onConfirm: processConfirm
+      })
+    } else {
+      openModal({
+        type: 'confirm',
+        title: '確認收到服務費',
+        msg: '確定已經收到這筆匯款，要確認並視情況開立服務費發票嗎？',
+        onConfirm: () => processConfirm(null)
+      })
+    }
+  }
 
 
   // ======================================================
   // KOC
   // ======================================================
 
-  const handleConfirmKocPayout =
-    async (payout, newStatus) => {
-      const payoutId =
-        payout.Payout_id ??
-        payout.payout_id
+  const handleConfirmKocPayout = (payout, newStatus) => {
+    const payoutId = payout.Payout_id ?? payout.payout_id
+    const amount = payout.Amount ?? payout.amount ?? 0
+    const complete = newStatus === 'completed'
 
-      const amount =
-        payout.Amount ??
-        payout.amount ??
-        0
+    openModal({
+      type: 'confirm',
+      title: complete ? '確認完成匯款' : '標記撥款失敗',
+      msg: complete 
+        ? `確定已完成這筆 KOC 匯款 ${money(amount)} 嗎？` 
+        : '確定要把這筆 KOC 撥款標記為失敗嗎？',
+      danger: !complete,
+      onConfirm: async () => {
+        closeModal()
+        const key = `koc-${payoutId}`
+        setProcessingKey(key)
 
-      const complete =
-        newStatus === 'completed'
-
-      if (
-        !window.confirm(
-          complete
-            ? `確定已完成這筆 KOC 匯款 ${money(
-                amount
-              )} 嗎？`
-            : '確定要把這筆 KOC 撥款標記為失敗嗎？'
-        )
-      ) {
-        return
-      }
-
-      const key =
-        `koc-${payoutId}`
-
-      setProcessingKey(key)
-
-      try {
-        const res =
-          await confirmAdminKocPayout({
+        try {
+          const res = await confirmAdminKocPayout({
             Admin_id: adminId,
             payout_id: payoutId,
             status: newStatus,
           })
 
-        if (
-          res.data?.success === false
-        ) {
-          throw new Error(
-            res.data.err ||
-              'KOC 撥款處理失敗'
-          )
-        }
+          if (res.data?.success === false) {
+            throw new Error(res.data.err || 'KOC 撥款處理失敗')
+          }
 
-        await loadAll(false)
-      } catch (err) {
-        alert(
-          getErrorMessage(err, 'KOC 撥款處理失敗')
-        )
-      } finally {
-        setProcessingKey('')
+          showToast('KOC 撥款處理成功！', 'success')
+          await loadAll(false)
+        } catch (err) {
+          showToast(getErrorMessage(err, 'KOC 撥款處理失敗'), 'error')
+        } finally {
+          setProcessingKey('')
+        }
       }
-    }
+    })
+  }
 
 
   const handleExportKoc = async () => {
@@ -1060,10 +968,7 @@ export default function AdminFinance() {
 
       window.URL.revokeObjectURL(url)
     } catch (err) {
-      alert(
-        err.response?.data?.err ||
-          '匯出 KOC 撥款 CSV 失敗'
-      )
+      showToast(err.response?.data?.err || '匯出 KOC 撥款 CSV 失敗', 'error')
     }
   }
 
@@ -1116,7 +1021,7 @@ export default function AdminFinance() {
   // ======================================================
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 sm:space-y-8">
+    <div className="space-y-6 animate-in fade-in duration-300 sm:space-y-8 relative">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -2504,6 +2409,80 @@ export default function AdminFinance() {
             )}
           </div>
         </section>
+      )}
+
+      {/* ==================================================
+          網頁內建彈出視窗 (Modal) & 提示 (Toast)
+      ================================================== */}
+      
+      {/* 對話框 Modal (Confirm / Prompt) */}
+      {modal.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-[2rem] border border-[#E2DDD4] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className={`text-lg font-black ${modal.danger ? 'text-[#D93025]' : 'text-[#1A1A18]'}`}>
+                {modal.title}
+              </h3>
+              <button onClick={closeModal} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-6 space-y-2 text-sm leading-relaxed text-[#8C8880]">
+              {modal.msg.split('\n').map((line, idx) => (
+                <p key={idx}>{line}</p>
+              ))}
+            </div>
+
+            {modal.type === 'prompt' && (
+              <input
+                type="text"
+                autoFocus
+                placeholder={modal.placeholder}
+                value={promptValue}
+                onChange={(e) => setPromptValue(e.target.value)}
+                className="mb-6 w-full rounded-xl border border-[#E2DDD4] px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none placeholder:font-normal placeholder:text-[#B8B4AC] focus:border-[#C8522A] focus:ring-2 focus:ring-[#C8522A]/20"
+              />
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeModal}
+                className="flex-1 rounded-xl border border-[#E2DDD4] bg-white py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all"
+              >
+                取消
+              </button>
+              <button
+                disabled={modal.requireInput && !promptValue.trim()}
+                onClick={() => modal.onConfirm?.(modal.type === 'prompt' ? promptValue.trim() : undefined)}
+                className={`flex-1 rounded-xl py-3 text-sm font-bold text-white transition-all disabled:opacity-50 ${
+                  modal.danger 
+                    ? 'bg-[#D93025] hover:bg-[#B3261D]' 
+                    : 'bg-[#C8522A] hover:bg-[#B44825]'
+                }`}
+              >
+                確認
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 小提示框 Toast */}
+      {toast.show && (
+        <div className="fixed left-1/2 top-10 z-[200] -translate-x-1/2 animate-in fade-in slide-in-from-top-5 duration-300">
+          <div className={`flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold shadow-xl transition-all ${
+            toast.type === 'success' 
+              ? 'border-green-200 bg-white text-green-700' 
+              : 'border-red-200 bg-white text-red-700'
+          }`}>
+            {toast.type === 'success' 
+              ? <CheckCircle2 size={18} className="text-green-500" /> 
+              : <AlertCircle size={18} className="text-red-500" />
+            }
+            {toast.msg}
+          </div>
+        </div>
       )}
     </div>
   )
