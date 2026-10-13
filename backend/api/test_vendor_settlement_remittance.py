@@ -3,15 +3,14 @@
 是否正常運作。走 Django 測試資料庫（manage.py test），不會碰到正式雲端資料：
 
 1. calculate_order_commission + create_vendor_settlement_items：
-   訂單完成時正確建立 pending Earnings（進 KocWallet.balance_frozen）
-   與 VendorSettlementItem。
+   訂單完成時正確建立 withdrawable Earnings（直接進 KocWallet.balance_available，
+   不等廠商繳服務費）與 VendorSettlementItem。
 2. admin_generate_vendor_settlement：把到期的 item 彙總成一張 VendorSettlement。
 3. vendor_report_settlement_payment：廠商回報匯款，建立 pending 的
    VendorSettlementPayment。
 4. admin_confirm_vendor_settlement_remittance reject → 可重新回報 →
-   confirm（mock ECPay）：VendorSettlement 變成 paid、對應 Earnings 從
-   pending 轉 withdrawable、KocWallet 正確從 balance_frozen 轉
-   balance_available、VendorInvoice 被建立並呼叫 issue_b2b_invoice。
+   confirm（mock ECPay）：VendorSettlement 變成 paid、VendorInvoice 被建立並
+   呼叫 issue_b2b_invoice；KOC 分潤在這之前就已經是 withdrawable，不受影響。
 5. VendorReceivable／VendorReceivablePayout（貨款撥付那條線）完全沒被動到。
 """
 import json
@@ -109,11 +108,11 @@ class VendorSettlementRemittanceFlowTest(TestCase):
         commission_amount = commission_result['commission_amount']
 
         wallet = KocWallet.objects.get(koc=self.koc)
-        self.assertEqual(wallet.balance_frozen, commission_amount)
-        self.assertEqual(wallet.balance_available, 0)
+        self.assertEqual(wallet.balance_frozen, 0)
+        self.assertEqual(wallet.balance_available, commission_amount)
 
         earning = Earnings.objects.get(order=self.order, kocmission=self.mission)
-        self.assertEqual(earning.status, 'pending')
+        self.assertEqual(earning.status, 'withdrawable')
 
         settlement_result = create_vendor_settlement_items(self.order)
         self.assertEqual(len(settlement_result), 1)
@@ -195,7 +194,8 @@ class VendorSettlementRemittanceFlowTest(TestCase):
         settlement.refresh_from_db()
         self.assertEqual(settlement.status, 'paid')
 
-        # KOC 分潤應該從 pending 轉 withdrawable，錢包 frozen -> available
+        # KOC 分潤在訂單完成時就已經是 withdrawable，廠商繳清服務費不會再動到它，
+        # 錢包餘額應該維持不變。
         earning.refresh_from_db()
         self.assertEqual(earning.status, 'withdrawable')
         wallet.refresh_from_db()

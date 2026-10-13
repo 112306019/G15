@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, Ban, X, Copy, Check, MessageCircle, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit3, AlertCircle, Info, Calendar, Ticket, Loader2, X, Copy, Check, MessageCircle, Upload } from 'lucide-react';
 import api from '../api/index';
 import { buildPromoLink } from '../config';
 import { formatApiError } from '../errorMessage';
@@ -202,7 +202,6 @@ function AnalyticsSection({
 
 export default function TaskDetailPage({ task, onBack }) {
   const navigate = useNavigate();
-  const user_id = localStorage.getItem('userId');
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -212,8 +211,6 @@ export default function TaskDetailPage({ task, onBack }) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
 
   // 控制自訂提示框 (Toast)
   const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
@@ -390,39 +387,6 @@ export default function TaskDetailPage({ task, onBack }) {
     }
   };
 
-  const handleCancelMission = async () => {
-    setCancelling(true);
-    try {
-      const res = await api.post('/koc/mission/cancel', {
-        User_id: user_id,
-        kocmission_id: task.id,
-      });
-
-      if (!res.data.success) {
-        showToast(formatApiError(res.data.err) || '取消失敗，請稍後再試', 'error');
-        setCancelling(false);
-        return;
-      }
-
-      setShowCancelModal(false);
-
-      if (res.data.suspended) {
-        const untilText = res.data.suspended_until
-          ? new Date(res.data.suspended_until).toLocaleDateString('zh-TW')
-          : '';
-        showToast(`接案已取消。由於違規次數已達 ${res.data.max_violation_count} 次，您的接案權限已被凍結${untilText ? `至 \${untilText}` : ''}。`, 'error');
-      } else {
-        showToast('接案已取消。', 'success');
-      }
-
-      setTimeout(() => onBack(5), 2000); // 延遲跳轉
-    } catch (err) {
-      console.error('取消任務失敗', err);
-      showToast('取消失敗，請稍後再試', 'error');
-      setCancelling(false);
-    } 
-  };
-
   return (
     <div className="flex flex-col min-h-screen max-w-4xl mx-auto animate-in fade-in duration-300 gap-6 p-4 xl:p-0 pb-12 xl:pb-8 relative">
 
@@ -585,6 +549,19 @@ export default function TaskDetailPage({ task, onBack }) {
                 </p>
               </div>
 
+              <div className="mt-4 xl:mt-6 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl xl:rounded-2xl p-4 xl:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 xl:gap-4">
+                <p className="text-[#1A1A18] font-bold text-xs xl:text-sm flex items-start gap-1.5 xl:gap-2 leading-relaxed">
+                  <Info size={16} className="text-[#C8522A] shrink-0 mt-0.5" />
+                  請記得填寫勞報單才能領取報酬
+                </p>
+                <button
+                  onClick={() => navigate('/earnings')}
+                  className="shrink-0 bg-[#C8522A] text-white px-5 py-2.5 rounded-xl font-bold text-xs xl:text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md whitespace-nowrap w-full sm:w-auto"
+                >
+                  前往填寫勞報單
+                </button>
+              </div>
+
               <div ref={analyticsRef} className="scroll-mt-4" />
               <AnalyticsSection
                 usageCount={usageCount}
@@ -610,17 +587,6 @@ export default function TaskDetailPage({ task, onBack }) {
           )}
         </div>
 
-        {!isCompleted && (
-          <div className="mt-4 text-center">
-            <button
-              onClick={() => setShowCancelModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl border border-[#E2DDD4] bg-white text-sm font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A] transition-colors"
-            >
-              <Ban size={16} />
-              取消接案
-            </button>
-          </div>
-        )}
       </div>
 
       {showModal && (
@@ -694,51 +660,16 @@ export default function TaskDetailPage({ task, onBack }) {
         </div>
       )}
 
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center shrink-0">
-                <AlertCircle size={20} className="text-[#C8522A]" />
-              </div>
-              <h3 className="text-lg font-bold text-[#1A1A18]">確定要取消這個接案嗎？</h3>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-xs text-amber-800 leading-relaxed">
-              取消接案將會被記錄一次違規（任務放到過期沒完成也算違規），累計達 5 次，將凍結您的接案權限 3 個月（凍結期間無法申請新案件，進行中的任務不受影響）。
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                disabled={cancelling}
-                className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all disabled:opacity-50"
-              >
-                再想想
-              </button>
-              <button
-                onClick={handleCancelMission}
-                disabled={cancelling}
-                className="flex-1 bg-[#C8522A] text-white py-3.5 rounded-2xl font-bold text-sm hover:bg-[#1A1A18] transition-all active:scale-95 shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {cancelling && <Loader2 size={16} className="animate-spin" />}
-                確認取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 網頁內建小提示框 (Toast) */}
       {toast.show && (
         <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top-5 fade-in duration-300">
           <div className={`flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl border text-sm font-bold transition-all ${
-            toast.type === 'success' 
-              ? 'bg-white border-green-200 text-green-700' 
+            toast.type === 'success'
+              ? 'bg-white border-green-200 text-green-700'
               : 'bg-white border-red-200 text-red-700'
           }`}>
-            {toast.type === 'success' 
-              ? <CheckCircle2 size={18} className="text-green-500" /> 
+            {toast.type === 'success'
+              ? <CheckCircle2 size={18} className="text-green-500" />
               : <AlertCircle size={18} className="text-red-500" />
             }
             {toast.msg}

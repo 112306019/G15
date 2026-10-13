@@ -1,127 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api/index';
-import { Wallet, FileText, FileSignature, Loader2, X, AlertCircle, Receipt } from 'lucide-react';
-import { getErrorMessage } from '../errorMessage';
-
-function extractApiError(err, fallback) {
-  return getErrorMessage(err, fallback);
-}
-
-function MissingTaxFormModal({ amount, onClose, onGoFill }) {
-  return (
-    <div
-      className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-bold text-[#1A1A18]">請先完成勞務報酬單</h3>
-          <button onClick={onClose} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 text-xs text-amber-800 leading-relaxed flex gap-2">
-          <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          您有 <span className="font-bold">NT$ {(amount || 0).toLocaleString()}</span> 的分潤尚未申報勞務報酬單，請先完成提交才能申請提領。
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all"
-          >
-            稍後再說
-          </button>
-          <button
-            onClick={onGoFill}
-            className="flex-1 bg-[#1A1A18] text-[#F5F0E8] py-3.5 rounded-2xl font-bold text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
-          >
-            前往申報
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { Wallet, FileText, FileSignature, Receipt, CheckCircle2, Loader2 } from 'lucide-react';
+import TaxFormModal from './TaxFormModal';
 
 export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecords }) {
   const user_id = localStorage.getItem('userId'); // 每次渲染重新讀取，避免登入前就被凍結
   const [loading, setLoading] = useState(true);
-  const [withdrawable, setWithdrawable] = useState(0);
+  // 分潤依申報/審核進度分三類；確定撥款金額才是平台下次撥款作業會真的匯出去的錢。
+  const [confirmedAmount, setConfirmedAmount] = useState(0);
+  const [undeclaredAmount, setUndeclaredAmount] = useState(0);
+  const [unapprovedAmount, setUnapprovedAmount] = useState(0);
+  // 目前「進行中」的勞報單（審核中，或被退回還沒重新送出），跟 koc.py 的
+  // _get_open_form 邏輯一致：同時間最多一張，不是 approved 就算進行中。
+  const [openForm, setOpenForm] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [withdrawError, setWithdrawError] = useState('');
-  const [withdrawSuccess, setWithdrawSuccess] = useState('');
-  const [missingAmount, setMissingAmount] = useState(null);
-  const [minPayoutAmount, setMinPayoutAmount] = useState(16);
-  const [transferFee, setTransferFee] = useState(15);
+  const fetchRevenue = useCallback(async () => {
+    try {
+      const [totalRes, formsRes] = await Promise.all([
+        api.get('/koc/revenue/getTotal', { params: { user_id } }),
+        api.get('/koc/revenue/getRemunerationForms', { params: { user_id } }),
+      ]);
+      if (totalRes.data.success) {
+        setConfirmedAmount(totalRes.data.confirmed_amount || 0);
+        setUndeclaredAmount(totalRes.data.undeclared_amount || 0);
+        setUnapprovedAmount(totalRes.data.unapproved_amount || 0);
+      }
+      if (formsRes.data.success) {
+        const forms = formsRes.data.forms || [];
+        setOpenForm(forms.find((f) => f.status !== 'approved') || null);
+      }
+    } catch (err) {
+      console.error('載入收益失敗', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user_id]);
 
   useEffect(() => {
-    const fetchRevenue = async () => {
-      try {
-        const res = await api.get('/koc/revenue/getTotal', {
-          params: { user_id }
-        });
-        if (res.data.success) {
-          setWithdrawable(res.data.withdrawable_amount);
-          if (res.data.min_payout_amount != null) setMinPayoutAmount(res.data.min_payout_amount);
-          if (res.data.cross_bank_transfer_fee != null) setTransferFee(res.data.cross_bank_transfer_fee);
-        }
-      } catch (err) {
-        console.error('載入收益失敗', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchRevenue();
-  }, []);
+  }, [fetchRevenue]);
 
-  const canWithdraw = withdrawable >= minPayoutAmount;
-
-  async function handleWithdrawClick() {
-    if (!user_id || !canWithdraw || withdrawing) return;
-
-    setWithdrawing(true);
-    setWithdrawError('');
-    setWithdrawSuccess('');
-
-    try {
-      const checkRes = await api.get('/koc/revenue/getMissingTaxForms', {
-        params: { user_id }
-      });
-
-      if (checkRes.data.success && checkRes.data.undeclared_amount > 0) {
-        setMissingAmount(checkRes.data.undeclared_amount);
-        return;
-      }
-
-      const payoutRes = await api.post('/koc/revenue/requestPayout', { user_id });
-
-      if (!payoutRes.data.success) {
-        // 後端還是會做同樣的勞報單檢查（防止繞過前端直接打 API），
-        // 如果剛好卡在這裡，一樣把未申報金額顯示出來
-        if (payoutRes.data.undeclared_amount > 0) {
-          setMissingAmount(payoutRes.data.undeclared_amount);
-          return;
-        }
-        throw new Error(payoutRes.data.err || '提領失敗');
-      }
-
-      setWithdrawable(payoutRes.data.remaining_balance ?? 0);
-      const netAmount = payoutRes.data.amount || 0;
-      setWithdrawSuccess(
-        `已送出提領申請，申請金額 NT$${netAmount.toLocaleString()}，平台將盡快撥款至您的銀行帳戶。`
-      );
-    } catch (err) {
-      setWithdrawError(extractApiError(err, '提領失敗，請稍後再試'));
-    } finally {
-      setWithdrawing(false);
-    }
-  }
+  const isReviewing = openForm?.status === 'pending_review';
+  const isResubmit = openForm?.status === 'rejected';
+  const canDeclare = !isReviewing && (isResubmit || undeclaredAmount > 0);
+  const modalAmount = isResubmit ? openForm.amount : undeclaredAmount;
 
   return (
     <div className="animate-in fade-in duration-500 font-sans p-4 md:p-0 max-w-5xl mx-auto pb-12">
@@ -138,7 +61,6 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
       ) : (
         <div className="space-y-6 md:space-y-8 max-w-4xl">
 
-          {/* 🌟 明亮版：可提領區塊 */}
           <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 sm:p-10 md:p-12 relative overflow-hidden shadow-[0_12px_40px_rgba(26,26,24,0.06)] border border-[#E2DDD4]">
 
             {/* 淡淡的點綴光暈，讓白底不無聊 */}
@@ -149,43 +71,53 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F5F0E8] rounded-xl md:rounded-2xl flex items-center justify-center shadow-sm">
                   <Wallet size={20} className="text-[#C8522A]" />
                 </div>
-                <span className="text-xs md:text-sm font-bold tracking-widest text-[#8C8880]">可提領餘額</span>
+                <span className="text-xs md:text-sm font-bold tracking-widest text-[#8C8880]">我的分潤</span>
               </div>
 
-              <div className="mb-8 md:mb-10">
-                <span className="text-lg md:text-2xl font-bold text-[#8C8880] mr-2">NT$</span>
-                <span className="text-4xl sm:text-5xl md:text-6xl font-black text-[#1A1A18] tracking-tight">
-                  {withdrawable.toLocaleString()}
-                </span>
+              {/* 分潤依申報/審核進度分三類，避免 KOC 以為所有分潤都已經確定撥款 */}
+              <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+                <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl px-2 py-3 md:px-4 md:py-5 text-center">
+                  <p className="text-[9px] md:text-xs font-bold text-[#8C8880] mb-1 md:mb-2">未申報金額</p>
+                  <p className="text-sm md:text-xl font-black text-[#1A1A18]">NT$ {undeclaredAmount.toLocaleString()}</p>
+                  <p className="text-[8px] md:text-[10px] text-[#8C8880] leading-relaxed mt-1 md:mt-2">尚未填寫勞報單</p>
+                </div>
+                <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl md:rounded-2xl px-2 py-3 md:px-4 md:py-5 text-center">
+                  <p className="text-[9px] md:text-xs font-bold text-[#8C8880] mb-1 md:mb-2">已申報待確認</p>
+                  <p className="text-sm md:text-xl font-black text-[#1A1A18]">NT$ {unapprovedAmount.toLocaleString()}</p>
+                  <p className="text-[8px] md:text-[10px] text-[#8C8880] leading-relaxed mt-1 md:mt-2">已填寫，平台尚未審核通過</p>
+                </div>
+                <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl md:rounded-2xl px-2 py-3 md:px-4 md:py-5 text-center">
+                  <p className="text-[9px] md:text-xs font-bold text-[#C8522A] mb-1 md:mb-2">確定撥款金額</p>
+                  <p className="text-sm md:text-xl font-black text-[#C8522A]">NT$ {confirmedAmount.toLocaleString()}</p>
+                  <p className="text-[8px] md:text-[10px] text-[#C8522A] leading-relaxed mt-1 md:mt-2">審核通過，將於下次撥款作業撥入您的銀行帳戶</p>
+                </div>
               </div>
 
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl md:rounded-2xl px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
-                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              {isReviewing ? (
+                <div className="w-full mb-2 flex items-center justify-center gap-2 bg-[#F5F0E8] text-[#8C8880] px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest">
+                  <Loader2 size={16} className="animate-spin" />
+                  有一張勞報單審核中，請等候結果
+                </div>
+              ) : (
+                <button
+                  onClick={() => canDeclare && setModalOpen(true)}
+                  disabled={!canDeclare}
+                  className="w-full mb-2 flex items-center justify-center gap-2 bg-[#C8522A] text-white px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#1A1A18] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                >
+                  <FileSignature size={16} className="md:w-[18px] md:h-[18px]" />
+                  {isResubmit ? '重新提交勞務報酬單' : canDeclare ? '填寫勞務報酬單' : '目前沒有可申報的分潤'}
+                </button>
+              )}
+              {isResubmit && openForm.reject_reason && (
+                <p className="text-xs font-bold text-[#C8522A] mb-4">上一張勞報單被退回：{openForm.reject_reason}</p>
+              )}
+
+              <div className="flex items-start gap-2 bg-[#F5F0E8] rounded-xl md:rounded-2xl px-4 py-3 mb-6 mt-4 text-xs text-[#1A1A18] leading-relaxed">
+                <CheckCircle2 size={15} className="shrink-0 mt-0.5 text-[#C8522A]" />
                 <span>
-                  注意事項：跨行提領需支付 NT$ {transferFee} 手續費，提領金額需達 NT$ {minPayoutAmount} 以上才能申請。
+                  請先完成勞務報酬單申報，審核通過後將於平台下次撥款作業（每兩週一次）撥入您指定的帳戶。
                 </span>
               </div>
-
-              <button
-                onClick={handleWithdrawClick}
-                disabled={!canWithdraw || withdrawing}
-                className="w-full mb-4 flex items-center justify-center gap-2 bg-[#C8522A] text-white px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-bold tracking-widest hover:bg-[#1A1A18] hover:-translate-y-1 transition-all active:translate-y-0 shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-              >
-                {withdrawing ? <Loader2 size={18} className="animate-spin" /> : <Wallet size={18} />}
-                {withdrawing ? '處理中...' : '提領至銀行帳戶'}
-              </button>
-
-              {!canWithdraw && withdrawable > 0 && (
-                <p className="text-xs font-bold text-[#8C8880] mb-4 text-center">
-                  可提領餘額未達 NT$ {minPayoutAmount}，暫時無法申請提領
-                </p>
-              )}
-              {withdrawError && (
-                <p className="text-xs font-bold text-[#C8522A] mb-4 text-center">{withdrawError}</p>
-              )}
-              {withdrawSuccess && (
-                <p className="text-xs font-bold text-green-700 mb-4 text-center">{withdrawSuccess}</p>
-              )}
 
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                 <button
@@ -215,20 +147,20 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
 
           {/* 輔助說明小提示 */}
           <p className="text-[10px] md:text-xs font-bold text-[#8C8880] text-left md:text-center mt-6 md:mt-8 px-2">
-            ※ 使用您優惠碼的訂單完成後，分潤會立即結算至可提領餘額，可自行決定何時提領。
+            ※ 使用您優惠碼的訂單完成後，分潤會立即入帳；請記得申報勞務報酬單，審核通過後會於下次撥款作業自動撥款，不需要自行申請提領。
           </p>
 
         </div>
       )}
 
-      {missingAmount != null && (
-        <MissingTaxFormModal
-          amount={missingAmount}
-          onClose={() => setMissingAmount(null)}
-          onGoFill={() => {
-            setMissingAmount(null);
-            onTaxFormRecords?.();
-          }}
+      {modalOpen && (
+        <TaxFormModal
+          amount={modalAmount}
+          isResubmit={isResubmit}
+          rejectReason={openForm?.reject_reason}
+          userId={user_id}
+          onClose={() => setModalOpen(false)}
+          onSubmitted={() => fetchRevenue()}
         />
       )}
     </div>

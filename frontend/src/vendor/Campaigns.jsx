@@ -2138,7 +2138,7 @@ export default function Campaigns() {
                       {h}
                       {h === '歷史違規' && (
                         <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 bg-[#1A1A18] text-white text-[11px] font-medium normal-case whitespace-normal tracking-normal leading-relaxed rounded-xl px-3 py-2 shadow-lg z-20">
-                          包含此 KOC 自行取消任務、以及任務逾期未完成（沒交文案或作品連結）的累計次數
+                          任務逾期未完成（沒交文案或作品連結）的累計次數
                         </div>
                       )}
                     </th>
