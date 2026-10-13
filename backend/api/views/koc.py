@@ -26,7 +26,7 @@ from ..serializers import (
     SaveDraftSerializer,  
     KOCApplySerializer,
 )
-from api.koc_commission import format_commission_rate, get_mission_tier_progress
+from api.koc_commission import campaign_commission_summary, format_commission_rate, get_mission_tier_progress
 from api.error_messages import internal_error_message, serializer_error_message
 from api.models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, Application, KOC, KOCMissionNew, Submissions, CouponNew, KocLinkClickDaily, KocWallet, Earnings, ChatRoom, Message, Payouts, RemunerationForm
 from .constants import (
@@ -250,6 +250,8 @@ def get_available_campaign_list(request):
                 "recruit_limit": campaign.recruit_limit,
                 "approved_count": approved_count,
                 "is_full": is_full,
+                # 分潤條件：KOC 申請前就看得到這個活動是固定還是階層式、各層幾 %
+                "commission": campaign_commission_summary(campaign),
             })
 
         return Response({
@@ -1867,20 +1869,7 @@ def send_chat_message(request):
         content=content,
     )
 
-    # KOC 傳訊息時通知廠商（同一個任務還有未讀通知時不重複發）；
-    # 廠商傳給 KOC 的通知在 vendor.vendor_chatroom_send_message
-    if sender_role == 'koc':
-        from api.notifications import notify_new_chat_message
-        campaign = room.kocmission.application.campaign if room.kocmission and room.kocmission.application else None
-        if campaign and campaign.vendor_id:
-            notify_new_chat_message(
-                vendor=campaign.vendor,
-                category='koc',
-                title=f'KOC 在「{campaign.name}」傳來新訊息',
-                body=content,
-                reference_type='vendor_koc_chat',
-                reference_id=room.room_id,
-            )
+    # 傳訊息當下不發通知；對方超過 24 小時沒讀才補通知（見 notifications.sync_stale_chat_notifications）
 
     return Response({
         "success": True,
@@ -1929,16 +1918,17 @@ def koc_chatroom_getlist(request):
         campaign = mission.application.campaign
         vendor = campaign.vendor
 
-        last_message = (
-            chatroom.messages
-            .order_by("-created_at")
-            .first()
+        # 用 prefetch 好的訊息在記憶體裡算，不要每個聊天室再各查兩次資料庫
+        room_messages = list(chatroom.messages.all())
+        last_message = max(
+            room_messages,
+            key=lambda m: (m.created_at, m.pk),
+            default=None,
         )
-
-        unread_count = chatroom.messages.filter(
-            sender_role="vendor",
-            is_read=False
-        ).count()
+        unread_count = sum(
+            1 for m in room_messages
+            if m.sender_role == "vendor" and not m.is_read
+        )
 
         chatroom_list.append({
             "room_id": chatroom.room_id,

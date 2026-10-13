@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, MessageCircle, Headset, Bell, Settings, LogOut, Menu, X } from 'lucide-react';
+import { User, Headset, Bell, Settings, LogOut, Menu, X } from 'lucide-react';
 
 import { getVendorSupportUnreadCount } from '../api/vendor';
+import VendorHeaderMessages from './VendorHeaderMessages';
 import { API_BASE_URL } from '../config';
 import LogoIcon from '../assets/logo.jpg';
 import LogoText from '../assets/ShareBuy.png';
@@ -17,7 +18,8 @@ const NOTIFICATION_PATH_MAP = {
 
 // 聊天訊息通知：直接打開統一聊天室裡對應的對話
 const CHAT_NOTIFICATION_PATH = {
-  vendor_order_chat: id => `/vendor/chat?tab=order&order=${encodeURIComponent(id)}`,
+  // 舊的訂單訊息通知：訂單訊息已併入「顧客訊息」，直接開那個分頁
+  vendor_order_chat: () => '/vendor/chat?tab=inquiry',
   vendor_inquiry: id => `/vendor/chat?tab=inquiry&room=${encodeURIComponent(id)}`,
   vendor_koc_chat: id => `/vendor/chat?room=${encodeURIComponent(id)}`,
 };
@@ -176,14 +178,15 @@ export default function VendorHeader() {
           >
             <Bell size={20} className="md:w-[22px] md:h-[22px]" />
             {notifData.unread_count > 0 && (
-              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] w-3.5 h-3.5 md:w-4 md:h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-                {notifData.unread_count > 9 ? '9+' : notifData.unread_count}
+              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+                {notifData.unread_count > 99 ? '99+' : notifData.unread_count}
               </span>
             )}
           </button>
 
+          {/* 手機版：鈴鐺不在最右邊，用固定寬度往左展開會超出螢幕，改成貼齊螢幕左右兩側；電腦版維持原樣 */}
           {notifOpen && (
-            <div className="absolute right-0 top-full pt-2 w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="fixed left-3 right-3 top-14 pt-2 md:absolute md:left-auto md:right-0 md:top-full md:w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
                 <div className="px-5 py-3 border-b border-[#E2DDD4] text-sm font-bold text-[#1A1A18]">
                   通知
@@ -221,15 +224,8 @@ export default function VendorHeader() {
           )}
         </div>
 
-        {/* 聊天室按鈕 */}
-        <button
-          onClick={() => handleNavigate('/vendor/chat')}
-          className="relative p-2 md:p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
-          title="聊天室"
-        >
-          <MessageCircle size={20} className="md:w-[22px] md:h-[22px]" />
-          <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 w-2 h-2 bg-[#C8522A] rounded-full border border-white shadow-sm" />
-        </button>
+        {/* 聊天室：有未讀顯示數字，滑鼠移上去展開 KOC 任務／顧客訊息，分別進對應的分頁 */}
+        <VendorHeaderMessages onNavigate={handleNavigate} />
 
         {/* 客服按鈕 */}
         <button
@@ -239,8 +235,8 @@ export default function VendorHeader() {
         >
           <Headset size={20} className="md:w-[22px] md:h-[22px]" />
           {supportUnreadCount > 0 && (
-            <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] w-3.5 h-3.5 md:w-4 md:h-4 flex items-center justify-center rounded-full border-2 border-white font-bold">
-              {supportUnreadCount}
+            <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+              {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
             </span>
           )}
         </button>

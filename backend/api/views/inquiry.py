@@ -1,6 +1,7 @@
 """
-消費者與廠商的「商品詢問」聊天：不用先下單，從廠商頁或商品頁發起。
-每位消費者跟每家廠商只有一個對話（InquiryRoom，user + vendor 唯一）。
+消費者與廠商的聊天：每位消費者跟每家廠商只有一個對話（InquiryRoom，user + vendor 唯一）。
+不用先下單，從廠商頁或商品頁就能發起；從訂單頁傳的訊息（見 order_chat.py）也存在同一個對話裡，
+用訊息上的 order 標記是在講哪張訂單。
 
 消費者端
 GET  /consumer/inquiry/getMessages?user_id=&vendor_id=   開啟（沒有就建立）對話並讀訊息，廠商訊息標為已讀
@@ -12,7 +13,8 @@ GET  /vendor/inquiry/list?vendor_id=                      廠商所有詢問對�
 GET  /vendor/inquiry/getMessages?vendor_id=&room_id=      讀訊息，消費者訊息標為已讀
 POST /vendor/inquiry/sendMessage {vendor_id, room_id, content}
 
-雙方傳訊息都會發站內通知給對方（同一個對話有未讀通知時不重複發）。
+傳訊息當下不發站內通知；對方超過 24 小時沒讀才會補一則通知（見 api/notifications.py 的
+sync_stale_chat_notifications）。聊天圖示上的未讀數字則是即時的。
 """
 
 from django.db.models import Count, Max, Q
@@ -22,7 +24,6 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from api.models import InquiryMessage, InquiryRoom, Product, User, Vendor
-from api.notifications import notify_new_chat_message
 
 MAX_MESSAGE_LENGTH = 2000
 
@@ -44,6 +45,8 @@ def _serialize_message(message):
             "image_url": product.image_url,
             "price": product.discounted_price or product.price,
         } if product else None,
+        # 從訂單頁傳的訊息會標上訂單，前端在訊息上方顯示訂單標籤
+        "order": {"order_id": str(message.order_id)} if message.order_id else None,
     }
 
 
@@ -72,6 +75,7 @@ def _room_summaries(rooms, unread_role):
     """對話列表共用：最後一則訊息、時間、對方未讀數。只回傳有訊息的對話。"""
     rooms = (
         rooms
+        .prefetch_related("messages")
         .annotate(
             message_count=Count("messages", distinct=True),
             last_message_at=Max("messages__created_at"),
@@ -86,7 +90,7 @@ def _room_summaries(rooms, unread_role):
     )
     result = []
     for room in rooms:
-        last = room.messages.order_by("-created_at", "-message_id").first()
+        last = max(room.messages.all(), key=lambda m: (m.created_at, m.pk), default=None)
         result.append({
             "room_id": room.room_id,
             "user_id": room.user_id,
@@ -150,14 +154,6 @@ def consumer_inquiry_send_message(request):
     room, _ = InquiryRoom.objects.get_or_create(user=user, vendor=vendor)
     message = InquiryMessage.objects.create(
         room=room, sender_role="user", sender_id=str(user.pk), content=content, product=product,
-    )
-    notify_new_chat_message(
-        vendor=vendor,
-        category="order",
-        title=f"{_user_display_name(user)} 傳來商品詢問",
-        body=content,
-        reference_type="vendor_inquiry",
-        reference_id=room.room_id,
     )
     return Response({
         "success": True,
@@ -235,14 +231,6 @@ def vendor_inquiry_send_message(request):
 
     message = InquiryMessage.objects.create(
         room=room, sender_role="vendor", sender_id=str(room.vendor_id), content=content,
-    )
-    notify_new_chat_message(
-        user=room.user,
-        category="order",
-        title=f"{room.vendor.company_name} 回覆了您的詢問",
-        body=content,
-        reference_type="inquiry",
-        reference_id=room.vendor_id,
     )
     return Response({
         "success": True,

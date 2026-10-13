@@ -21,8 +21,17 @@ class VendorRegisterSerializer(serializers.ModelSerializer):
 
 
 class VendorLoginSerializer(serializers.Serializer):
-    vendor_id = serializers.CharField()
+    # 登入改用 Email。vendor_id 保留給還沒改的舊呼叫端（兩者擇一即可）
+    email = serializers.CharField(required=False, allow_blank=True)
+    vendor_id = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField()
+
+    def validate(self, attrs):
+        attrs["email"] = (attrs.get("email") or "").strip()
+        attrs["vendor_id"] = (attrs.get("vendor_id") or "").strip()
+        if not attrs["email"] and not attrs["vendor_id"]:
+            raise serializers.ValidationError({"email": "請輸入 Email"})
+        return attrs
 
 
 class VendorProfileUpdateSerializer(serializers.ModelSerializer):
@@ -315,15 +324,28 @@ class VendorCampaignCreateSerializer(serializers.Serializer):
         min_value=0
     )
 
-    # KOC 分潤比例改為平台統一固定 3%，廠商不能再自訂這個比例；
-    # 欄位保留 required=False 是為了向下相容舊的前端呼叫，
-    # 實際上不管前端傳什麼值，view 層都會強制覆蓋成 KOC_FIXED_COMMISSION_RATE。
+    # 固定分潤時的分潤率（%）；階層式時不使用。
     koc_commission_rate = serializers.DecimalField(
         max_digits=5,
         decimal_places=2,
         min_value=0,
         max_value=100,
         required=False
+    )
+
+    # 分潤方式由廠商決定：fixed（固定，分潤率用 koc_commission_rate）或
+    # progressive（階層式累進，級距用 commission_tiers：[[到第幾件, 分潤率], ...]）。
+    # 細部規則（上下限、層數、遞增）在 view 用 koc_commission.normalize_commission_setting 檢查，
+    # 才能回傳完整的中文錯誤訊息。沒帶 commission_mode 視為舊的呼叫方式。
+    commission_mode = serializers.ChoiceField(
+        choices=["fixed", "progressive"],
+        required=False,
+        allow_null=True
+    )
+
+    commission_tiers = serializers.JSONField(
+        required=False,
+        allow_null=True
     )
 
     promo_days = serializers.IntegerField(
@@ -467,11 +489,28 @@ class VendorCampaignUpdateSerializer(serializers.Serializer):
         min_value=0
     )
 
+    # 固定分潤時的分潤率（%）；階層式時不使用。
     koc_commission_rate = serializers.DecimalField(
         max_digits=5,
         decimal_places=2,
         min_value=0,
-        max_value=100
+        max_value=100,
+        required=False
+    )
+
+    # 分潤方式由廠商決定：fixed（固定，分潤率用 koc_commission_rate）或
+    # progressive（階層式累進，級距用 commission_tiers：[[到第幾件, 分潤率], ...]）。
+    # 細部規則（上下限、層數、遞增）在 view 用 koc_commission.normalize_commission_setting 檢查，
+    # 才能回傳完整的中文錯誤訊息。沒帶 commission_mode 視為舊的呼叫方式。
+    commission_mode = serializers.ChoiceField(
+        choices=["fixed", "progressive"],
+        required=False,
+        allow_null=True
+    )
+
+    commission_tiers = serializers.JSONField(
+        required=False,
+        allow_null=True
     )
 
     promo_days = serializers.IntegerField(

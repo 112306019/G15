@@ -27,13 +27,14 @@ import { useConfirm } from './components/ui/ConfirmDialog'
 import { formatCurrency, cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
 
-const couponStatusFilters = ['all', 'active', 'inactive', 'disabled']
+// 「已到期」分頁包含活動結束自動到期（expired）與廠商手動停用（disabled）的優惠碼，
+// 兩種都是不能再使用的優惠碼。優惠碼在核准接案時就會自動啟用，所以不另外列「尚未啟用」分頁。
+const couponStatusFilters = ['all', 'active', 'expired']
 
 const couponStatusLabels = {
   all: '全部',
   active: '啟用中',
-  inactive: '尚未啟用',
-  disabled: '已停用'
+  expired: '已到期'
 }
 
 const missionStageLabels = {
@@ -57,8 +58,13 @@ function CouponBadge({ status }) {
       cls: 'bg-[#F5F0E8] text-[#8C8880]',
       dot: 'bg-[#8C8880]'
     },
+    expired: {
+      label: '已到期',
+      cls: 'bg-red-50 text-red-600',
+      dot: 'bg-red-500'
+    },
     disabled: {
-      label: '已停用',
+      label: '已到期（手動停用）',
       cls: 'bg-red-50 text-red-600',
       dot: 'bg-red-500'
     }
@@ -317,8 +323,8 @@ function CouponDetailModal({
             <SummaryCard
               compact
               icon={Wallet}
-              label="KOC 分潤比例"
-              value={`${coupon.kocCommissionRate}%`}
+              label="KOC 分潤方式"
+              value={coupon.commissionLabel || `${coupon.kocCommissionRate}%`}
             />
 
             <SummaryCard
@@ -421,6 +427,7 @@ export default function KocManagement() {
             discountType: coupon.discount_type || 'percentage',
             discountValue: Number(coupon.discount_value || 0),
             kocCommissionRate: Number(coupon.koc_commission_rate || 0),
+            commissionLabel: coupon.commission_label || '',
             status: coupon.status,
             usageCount: Number(coupon.usage_count || 0),
             totalCommission: Number(coupon.total_commission || 0),

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Store, UserCheck,
   ClipboardList, CreditCard, LogOut, History,
   ShieldAlert, Headset, FileText, Menu, X,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ShieldCheck
 } from 'lucide-react';
 
 import LogoIcon from './assets/logo.jpg';
@@ -24,6 +24,7 @@ import AdminFinance from './admin/AdminFinance';
 import AdminLogs from './admin/AdminLogs';
 import AdminSupport from './admin/AdminSupport';
 import AdminTaxForms from './admin/AdminTaxForms';
+import AdminSecurity from './admin/AdminSecurity';
 
 // 路由保護元件：定義在元件外層，避免每次 AdminApp 重新渲染（例如側邊欄收合、
 // 個人選單開關）就產生一個全新的元件型別，導致 React 把底下的頁面整個卸載重掛，
@@ -91,6 +92,8 @@ export default function AdminApp() {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
     localStorage.removeItem('admin_role');
+    // admin_id 也要清，不然換帳號登入前殘留的會是上一位管理員的 id
+    localStorage.removeItem('admin_id');
     navigate('/admin-login');
   };
 
@@ -107,6 +110,7 @@ export default function AdminApp() {
     { id: 'taxForms', label: '勞報單審核', icon: <FileText size={20} />, path: '/admin/tax-forms', roles: ['super_admin', 'finance'] },
     { id: 'support', label: '客服聊天室', icon: <Headset size={20} />, path: '/admin/support', roles: ['super_admin', 'reviewer', 'finance'] },
     { id: 'logs', label: '操作紀錄', icon: <History size={20} />, path: '/admin/logs', roles: ['super_admin', 'reviewer', 'finance'] },
+    { id: 'security', label: '登入與安全性', icon: <ShieldCheck size={20} />, path: '/admin/security', roles: ['super_admin', 'reviewer', 'finance'] },
   ];
 
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
@@ -225,8 +229,15 @@ export default function AdminApp() {
               {/* 下拉選單內容 */}
               {isProfileMenuOpen && (
                 <div className="absolute right-0 top-full pt-1 z-50">
-                  <div className="w-40 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#E2DDD4] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="w-44 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#E2DDD4] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-1.5">
+                      <button
+                        onClick={() => navigate('/admin/security')}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-[#1A1A18] hover:bg-[#F5F0E8] rounded-lg transition-colors"
+                      >
+                        <ShieldCheck size={16} />
+                        登入與安全性
+                      </button>
                       <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-[#C8522A] hover:bg-[#FDF0ED] rounded-lg transition-colors"
@@ -317,6 +328,12 @@ export default function AdminApp() {
             <Route path="/logs" element={
               <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
                 <AdminLogs />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/security" element={
+              <ProtectedRoute allowedRoles={['super_admin', 'reviewer', 'finance']} adminRole={adminRole}>
+                <AdminSecurity onLogout={handleLogout} />
               </ProtectedRoute>
             } />
           </Routes>

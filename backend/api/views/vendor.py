@@ -18,17 +18,29 @@ from api.views.constants import (
     resync_bundle_stock,
     SUBMISSION_REMINDER_DAYS,
     KOC_COMMISSION_RATE_PERCENT,
+    KOC_COMMISSION_MIN_PERCENT,
+    KOC_COMMISSION_MAX_PERCENT,
+    KOC_COMMISSION_MAX_TIERS,
+    KOC_COMMISSION_PLATFORM_BASE_PERCENT,
     VENDOR_SETTLEMENT_RATE_PERCENT,
+)
+from api.koc_commission import (
+    CommissionSettingError,
+    campaign_commission_summary,
+    normalize_commission_setting,
 )
 from api.models import (
     Vendor, Product, Campaigns, CampaignProduct, Application, KOCMissionNew,
     Submissions, Order, OrderItem, CouponNew, Earnings, ChatRoom, Message,
-    Address, User, ShipmentInfo, VendorEmailVerificationCode, ReturnRequest,
+    Address, User, ShipmentInfo, VendorEmailVerificationCode, VendorPasswordResetCode, VendorLoginHistory, ReturnRequest,
     VendorSettlement, VendorSettlementItem, VendorSettlementPayment,
     VendorReceivable, VendorReceivablePayout, VendorPayoutBatch, KocLinkClickDaily,
-    VendorInvoice, ProductBundleItem,
+    VendorInvoice, ProductBundleItem, KOC,
 )
-from api.emails import send_vendor_email_verification_email, send_invoice_notification_email
+from api.emails import (
+    send_vendor_email_verification_email, send_invoice_notification_email,
+    send_vendor_password_reset_email,
+)
 from api.notifications import create_notification
 from payments.services import get_order_payment_status, is_payment_effectively_failed, pick_relevant_payment, mark_payment_refund_pending
 from .platform import reverse_earning_and_vendor_income_for_return
@@ -53,6 +65,11 @@ from api.views.shipping import (
 
 
 VENDOR_VERIFICATION_CODE_TTL_MINUTES = 10
+VENDOR_PASSWORD_RESET_CODE_TTL_MINUTES = 10
+VENDOR_PASSWORD_MIN_LENGTH = 8
+# 每個廠商保留幾筆登入記錄、畫面上顯示幾筆（跟消費者/KOC 的登入記錄一致）
+VENDOR_LOGIN_HISTORY_KEEP = 10
+VENDOR_LOGIN_HISTORY_SHOWN = 5
 
 
 def _generate_vendor_verification_code():
@@ -244,31 +261,34 @@ def vendor_login(request):
             "err": serializer_error_message(serializer.errors)
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    email = serializer.validated_data["email"]
     vendor_id = serializer.validated_data["vendor_id"]
     password = serializer.validated_data["password"]
 
-    try:
-        vendor = Vendor.objects.get(vendor_id=vendor_id)
-    except Vendor.DoesNotExist:
-        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
-        return Response({
-            "success": False,
-            "err": "帳號或密碼錯誤"
-        }, status=status.HTTP_401_UNAUTHORIZED)
+    # 用 Email 登入（不分大小寫）；沒帶 Email 才退回用廠商編號（舊的呼叫方式）。
+    # Vendor.email 在資料庫沒有設唯一，萬一有重複的信箱，就以密碼對得上的那個帳號為準。
+    if email:
+        candidates = Vendor.objects.filter(email__iexact=email).order_by("vendor_id")
+    else:
+        candidates = Vendor.objects.filter(vendor_id=vendor_id)
 
     # 密碼一律以雜湊比對；原本允許明文比對的後門已移除，
     # 資料庫裡的明文測試密碼已全部轉成雜湊（密碼本身不變）
-    password_correct = check_password(password, vendor.password)
+    vendor = next(
+        (candidate for candidate in candidates if check_password(password, candidate.password)),
+        None,
+    )
 
-    if not password_correct:
+    if not vendor:
+        # 帳號不存在與密碼錯誤回傳同一個訊息，避免別人藉登入頁試出哪些廠商帳號存在
         return Response({
             "success": False,
-            "err": "帳號或密碼錯誤"
+            "err": "Email 或密碼錯誤"
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     # 信箱還沒驗證不能登入，前端要能分辨這種情況去導去驗證流程。
-    # 廠商登入表單只收 vendor_id（不像消費者登入收 email），前端沒有信箱可以直接開驗證彈窗，
-    # 所以這裡把 email 一併帶回去——這個時間點密碼已經驗證正確，不是洩漏帳號資訊給不相關的人。
+    # 把帳號上登記的 email 一併帶回去給前端開驗證彈窗（用登記的那個，不用使用者輸入的大小寫）
+    # ——這個時間點密碼已經驗證正確，不是洩漏帳號資訊給不相關的人。
     if not vendor.is_verified:
         return Response({
             "success": False,
@@ -277,11 +297,220 @@ def vendor_login(request):
             "email": vendor.email,
         }, status=status.HTTP_403_FORBIDDEN)
 
+    # 記錄登入記錄（後台「登入與安全性」顯示用）；寫入失敗不影響登入
+    try:
+        VendorLoginHistory.objects.create(
+            vendor=vendor,
+            ip_address=request.META.get("REMOTE_ADDR", ""),
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+        old_ids = list(
+            VendorLoginHistory.objects
+            .filter(vendor=vendor)
+            .order_by("-login_at", "-log_id")
+            .values_list("log_id", flat=True)[VENDOR_LOGIN_HISTORY_KEEP:]
+        )
+        if old_ids:
+            VendorLoginHistory.objects.filter(log_id__in=old_ids).delete()
+    except Exception:
+        pass
+
     return Response({
         "success": True,
         "err": "",
         "vendor_id": vendor.vendor_id
     }, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_login_history(request):
+    """
+    廠商後台「登入與安全性」：最近的登入記錄、上次更新密碼的時間
+    URL: /vendor/auth/loginHistory?vendor_id=
+    """
+    vendor = Vendor.objects.filter(vendor_id=request.GET.get("vendor_id")).first()
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到廠商資料，請重新登入"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    logs = (
+        VendorLoginHistory.objects
+        .filter(vendor=vendor)
+        .order_by("-login_at", "-log_id")[:VENDOR_LOGIN_HISTORY_SHOWN]
+    )
+    return Response({
+        "success": True,
+        "err": "",
+        "password_updated_at": vendor.password_updated_at,
+        "logs": [
+            {
+                "log_id": log.log_id,
+                "ip_address": log.ip_address,
+                "user_agent": log.user_agent,
+                "login_at": log.login_at,
+            }
+            for log in logs
+        ],
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_change_password(request):
+    """
+    廠商後台更新密碼：要先輸入目前密碼
+    URL: /vendor/auth/changePassword  {vendor_id, current_password, new_password}
+    """
+    vendor_id = request.data.get("vendor_id")
+    current_password = request.data.get("current_password") or ""
+    new_password = request.data.get("new_password") or ""
+
+    if not vendor_id or not current_password or not new_password:
+        return Response({
+            "success": False,
+            "err": "請輸入目前密碼與新密碼"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < VENDOR_PASSWORD_MIN_LENGTH:
+        return Response({
+            "success": False,
+            "err": f"新密碼需至少 {VENDOR_PASSWORD_MIN_LENGTH} 位"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到廠商資料，請重新登入"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    if not check_password(current_password, vendor.password):
+        return Response({
+            "success": False,
+            "err": "目前密碼不正確"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+    vendor.password = make_password(new_password)
+    vendor.password_updated_at = timezone.now()
+    vendor.save(update_fields=["password", "password_updated_at"])
+
+    return Response({
+        "success": True,
+        "err": "",
+        "password_updated_at": vendor.password_updated_at,
+    }, status=status.HTTP_200_OK)
+
+def _find_vendor_by_email(email):
+    """用 Email 找廠商（不分大小寫）；Vendor.email 沒有設唯一，萬一重複就取廠商編號最小的那個。"""
+    email = (email or "").strip()
+    if not email:
+        return None
+    return Vendor.objects.filter(email__iexact=email).order_by("vendor_id").first()
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_forgot_password(request):
+    """
+    廠商忘記密碼：寄驗證碼到廠商登記的信箱（流程比照消費者/KOC 的 user/password/forgot）
+    URL: /vendor/auth/password/forgot  {email}
+    """
+    email = (request.data.get("email") or "").strip()
+    if not email:
+        return Response({
+            "success": False,
+            "err": "請輸入 Email"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = _find_vendor_by_email(email)
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 重新申請時，之前還沒用掉的驗證碼一律作廢，只有最新寄出的那組有效
+    VendorPasswordResetCode.objects.filter(vendor=vendor, is_used=False).update(is_used=True)
+
+    code = _generate_vendor_verification_code()
+    VendorPasswordResetCode.objects.create(
+        vendor=vendor,
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=VENDOR_PASSWORD_RESET_CODE_TTL_MINUTES),
+    )
+
+    try:
+        send_vendor_password_reset_email(vendor, code)
+    except Exception:
+        return Response({
+            "success": False,
+            "err": "驗證碼寄送失敗，請稍後再試"
+        }, status=status.HTTP_502_BAD_GATEWAY)
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def vendor_reset_password(request):
+    """
+    廠商忘記密碼：驗證驗證碼並重設密碼
+    URL: /vendor/auth/password/reset  {email, code, new_password}
+    """
+    email = (request.data.get("email") or "").strip()
+    code = str(request.data.get("code") or "").strip()
+    new_password = request.data.get("new_password") or ""
+
+    if not email or not code or not new_password:
+        return Response({
+            "success": False,
+            "err": "請輸入 Email、驗證碼與新密碼"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < VENDOR_PASSWORD_MIN_LENGTH:
+        return Response({
+            "success": False,
+            "err": f"密碼需至少 {VENDOR_PASSWORD_MIN_LENGTH} 位"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor = _find_vendor_by_email(email)
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "找不到使用這個 Email 的廠商帳號"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    reset_code = (
+        VendorPasswordResetCode.objects
+        .filter(vendor=vendor, code=code, is_used=False)
+        .order_by("-created_at")
+        .first()
+    )
+
+    if not reset_code:
+        return Response({
+            "success": False,
+            "err": "驗證碼錯誤"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if reset_code.expires_at < timezone.now():
+        return Response({
+            "success": False,
+            "err": "驗證碼已過期，請重新申請"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    vendor.password = make_password(new_password)
+    vendor.password_updated_at = timezone.now()
+    vendor.save(update_fields=["password", "password_updated_at"])
+
+    reset_code.is_used = True
+    reset_code.save(update_fields=["is_used"])
+
+    return Response({"success": True, "err": ""}, status=status.HTTP_200_OK)
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -1212,6 +1441,24 @@ def vendor_bundle_delete(request):
 # Vendor 任務 / Campaign 管理
 # ──────────────────────────────────────────────
 
+
+def _commission_setting_from_request(data):
+    """
+    從建立／編輯活動的請求整理出分潤設定，回傳 (commission_mode, commission_tiers)。
+    沒帶 commission_mode 是舊的呼叫方式，當成固定分潤（固定制一律是平台基本分潤率 3%）。
+    設定不合規定時丟 CommissionSettingError（訊息可直接顯示給廠商）。
+    """
+    mode = data.get("commission_mode") or "fixed"
+    return normalize_commission_setting(
+        mode, rate=data.get("koc_commission_rate"), tiers=data.get("commission_tiers")
+    )
+
+
+def _commission_base_rate(commission_tiers):
+    """第一層的分潤率，寫進 CampaignProduct.koc_commission_rate 給舊畫面顯示用。"""
+    return Decimal(str(commission_tiers[0][1]))
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_campaign_create(request):
@@ -1247,6 +1494,14 @@ def vendor_campaign_create(request):
             "success": False,
             "err": "Vendor not found"
         }, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        commission_mode, commission_tiers = _commission_setting_from_request(data)
+    except CommissionSettingError as error:
+        return Response({
+            "success": False,
+            "err": str(error)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     start_datetime = timezone.make_aware(
         datetime.combine(
@@ -1360,6 +1615,8 @@ def vendor_campaign_create(request):
 
             campaign = Campaigns.objects.create(
                 vendor=vendor,
+                commission_mode=commission_mode,
+                commission_tiers=commission_tiers,
                 name=data["name"],
                 description=data.get("description", ""),
                 promo_copy=(data.get("promo_copy") or "").strip(),
@@ -1380,8 +1637,8 @@ def vendor_campaign_create(request):
                 product=product,
                 discount_type=data["discount_type"],
                 discount_value=data["discount_value"],
-                # KOC 分潤比例由平台統一固定，不接受 Vendor 自訂。
-                koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                # 分潤方式存在 Campaigns；這裡存第一層的分潤率給舊畫面顯示用
+                koc_commission_rate=_commission_base_rate(commission_tiers)
             )
 
     except Exception:
@@ -1449,6 +1706,31 @@ def vendor_campaign_update(request):
         kocmission__application__campaign=campaign,
         usage_count__gt=0
     ).exists()
+
+    # 分潤設定：已經有 KOC 接案（建立了任務）就鎖定，KOC 是看到這個條件才接案的，不能中途改。
+    # 沒帶 commission_mode（舊的呼叫方式、或前端因為鎖定而不送）就維持原本的設定。
+    commission_locked = KOCMissionNew.objects.filter(
+        application__campaign=campaign
+    ).exists()
+    new_commission = None
+
+    if data.get("commission_mode"):
+        try:
+            requested_commission = _commission_setting_from_request(data)
+        except CommissionSettingError as error:
+            return Response({
+                "success": False,
+                "err": str(error)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        current_commission = (campaign.commission_mode, campaign.commission_tiers)
+        if requested_commission != current_commission:
+            if commission_locked:
+                return Response({
+                    "success": False,
+                    "err": "此活動已有 KOC 接案，分潤設定無法再修改"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            new_commission = requested_commission
 
     if coupon_used and campaign_product:
         locked_field_changed = (
@@ -1602,7 +1884,14 @@ def vendor_campaign_update(request):
             campaign.start_date = start_datetime
             campaign.end_date = end_datetime
             campaign.status = data["status"]
+            if new_commission:
+                campaign.commission_mode, campaign.commission_tiers = new_commission
             campaign.save()
+
+            # 第一層的分潤率（舊活動沿用平台級距的基本分潤率），給舊畫面顯示用
+            base_commission_rate = Decimal(
+                campaign_commission_summary(campaign)["base_rate"]
+            )
 
             campaign_product = CampaignProduct.objects.filter(
                 campaign=campaign
@@ -1616,7 +1905,7 @@ def vendor_campaign_update(request):
                 campaign_product.discount_value = data[
                     "discount_value"
                 ]
-                campaign_product.koc_commission_rate = Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                campaign_product.koc_commission_rate = base_commission_rate
 
                 campaign_product.save(
                     update_fields=[
@@ -1632,7 +1921,7 @@ def vendor_campaign_update(request):
                     product=product,
                     discount_type=data["discount_type"],
                     discount_value=data["discount_value"],
-                    koc_commission_rate=Decimal(str(KOC_COMMISSION_RATE_PERCENT))
+                    koc_commission_rate=base_commission_rate
                 )
 
     except Exception:
@@ -1724,19 +2013,57 @@ def vendor_campaign_getlist(request):
     if campaign_status:
         campaigns = campaigns.filter(status=campaign_status)
 
+    campaigns = list(campaigns)
+    campaign_ids = [campaign.campaign_id for campaign in campaigns]
+
+    # 下面三樣都一次撈出所有活動的份再分組，不要每個活動各查好幾次資料庫
+    campaign_products_by_campaign = {}
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(campaign_id__in=campaign_ids)
+        .select_related("product")
+        .order_by("pk")
+    ):
+        campaign_products_by_campaign.setdefault(
+            campaign_product.campaign_id, []
+        ).append(campaign_product)
+
+    # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
+    # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
+    coupon_used_campaign_ids = set(
+        CouponNew.objects
+        .filter(
+            kocmission__application__campaign_id__in=campaign_ids,
+            usage_count__gt=0
+        )
+        .values_list("kocmission__application__campaign_id", flat=True)
+    )
+
+    # 已經有 KOC 接案的活動，分潤設定鎖定不能改
+    commission_locked_campaign_ids = set(
+        KOCMissionNew.objects
+        .filter(application__campaign_id__in=campaign_ids)
+        .values_list("application__campaign_id", flat=True)
+    )
+
+    approved_count_by_campaign = {
+        row["campaign_id"]: row["total"]
+        for row in (
+            Application.objects
+            .filter(campaign_id__in=campaign_ids, status="approved")
+            .values("campaign_id")
+            .annotate(total=Count("pk"))
+        )
+    }
+
     campaign_list = []
 
     for campaign in campaigns:
-        campaign_products = CampaignProduct.objects.filter(
-            campaign=campaign
+        campaign_products = campaign_products_by_campaign.get(
+            campaign.campaign_id, []
         )
-
-        # 該活動只要有任何一張優惠碼被實際使用過（usage_count > 0），
-        # 折扣與分潤條件就視為「鎖定」，避免事後更動讓已發生的訂單/分潤跟畫面對不起來。
-        coupon_used = CouponNew.objects.filter(
-            kocmission__application__campaign=campaign,
-            usage_count__gt=0
-        ).exists()
+        coupon_used = campaign.campaign_id in coupon_used_campaign_ids
+        commission = campaign_commission_summary(campaign)
 
         products = []
 
@@ -1758,7 +2085,7 @@ def vendor_campaign_getlist(request):
                 "discount_value": str(
                     campaign_product.discount_value
                 ),
-                "koc_commission_rate": str(KOC_COMMISSION_RATE_PERCENT),
+                "koc_commission_rate": commission["base_rate"],
             })
 
         campaign_list.append({
@@ -1782,17 +2109,30 @@ def vendor_campaign_getlist(request):
             ),
             "status": campaign.status,
             "coupon_used": coupon_used,
+            # 分潤方式：mode（platform_tier 舊活動／fixed 固定／progressive 階層式累進）、
+            # label（一句話說明）、tiers（各層件數與分潤率）
+            "commission": commission,
+            "commission_locked": campaign.campaign_id in commission_locked_campaign_ids,
             "products": products,
             "recruit_limit": campaign.recruit_limit,
-            "approved_count": Application.objects.filter(
-                campaign=campaign, status="approved"
-            ).count(),
+            "approved_count": approved_count_by_campaign.get(
+                campaign.campaign_id, 0
+            ),
         })
 
     return Response({
         "success": True,
         "err": "",
-        "campaigns": campaign_list
+        "campaigns": campaign_list,
+        # 廠商設定分潤時的限制（建立活動的表單用）
+        "commission_limits": {
+            "min_rate": KOC_COMMISSION_MIN_PERCENT,
+            "max_rate": KOC_COMMISSION_MAX_PERCENT,
+            "max_tiers": KOC_COMMISSION_MAX_TIERS,
+            # 平台負擔的基本分潤（%）；超過的部分是廠商加碼，併入月結單
+            "platform_base_rate": KOC_COMMISSION_PLATFORM_BASE_PERCENT,
+            "service_fee_rate": VENDOR_SETTLEMENT_RATE_PERCENT,
+        },
     }, status=status.HTTP_200_OK)
 
 
@@ -1824,31 +2164,84 @@ def vendor_application_getlist(request):
     if application_status:
         applications = applications.filter(status=application_status)
 
+    # 以下資料都一次撈出所有申請的份再用 dict 對照，
+    # 不要每筆申請各查好幾次資料庫（申請一多會慢到二十幾秒）
+    # 排序固定下來（同一個活動的申請排在一起、依申請先後），跟改寫前資料庫預設回傳的順序一致
+    applications = list(
+        applications
+        .select_related("campaign", "koc", "koc__user")
+        .order_by("campaign_id", "application_id")
+    )
+
+    mission_by_application = {}
+    for mission in (
+        KOCMissionNew.objects
+        .filter(application_id__in=[a.application_id for a in applications])
+        .order_by("kocmission_id")
+    ):
+        mission_by_application.setdefault(mission.application_id, mission)
+
+    coupon_by_mission = {}
+    for coupon in (
+        CouponNew.objects
+        .filter(kocmission_id__in=[m.kocmission_id for m in mission_by_application.values()])
+        .order_by("coupon_id")
+    ):
+        coupon_by_mission.setdefault(coupon.kocmission_id, coupon)
+
+    # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位
+    campaign_product_by_campaign = {}
+    for campaign_product in (
+        CampaignProduct.objects
+        .filter(campaign_id__in={a.campaign_id for a in applications})
+        .select_related("product")
+        .order_by("pk")
+    ):
+        campaign_product_by_campaign.setdefault(
+            campaign_product.campaign_id, campaign_product
+        )
+
+    # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
+    # （stage 為 promoting 或 completed），用任務綁定的優惠碼
+    # 查出對應訂單，加總訂單金額後除以已完成任務數。
+    koc_ids = {a.koc_id for a in applications if a.koc_id}
+    completed_count_by_koc = {}
+    koc_by_completed_mission = {}
+    for kocmission_id, koc_id in (
+        KOCMissionNew.objects
+        .filter(koc_id__in=koc_ids, stage__in=["promoting", "completed"])
+        .values_list("kocmission_id", "koc_id")
+    ):
+        koc_by_completed_mission[kocmission_id] = koc_id
+        completed_count_by_koc[koc_id] = completed_count_by_koc.get(koc_id, 0) + 1
+
+    promo_codes_by_koc = {}
+    for kocmission_id, promotion_code in (
+        CouponNew.objects
+        .filter(kocmission_id__in=list(koc_by_completed_mission))
+        .values_list("kocmission_id", "promotion_code")
+    ):
+        promo_codes_by_koc.setdefault(
+            koc_by_completed_mission[kocmission_id], set()
+        ).add(promotion_code)
+
+    all_promo_codes = set().union(*promo_codes_by_koc.values()) if promo_codes_by_koc else set()
+    sales_by_promo_code = {
+        row["promotion_code"]: row["total"] or 0
+        for row in (
+            Order.objects
+            .filter(promotion_code__in=all_promo_codes)
+            .values("promotion_code")
+            .annotate(total=Sum("total_amount"))
+        )
+    } if all_promo_codes else {}
+
     application_list = []
 
     for application in applications:
-        mission = (
-            KOCMissionNew.objects
-            .filter(application=application)
-            .first()
-        )
-
-        coupon = None
-
-        if mission:
-            coupon = (
-                CouponNew.objects
-                .filter(kocmission=mission)
-                .first()
-            )
-
-        # 折扣/分潤設定要看 CampaignProduct，不是 coupon 自己的欄位
-        campaign_product = (
-            CampaignProduct.objects
-            .filter(campaign=application.campaign)
-            .select_related("product")
-            .first()
-        )
+        mission = mission_by_application.get(application.application_id)
+        coupon = coupon_by_mission.get(mission.kocmission_id) if mission else None
+        campaign_product = campaign_product_by_campaign.get(application.campaign_id)
 
         koc_name = ""
         if application.koc and application.koc.user:
@@ -1860,30 +2253,14 @@ def vendor_application_getlist(request):
 
         koc_violation_count = application.koc.total_violation_count if application.koc else 0
 
-        # 平均一次接案賣出多少：只算這個 KOC 已完成的任務
-        # （stage 為 promoting 或 completed），用任務綁定的優惠碼
-        # 查出對應訂單，加總訂單金額後除以已完成任務數。
         koc_avg_sales_amount = None
-        if application.koc_id:
-            completed_missions = KOCMissionNew.objects.filter(
-                koc_id=application.koc_id,
-                stage__in=["promoting", "completed"],
+        completed_count = completed_count_by_koc.get(application.koc_id, 0)
+        if completed_count > 0:
+            total_sales = sum(
+                sales_by_promo_code.get(code, 0)
+                for code in promo_codes_by_koc.get(application.koc_id, ())
             )
-            completed_count = completed_missions.count()
-
-            if completed_count > 0:
-                promo_codes = list(
-                    CouponNew.objects
-                    .filter(kocmission__in=completed_missions)
-                    .values_list("promotion_code", flat=True)
-                )
-                total_sales = (
-                    Order.objects
-                    .filter(promotion_code__in=promo_codes)
-                    .aggregate(total=Sum("total_amount"))
-                    .get("total") or 0
-                )
-                koc_avg_sales_amount = float(total_sales) / completed_count
+            koc_avg_sales_amount = float(total_sales) / completed_count
 
         application_list.append({
             "application_id": application.application_id,
@@ -1949,8 +2326,10 @@ def vendor_application_getlist(request):
             ),
 
             "koc_commission_rate": (
-                str(KOC_COMMISSION_RATE_PERCENT) if campaign_product else None
+                campaign_commission_summary(application.campaign)["base_rate"]
+                if campaign_product else None
             ),
+            "commission_label": campaign_commission_summary(application.campaign)["label"],
         })
 
     return Response({
@@ -1958,6 +2337,148 @@ def vendor_application_getlist(request):
         "err": "",
         "applications": application_list
     }, status=status.HTTP_200_OK)
+
+# 審核頁「接案紀錄」最多列出幾筆過往任務
+KOC_HISTORY_MISSION_LIMIT = 30
+
+
+def _mission_outcome(mission):
+    """把任務的 stage / end_reason 轉成審核頁看的結果：進行中、已完成、KOC 取消、逾期未完成、平台終止。"""
+    if mission.stage != "completed":
+        return "ongoing"
+    return {
+        "cancelled": "cancelled",
+        "expired": "expired",
+        "admin_closed": "admin_closed",
+    }.get(mission.end_reason, "completed")
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def vendor_koc_history(request):
+    """
+    廠商審核接案申請時查看 KOC 的過往接案紀錄：違規次數、成效（平均一次接案賣出多少）、每次任務的結果。
+    URL: /vendor/koc/history?vendor_id=&koc_id=
+
+    只有收過這位 KOC 申請的廠商可以查看。別家廠商的活動不顯示活動名稱（只顯示「其他廠商的活動」），
+    成效數字則照實顯示，讓廠商判斷這位 KOC 的帶貨能力。
+    不提供 KOC 的社群帳號（IG / FB / Threads）：平台希望廠商依帶貨成效決定，而不是依名氣篩選。
+    """
+    vendor_id = request.GET.get("vendor_id")
+    koc_id = request.GET.get("koc_id")
+
+    if not vendor_id or not koc_id:
+        return Response({
+            "success": False,
+            "err": "缺少廠商或 KOC 資訊，請重新整理後再試"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not Application.objects.filter(campaign__vendor_id=vendor_id, koc_id=koc_id).exists():
+        return Response({
+            "success": False,
+            "err": "只能查看申請過您活動的 KOC"
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    koc = KOC.objects.select_related("user").filter(koc_id=koc_id).first()
+    if not koc:
+        return Response({
+            "success": False,
+            "err": "找不到這位 KOC"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    missions = list(
+        KOCMissionNew.objects
+        .filter(koc_id=koc_id)
+        .select_related("application__campaign")
+        .order_by("-kocmission_id")
+    )
+
+    # 每個任務的成效：用任務綁定的優惠碼查出訂單數與銷售額（一次撈完再對照）
+    code_by_mission = {}
+    for kocmission_id, promotion_code in (
+        CouponNew.objects
+        .filter(kocmission_id__in=[m.kocmission_id for m in missions])
+        .order_by("coupon_id")
+        .values_list("kocmission_id", "promotion_code")
+    ):
+        code_by_mission.setdefault(kocmission_id, promotion_code)
+
+    sales_by_code = {
+        row["promotion_code"]: row
+        for row in (
+            Order.objects
+            .filter(promotion_code__in=set(code_by_mission.values()))
+            .values("promotion_code")
+            .annotate(orders=Count("pk"), total=Sum("total_amount"))
+        )
+    } if code_by_mission else {}
+
+    outcome_counts = {"ongoing": 0, "completed": 0, "cancelled": 0, "expired": 0, "admin_closed": 0}
+    total_orders = 0
+    total_sales = 0.0
+    # 平均一次接案賣出多少：只算真的有進入推廣的任務（promoting 或 completed），
+    # 跟審核列表上「平均接案銷售額」同一個算法
+    promoted_count = 0
+    promoted_sales = 0.0
+    mission_rows = []
+
+    for mission in missions:
+        campaign = mission.application.campaign
+        outcome = _mission_outcome(mission)
+        outcome_counts[outcome] += 1
+
+        sales = sales_by_code.get(code_by_mission.get(mission.kocmission_id)) or {}
+        orders = sales.get("orders") or 0
+        amount = float(sales.get("total") or 0)
+        total_orders += orders
+        total_sales += amount
+        if mission.stage in ("promoting", "completed"):
+            promoted_count += 1
+            promoted_sales += amount
+
+        if len(mission_rows) < KOC_HISTORY_MISSION_LIMIT:
+            is_own = str(campaign.vendor_id) == str(vendor_id)
+            mission_rows.append({
+                "kocmission_id": mission.kocmission_id,
+                "is_own_campaign": is_own,
+                "campaign_name": campaign.name if is_own else "其他廠商的活動",
+                "start_date": campaign.start_date.date().isoformat() if campaign.start_date else None,
+                "end_date": campaign.end_date.date().isoformat() if campaign.end_date else None,
+                "stage": mission.stage,
+                "outcome": outcome,
+                "missed_publishing_deadline": mission.missed_publishing_deadline,
+                "orders": orders,
+                "sales_amount": amount,
+            })
+
+    user = koc.user
+    return Response({
+        "success": True,
+        "err": "",
+        "koc": {
+            "koc_id": koc.koc_id,
+            "name": (user.display_name or user.name) if user else "",
+            # 故意不回傳 IG / FB / Threads 帳號：審核要看的是帶貨成效，
+            # 不希望廠商用社群名氣篩人，讓沒有名氣的 KOC 也有機會
+            "is_suspended": koc.is_suspended,
+        },
+        "summary": {
+            "total_missions": len(missions),
+            "ongoing_count": outcome_counts["ongoing"],
+            "completed_count": outcome_counts["completed"],
+            "cancelled_count": outcome_counts["cancelled"],
+            "expired_count": outcome_counts["expired"],
+            "admin_closed_count": outcome_counts["admin_closed"],
+            "violation_count": koc.total_violation_count,
+            "missed_publishing_count": sum(1 for m in missions if m.missed_publishing_deadline),
+            "total_orders": total_orders,
+            "total_sales_amount": total_sales,
+            "avg_sales_amount": (promoted_sales / promoted_count) if promoted_count else None,
+        },
+        "missions": mission_rows,
+        "missions_truncated": len(missions) > KOC_HISTORY_MISSION_LIMIT,
+    }, status=status.HTTP_200_OK)
+
 
 # 產生優惠碼
 def generate_promotion_code(koc_id):
@@ -3561,7 +4082,10 @@ def vendor_coupon_get_usage_list(request):
             kocmission__application__campaign__campaign_id=campaign_id
         )
 
-    if status_filter:
+    # 後台的「已到期」分頁：活動結束自動到期（expired）和廠商手動停用（disabled）都算
+    if status_filter == "expired":
+        coupons = coupons.filter(status__in=["expired", "disabled"])
+    elif status_filter:
         coupons = coupons.filter(status=status_filter)
 
     coupons = list(coupons)
@@ -3610,8 +4134,9 @@ def vendor_coupon_get_usage_list(request):
                 str(campaign_product.discount_value) if campaign_product else None
             ),
             "koc_commission_rate": (
-                str(KOC_COMMISSION_RATE_PERCENT) if campaign_product else None
+                campaign_commission_summary(campaign)["base_rate"] if campaign_product else None
             ),
+            "commission_label": campaign_commission_summary(campaign)["label"],
             "status": coupon.status,
             "usage_count": coupon.usage_count,
             "total_commission": commission_by_kocmission_id.get(mission.kocmission_id, 0),
@@ -4158,16 +4683,17 @@ def vendor_chatroom_getlist(request):
                 or mission.koc.user.name
             )
 
-        last_message = (
-            chatroom.messages
-            .order_by("-created_at")
-            .first()
+        # 用 prefetch 好的訊息在記憶體裡算，不要每個聊天室再各查兩次資料庫
+        room_messages = list(chatroom.messages.all())
+        last_message = max(
+            room_messages,
+            key=lambda m: (m.created_at, m.pk),
+            default=None,
         )
-
-        unread_count = chatroom.messages.filter(
-            sender_role="koc",
-            is_read=False
-        ).count()
+        unread_count = sum(
+            1 for m in room_messages
+            if m.sender_role == "koc" and not m.is_read
+        )
 
         chatroom_list.append({
             "room_id": chatroom.room_id,
@@ -4360,16 +4886,8 @@ def vendor_chatroom_send_message(request):
         is_read=False
     )
 
-    # 通知 KOC 有新訊息，reference_type='koc_chat' 帶 kocmission_id，前端點通知
-    # 直接跳去 /chat?mission=<id> 打開對應的聊天室（見 ChatPage.jsx）。
-    create_notification(
-        user=chatroom.kocmission.koc.user,
-        category="koc",
-        title=f"{campaign.vendor.company_name} 傳送了新訊息",
-        body=content,
-        reference_type="koc_chat",
-        reference_id=chatroom.kocmission_id,
-    )
+    # 傳訊息當下不發通知；KOC 超過 24 小時沒讀才補通知（見 notifications.sync_stale_chat_notifications），
+    # 通知的 reference_type='koc_chat' 帶 kocmission_id，前端點了會打開對應的聊天室。
 
     return Response({
         "success": True,
@@ -5067,6 +5585,9 @@ def get_vendor_finance_overview(request):
             koc=Sum(
                 "koc_amount"
             ),
+            koc_bonus=Sum(
+                "koc_bonus_amount"
+            ),
             platform=Sum(
                 "platform_amount"
             ),
@@ -5098,6 +5619,10 @@ def get_vendor_finance_overview(request):
         ),
         "pending_koc_amount": float(
             pending_agg["koc"] or 0
+        ),
+        # 尚未出帳的金額裡，廠商加碼的 KOC 分潤有多少（已包含在 pending_settlement_amount 裡）
+        "pending_koc_bonus_amount": float(
+            pending_agg["koc_bonus"] or 0
         ),
         "pending_platform_amount": float(
             pending_agg["platform"] or 0
@@ -5264,6 +5789,10 @@ def get_vendor_finance_transactions(request):
                 "koc_amount": float(
                     item.koc_amount or 0
                 ),
+                # 廠商加碼的 KOC 分潤（已包含在 settlement_amount 裡）
+                "koc_bonus_amount": float(
+                    item.koc_bonus_amount or 0
+                ),
                 "platform_amount": float(
                     item.platform_amount or 0
                 ),
@@ -5336,6 +5865,10 @@ def get_vendor_finance_transactions(request):
             ),
             "koc_amount": float(
                 settlement.koc_amount or 0
+            ),
+            # 本期廠商加碼的 KOC 分潤（已包含在 amount_due 裡）
+            "koc_bonus_amount": float(
+                settlement.koc_bonus_amount or 0
             ),
             "platform_amount": float(
                 settlement.platform_amount
@@ -5427,6 +5960,9 @@ def get_vendor_finance_transactions(request):
         ),
         "koc_amount": float(
             item.koc_amount or 0
+        ),
+        "koc_bonus_amount": float(
+            item.koc_bonus_amount or 0
         ),
         "platform_amount": float(
             item.platform_amount or 0

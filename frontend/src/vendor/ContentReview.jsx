@@ -26,6 +26,7 @@ import {
   reviewVendorApplication
 } from '../api/vendor'
 import { getErrorMessage } from '../errorMessage'
+import KocHistoryPanel from './KocHistoryPanel'
 
 // ─── 共用 UI 元件 ─────────────────────────────────────────────
 
@@ -479,7 +480,7 @@ export default function ContentReview() {
           {/* 接案審核 Modal */}
           {selectedApplication && selectedApplication.status === 'pending' && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-2 sm:p-4">
-              <div className="relative w-full max-w-2xl bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl border border-[#E2DDD4] max-h-[95vh] overflow-y-auto">
+              <div className="relative w-full max-w-3xl bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl border border-[#E2DDD4] max-h-[95vh] overflow-y-auto">
                 <div className="flex justify-between items-start mb-6 sm:mb-8">
                   <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#1A1A18]">
                     審核接案申請
@@ -540,6 +541,11 @@ export default function ContentReview() {
                       </div>
                     </div>
                   </div>
+
+                  {/* 審核前直接看這位 KOC 的過往接案紀錄：違規與履約、成效（平均一次接案賣出多少）、每次任務結果 */}
+                  <KocHistoryPanel
+                    koc={{ kocId: selectedApplication.kocId, name: selectedApplication.kocName }}
+                  />
 
                   <div className="bg-[#FDF0ED] rounded-xl px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-bold text-[#C8522A] flex items-start gap-2 sm:gap-3">
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />

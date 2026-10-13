@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, MessageCircle, Loader2, Send, Package } from 'lucide-react'
 
 import { getVendorOrderChatMessages, sendVendorOrderChatMessage } from '../api/vendor'
+import { OrderTag, showsOrderTag } from '../chatTags'
 import { cn, formatCurrency } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
 import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
@@ -177,7 +178,7 @@ export default function OrderChatModal({ open, orderId, vendorId, items = [], to
               <div className="text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
             </div>
           ) : messages.length > 0 ? (
-            messages.map(message => {
+            messages.map((message, index) => {
               const isMine = message.sender_role === 'vendor'
 
               return (
@@ -193,6 +194,13 @@ export default function OrderChatModal({ open, orderId, vendorId, items = [], to
                         : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
                     )}
                   >
+                    {/* 這裡是跟這位買家的完整對話，標出每段是在講哪張訂單、哪個商品 */}
+                    {showsOrderTag(messages, index) && <OrderTag order={message.order} inverted={isMine} />}
+                    {message.product && (
+                      <div className={cn('mb-1 text-[11px] font-bold', isMine ? 'text-white/60' : 'text-[#8C8880]')}>
+                        詢問商品：{message.product.product_name}
+                      </div>
+                    )}
                     {message.content}
                     <div
                       className={cn(

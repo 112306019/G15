@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Loader2, MessageCircle, RefreshCw, Search, Send } from 'lucide-react'
 import { cn } from './lib/utils'
 import { getErrorMessage } from '../errorMessage'
-import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
+import { OrderTag, showsOrderTag } from '../chatTags'
+import usePolling, { CHAT_LIST_POLL_EVERY, CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling'
 
 function formatTime(value) {
   if (!value) return ''
@@ -36,7 +37,7 @@ function MessageProduct({ product, mine }) {
 }
 
 /**
- * 廠商統一聊天室的通用對話面板（「訂單訊息」「商品詢問」分頁共用）：
+ * 通用對話面板（廠商端「顧客訊息」、前台「我的訊息」共用）：
  * 左邊對話列表、右邊訊息與輸入框，跟其他聊天室一樣每 4 秒背景同步。
  *
  * fetchList()            → [{ key, title, subtitle, lastMessage, lastMessageAt, unreadCount }]
@@ -141,9 +142,14 @@ export default function ConversationPanel({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, activeKey])
 
+  const pollTickRef = useRef(0)
   usePolling(async () => {
+    pollTickRef.current += 1
     if (active) await loadMessages(active, { silent: true })
-    await loadList({ silent: true })
+    // 清單比較重，隔幾輪才抓一次
+    if (pollTickRef.current % CHAT_LIST_POLL_EVERY === 0) {
+      await loadList({ silent: true })
+    }
   }, CHAT_POLL_INTERVAL_MS)
 
   async function handleSend() {
@@ -278,7 +284,7 @@ export default function ConversationPanel({
               ) : messages.length === 0 ? (
                 <div className="py-12 text-center text-xs font-bold text-[#8C8880]">還沒有訊息</div>
               ) : (
-                messages.map(m => {
+                messages.map((m, index) => {
                   const mine = m.sender_role === mineRole
                   return (
                     <div key={m.message_id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
@@ -289,6 +295,7 @@ export default function ConversationPanel({
                             mine ? 'bg-[#1A1A18] text-white rounded-br-md' : 'bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-bl-md'
                           )}
                         >
+                          {showsOrderTag(messages, index) && <OrderTag order={m.order} inverted={mine} />}
                           <MessageProduct product={m.product} mine={mine} />
                           {m.content}
                         </div>

@@ -2,6 +2,8 @@ import { API_BASE_URL } from '../config';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, MessageCircle, Loader2, Send, Package } from 'lucide-react';
 import { getErrorMessage } from '../errorMessage';
+import { OrderTag, showsOrderTag } from '../chatTags';
+import { InquiryProductCard } from './InquiryChatPage';
 import usePolling, { CHAT_POLL_INTERVAL_MS, hasNewMessages } from '../usePolling';
 
 function cn(...classes) {
@@ -209,7 +211,7 @@ export default function OrderChatPage({ orderId, onBack }) {
               <div className="text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
             </div>
           ) : messages.length > 0 ? (
-            messages.map((message) => {
+            messages.map((message, index) => {
               const isMine = message.sender_role === 'user';
 
               return (
@@ -225,6 +227,9 @@ export default function OrderChatPage({ orderId, onBack }) {
                         : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
                     )}
                   >
+                    {/* 這裡是跟這家廠商的完整對話，標出每段是在講哪張訂單、哪個商品 */}
+                    {showsOrderTag(messages, index) && <OrderTag order={message.order} inverted={isMine} />}
+                    <InquiryProductCard product={message.product} inverted={isMine} />
                     {message.content}
                     <div
                       className={cn(

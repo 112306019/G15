@@ -53,3 +53,11 @@ from .platform import (
     admin_list_return_disputes,
     admin_resolve_return_dispute,
 )
+
+from .admin_auth import (
+    admin_forgot_password,
+    admin_reset_password,
+    admin_security_info,
+    admin_login_history,
+    admin_change_password,
+)

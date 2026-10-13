@@ -131,6 +131,29 @@ def send_vendor_email_verification_email(vendor, code):
     )
 
 
+def send_vendor_password_reset_email(vendor, code):
+    """
+    廠商忘記密碼流程寄送驗證碼，跟 send_password_reset_email 對消費者/KOC 做的事一樣。
+    這封信是廠商拿到驗證碼的唯一管道，寄信失敗要讓呼叫端知道並回報錯誤，不能悄悄吞掉。
+    """
+    subject = "【KOC Platform】廠商帳號密碼重設驗證碼"
+    message = (
+        f"{vendor.contact_name or vendor.company_name} 您好，\n\n"
+        f"您的廠商帳號密碼重設驗證碼為：{code}\n\n"
+        "此驗證碼將於 10 分鐘後失效，請盡快完成密碼重設。\n"
+        "如果這不是您本人的操作，請忽略此信，您的密碼不會被變更。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[vendor.email],
+        fail_silently=False,
+    )
+
+
 def send_password_reset_email(user, code):
     """
     忘記密碼流程寄送驗證碼。
@@ -235,5 +258,31 @@ def send_publishing_overdue_email(mission, days):
         message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[koc_user.email],
+        fail_silently=False,
+    )
+
+
+def send_admin_password_reset_email(admin, code):
+    """
+    平台管理員忘記密碼流程寄送驗證碼。
+
+    跟一般使用者的 send_password_reset_email 一樣，這封信是拿到驗證碼的唯一管道，
+    寄信失敗必須讓呼叫端知道並回報錯誤，不能悄悄吞掉。
+    """
+    subject = "【KOC Platform 管理後台】密碼重設驗證碼"
+    message = (
+        f"{admin.name or admin.email} 您好，\n\n"
+        f"您的管理後台密碼重設驗證碼為：{code}\n\n"
+        "此驗證碼將於 10 分鐘後失效，輸入錯誤 5 次也會失效。\n"
+        "如果這不是您本人的操作，請忽略此信，您的密碼不會被變更，"
+        "並建議通知其他管理員留意帳號安全。\n\n"
+        "KOC Platform 團隊"
+    )
+
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[admin.email],
         fail_silently=False,
     )

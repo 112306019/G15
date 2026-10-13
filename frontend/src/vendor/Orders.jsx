@@ -37,7 +37,7 @@ import { formatCurrency, cn } from './lib/utils'
 import { useToast } from './components/ui/Toast'
 import { useConfirm } from './components/ui/ConfirmDialog'
 import { getErrorMessage } from '../errorMessage'
-import usePolling, { CHAT_POLL_INTERVAL_MS } from '../usePolling'
+import usePolling, { UNREAD_POLL_INTERVAL_MS } from '../usePolling'
 
 const shippingFilters = [
   'all',
@@ -1478,7 +1478,7 @@ export default function Orders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId])
 
-  usePolling(refreshChatUnread, CHAT_POLL_INTERVAL_MS * 2, Boolean(vendorId))
+  usePolling(refreshChatUnread, UNREAD_POLL_INTERVAL_MS, Boolean(vendorId))
 
   const [selectedOrderIds, setSelectedOrderIds] = useState([])
   const [bulkStatus, setBulkStatus] = useState('preparing')
