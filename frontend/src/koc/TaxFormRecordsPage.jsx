@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileText } from 'lucide-react';
 import api from '../api/index';
 
 function formatDateTime(value) {
@@ -11,10 +11,20 @@ function formatDateTime(value) {
 
 function FormRow({ form }) {
   return (
-    <div className="grid grid-cols-4 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
+    <div className="grid grid-cols-5 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
       <div className="font-black text-[#C8522A]">NT$ {(form.amount || 0).toLocaleString()}</div>
       <div className="text-[#8C8880] font-medium">{formatDateTime(form.submitted_at)}</div>
       <div className="text-[#8C8880] font-medium">{form.reviewed_at ? formatDateTime(form.reviewed_at) : '-'}</div>
+      <div>
+        <a
+          href={`/tax-form-print/${form.form_id}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-xs font-bold text-[#8C8880] hover:text-[#C8522A]"
+        >
+          查看勞報單 <FileText size={10} />
+        </a>
+      </div>
       <div>
         <a
           href={form.cloud_link_url}
@@ -32,10 +42,11 @@ function FormRow({ form }) {
 function FormsTable({ records, emptyText }) {
   return (
     <div className="w-full bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-      <div className="grid grid-cols-4 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+      <div className="grid grid-cols-5 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
         <span>金額</span>
         <span>申報時間</span>
         <span>審核時間</span>
+        <span>勞報單</span>
         <span>連結</span>
       </div>
       {records.length === 0 ? (

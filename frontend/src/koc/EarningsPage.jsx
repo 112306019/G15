@@ -158,6 +158,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
           amount={modalAmount}
           isResubmit={isResubmit}
           rejectReason={openForm?.reject_reason}
+          formId={openForm?.form_id}
           userId={user_id}
           onClose={() => setModalOpen(false)}
           onSubmitted={() => fetchRevenue()}
