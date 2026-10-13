@@ -41,8 +41,6 @@ from .constants import (
     EARNINGS_STATUS_CHOICES_MAP,
     EARNINGS_STATUS_CODE_MAP,
     REMUNERATION_SERVICE_CONTENT,
-    CROSS_BANK_TRANSFER_FEE,
-    MIN_PAYOUT_AMOUNT,
     MAX_VIOLATION_COUNT,
     is_probably_bot_click,
     sync_expired_promoting_missions,
@@ -892,66 +890,24 @@ def get_mission_list(request):
     }, status=http_status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def cancel_mission(request):
-    """
-    KOC 自行取消尚未結束的任務（撰寫文案/上傳作品/推廣中都可以取消）。
-    URL: /koc/mission/cancel
-
-    取消後任務直接進入「已結束」（stage='completed'），end_reason 標記為
-    'cancelled'，歸類在前端的「已取消」分類（跟過期自動結案的任務同一組，
-    但原因不同）。順便停用優惠碼，避免取消後消費者還撿得到連結繼續使用。
-
-    這也算一次 KOC 違規（見 record_koc_violation），跟任務放到過期沒完成
-    是同一套計數、同一個停權門檻，不分開算。
-    """
-    user_id = request.data.get('User_id')
-    kocmission_id = request.data.get('kocmission_id')
-
-    if not user_id:
-        return Response({'success': False, 'err': 'User_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
-    if not kocmission_id:
-        return Response({'success': False, 'err': 'kocmission_id 為必填'}, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        mission = KOCMissionNew.objects.select_related('koc').get(kocmission_id=kocmission_id)
-    except KOCMissionNew.DoesNotExist:
-        return Response({'success': False, 'err': '找不到對應的任務'}, status=http_status.HTTP_404_NOT_FOUND)
-
-    if not mission.koc or str(mission.koc.user_id) != str(user_id):
-        return Response({'success': False, 'err': '無權限操作此任務'}, status=http_status.HTTP_403_FORBIDDEN)
-
-    if mission.stage == 'completed':
-        return Response({'success': False, 'err': '此任務已經結束，無法取消'}, status=http_status.HTTP_400_BAD_REQUEST)
-
-    mission.stage = 'completed'
-    mission.end_reason = 'cancelled'
-    mission.save(update_fields=['stage', 'end_reason'])
-
-    CouponNew.objects.filter(kocmission=mission).exclude(status__in=['expired', 'disabled']).update(status='disabled')
-
-    koc = mission.koc
-    suspended, suspended_until = record_koc_violation(koc)
-
-    return Response({
-        'success': True,
-        'err': '',
-        'kocmission_id': mission.kocmission_id,
-        'stage': STAGE_CODE_MAP[mission.stage],
-        'end_reason': mission.end_reason,
-        'total_violation_count': koc.total_violation_count,
-        'max_violation_count': MAX_VIOLATION_COUNT,
-        'suspended': suspended,
-        'suspended_until': suspended_until,
-    }, status=http_status.HTTP_200_OK)
-
-
 def _get_undeclared_amount(koc):
     """這個 KOC 目前有多少分潤還沒被納入任何一張勞務報酬單。"""
     return Earnings.objects.filter(
         user=koc.user, remuneration_form__isnull=True
     ).aggregate(total=Sum('amount'))['total'] or 0
+
+
+def _get_unapproved_declared_amount(koc):
+    """
+    這個 KOC 已經申報（掛在某張勞務報酬單上），但那張單還沒被平台審核通過
+    （還在待審核，或曾被退回還沒重新審核通過）的分潤加總。
+
+    這筆錢雖然已經不算「未申報」，但平台還沒確認這張單，依規定也還不能
+    真的撥款出去（見 request_payout 的審核通過檢查）。
+    """
+    return Earnings.objects.filter(
+        user=koc.user, remuneration_form__isnull=False
+    ).exclude(remuneration_form__status='approved').aggregate(total=Sum('amount'))['total'] or 0
 
 
 def _get_open_form(koc):
@@ -1264,12 +1220,20 @@ def get_revenue_total(request):
             "err": "找不到對應的 KOC"
         }, status=http_status.HTTP_404_NOT_FOUND)
 
-    # 待提領金額：直接讀 KocWallet 的可用餘額
+    # KocWallet.balance_available 是「訂單完成後直接入帳」的總額，不分申報進度。
+    # 這裡再依申報/審核狀態拆成三類給前端分開顯示，避免 KOC 以為錢隨時都能領：
+    #   未申報金額：還沒掛到任何勞報單上
+    #   已申報待確認：掛了勞報單，但那張單還沒審核通過
+    #   確定撥款金額：掛的勞報單已審核通過，真正可以申請提領的部分
     try:
         wallet = koc.wallet  # KocWallet 的 related_name='wallet'
-        withdrawable_amount = wallet.balance_available
+        total_balance = wallet.balance_available
     except KocWallet.DoesNotExist:
-        withdrawable_amount = 0
+        total_balance = 0
+
+    undeclared_amount = _get_undeclared_amount(koc)
+    unapproved_amount = _get_unapproved_declared_amount(koc)
+    confirmed_amount = max(0, total_balance - undeclared_amount - unapproved_amount)
 
     # 是否已綁定銀行帳戶：檢查 KOC 的 bank_account 欄位是否有值
     has_bank_account = bool(koc.bank_account)
@@ -1277,146 +1241,27 @@ def get_revenue_total(request):
     return Response({
         "success": True,
         "err": "",
-        "withdrawable_amount": withdrawable_amount,
+        "undeclared_amount": undeclared_amount,
+        "unapproved_amount": unapproved_amount,
+        "confirmed_amount": confirmed_amount,
         "hasBankAccount": has_bank_account,
-        "min_payout_amount": MIN_PAYOUT_AMOUNT,
-        "cross_bank_transfer_fee": CROSS_BANK_TRANSFER_FEE,
     }, status=http_status.HTTP_200_OK)
 
 
-# 查詢「還沒申報過勞報單」的分潤金額，給前端在按下提領前先跳出提示用，
-# 不用等實際送出 request_payout 才被後端擋下來。
-# URL: /koc/revenue/getMissingTaxForms?user_id=xxx
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def get_missing_tax_forms(request):
-    user_id = request.query_params.get('user_id')
-
-    if not user_id:
-        return Response({
-            "success": False,
-            "err": "user_id 為必填"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        koc = KOC.objects.get(user_id=user_id)
-    except KOC.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的 KOC"
-        }, status=http_status.HTTP_404_NOT_FOUND)
-
-    return Response({
-        "success": True,
-        "err": "",
-        "undeclared_amount": _get_undeclared_amount(koc),
-    }, status=http_status.HTTP_200_OK)
-
-
-# 申請撥款：把可提領餘額（balance_available）送出撥款申請，
-# 建立 Payouts 紀錄，並把對應的 Earnings 標記為已轉帳。
+# 舊 API 相容端點。
+# 撥款改由平台每兩週統一批次處理（見 platform.admin_generate_koc_payouts）：
+# KOC 不需要，也不能再自行申請提領，只要把分潤申報到勞務報酬單、等平台審核
+# 通過即可，審核通過的分潤會在下次撥款作業時由平台主動撥付。
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_payout(request):
-    user_id = request.data.get('user_id')
-    amount = request.data.get('amount')
-
-    if not user_id:
-        return Response({
-            "success": False,
-            "err": "user_id 為必填"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        koc = KOC.objects.select_related('wallet', 'user').get(user_id=user_id)
-    except KOC.DoesNotExist:
-        return Response({
-            "success": False,
-            "err": "找不到對應的 KOC"
-        }, status=http_status.HTTP_404_NOT_FOUND)
-
-    if not koc.bank_account:
-        return Response({
-            "success": False,
-            "err": "尚未綁定銀行帳戶，無法申請撥款"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    # KOC 可以自己決定何時提領，不用再等案件結束，但硬性要求分潤都要先申報過勞報單，
-    # 才能真的把錢領出去（前端會先跳提示引導去填，這裡是後端最後一道防線）。
-    undeclared_amount = _get_undeclared_amount(koc)
-    if undeclared_amount > 0:
-        return Response({
-            "success": False,
-            "err": "有分潤尚未提交勞務報酬單，請先完成提交才能申請提領",
-            "undeclared_amount": undeclared_amount,
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    try:
-        wallet = koc.wallet
-    except KocWallet.DoesNotExist:
-        wallet = None
-
-    available = wallet.balance_available if wallet else 0
-
-    if available <= 0:
-        return Response({
-            "success": False,
-            "err": "目前沒有可提領的餘額"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    # 沒有指定金額就預設全部提領；有指定金額則不能超過可提領餘額
-    payout_amount = int(amount) if amount else available
-
-    if payout_amount <= 0 or payout_amount > available:
-        return Response({
-            "success": False,
-            "err": "申請金額不可小於等於 0 或超過可提領餘額"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    # 跨行提領銀行會收 15 元手續費，金額至少要 16 元才有意義（扣完手續費還會剩下錢）
-    if payout_amount < MIN_PAYOUT_AMOUNT:
-        return Response({
-            "success": False,
-            "err": f"提領金額需達 NT$ {MIN_PAYOUT_AMOUNT} 以上才能申請（跨行提領需支付 NT$ {CROSS_BANK_TRANSFER_FEE} 手續費）"
-        }, status=http_status.HTTP_400_BAD_REQUEST)
-
-    with transaction.atomic():
-        wallet = KocWallet.objects.select_for_update().get(koc=koc)
-        wallet.balance_available = wallet.balance_available - payout_amount
-        wallet.save(update_fields=['balance_available', 'updated_at'])
-
-        payout = Payouts.objects.create(
-            koc=koc.user,
-            amount=payout_amount,
-            payout_date=timezone.localdate(),
-            status='pending'
-        )
-
-        # 把這筆撥款金額對應到的「可提領」分潤標記為已轉帳，
-        # 依建立時間先後扣抵，扣到申請金額為止
-        remaining = payout_amount
-        withdrawable_earnings = (
-            Earnings.objects
-            .filter(user=koc.user, status='withdrawable')
-            .order_by('created_at')
-        )
-
-        for earning in withdrawable_earnings:
-            if remaining <= 0:
-                break
-            earning.status = 'transferred'
-            earning.save(update_fields=['status'])
-            remaining -= earning.amount
-
     return Response({
-        "success": True,
-        "err": "",
-        "payout_id": payout.payout_id,
-        "amount": payout.amount,
-        "payout_date": payout.payout_date,
-        "status": payout.status,
-        "remaining_balance": wallet.balance_available,
-    }, status=http_status.HTTP_200_OK)
+        "success": False,
+        "err": (
+            "撥款採平台統一批次處理，KOC 不需自行申請提領；"
+            "請完成勞務報酬單申報，待平台審核通過後，將於下次撥款作業自動撥付。"
+        )
+    }, status=http_status.HTTP_410_GONE)
 
 # 獲取收益明細
 @api_view(['GET'])

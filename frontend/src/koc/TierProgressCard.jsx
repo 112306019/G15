@@ -12,7 +12,8 @@ const MODE_TEXT = {
   platform_tier: {
     title: '本月分潤級距',
     note:
-      '達到新級距時，本月這個任務的所有分潤都會以新的分潤率重新計算。' +
+      '每筆分潤會在成立當下依那一刻的累計件數直接定案；件數跨級距只影響之後新成立的' +
+      '分潤，不會回頭調整已經成立的分潤金額。' +
       '件數在訂單完成後才計入，退貨會扣除；每個任務、每個月獨立計算，下個月重新累計。',
   },
   progressive: {
@@ -124,14 +125,14 @@ export default function TierProgressCard({ tier }) {
               再售出 <span className="text-[#C8522A] font-black">{next.remaining}</span> 件，
               {mode === 'progressive'
                 ? `之後售出的每一件改以 ${next.rate}% 計算`
-                : `本月分潤升級到「${next.name}」${next.rate}%`}
+                : `之後新成立的分潤升級到「${next.name}」${next.rate}%`}
             </p>
           ) : (
             <p className="text-xs xl:text-sm font-bold text-[#1A1A18] flex items-center gap-1.5">
               <Trophy size={14} className="text-[#B89B6A]" />
               {mode === 'progressive'
                 ? `已進入最高一層，之後售出的每一件都以 ${tier.rate}% 計算`
-                : `已達最高級距，本月這個任務的分潤全部以 ${tier.rate}% 計算`}
+                : `已達最高級距，之後這個任務的分潤都會以 ${tier.rate}% 計算`}
             </p>
           )}
         </>
