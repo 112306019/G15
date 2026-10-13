@@ -1,16 +1,16 @@
 """
-KOC 階梯式月結分潤。
+KOC 階梯式月結分潤（累進制）。
 
 規則（級距設定在 constants.KOC_COMMISSION_TIERS）：
 - 以「任務」為單位：每個任務（一位 KOC 接的一個廠商活動，對應一組優惠碼）每個月
   透過優惠碼售出的「活動商品件數」決定該任務當月的級距。
   同一位 KOC 的不同任務各自計算，不會合併件數。
-- 整月全額套用：當月所有分潤都用同一個級距的分潤率，跨級時整月一起調高。
+- 累進制：每筆訂單分潤建立時，用「當下累計件數」決定級距並直接定案，
+  之後不再回頭調整這一筆。同月後面件數跨級距，只影響之後新建立的分潤，
+  不會動到已經成立（可能早就解凍、甚至已被提領）的舊分潤。
 - 月份以訂單完成日（台灣時間）為準，每個月獨立計算，不會累計到下個月。
-- 月份結束後該月級距鎖定：下個月才發生的退貨只會扣那一筆的分潤，
-  不會回頭改動上個月其他訂單的級距。
-- 只有還在 pending（待結算）的分潤會被調整；已轉成可提領／已撥款的不動。
-  正常流程下，廠商月結算單在月底之後才產生，所以當月分潤在月底前都還是 pending。
+- 退貨只調整被退那一筆分潤自己的金額（用它當初鎖定的分潤率重算），
+  不會因為件數減少就回頭調整同月其他訂單的級距。
 
 舊資料（commission_month 為 null，固定 5% 時期建立）不參與級距計算。
 """
@@ -20,7 +20,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
 
-from api.models import Earnings, KocWallet, Transactions, VendorSettlementItem
+from api.models import Earnings
 
 COMMISSION_TIER_NAMES = ['一般', '中等量', '大量']
 
@@ -66,11 +66,6 @@ def commission_month_of(moment=None):
     return date(local_day.year, local_day.month, 1)
 
 
-def is_month_open(month):
-    """月份還沒結束才能重算級距；月底後鎖定。"""
-    return month == commission_month_of()
-
-
 def get_month_quantity(mission, month):
     """任務某月份目前的有效件數（已取消的分潤不算）。"""
     quantities = (
@@ -80,87 +75,6 @@ def get_month_quantity(mission, month):
         .values_list('item_quantity', flat=True)
     )
     return sum(quantity or 0 for quantity in quantities)
-
-
-def sync_settlement_item_koc_amount(earning):
-    """
-    廠商結算明細會存一份 KOC 分潤金額（koc_amount）與平台實拿（platform_amount），
-    月結算單的金額由它加總。分潤被重算後同步更新，只動還沒被納入結算單的明細。
-    """
-    mission = earning.kocmission
-    campaign = mission.application.campaign if mission and mission.application else None
-    if not campaign or not earning.order_id:
-        return
-
-    items = VendorSettlementItem.objects.select_for_update().filter(
-        order_id=earning.order_id,
-        vendor_id=campaign.vendor_id,
-        settlement__isnull=True,
-    )
-    for item in items:
-        koc_amount = Decimal(str(earning.amount if earning.status != 'cancelled' else 0))
-        item.koc_amount = koc_amount
-        item.platform_amount = max(Decimal('0.00'), item.settlement_amount - koc_amount)
-        item.save(update_fields=['koc_amount', 'platform_amount', 'updated_at'])
-
-
-def recalculate_mission_month(mission, month):
-    """
-    依任務某月份目前的總件數，把該任務該月所有 pending 分潤調整到對應級距。
-    必須在 transaction.atomic() 裡呼叫。月份已結束時不做任何事（級距鎖定）。
-    回傳套用的分潤率；月份已鎖定時回傳 None。
-    """
-    if not mission or not month or not is_month_open(month):
-        return None
-
-    earnings = list(
-        Earnings.objects
-        .select_for_update()
-        .select_related('kocmission__application__campaign')
-        .filter(kocmission=mission, commission_month=month)
-        .exclude(status='cancelled')
-    )
-    rate = get_tier_rate(sum(earning.item_quantity or 0 for earning in earnings))
-
-    wallet = None
-    for earning in earnings:
-        if earning.status != 'pending' or earning.commission_base is None:
-            continue
-        old_rate = earning.commission_rate
-        if old_rate is not None and Decimal(str(old_rate)) == rate:
-            continue
-
-        new_amount = commission_amount_for(earning.commission_base, rate)
-        delta = new_amount - earning.amount
-
-        # original_amount 是「部分退款前」的金額，跟著級距等比例調整
-        if earning.original_amount is not None and old_rate:
-            earning.original_amount = int(
-                (Decimal(earning.original_amount) * rate / Decimal(str(old_rate)))
-                .quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-            )
-        earning.amount = new_amount
-        earning.commission_rate = rate
-        earning.save(update_fields=['amount', 'original_amount', 'commission_rate'])
-
-        if delta:
-            if wallet is None:
-                wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=mission.koc)
-            wallet.balance_frozen = max(0, wallet.balance_frozen + delta)
-            Transactions.objects.create(
-                koc_wallet=wallet,
-                type='commission_tier_adjustment',
-                amount=delta,
-                reference_type='earning',
-                reference_id=str(earning.earnings_id),
-            )
-
-        sync_settlement_item_koc_amount(earning)
-
-    if wallet is not None:
-        wallet.save(update_fields=['balance_frozen', 'updated_at'])
-
-    return rate
 
 
 def get_mission_tier_progress(mission, month=None):

@@ -305,7 +305,7 @@ class KOCMissionNew(models.Model):
 
     END_REASON_CHOICES = [
         ('expired', '已過期'),
-        ('cancelled', 'KOC取消'),
+        ('cancelled', 'KOC取消'),  # 舊資料殘留；KOC 已不能再自行取消任務，新資料不會再產生這個值
         ('admin_closed', '平台終止'),  # 管理員強制結案（見 platform.admin_force_close_mission）
     ]
 

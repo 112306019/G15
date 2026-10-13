@@ -44,6 +44,7 @@ from .views.platform import (
     admin_confirm_vendor_payout_batch,
     admin_export_payout_transfers,
     admin_list_koc_payouts,
+    admin_generate_koc_payouts,
     admin_confirm_koc_payout,
     admin_get_earnings,
     admin_list_settleable_campaigns,
@@ -108,7 +109,6 @@ urlpatterns = [
     path('koc/application/getlist', views.get_application_list, name='get-application-list'),
     path('koc/mission/getDetail', views.mission_get_detail, name='koc-mission-get-detail'),
     path('koc/mission/getlist', views.get_mission_list, name='koc-mission-get-list'),
-    path('koc/mission/cancel', views.cancel_mission, name='koc-mission-cancel'),
     path('koc/mission/getStageCounts', views.get_mission_stage_counts, name='koc-mission-get-stage-counts'),
     path('koc/mission/submitTaxFormLink', views.submit_tax_form_link, name='koc-mission-submit-tax-form-link'),
     path('koc/mission/taxFormData', views.get_tax_form_data, name='koc-mission-tax-form-data'),
@@ -116,8 +116,8 @@ urlpatterns = [
     path('koc/revenue/getTotal', views.get_revenue_total, name='koc-revenue-get-total'),
     path('koc/revenue/getHistory', views.get_revenue_history, name='koc-revenue-get-history'),
     path('koc/revenue/getPayoutRecords', views.get_payout_records, name='koc-revenue-get-payout-records'),
-    path('koc/revenue/getMissingTaxForms', views.get_missing_tax_forms, name='koc-revenue-get-missing-tax-forms'),
     path('koc/revenue/getRemunerationForms', views.get_remuneration_forms, name='koc-revenue-get-remuneration-forms'),
+    # 舊路徑暫時保留給尚未更新的前端；requestPayout 會回 410 Gone。
     path('koc/revenue/requestPayout', views.request_payout, name='koc-revenue-request-payout'),
     path('koc/analytics/getList', views.get_analytics_list, name='koc-analytics-get-list'),
     path('koc/analytics/getDetail', views.get_analytics_detail, name='koc-analytics-get-detail'),
@@ -170,6 +170,7 @@ urlpatterns = [
     path('platform/vendor/run-monthly-payouts', admin_generate_vendor_settlement, name='platform-vendor-run-monthly-payouts-legacy'),
 
     path('platform/koc/payouts', admin_list_koc_payouts, name='platform-koc-payouts'),
+    path('platform/koc/payouts/generate', admin_generate_koc_payouts, name='platform-koc-payouts-generate'),
     path('platform/koc/payout/confirm', admin_confirm_koc_payout, name='platform-koc-payout-confirm'),
     path('platform/payouts/export', admin_export_payout_transfers, name='platform-payouts-export'),
     path('platform/earnings', admin_get_earnings, name='platform-earnings'),

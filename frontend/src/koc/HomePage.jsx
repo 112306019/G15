@@ -9,7 +9,7 @@ const STAGES = [
   { id: 1, label: '接案申請', icon: Send, desc: '瀏覽並申請案件' },
   { id: 3, label: '上傳作品', icon: Upload, desc: '發文後上傳連結' },
   { id: 4, label: '推廣中', icon: TrendingUp, desc: '優惠碼推廣中' },
-  { id: 5, label: '已結束', icon: CheckCircle2, desc: '案件已結束' },
+  { id: 5, label: '已結案', icon: CheckCircle2, desc: '案件已結案' },
 ];
 
 // 商品資料裡偶爾會有 "無" 這種佔位字串而非真正的網址，這種值要當成沒有圖片處理
@@ -54,8 +54,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
   // 代言申請分頁（stage 1）子狀態：未申請（可瀏覽並申請的活動）/ 已申請（原本的資格審核內容）
   const [applySubTab, setApplySubTab] = useState('unapplied');
 
-  // 已結束分頁（stage 5）子狀態：已結案（正常跑完）/ 已取消（過期或 KOC 自己取消）
-  const [endedSubTab, setEndedSubTab] = useState('completed');
   const [availableCampaigns, setAvailableCampaigns] = useState([]);
   const [kocId, setKocId] = useState(null);
   const [appliedCampaign, setAppliedCampaign] = useState(null);
@@ -340,10 +338,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
     }
   };
 
-  // 已結束分頁要再依「已結案／已取消」子分頁篩選一次，其餘分頁照舊全部顯示
-  const visibleTasks = activeStage === 5
-    ? tasks.filter(t => (endedSubTab === 'completed' ? !t.endReason : !!t.endReason))
-    : tasks;
+  const visibleTasks = tasks;
 
   return (
     <div className="animate-in fade-in duration-500 max-w-6xl mx-auto pb-12 md:pb-20">
@@ -395,7 +390,7 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end mb-4 md:mb-6 px-1 md:px-2 gap-3 md:gap-4">
-        {activeStage !== 1 && activeStage !== 5 && (
+        {activeStage !== 1 && (
           <h3 className="text-lg md:text-xl font-bold text-[#1A1A18]">
             {STAGES.find(s => s.id === activeStage)?.label}
           </h3>
@@ -426,30 +421,6 @@ export default function HomePage({ onNavigate, jumpToStage, onJumpHandled }) {
           </div>
         )}
 
-        {activeStage === 5 && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setEndedSubTab('completed')}
-              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
-                endedSubTab === 'completed'
-                  ? 'bg-[#C8522A] text-white'
-                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
-              }`}
-            >
-              已結案（{tasks.filter(t => !t.endReason).length}）
-            </button>
-            <button
-              onClick={() => setEndedSubTab('cancelled')}
-              className={`px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
-                endedSubTab === 'cancelled'
-                  ? 'bg-[#C8522A] text-white'
-                  : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
-              }`}
-            >
-              已取消（{tasks.filter(t => t.endReason).length}）
-            </button>
-          </div>
-        )}
       </div>
 
       {loading ? (

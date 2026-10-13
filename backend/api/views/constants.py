@@ -118,8 +118,8 @@ def sync_expired_koc_suspensions():
 
 def record_koc_violation(koc):
     """
-    記一次 KOC 違規：自己取消任務（見 koc.py 的 cancel_mission）、或任務被放到
-    過期還沒完成該做的事（見下面 sync_expired_promoting_missions），都算一次。
+    記一次 KOC 違規：任務被放到過期還沒完成該做的事
+    （見下面 sync_expired_promoting_missions）時呼叫。
 
     total_violation_count 終身累計、只加不減，給廠商審核接案申請時參考；
     violation_count_since_suspension 距離上次觸發停權以來的次數，達到

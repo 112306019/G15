@@ -53,7 +53,7 @@ from api.models import (
 )
 
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer
-from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMINDER_DAYS, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT
+from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMINDER_DAYS, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT, MIN_PAYOUT_AMOUNT
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
@@ -62,8 +62,8 @@ from api.koc_commission import (
     commission_month_of,
     get_month_quantity,
     get_tier_rate,
-    recalculate_mission_month,
 )
+from api.views.koc import _get_undeclared_amount, _get_unapproved_declared_amount
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +146,15 @@ def require_admin_role(request, allowed_roles, source='data'):
 # ==============================================================================
 
 def calculate_order_commission(order):
-    """訂單完成後建立 KOC 待結算分潤（階梯式月結，見 api/koc_commission.py）。
+    """訂單完成後建立 KOC 分潤（階梯式月結，累進制，見 api/koc_commission.py）。
 
-    訂單完成時建立 pending Earnings，並放入 KOCWallet.balance_frozen；
-    等該訂單所屬 Vendor 的 VendorSettlement 確認 paid 後，才轉成 withdrawable。
+    訂單完成時直接建立 withdrawable 的 Earnings，並計入 KOCWallet.balance_available，
+    不等該訂單所屬 Vendor 的 VendorSettlement 繳清服務費才解凍——解凍時點就是訂單完成，
+    不綁廠商繳款進度。
     分潤基礎只計算該 Campaign 綁定、且屬於該 Campaign Vendor 的商品小計，不含運費。
-    分潤率依「這個任務」當月（含這筆）累計的活動商品件數決定；這筆讓任務升級時，
-    同任務同月其他 pending 分潤會一起調整到新級距。
+    分潤率依「這個任務」當月（含這筆）累計的活動商品件數決定，用這個級距算出金額後
+    就直接定案、永久鎖定：之後同任務同月其他訂單讓件數跨級距，只影響「之後才建立」
+    的分潤，不會回頭調整這一筆——因為這一筆可能已經解凍、甚至已經被提領走了。
     """
     promotion_code = (order.promotion_code or "").strip()
     if not promotion_code:
@@ -213,8 +215,8 @@ def calculate_order_commission(order):
     commission_month = commission_month_of(order.completed_at)
 
     with transaction.atomic():
-        # 先用「當月目前件數 + 這筆件數」決定分潤率；建立後再整月重算一次，
-        # 處理跨級時同月其他分潤的調整（也順便處理同時完成的訂單）
+        # 用「當月目前累計件數 + 這筆件數」決定這一筆的級距，算完就定案，
+        # 不會再被之後同月其他訂單回頭調整（累進制）。
         month_quantity = get_month_quantity(mission, commission_month) + item_quantity
         commission_rate = get_tier_rate(month_quantity)
         commission_amount = commission_amount_for(commission_base, commission_rate)
@@ -225,18 +227,18 @@ def calculate_order_commission(order):
             order=order,
             amount=commission_amount,
             original_amount=commission_amount,
-            status=EARNINGS_STATUS_CHOICES_MAP["pending"],
+            status=EARNINGS_STATUS_CHOICES_MAP["withdrawable"],
             commission_base=commission_base,
             item_quantity=item_quantity,
             commission_rate=commission_rate,
             commission_month=commission_month,
         )
         wallet, _ = KocWallet.objects.select_for_update().get_or_create(koc=mission.koc)
-        wallet.balance_frozen += commission_amount
-        wallet.save(update_fields=["balance_frozen", "updated_at"])
+        wallet.balance_available += commission_amount
+        wallet.save(update_fields=["balance_available", "updated_at"])
         Transactions.objects.create(
             koc_wallet=wallet,
-            type="reward_pending",
+            type="reward_withdrawable",
             amount=commission_amount,
             reference_type="earning",
             reference_id=str(earning.earnings_id),
@@ -244,16 +246,13 @@ def calculate_order_commission(order):
         coupon.usage_count = (coupon.usage_count or 0) + 1
         coupon.save(update_fields=["usage_count"])
 
-        recalculate_mission_month(mission, commission_month)
-        earning.refresh_from_db(fields=["amount", "commission_rate"])
-
     return {
         "created": True,
         "earning_id": earning.earnings_id,
         "commission_amount": earning.amount,
         "commission_base": str(commission_base),
         "commission_rate": str(earning.commission_rate),
-        "message": "分潤已建立，待廠商完成平台結算後轉為可提領",
+        "message": "分潤已建立，可直接提領",
     }
 
 
@@ -591,12 +590,6 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                         earning.item_quantity = new_quantity
                         update_fields += ['commission_base', 'item_quantity']
                     earning.save(update_fields=update_fields)
-
-                # 退貨讓當月件數減少，級距可能往下調；月份已結束則鎖定不動
-                if tiered:
-                    recalculate_mission_month(earning.kocmission, earning.commission_month)
-                    # 重算可能改到這筆自己的金額，下面同步廠商結算明細前要用最新值
-                    earning.refresh_from_db(fields=['amount', 'status'])
             results['earning_adjustment'] = {'earnings_id': earning.earnings_id, 'deducted': delta, 'status': earning.status}
 
     qs = VendorSettlementItem.objects.select_related('settlement', 'vendor').filter(order=order)
@@ -1110,10 +1103,13 @@ def admin_list_vendor_invoices(request):
 
 def _finalize_vendor_settlement_status(locked_settlement):
     """
-    結算單收到一筆已確認付款後，重新計算 status（部分/全額繳清），全額繳清
-    的話一併釋放對應訂單的 KOC 分潤（pending -> withdrawable）。呼叫端要自己
+    結算單收到一筆已確認付款後，重新計算 status（部分/全額繳清）。呼叫端要自己
     在 transaction.atomic() 裡先 select_for_update 鎖住這張 settlement 再呼叫，
     這支本身不開交易。
+
+    下面釋放 pending Earnings（pending -> withdrawable）的部分現在只是相容舊資料：
+    calculate_order_commission 已改成訂單完成時直接建立 withdrawable 的 Earnings，
+    正常流程不會再有 pending 分潤卡在這裡等釋放。
     """
     confirmed_total = VendorSettlementPayment.objects.filter(
         settlement=locked_settlement, status='confirmed'
@@ -2681,6 +2677,138 @@ def admin_confirm_koc_payout(request):
         'err': '',
         'payout_id': payout.payout_id,
         'status': payout.status,
+    }, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# KOC 撥款改平台批次：原本 koc.request_payout 是 KOC 自己隨時申請提領，
+# 現在改成由平台統一批次處理（例如每兩週跑一次）——KOC 不用也不能再自行
+# 申請，只要把分潤申報到勞務報酬單、等平台審核通過即可。
+#
+# 這支會幫每一個「未申報金額 = 0 且已申報待確認金額 = 0（也就是錢包餘額
+# 全部都已經審核通過）、確定撥款金額達最低提領門檻」的 KOC 各自建立一筆
+# Payouts，把 balance_available 歸零、把對應金額的 withdrawable Earnings
+# 標記為 transferred。收款帳戶不要求 KOC 另外在個人資料綁定，是寫在審核
+# 通過的勞務報酬單文件上，財務人工核對文件後再去匯款。之後的後台流程
+# （列表 admin_list_koc_payouts、匯出 admin_export_payout_transfers、
+# 標記完成/失敗 admin_confirm_koc_payout）完全沿用既有的，不用另外改。
+#
+# 這支本身「不管日期」，只要被打就會立刻對所有符合條件的 KOC 跑一次；
+# 實際「每兩週哪幾天跑」由外部排程系統設定。
+#
+# 權限：跟 admin_generate_vendor_payout_batch 一樣雙軌——帶 Admin_id 走
+# 原本的角色檢查（後台可以放一顆「手動批次撥款」按鈕），沒帶就比對
+# X-Cron-Token 這個 header 是否等於 settings.VENDOR_PAYOUT_CRON_TOKEN
+# （這個 token 是共用的，不是只給 Vendor 撥款用）。
+#
+# POST /platform/koc/payouts/generate
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_generate_koc_payouts(request):
+    admin_obj = None
+
+    if request.data.get('Admin_id'):
+        admin_obj, err = require_admin_role(request, FINANCE_ADMIN_ROLES, source='data')
+        if err:
+            return err
+    else:
+        cron_token = request.headers.get('X-Cron-Token')
+        expected_token = getattr(settings, 'VENDOR_PAYOUT_CRON_TOKEN', None)
+        if not expected_token or cron_token != expected_token:
+            return Response({
+                'success': False,
+                'err': '未授權：需要有效的 Admin_id 或 X-Cron-Token'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    generated = []
+    skipped = []
+
+    # 收款帳戶寫在勞務報酬單文件上，由財務人工核對匯款，不要求 KOC 另外在
+    # 個人資料綁定 KOC.bank_account，所以這裡不篩選這個欄位。
+    kocs = (
+        KOC.objects
+        .select_related('user', 'wallet')
+    )
+
+    for koc in kocs:
+        try:
+            wallet = koc.wallet
+        except KocWallet.DoesNotExist:
+            continue
+
+        if wallet.balance_available <= 0:
+            continue
+
+        undeclared_amount = _get_undeclared_amount(koc)
+        unapproved_amount = _get_unapproved_declared_amount(koc)
+        if undeclared_amount > 0 or unapproved_amount > 0:
+            skipped.append({
+                'koc_id': koc.koc_id,
+                'reason': '有分潤尚未申報或審核未通過',
+                'undeclared_amount': undeclared_amount,
+                'unapproved_amount': unapproved_amount,
+            })
+            continue
+
+        with transaction.atomic():
+            locked_wallet = KocWallet.objects.select_for_update().get(pk=wallet.pk)
+            payout_amount = locked_wallet.balance_available
+
+            if payout_amount < MIN_PAYOUT_AMOUNT:
+                skipped.append({
+                    'koc_id': koc.koc_id,
+                    'reason': f'確定撥款金額未達 NT$ {MIN_PAYOUT_AMOUNT}',
+                    'amount': payout_amount,
+                })
+                continue
+
+            locked_wallet.balance_available -= payout_amount
+            locked_wallet.save(update_fields=['balance_available', 'updated_at'])
+
+            payout = Payouts.objects.create(
+                koc=koc.user,
+                amount=payout_amount,
+                payout_date=timezone.localdate(),
+                status='pending',
+            )
+
+            # 把這筆撥款金額對應到的「可提領」分潤標記為已轉帳，
+            # 依建立時間先後扣抵，扣到撥款金額為止
+            remaining = payout_amount
+            withdrawable_earnings = (
+                Earnings.objects
+                .filter(user=koc.user, status='withdrawable')
+                .order_by('created_at')
+            )
+            for earning in withdrawable_earnings:
+                if remaining <= 0:
+                    break
+                earning.status = 'transferred'
+                earning.save(update_fields=['status'])
+                remaining -= earning.amount
+
+        generated.append({
+            'koc_id': koc.koc_id,
+            'payout_id': payout.payout_id,
+            'amount': payout_amount,
+        })
+
+    if admin_obj:
+        AdminAuditLogs.objects.create(
+            admin_id=admin_obj,
+            action_type='generate_koc_payouts',
+            action_reason=f'批次產生 KOC 撥款 {len(generated)} 筆，略過 {len(skipped)} 筆',
+        )
+
+    return Response({
+        'success': True,
+        'err': '',
+        'generated_count': len(generated),
+        'generated': generated,
+        'skipped_count': len(skipped),
+        'skipped': skipped,
     }, status=status.HTTP_200_OK)
 
 
