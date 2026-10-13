@@ -14,7 +14,7 @@ function isValidUrl(value) {
 
 // isResubmit：true 代表在修正一張被退回的單，金額是固定的（退回當時的金額，
 // 不會因為重新提交而改變）；false 代表要開一張全新的單，金額是目前所有還沒申報過的分潤加總。
-export default function TaxFormModal({ amount, isResubmit, rejectReason, userId, onClose, onSubmitted }) {
+export default function TaxFormModal({ amount, isResubmit, rejectReason, formId, userId, onClose, onSubmitted }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -98,9 +98,11 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, userId,
             </div>
           </div>
 
-          {/* 開啟勞報單列印頁面：瀏覽器直接渲染表單，用「列印/儲存為 PDF」輸出 */}
+          {/* 開啟勞報單列印頁面：瀏覽器直接渲染表單，用「列印/儲存為 PDF」輸出。
+              重新提交時帶上 formId，顯示的是當初退回那張單鎖定的金額，不是現在的
+              即時預覽（重新提交不會改變金額，見上面的說明文字）。 */}
           <a
-            href="/tax-form-print"
+            href={isResubmit && formId ? `/tax-form-print/${formId}` : '/tax-form-print'}
             target="_blank"
             rel="noreferrer"
             className="w-full mb-4 md:mb-5 flex items-center justify-center gap-1.5 md:gap-2 bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
