@@ -87,7 +87,7 @@ export default function HeaderMessages({ userRole, active = false, unread }) {
       >
         <MessageCircle size={22} strokeWidth={2.5} className={active || open ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
         {/* 大小跟旁邊通知鈴鐺、購物車的數字圈一樣 */}
-        <CountBadge count={unread.total} max={9} className="absolute top-1 right-1 w-4 h-4 border-2 border-white" />
+        <CountBadge count={unread.total} className="absolute top-1 right-1 min-w-4 h-4 px-0.5 border-2 border-white box-content" />
       </div>
 
       {open && (
