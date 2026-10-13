@@ -562,6 +562,31 @@ KOC_COMMISSION_TIERS = [
 # 舊程式與畫面用的單一分潤率，改成階梯式後代表「基本級距」，僅供顯示用。
 KOC_COMMISSION_RATE_PERCENT = KOC_COMMISSION_TIERS[0][1]
 
+# ------------------------------------------------------------------------------
+# 廠商自訂分潤（新建立的活動適用，見 Campaigns.commission_mode / commission_tiers）
+# ------------------------------------------------------------------------------
+# 廠商建立活動時自己選「固定」或「階層式」：
+#   fixed       固定分潤：一律是平台基本分潤率 KOC_COMMISSION_PLATFORM_BASE_PERCENT（3%），不能自訂
+#   progressive 階層式、累進計算：廠商自訂每一層到第幾件、幾 %，
+#               每一段件數各用各的分潤率（例如前 10 件 3%、第 11 件起 10%），每月歸零
+# 上面的 KOC_COMMISSION_TIERS 只剩舊活動（commission_mode='platform_tier'）在用：
+# 平台統一級距、整月套用同一個分潤率。
+#
+# 誰出這筆分潤（只適用廠商自訂分潤的活動；舊活動仍全部由平台從 15% 裡支出）：
+#   平台負擔   = 分潤計算基礎 × KOC_COMMISSION_PLATFORM_BASE_PERCENT（從向廠商收的 15% 裡出）
+#   廠商加碼   = KOC 分潤 − 平台負擔（併入廠商月結單，跟 15% 服務費一起繳）
+#   廠商應繳   = 成交額 × 15% + 廠商加碼
+#   平台實拿   = 成交額 × 15% − 平台負擔
+# 例：分潤訂 10%、一筆 NT$1,000 → KOC 拿 100（平台出 30、廠商加碼 70），廠商繳 150 + 70 = 220。
+# 階層式累進時每一層各自套用：廠商加碼 = Σ 該層成交額 × (該層分潤率 − 平台基本額度)。
+KOC_COMMISSION_PLATFORM_BASE_PERCENT = 3
+
+# 廠商能設定的分潤率範圍。下限等於平台負擔的基本額度（不能訂得比平台出的還低）；
+# 上限避免填錯數字造成一筆很大的加碼費用。
+KOC_COMMISSION_MIN_PERCENT = KOC_COMMISSION_PLATFORM_BASE_PERCENT
+KOC_COMMISSION_MAX_PERCENT = 15
+KOC_COMMISSION_MAX_TIERS = 3
+
 # Vendor 應支付給 ShareBuy 的平台推廣／服務費率。
 # 新制度是「消費者商品款由 Vendor 取得，Vendor 再依有效成交額支付 15% 給平台」，
 # 不再把 Vendor 商品收入先存進 VendorWallet 後由平台撥款給 Vendor。

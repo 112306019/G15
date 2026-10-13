@@ -146,6 +146,24 @@ class Campaigns(models.Model):
     # 商品簡介則沿用 Product.description，跟商城商品頁同一份。
     promo_copy = models.TextField(blank=True, default='', db_column='promo_copy')
 
+    # KOC 分潤方式（計算邏輯見 api/koc_commission.py）：
+    #   platform_tier 舊活動：平台統一級距，整月套用同一個分潤率（constants.KOC_COMMISSION_TIERS）
+    #   fixed         廠商自訂：固定一個分潤率
+    #   progressive   廠商自訂：階層式累進，每一段件數各用各的分潤率
+    # 預設 platform_tier 是為了讓這個欄位加進來之前就存在的活動維持原本的算法；
+    # 新建立的活動一律由 vendor_campaign_create 明確寫入 fixed 或 progressive。
+    COMMISSION_MODE_CHOICES = [
+        ('platform_tier', '平台統一級距（舊活動）'),
+        ('fixed', '固定分潤'),
+        ('progressive', '階層式累進分潤'),
+    ]
+    commission_mode = models.CharField(
+        max_length=20, choices=COMMISSION_MODE_CHOICES, default='platform_tier', db_column='commission_mode'
+    )
+    # 廠商自訂的級距：[[件數上限, 分潤率%], ...]，最後一層的上限是 null（沒有上限）。
+    # fixed 只有一層 [[null, 分潤率]]；platform_tier 不使用這個欄位（留空）。
+    commission_tiers = models.JSONField(default=list, blank=True, db_column='commission_tiers')
+
     class Meta:
         db_table = 'Campaigns'
 
@@ -795,12 +813,46 @@ class Admins(models.Model):
     role = models.CharField(max_length=50)
     status = models.CharField(max_length=50)
     last_login_at = models.DateTimeField(blank=True, null=True)
+    password_updated_at = models.DateTimeField(null=True, blank=True, db_column='password_updated_at')
 
     class Meta:
         db_table = 'Admins'
 
     def __str__(self):
         return self.name
+
+
+class AdminPasswordResetCode(models.Model):
+    """平台管理員忘記密碼流程用的驗證碼；錯誤次數達上限就作廢"""
+    reset_id = models.AutoField(primary_key=True)
+    admin = models.ForeignKey(Admins, on_delete=models.CASCADE, db_column='admin_id', related_name='password_reset_codes')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = 'AdminPasswordResetCode'
+
+    def __str__(self):
+        return f"AdminPasswordResetCode for admin {self.admin_id}"
+
+
+class AdminLoginHistory(models.Model):
+    """平台管理員登入紀錄，給「登入與安全性」頁面顯示最近登入的裝置與 IP"""
+    log_id = models.AutoField(primary_key=True)
+    admin = models.ForeignKey(Admins, on_delete=models.CASCADE, db_column='admin_id', related_name='login_history')
+    ip_address = models.CharField(max_length=50, blank=True, default='')
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    login_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Admin_Login_History'
+        ordering = ['-login_at']
+
+    def __str__(self):
+        return f"admin {self.admin_id} - {self.login_at}"
 
 
 class Vendor(models.Model):
@@ -1567,6 +1619,15 @@ class VendorSettlement(models.Model):
         db_column='koc_amount'
     )
 
+    # 本期廠商加碼的 KOC 分潤加總（已包含在 amount_due 裡，另外存一份給月結單拆開顯示）：
+    # amount_due = 15% 服務費 + koc_bonus_amount。
+    koc_bonus_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='koc_bonus_amount'
+    )
+
     # 平台最終保留的服務收入：amount_due - koc_amount。
     platform_amount = models.DecimalField(
         max_digits=14,
@@ -1704,7 +1765,8 @@ class VendorSettlementItem(models.Model):
         db_column='settlement_rate'
     )
 
-    # sales_amount × 15%。
+    # 廠商這張訂單應繳的金額：sales_amount × 15% ＋ koc_bonus_amount（廠商加碼的 KOC 分潤）。
+    # 舊活動沒有加碼，就是 sales_amount × 15%。
     settlement_amount = models.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -1718,6 +1780,16 @@ class VendorSettlementItem(models.Model):
         decimal_places=2,
         default=Decimal('0.00'),
         db_column='koc_amount'
+    )
+
+    # 廠商加碼的 KOC 分潤：koc_amount 超過平台基本額度（分潤基礎 × 3%）的部分，
+    # 已經包含在 settlement_amount 裡，這裡另外存一份給月結單拆開顯示。
+    # 只有廠商自訂分潤（固定／階層式）的活動才會有；舊活動是 0。見 koc_commission.vendor_bonus_for。
+    koc_bonus_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        db_column='koc_bonus_amount'
     )
 
     # settlement_amount - koc_amount。

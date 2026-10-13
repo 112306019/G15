@@ -4,6 +4,8 @@ import { Plus, Calendar, Users, TrendingUp, Check, ChevronRight, ChevronLeft, Up
 import { formatCurrency, budgetUsedPct, cn } from './lib/utils'
 import { getVendorProducts, getVendorBundles, createVendorBundle, getVendorCampaigns, createVendorCampaign, updateVendorCampaign, deleteVendorCampaign, getVendorApplications, reviewVendorApplication} from '../api/vendor'
 import { useToast } from './components/ui/Toast'
+import KocHistoryPanel from './KocHistoryPanel'
+import { commissionModeHint, commissionTiersText } from '../commissionText'
 import { useConfirm } from './components/ui/ConfirmDialog'
 import { formatApiError, getErrorMessage } from '../errorMessage';
 
@@ -125,7 +127,84 @@ const newBundleRow = () => ({
   quantity: '1'
 })
 
-function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts, existingBundles = [], onBundleCreated }) {
+// ── KOC 分潤設定（廠商自己選固定或階層式）──
+// 後端沒回傳限制時用的預設值；實際以後端 commission_limits 為準
+const DEFAULT_COMMISSION_LIMITS = { min_rate: 3, max_rate: 15, max_tiers: 3, platform_base_rate: 3, service_fee_rate: 15 }
+
+// 階層式的預設三層：第 1–10 件、第 11–50 件、第 51 件以上（最後一層沒有上限，upTo 留空）
+const defaultCommissionTiers = () => [
+  { upTo: '10', rate: '3' },
+  { upTo: '50', rate: '5' },
+  { upTo: '', rate: '10' },
+]
+
+// 後端的 commission → 表單欄位。舊活動（平台統一級距）打開編輯時，先帶入固定分潤的預設值
+function commissionFormFromApi(commission) {
+  if (commission?.mode === 'progressive' && commission.tiers?.length) {
+    return {
+      commissionMode: 'progressive',
+      commissionRate: String(commission.base_rate ?? DEFAULT_COMMISSION_LIMITS.min_rate),
+      commissionTiers: commission.tiers.map(tier => ({
+        upTo: tier.max_quantity == null ? '' : String(tier.max_quantity),
+        rate: String(tier.rate),
+      })),
+    }
+  }
+  return {
+    commissionMode: 'fixed',
+    commissionRate: String(commission?.base_rate ?? DEFAULT_COMMISSION_LIMITS.min_rate),
+    commissionTiers: defaultCommissionTiers(),
+  }
+}
+
+const isValidRate = (value, limits) => {
+  if (value === '' || value === null || value === undefined) return false
+  const rate = Number(value)
+  return Number.isFinite(rate) && rate >= limits.min_rate && rate <= limits.max_rate
+}
+
+// 檢查表單上的分潤設定，回傳要顯示的錯誤訊息（沒問題回傳空字串）。規則跟後端一致
+function commissionFormError(form, limits) {
+  const range = `${limits.min_rate}% 到 ${limits.max_rate}%`
+  // 固定制一律是平台基本分潤率，沒有可以填錯的欄位
+  if (form.commissionMode !== 'progressive') return ''
+  const tiers = form.commissionTiers || []
+  if (tiers.length < 2) return '階層式分潤至少要設定兩層'
+  let previousUpTo = 0
+  let previousRate = null
+  for (let index = 0; index < tiers.length; index += 1) {
+    const tier = tiers[index]
+    const label = `第 ${index + 1} 層`
+    if (!isValidRate(tier.rate, limits)) return `${label}的分潤比例需介於 ${range} 之間`
+    if (previousRate !== null && Number(tier.rate) < previousRate) return `${label}的分潤比例不能比前一層低`
+    previousRate = Number(tier.rate)
+    if (index < tiers.length - 1) {
+      const upTo = Number(tier.upTo)
+      if (tier.upTo === '' || !Number.isInteger(upTo) || upTo < 1) return `${label}請填到第幾件（整數）`
+      if (upTo <= previousUpTo) return `${label}的件數要比前一層大`
+      previousUpTo = upTo
+    }
+  }
+  return ''
+}
+
+// 表單 → 送給後端的欄位
+function commissionPayload(form) {
+  if (form.commissionMode === 'progressive') {
+    const tiers = form.commissionTiers || []
+    return {
+      commission_mode: 'progressive',
+      commission_tiers: tiers.map((tier, index) => [
+        index === tiers.length - 1 ? null : Number(tier.upTo),
+        Number(tier.rate),
+      ]),
+    }
+  }
+  // 固定制的分潤率由後端決定（平台基本分潤率），不用送
+  return { commission_mode: 'fixed' }
+}
+
+function CampaignWizard({ open, onClose, onComplete, initialData, existingProducts, existingBundles = [], onBundleCreated, commissionLimits = DEFAULT_COMMISSION_LIMITS }) {
   const { toast } = useToast()
   const [step, setStep] = useState(0)
   const [prodMode, setProdMode] = useState('existing')
@@ -157,6 +236,10 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     discountType: 'percentage',
     discountValue: '',
     kocCommissionRate: '',
+    // 分潤方式：fixed 固定、progressive 階層式累進
+    ...commissionFormFromApi(null),
+    commission: null,
+    commissionLocked: false,
 
     status: 'draft',
     couponUsed: false,
@@ -273,7 +356,49 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   // 就以優惠價為基準去算折扣後金額，而不是用原價。
   const originalPrice = channelDiscountedPrice ?? listPrice
   const discountValue = Number(form.discountValue) || 0
-  const commissionRate = 3 // KOC 分潤比例平台統一固定 3%
+  // 已有 KOC 接案的活動，分潤設定鎖定不能改
+  const commissionLocked = Boolean(form.commissionLocked)
+  const commissionError = commissionLocked ? '' : commissionFormError(form, commissionLimits)
+  // 預估每件分潤用的比例：固定就是那個比例；階層式是第一層到最後一層的範圍
+  const commissionRates = commissionLocked && form.commission?.tiers?.length
+    ? form.commission.tiers.map(tier => Number(tier.rate))
+    : form.commissionMode === 'progressive'
+      ? (form.commissionTiers || []).map(tier => Number(tier.rate) || 0)
+      // 固定制一律是平台基本分潤率
+      : [Number(commissionLimits.platform_base_rate ?? 3)]
+  const commissionRate = commissionRates[0] || 0
+  const maxCommissionRate = commissionRates[commissionRates.length - 1] || 0
+
+  const setCommissionTier = (index, key) => event => {
+    const value = event.target.value
+    setForm(previous => ({
+      ...previous,
+      commissionTiers: previous.commissionTiers.map((tier, i) => (i === index ? { ...tier, [key]: value } : tier)),
+    }))
+  }
+
+  // 新增一層：加在最後面（新的最後一層沒有上限），原本的最後一層要補上件數
+  const addCommissionTier = () => {
+    setForm(previous => {
+      const tiers = previous.commissionTiers
+      const last = tiers[tiers.length - 1]
+      return {
+        ...previous,
+        commissionTiers: [...tiers.slice(0, -1), { ...last, upTo: '' }, { upTo: '', rate: last.rate }],
+      }
+    })
+  }
+
+  // 移除最後一層：前一層變成沒有上限
+  const removeCommissionTier = () => {
+    setForm(previous => {
+      const tiers = previous.commissionTiers.slice(0, -1)
+      return {
+        ...previous,
+        commissionTiers: tiers.map((tier, i) => (i === tiers.length - 1 ? { ...tier, upTo: '' } : tier)),
+      }
+    })
+  }
 
   const estimatedPrice =
     form.discountType === 'percentage'
@@ -284,6 +409,20 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
   const estimatedCommission =
     safeEstimatedPrice * (commissionRate / 100)
+  const maxEstimatedCommission =
+    safeEstimatedPrice * (maxCommissionRate / 100)
+
+  // 誰出這筆分潤：平台從 15% 服務費裡負擔基本額度，超過的部分是廠商加碼、併入月結單。
+  // 舊活動（平台統一級距）全部由平台負擔，沒有加碼。
+  const platformBaseRate = Number(commissionLimits.platform_base_rate ?? 3)
+  const serviceFeeRate = Number(commissionLimits.service_fee_rate ?? 15)
+  const hasVendorBonus = !(commissionLocked && form.commission?.mode === 'platform_tier')
+  const bonusRateOf = rate => (hasVendorBonus ? Math.max(0, rate - platformBaseRate) : 0)
+  const minBonusRate = bonusRateOf(commissionRate)
+  const maxBonusRate = bonusRateOf(maxCommissionRate)
+  // 12 → '12'、12.5 → '12.5'
+  const percentText = value => String(Math.round(value * 100) / 100)
+  const rangeText = (low, high, format) => (high > low ? `${format(low)} ~ ${format(high)}` : format(low))
 
   // ── 同一商品同一時間只能綁一個活動 ──
   // 編輯中的活動本身不算佔用；日期都是 YYYY-MM-DD 字串，可以直接用字串比大小。
@@ -567,13 +706,14 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
       discount_type: form.discountType,
       discount_value: Number(form.discountValue),
-      // KOC 分潤比例由平台統一固定為 3%，不再送廠商輸入的值
-      koc_commission_rate: 3,
+      // 分潤方式由廠商決定；已有 KOC 接案時設定已鎖定，不送，後端會維持原本的設定
+      ...(commissionLocked ? {} : commissionPayload(form)),
 
       promo_days: Number(form.promoDays),
       start_date: form.startDate,
       end_date: form.recruitEndDate,
-      recruit_limit: form.recruitLimit ? Number(form.recruitLimit) : null,
+      // 活動不再設定招募人數上限（欄位已從表單拿掉），新活動一律不限制
+      recruit_limit: null,
       status: campaignStatus
     }
 
@@ -637,7 +777,6 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
         {step === 0 && <>
           <Input label="任務名稱 *" value={form.name} onChange={set('name')} placeholder="例：夏季防曬大作戰" />
           <Input label="總預算 (NT$) *" type="number" value={form.budget} onChange={set('budget')} placeholder="50000" />
-          <Input label="招募人數上限（留空代表不限制）" type="number" min="1" value={form.recruitLimit} onChange={set('recruitLimit')} placeholder="例：10" />
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input 
@@ -1029,7 +1168,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
             {locked && (
               <div className="flex items-start gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 text-xs font-bold text-[#8C8880]">
                 <Lock size={14} className="shrink-0 mt-0.5" />
-                此活動已有優惠碼被使用，折扣與 KOC 分潤比例無法再修改
+                此活動已有優惠碼被使用，折扣無法再修改
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1069,12 +1208,122 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">KOC 分潤比例</label>
-              <div className="w-full bg-[#F5F0E8] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18]">
-                3%（平台統一固定比例）
-              </div>
-              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">KOC 分潤比例由平台統一設定，不開放廠商自訂</p>
+            <div className="flex flex-col gap-2 w-full">
+              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">KOC 分潤方式 *</label>
+
+              {commissionLocked ? (
+                <div className="w-full bg-[#F5F0E8] border border-[#E2DDD4] rounded-xl px-4 py-3">
+                  <div className="text-sm font-bold text-[#1A1A18]">{form.commission?.label || '—'}</div>
+                  {commissionTiersText(form.commission) && (
+                    <div className="mt-1 text-xs font-bold text-[#8C8880]">{commissionTiersText(form.commission)}</div>
+                  )}
+                  <div className="mt-1 text-[11px] font-medium text-[#8C8880]">{commissionModeHint(form.commission)}</div>
+                  <div className="mt-2 flex items-start gap-1.5 text-[11px] font-bold text-[#8C8880]">
+                    <Lock size={12} className="shrink-0 mt-0.5" />
+                    此活動已有 KOC 接案，分潤設定無法再修改
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'fixed', title: `固定 ${commissionLimits.platform_base_rate ?? 3}%`, desc: '每筆訂單都一樣，由平台負擔' },
+                      { key: 'progressive', title: '階層式', desc: '賣越多，後面的件數比例越高' },
+                    ].map(option => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setForm(previous => ({ ...previous, commissionMode: option.key }))}
+                        className={cn(
+                          'rounded-xl border px-4 py-3 text-left transition-colors',
+                          form.commissionMode === option.key
+                            ? 'border-[#C8522A] bg-[#FDF0ED]'
+                            : 'border-[#E2DDD4] bg-[#F8F9FA] hover:border-[#1A1A18]'
+                        )}
+                      >
+                        <div className={cn('text-sm font-bold', form.commissionMode === option.key ? 'text-[#C8522A]' : 'text-[#1A1A18]')}>
+                          {option.title}
+                        </div>
+                        <div className="mt-0.5 text-[11px] font-medium text-[#8C8880]">{option.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {form.commissionMode === 'fixed' ? (
+                    <div className="w-full bg-[#F5F0E8] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18]">
+                      {commissionLimits.platform_base_rate ?? 3}%（固定比例，全部由平台負擔）
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {form.commissionTiers.map((tier, index) => {
+                        const isLast = index === form.commissionTiers.length - 1
+                        // 這一層從第幾件開始＝前一層的件數 + 1
+                        const previousUpTo = index === 0 ? 0 : Number(form.commissionTiers[index - 1].upTo)
+                        const fromText = index === 0 ? '1' : (Number.isInteger(previousUpTo) && previousUpTo > 0 ? String(previousUpTo + 1) : '?')
+                        return (
+                          <div key={index} className="flex flex-wrap items-center gap-2 rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 py-2.5 text-sm font-bold text-[#1A1A18]">
+                            <span className="text-xs text-[#8C8880] w-12 shrink-0">第 {index + 1} 層</span>
+                            <span className="whitespace-nowrap">第 {fromText} 件</span>
+                            {isLast ? (
+                              <span className="whitespace-nowrap">以上</span>
+                            ) : (
+                              <>
+                                <span className="whitespace-nowrap">到第</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={tier.upTo}
+                                  onChange={setCommissionTier(index, 'upTo')}
+                                  className="w-20 bg-white border border-[#E2DDD4] rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:border-[#C8522A]"
+                                />
+                                <span className="whitespace-nowrap">件</span>
+                              </>
+                            )}
+                            <span className="ml-auto flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={commissionLimits.min_rate}
+                                max={commissionLimits.max_rate}
+                                step="0.01"
+                                value={tier.rate}
+                                onChange={setCommissionTier(index, 'rate')}
+                                className="w-20 bg-white border border-[#E2DDD4] rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:border-[#C8522A]"
+                              />
+                              %
+                            </span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex gap-3">
+                        {form.commissionTiers.length < commissionLimits.max_tiers && (
+                          <button type="button" onClick={addCommissionTier} className="text-xs font-bold text-[#C8522A] hover:underline">
+                            ＋ 新增一層
+                          </button>
+                        )}
+                        {form.commissionTiers.length > 2 && (
+                          <button type="button" onClick={removeCommissionTier} className="text-xs font-bold text-[#8C8880] hover:text-red-600 hover:underline">
+                            移除最後一層
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {commissionError && (
+                    <p className="flex items-center gap-1 text-[11px] font-bold text-red-600">
+                      <AlertCircle size={12} className="shrink-0" />
+                      {commissionError}
+                    </p>
+                  )}
+                  <p className="text-[10px] sm:text-[11px] text-[#8C8880] leading-relaxed">
+                    {form.commissionMode === 'progressive'
+                      ? `每一層的比例可設定 ${commissionLimits.min_rate}% 到 ${commissionLimits.max_rate}%。階層式為累進計算：每一段件數各用各的比例（例如前 10 件 3%、第 11 件起 10%），以商品件數計，每個 KOC 任務每月從第 1 件重新計算。`
+                      : `固定制的分潤比例一律是 ${commissionLimits.platform_base_rate ?? 3}%，您不用另外支付；想給 KOC 更高的分潤請選擇階層式。`}
+                    有 KOC 接案後就不能再修改。
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 sm:p-5 mt-4 space-y-3">
@@ -1099,8 +1348,34 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
               <div className="flex justify-between items-center text-sm">
                 <span className="text-[#8C8880] font-bold">每件 KOC 預估分潤</span>
                 <span className="font-black text-[#C8522A] text-lg">
-                  {originalPrice > 0 && form.discountValue !== '' ? formatCurrency(estimatedCommission) : '—'}
+                  {originalPrice > 0 && form.discountValue !== ''
+                    ? (maxEstimatedCommission > estimatedCommission
+                        ? `${formatCurrency(estimatedCommission)} ~ ${formatCurrency(maxEstimatedCommission)}`
+                        : formatCurrency(estimatedCommission))
+                    : '—'}
                 </span>
+              </div>
+              {/* 廠商實際要付多少：15% 服務費 + 超過平台基本額度的加碼 */}
+              <div className="pt-3 border-t border-[#E2DDD4] space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-[#8C8880] font-bold">其中由您加碼（每件）</span>
+                  <span className="font-bold text-[#1A1A18]">
+                    {originalPrice > 0 && form.discountValue !== ''
+                      ? rangeText(safeEstimatedPrice * minBonusRate / 100, safeEstimatedPrice * maxBonusRate / 100, formatCurrency)
+                      : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-[#8C8880] font-bold">您的月結費率</span>
+                  <span className="font-black text-[#1A1A18]">
+                    {rangeText(serviceFeeRate + minBonusRate, serviceFeeRate + maxBonusRate, value => `${percentText(value)}%`)}
+                  </span>
+                </div>
+                <p className="text-[10px] sm:text-[11px] text-[#8C8880] leading-relaxed">
+                  {hasVendorBonus
+                    ? `KOC 分潤中 ${percentText(platformBaseRate)}% 由平台從 ${percentText(serviceFeeRate)}% 服務費裡負擔；您設定的比例超過 ${percentText(platformBaseRate)}% 的部分是您給 KOC 的加碼獎勵，會併入每月的服務費月結單一起繳。月結費率 = ${percentText(serviceFeeRate)}% +（分潤比例 − ${percentText(platformBaseRate)}%）。`
+                    : `這個活動沿用原本的平台統一級距，KOC 分潤全部由平台從 ${percentText(serviceFeeRate)}% 服務費裡負擔，您不用另外支付。`}
+                </p>
               </div>
             </div>
           </>
@@ -1169,7 +1444,7 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
                 disabled={
                   (step === 0 && (!form.name || !form.startDate || !form.recruitEndDate)) ||
                   (step === 1 && (!form.prodName || hasScheduleConflict || Boolean(bundleError))) ||
-                  (step === 2 && (form.discountValue === '' || Number(form.discountValue) <= 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > originalPrice))) ||
+                  (step === 2 && (form.discountValue === '' || Number(form.discountValue) <= 0 || (form.discountType === 'percentage' && Number(form.discountValue) > 100) || (form.discountType === 'fixed' && Number(form.discountValue) > originalPrice) || Boolean(commissionError))) ||
                   isSaving
                 }
                 className="gap-1.5 px-8 w-full sm:w-auto"
@@ -1200,6 +1475,8 @@ export default function Campaigns() {
   const confirm = useConfirm()
   const [kocList, setKocList] = useState([])
   const [view, setView] = useState('grid')
+  // 審核名單裡目前展開接案紀錄的是哪一列（申請的 id），再點一次收起來
+  const [historyRowId, setHistoryRowId] = useState(null)
   // 已結案的活動獨立放在下方一區，可以收合
   const [showClosed, setShowClosed] = useState(true)
   const [kocLoading, setKocLoading] = useState(false)
@@ -1211,6 +1488,8 @@ export default function Campaigns() {
   const [productLoading, setProductLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
+  // 廠商設定分潤時的上下限與最多幾層（後端回傳）
+  const [commissionLimits, setCommissionLimits] = useState(DEFAULT_COMMISSION_LIMITS)
   const [campaignLoading, setCampaignLoading] = useState(true)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingDraft, setEditingDraft] = useState(null)
@@ -1302,8 +1581,6 @@ export default function Campaigns() {
           orderId: application.order_id,
 
           handle: application.koc_id,
-          platform: '尚未提供',
-          followers: '—',
           orders: 0,
           gmv: 0,
           avatar: '👤',
@@ -1432,6 +1709,10 @@ export default function Campaigns() {
         product.koc_commission_rate !== undefined
           ? String(product.koc_commission_rate)
           : '',
+      // 分潤方式（後端的 commission：mode / label / tiers）與編輯表單用的欄位
+      commission: campaign.commission || null,
+      commissionLocked: Boolean(campaign.commission_locked),
+      ...commissionFormFromApi(campaign.commission),
 
       prodId: product.product_id || '',
       isBundle: Boolean(product.is_bundle),
@@ -1467,6 +1748,7 @@ export default function Campaigns() {
         setError('')
         const response = await getVendorCampaigns(vendorId)
         setItems((response.data.campaigns || []).map(mapCampaignFromApi))
+        if (response.data.commission_limits) setCommissionLimits(response.data.commission_limits)
       } catch (error) {
         setError(getErrorMessage(error, '任務資料載入失敗'))
       } finally {
@@ -1733,6 +2015,7 @@ export default function Campaigns() {
         existingProducts={existingProducts}
         existingBundles={existingBundles}
         onBundleCreated={() => setProductsVersion(version => version + 1)}
+        commissionLimits={commissionLimits}
       />
 
       {/* 任務詳細資料 Modal */}
@@ -1782,7 +2065,7 @@ export default function Campaigns() {
                         : `折扣優惠 ${selectedTask.discountValue || 0}%`}
                     </span>
                     <span className="text-[#C8522A]">
-                      KOC 分潤 {selectedTask.kocCommissionRate || 0}%
+                      KOC 分潤 {selectedTask.commission?.label || `${selectedTask.kocCommissionRate || 0}%`}
                     </span>
                   </div>
                 </div>
@@ -1844,7 +2127,7 @@ export default function Campaigns() {
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4] sticky top-0 z-10">
-                  {['KOC 資訊', '平台與粉絲數', '審核狀態', '歷史違規', '平均接案銷售額', '帶來訂單', '創造 GMV', '審核'].map(h => (
+                  {['KOC 資訊', '審核狀態', '歷史違規', '平均接案銷售額', '帶來訂單', '創造 GMV', '審核'].map(h => (
                     <th
                       key={h}
                       className={cn(
@@ -1883,7 +2166,8 @@ export default function Campaigns() {
                   </tr>
                 ) : (
                   kocList.map(koc => (
-                    <tr key={koc.id} className="hover:bg-[#F8F9FA] transition-colors">
+                    <React.Fragment key={koc.id}>
+                    <tr className="hover:bg-[#F8F9FA] transition-colors">
                       <td className="p-4 sm:p-5">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-[#F5F0E8] border border-[#E2DDD4] rounded-full flex items-center justify-center text-lg shrink-0">
@@ -1892,14 +2176,18 @@ export default function Campaigns() {
                           <div>
                             <div className="text-sm font-bold text-[#1A1A18]">{koc.name}</div>
                             <div className="text-[11px] font-bold text-[#8C8880]">{koc.kocId}</div>
+                            {/* 審核前可以先看這位 KOC 的過往接案紀錄（違規、成效、每次任務結果） */}
+                            <button
+                              type="button"
+                              onClick={() => setHistoryRowId(previous => (previous === koc.id ? null : koc.id))}
+                              className="mt-1 text-[11px] font-bold text-[#C8522A] hover:underline whitespace-nowrap"
+                            >
+                              {historyRowId === koc.id ? '收起接案紀錄' : '查看接案紀錄'}
+                            </button>
                           </div>
                         </div>
                       </td>
 
-                      <td className="p-4 sm:p-5">
-                        <div className="text-sm font-bold text-[#1A1A18]">{koc.platform}</div>
-                        <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">{koc.followers}</div>
-                      </td>
 
                       <td className="p-4 sm:p-5">
                         <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap',
@@ -1957,6 +2245,15 @@ export default function Campaigns() {
                         )}
                       </td>
                     </tr>
+                    {/* 接案紀錄直接展開在這位 KOC 的列下方，不另外跳視窗 */}
+                    {historyRowId === koc.id && (
+                      <tr className="bg-[#F8F9FA]">
+                        <td colSpan={7} className="p-3 sm:p-5">
+                          <KocHistoryPanel koc={koc} />
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   ))
                 )}
               </tbody>

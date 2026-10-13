@@ -55,14 +55,16 @@ from api.models import (
 from api.serializers import KOCApproveSerializer, KOCRejectSerializer
 from api.views.constants import ROLE_CODE_MAP, STAGE_CODE_MAP, SUBMISSION_REMINDER_DAYS, EARNINGS_STATUS_CODE_MAP, EARNINGS_STATUS_CHOICES_MAP, VENDOR_SETTLEMENT_HOLD_DAYS, REMUNERATION_SERVICE_CONTENT, RETURN_REQUEST_WINDOW_DAYS, is_return_window_open, has_unresolved_return_request, sync_expired_promoting_missions, KOC_COMMISSION_RATE_PERCENT, VENDOR_SETTLEMENT_RATE_PERCENT
 from api.emails import send_koc_approval_email, send_vendor_approval_email, send_tax_form_rejected_email
+from api.views.admin_auth import record_admin_login
 from api.notifications import create_notification
 from payments.services import pick_relevant_payment
 from api.koc_commission import (
     commission_amount_for,
     commission_month_of,
     get_month_quantity,
-    get_tier_rate,
+    quote_new_earning,
     recalculate_mission_month,
+    vendor_bonus_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -213,11 +215,11 @@ def calculate_order_commission(order):
     commission_month = commission_month_of(order.completed_at)
 
     with transaction.atomic():
-        # 先用「當月目前件數 + 這筆件數」決定分潤率；建立後再整月重算一次，
-        # 處理跨級時同月其他分潤的調整（也順便處理同時完成的訂單）
-        month_quantity = get_month_quantity(mission, commission_month) + item_quantity
-        commission_rate = get_tier_rate(month_quantity)
-        commission_amount = commission_amount_for(commission_base, commission_rate)
+        # 依活動的分潤方式（固定／階層式累進／舊活動的平台級距）算出這筆的分潤率與金額；
+        # 建立後再整月重算一次，處理舊活動跨級時同月其他分潤的調整（也順便處理同時完成的訂單）
+        commission_rate, commission_amount = quote_new_earning(
+            mission, commission_month, commission_base, item_quantity
+        )
 
         earning = Earnings.objects.create(
             user=mission.koc.user,
@@ -332,17 +334,15 @@ def calculate_vendor_earning(order):
         ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         rate = Decimal(str(VENDOR_SETTLEMENT_RATE_PERCENT))
-        settlement_amount = (
+        service_fee = (
             sales_amount * rate / Decimal('100')
         ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-        koc_amount = Decimal(
-            str(
-                earning.amount
-                if earning and earning_vendor_id == vendor_id
-                else 0
-            )
-        )
+        vendor_earning = earning if earning and earning_vendor_id == vendor_id else None
+        koc_amount = Decimal(str(vendor_earning.amount if vendor_earning else 0))
+        # 廠商自訂分潤的活動：KOC 分潤超過平台基本額度的部分由廠商加碼，併入這張訂單的應繳金額
+        koc_bonus_amount = vendor_bonus_for(vendor_earning)
+        settlement_amount = service_fee + koc_bonus_amount
         platform_amount = max(
             Decimal('0.00'),
             settlement_amount - koc_amount
@@ -365,6 +365,7 @@ def calculate_vendor_earning(order):
                 'settlement_rate': rate,
                 'settlement_amount': settlement_amount,
                 'koc_amount': koc_amount,
+                'koc_bonus_amount': koc_bonus_amount,
                 'platform_amount': platform_amount,
                 'eligible_at': eligible_at,
                 'status': item_status,
@@ -379,6 +380,7 @@ def calculate_vendor_earning(order):
             'settlement_rate': str(rate),
             'settlement_amount': str(settlement_amount),
             'koc_amount': str(koc_amount),
+            'koc_bonus_amount': str(koc_bonus_amount),
             'platform_amount': str(platform_amount),
             'status': obj.status,
             'message': (
@@ -599,6 +601,10 @@ def reverse_earning_and_vendor_income_for_return(return_request):
                     earning.refresh_from_db(fields=['amount', 'status'])
             results['earning_adjustment'] = {'earnings_id': earning.earnings_id, 'deducted': delta, 'status': earning.status}
 
+    earning_vendor_id = None
+    if earning and earning.kocmission and earning.kocmission.application:
+        earning_vendor_id = earning.kocmission.application.campaign.vendor_id
+
     qs = VendorSettlementItem.objects.select_related('settlement', 'vendor').filter(order=order)
     if return_request.order_item_id:
         vendor_id = return_request.order_item.product.vendor_id
@@ -617,15 +623,26 @@ def reverse_earning_and_vendor_income_for_return(return_request):
             new_sales = Decimal('0.00')
         else:
             new_sales = max(Decimal('0.00'), item.sales_amount - refunded_amount)
-        new_fee = (new_sales * Decimal(str(VENDOR_SETTLEMENT_RATE_PERCENT)) / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        new_koc = Decimal(str(earning.amount if earning and earning.status != 'cancelled' else 0))
+        # 分潤只屬於活動廠商的那一筆明細；同一張訂單裡其他廠商的明細沒有 KOC 分潤
+        item_earning = (
+            earning
+            if earning and earning.status != 'cancelled' and earning_vendor_id == item.vendor_id
+            else None
+        )
+        new_koc = Decimal(str(item_earning.amount if item_earning else 0))
+        # 廠商加碼跟著退款後的分潤重算；整筆退掉就沒有加碼
+        new_bonus = vendor_bonus_for(item_earning) if new_sales > 0 else Decimal('0.00')
+        new_fee = (
+            new_sales * Decimal(str(VENDOR_SETTLEMENT_RATE_PERCENT)) / Decimal('100')
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) + new_bonus
         new_platform = max(Decimal('0.00'), new_fee - new_koc)
         item.sales_amount = new_sales
         item.settlement_amount = new_fee
         item.koc_amount = new_koc
+        item.koc_bonus_amount = new_bonus
         item.platform_amount = new_platform
         item.status = 'refunded' if new_sales == 0 else 'adjusted'
-        item.save(update_fields=['sales_amount','settlement_amount','koc_amount','platform_amount','status','updated_at'])
+        item.save(update_fields=['sales_amount','settlement_amount','koc_amount','koc_bonus_amount','platform_amount','status','updated_at'])
         results['vendor_adjustments'].append({
             'vendor_id': item.vendor_id,
             'settlement_item_id': item.settlement_item_id,
@@ -968,6 +985,12 @@ def admin_settle_vendor_earnings(request):
             Decimal('0.00')
         )
 
+        # 廠商加碼的 KOC 分潤（已包含在上面的 fee 裡），另外加總給月結單拆開顯示
+        koc_bonus = sum(
+            (item.koc_bonus_amount or Decimal('0.00') for item in items),
+            Decimal('0.00')
+        )
+
         platform_amount = max(
             Decimal('0.00'),
             fee - koc
@@ -991,6 +1014,7 @@ def admin_settle_vendor_earnings(request):
                 ),
                 amount_due=fee,
                 koc_amount=koc,
+                koc_bonus_amount=koc_bonus,
                 platform_amount=platform_amount,
                 status='awaiting_payment',
                 due_date=due_date,
@@ -1018,6 +1042,7 @@ def admin_settle_vendor_earnings(request):
             'gross_sales': str(gross),
             'amount_due': str(fee),
             'koc_amount': str(koc),
+            'koc_bonus_amount': str(koc_bonus),
             'platform_amount': str(platform_amount),
             'due_date': due_date,
             'status': settlement.status,
@@ -1483,6 +1508,7 @@ def admin_list_vendor_payouts(request):
             'Amount_paid': float(paid),
             'Outstanding_amount': float(s.outstanding_amount),
             'Koc_amount': float(s.koc_amount),
+            'Koc_bonus_amount': float(s.koc_bonus_amount or 0),
             'Platform_amount': float(s.platform_amount),
             'Due_date': s.due_date,
             'Status': s.status,
@@ -4195,7 +4221,9 @@ def admin_login(request):
         )
 
     admin.last_login_at = timezone.now()
-    admin.save()
+    admin.save(update_fields=['last_login_at'])
+    # 給「登入與安全性」頁面用；寫入失敗不影響登入（函式內部自己吞例外）
+    record_admin_login(admin, request)
 
     return Response({
         'success': True,
@@ -4836,4 +4864,3 @@ def admin_review_tax_form(request):
         'form_id': form.form_id,
         'status': form.status,
     }, status=status.HTTP_200_OK)
-

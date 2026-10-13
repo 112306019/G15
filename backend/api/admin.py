@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts, ChatRoom, Message
+from .models import User, Order, OrderItem, Campaigns, CampaignProduct, Product, KOC, Application,  KOCMissionNew, Submissions, Vendor, KocWallet, Earnings, CouponNew, Admins, AdminAuditLogs, Payouts, ChatRoom, Message, AdminLoginHistory, AdminPasswordResetCode
 # 例如：from .models import Product
 # admin.site.register(Product)
 
@@ -94,9 +94,10 @@ class CouponNewAdmin(admin.ModelAdmin):
 
 @admin.register(Admins)
 class AdminsAdmin(admin.ModelAdmin):
-    list_display = ('admin_id', 'name', 'email', 'role', 'status', 'last_login_at')
+    list_display = ('admin_id', 'name', 'email', 'role', 'status', 'last_login_at', 'password_updated_at')
     list_filter = ('role', 'status')
     search_fields = ('name', 'email')
+    readonly_fields = ('password_updated_at',)
 
 
 @admin.register(AdminAuditLogs)
@@ -127,3 +128,20 @@ class MessageAdmin(admin.ModelAdmin):
     search_fields = ('sender_id', 'content')
     readonly_fields = ('created_at',)
     list_editable = ('is_read',)
+
+
+@admin.register(AdminLoginHistory)
+class AdminLoginHistoryAdmin(admin.ModelAdmin):
+    list_display = ('log_id', 'admin', 'ip_address', 'login_at')
+    search_fields = ('admin__email', 'ip_address')
+    readonly_fields = ('login_at',)
+
+
+@admin.register(AdminPasswordResetCode)
+class AdminPasswordResetCodeAdmin(admin.ModelAdmin):
+    # 不顯示 code 本身，避免能進 Django admin 的人直接看到別人的驗證碼
+    list_display = ('reset_id', 'admin', 'is_used', 'failed_attempts', 'expires_at', 'created_at')
+    list_filter = ('is_used',)
+    search_fields = ('admin__email',)
+    exclude = ('code',)
+    readonly_fields = ('created_at',)
