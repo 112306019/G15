@@ -1,9 +1,9 @@
-import random, string
+import random, string, uuid
 from django.contrib.auth.hashers import make_password, check_password
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from django.utils import timezone
 from datetime import datetime, time, timedelta
 from django.db import transaction
@@ -1459,6 +1459,212 @@ def _commission_base_rate(commission_tiers):
     return Decimal(str(commission_tiers[0][1]))
 
 
+# ──────────────────────────────────────────────
+# 活動草稿
+# ──────────────────────────────────────────────
+#
+# 草稿是「還沒填完」的活動，所以不能套用發佈時的完整驗證：
+# 預算、折扣、截止日、商品都允許先空著，發佈時才全部檢查。
+# 草稿也不佔用商品（見 CAMPAIGN_NON_OCCUPYING_STATUSES），所以不做檔期衝突檢查。
+#
+# 資料表欄位不能是空值的部分，存草稿時補預設值：
+# - start_date 沒填 → 今天；end_date 沒填 → 同 start_date
+# - budget / discount_value 沒填 → 0（前端讀回草稿時把 0 當成沒填）
+# - 分潤設定不完整 → 沿用原本設定，新草稿用固定分潤
+# - 沒選商品，或新商品資料沒填完整 → 先不綁商品（不會建立半套商品出現在商城）
+
+
+class VendorCampaignDraftSerializer(serializers.Serializer):
+    vendor_id = serializers.CharField()
+    campaign_id = serializers.UUIDField(required=False, allow_null=True)
+    name = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    promo_copy = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=5000)
+    product_description = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=5000)
+    budget = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False, allow_null=True)
+    reward_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    discount_type = serializers.ChoiceField(choices=["percentage", "fixed"], required=False, allow_null=True)
+    discount_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False, allow_null=True)
+    promo_days = serializers.IntegerField(min_value=1, max_value=30, required=False, allow_null=True)
+    start_date = serializers.DateField(required=False, allow_null=True)
+    end_date = serializers.DateField(required=False, allow_null=True)
+    product_id = serializers.IntegerField(required=False, allow_null=True)
+    product = serializers.DictField(required=False, allow_null=True)
+    commission_mode = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    commission_tiers = serializers.JSONField(required=False, allow_null=True)
+    koc_commission_rate = serializers.JSONField(required=False, allow_null=True)
+
+    def validate(self, data):
+        start_date, end_date = data.get("start_date"), data.get("end_date")
+        if start_date and end_date and end_date < start_date:
+            raise serializers.ValidationError({"end_date": "申請截止日期不能早於任務開始日期"})
+        if data.get("discount_type") == "percentage" and (data.get("discount_value") or 0) > 100:
+            raise serializers.ValidationError({"discount_value": "百分比折扣不能超過 100%"})
+        return data
+
+
+def _draft_new_product(product_data):
+    """新商品資料要「名稱、售價、庫存」都有填才建立，否則回傳 None（草稿先不綁商品）。"""
+    if not product_data:
+        return None
+
+    name = str(product_data.get("product_name") or "").strip()
+    try:
+        price = int(product_data.get("price"))
+        stock = int(product_data.get("stock"))
+    except (TypeError, ValueError):
+        return None
+
+    if not name or price < 0 or stock < 0:
+        return None
+
+    discounted_price = product_data.get("discounted_price")
+    try:
+        discounted_price = int(discounted_price) if discounted_price not in (None, "") else None
+    except (TypeError, ValueError):
+        discounted_price = None
+
+    return {
+        "product_name": name,
+        "description": product_data.get("description") or "",
+        "price": price,
+        "discounted_price": discounted_price,
+        "stock": stock,
+        "category": product_data.get("category") or "",
+        "image_url": product_data.get("image_url") or "",
+    }
+
+
+def _is_valid_uuid(value):
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _save_campaign_draft(request, campaign=None):
+    serializer = VendorCampaignDraftSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response({
+            "success": False,
+            "err": serializer_error_message(serializer.errors)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    vendor_id = data["vendor_id"]
+
+    vendor = Vendor.objects.filter(vendor_id=vendor_id).first()
+    if not vendor:
+        return Response({
+            "success": False,
+            "err": "Vendor not found"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    # 分潤：填得不完整就沿用原本設定（新草稿用固定分潤），發佈時才嚴格檢查
+    try:
+        commission_mode, commission_tiers = _commission_setting_from_request(data)
+    except CommissionSettingError:
+        if campaign is not None and campaign.commission_mode:
+            commission_mode, commission_tiers = campaign.commission_mode, campaign.commission_tiers
+        else:
+            commission_mode, commission_tiers = normalize_commission_setting("fixed", rate=None, tiers=None)
+
+    start_date = data.get("start_date") or timezone.localdate()
+    end_date = data.get("end_date") or start_date
+    start_datetime = timezone.make_aware(datetime.combine(start_date, time.min))
+    end_datetime = timezone.make_aware(datetime.combine(end_date, time.max))
+
+    existing_product = None
+    new_product_data = None
+    product_id = data.get("product_id")
+
+    if product_id:
+        existing_product = Product.objects.filter(product_id=product_id, vendor_id=vendor_id).first()
+        if existing_product is None:
+            return Response({
+                "success": False,
+                "err": "找不到這個商品，請重新選擇"
+            }, status=status.HTTP_404_NOT_FOUND)
+    else:
+        new_product_data = _draft_new_product(data.get("product"))
+
+    # 有送商品資料，但沒填完整，所以這次沒綁商品；前端據此提示廠商
+    product_skipped = bool(data.get("product")) and new_product_data is None and existing_product is None
+
+    discount_type = data.get("discount_type") or "percentage"
+    discount_value = data.get("discount_value") or Decimal("0")
+
+    try:
+        with transaction.atomic():
+            if existing_product is not None:
+                product = existing_product
+                _apply_product_description(product, data)
+            elif new_product_data is not None:
+                product = Product.objects.create(
+                    vendor_id=vendor.vendor_id,
+                    status="active",
+                    **new_product_data
+                )
+            else:
+                product = None
+
+            if campaign is None:
+                campaign = Campaigns(vendor=vendor)
+
+            campaign.name = data["name"].strip()
+            campaign.description = data.get("description") or ""
+            campaign.promo_copy = (data.get("promo_copy") or "").strip()
+            campaign.budget = data.get("budget") or Decimal("0")
+            campaign.reward_type = data.get("reward_type") or "commission"
+            campaign.promo_days = data.get("promo_days") or 7
+            campaign.start_date = start_datetime
+            campaign.end_date = end_datetime
+            campaign.status = "draft"
+            campaign.commission_mode = commission_mode
+            campaign.commission_tiers = commission_tiers
+            campaign.save()
+
+            campaign_product = CampaignProduct.objects.filter(campaign=campaign).first()
+
+            if product is None:
+                # 表單上目前沒有（完整的）商品，草稿跟著解除綁定
+                CampaignProduct.objects.filter(campaign=campaign).delete()
+            elif campaign_product:
+                campaign_product.product = product
+                campaign_product.discount_type = discount_type
+                campaign_product.discount_value = discount_value
+                campaign_product.koc_commission_rate = _commission_base_rate(commission_tiers)
+                campaign_product.save(update_fields=[
+                    "product", "discount_type", "discount_value", "koc_commission_rate",
+                ])
+            else:
+                CampaignProduct.objects.create(
+                    campaign=campaign,
+                    product=product,
+                    discount_type=discount_type,
+                    discount_value=discount_value,
+                    koc_commission_rate=_commission_base_rate(commission_tiers),
+                )
+
+    except Exception:
+        return Response({
+            "success": False,
+            "err": internal_error_message("草稿儲存失敗")
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({
+        "success": True,
+        "err": "",
+        "campaign_id": str(campaign.campaign_id),
+        "product_id": product.product_id if product else None,
+        "product_created": new_product_data is not None,
+        "product_skipped": product_skipped,
+        "status": campaign.status,
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def vendor_campaign_create(request):
@@ -1468,7 +1674,12 @@ def vendor_campaign_create(request):
     商品來源二選一：
     1. 傳 product_id：綁定廠商既有商品
     2. 傳 product：建立新商品並綁定
+
+    status=draft 走 _save_campaign_draft（欄位可以先空著）。
     """
+    if request.data.get("status") == "draft":
+        return _save_campaign_draft(request)
+
     serializer = VendorCampaignCreateSerializer(
         data=request.data
     )
@@ -1666,7 +1877,29 @@ def vendor_campaign_update(request):
     商品來源二選一：
     1. product_id：綁定既有商品
     2. product：建立新商品並重新綁定
+
+    status=draft 走 _save_campaign_draft（欄位可以先空著）；已發佈的活動不能改回草稿。
     """
+    if request.data.get("status") == "draft":
+        draft = Campaigns.objects.filter(
+            campaign_id=request.data.get("campaign_id"),
+            vendor_id=request.data.get("vendor_id"),
+        ).first() if _is_valid_uuid(request.data.get("campaign_id")) else None
+
+        if draft is None:
+            return Response({
+                "success": False,
+                "err": "Campaign not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if draft.status != "draft":
+            return Response({
+                "success": False,
+                "err": "已發佈的活動不能改回草稿"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return _save_campaign_draft(request, campaign=draft)
+
     serializer = VendorCampaignUpdateSerializer(
         data=request.data
     )

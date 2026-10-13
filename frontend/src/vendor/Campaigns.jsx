@@ -503,10 +503,12 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
 
   // 新組合在送出活動前才真正建立；建立後把 id 記回表單，重送時不會重複建立。
   // 組合內容不完整時回傳 null，呼叫端直接中止。
-  const ensureBundleProductId = async () => {
+  // forDraft=true：組合還沒搭配完整時不擋存草稿，只是這次先不綁商品（回傳 ''）。
+  const ensureBundleProductId = async ({ forDraft = false } = {}) => {
     if (!isNewBundle) return form.prodId
 
     if (bundleError) {
+      if (forDraft) return ''
       toast.error(bundleError)
       return null
     }
@@ -598,9 +600,8 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
     setIsSaving(true)
 
     try {
-      const productId = await ensureBundleProductId()
-      if (productId === null) return
-      const payload = buildPayload('draft', productId)
+      const productId = await ensureBundleProductId({ forDraft: true })
+      const payload = buildDraftPayload(productId)
 
       let response
 
@@ -623,13 +624,20 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
       const savedProductId =
         response.data?.product_id ||
         response.product_id ||
-        form.prodId
+        productId ||
+        ''
+
+      if (response.data?.product_skipped || (isNewBundle && bundleError)) {
+        toast.success('草稿已儲存（商品資料還沒填完整，這次先不綁商品）')
+      } else {
+        toast.success('草稿已儲存')
+      }
 
       onComplete({
         ...form,
         id: savedCampaignId,
         prodId: savedProductId,
-        isBundle: prodMode === 'bundle',
+        isBundle: prodMode === 'bundle' && Boolean(savedProductId),
         status: 'draft',
         spent: form.spent || 0,
         kocCount: form.kocCount || 0,
@@ -694,6 +702,62 @@ function CampaignWizard({ open, onClose, onComplete, initialData, existingProduc
   }
 
   
+
+  // 草稿：沒填的欄位送 null（不要 Number('') 變成 0 被後端當成有填），
+  // 沒選商品就不送 product_id，新商品沒填完整就不送 product。
+  const buildDraftPayload = productId => {
+    const numberOrNull = value =>
+      value === '' || value === null || value === undefined || Number.isNaN(Number(value))
+        ? null
+        : Number(value)
+
+    const payload = {
+      vendor_id: localStorage.getItem('vendor_id'),
+      name: form.name.trim(),
+      description: (form.description || '').trim(),
+      promo_copy: (form.promoCopy || '').trim(),
+      budget: numberOrNull(form.budget),
+      reward_type: 'commission',
+      discount_type: form.discountType || 'percentage',
+      discount_value: numberOrNull(form.discountValue),
+      ...(commissionLocked ? {} : commissionPayload(form)),
+      promo_days: numberOrNull(form.promoDays),
+      start_date: form.startDate || null,
+      end_date: form.recruitEndDate || null,
+      recruit_limit: null,
+      status: 'draft'
+    }
+
+    if (prodMode === 'existing' || prodMode === 'bundle') {
+      if (productId) {
+        payload.product_id = Number(productId)
+        payload.product_description = (form.prodDescription || '').trim()
+      }
+      return payload
+    }
+
+    const newProductComplete =
+      form.prodName.trim() !== '' &&
+      numberOrNull(form.prodPrice) !== null &&
+      numberOrNull(form.prodStock) !== null
+
+    if (newProductComplete) {
+      payload.product = {
+        product_name: form.prodName.trim(),
+        description: (form.prodDescription || '').trim(),
+        price: Number(form.prodPrice),
+        discounted_price: numberOrNull(form.prodDiscountedPrice),
+        stock: Number(form.prodStock),
+        category: (form.prodCategory || '').trim(),
+        image_url: (form.prodImageUrl || '').trim()
+      }
+    } else if (form.prodName.trim()) {
+      // 讓後端回 product_skipped，前端顯示提示
+      payload.product = { product_name: form.prodName.trim() }
+    }
+
+    return payload
+  }
 
   const buildPayload = (campaignStatus, productId = form.prodId) => {
     const basePayload = {
@@ -1724,6 +1788,17 @@ export default function Campaigns() {
       prodCategory: product.category || '',
       prodImageUrl: product.image_url || '',
       thumbnail: product.image_url || '📦',
+
+      // 草稿存檔時沒填的預算 / 折扣，後端會存成 0；讀回來當成沒填
+      ...(campaign.status === 'draft'
+        ? {
+            budget: Number(campaign.budget || 0) > 0 ? Number(campaign.budget) : '',
+            discountValue:
+              product.discount_value !== undefined && Number(product.discount_value) > 0
+                ? String(product.discount_value)
+                : '',
+          }
+        : {}),
 
       status: campaign.status || 'draft',
       couponUsed: Boolean(campaign.coupon_used),
