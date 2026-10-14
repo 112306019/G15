@@ -934,8 +934,10 @@ def get_tax_form_data(request):
     URL: /koc/mission/taxFormData?User_id=xxx&form_id=1（form_id 可省略）
 
     帶 form_id：查看某一張「已經送出過」的勞報單當時申報的金額與時間。
-    不帶 form_id：預覽「現在馬上申報的話」會是多少錢（等於目前所有還沒申報過的分潤加總），
-    給 KOC 在正式送出連結前先把單子印出來看金額用。
+    不帶 form_id：預覽「現在馬上申報／重新提交的話」會是多少錢——目前所有還沒申報過的
+    分潤加總，若剛好有一張被退回、待重新提交的單，會一併加上那張單的金額（跟
+    submit_tax_form_link 重新提交時的合併邏輯一致），給 KOC 在正式送出連結前
+    先把單子印出來看金額用。
 
     只回傳系統裡目前有的資料；身分證字號、代扣稅額、二代健保費、執行業務代號
     這些系統沒有收集或不計算的欄位，前端會顯示成空白手填欄位。
@@ -964,6 +966,9 @@ def get_tax_form_data(request):
         submitted_at = form.submitted_at
     else:
         amount = _get_undeclared_amount(koc)
+        open_form = _get_open_form(koc)
+        if open_form and open_form.status == 'rejected':
+            amount += open_form.amount
         submitted_at = timezone.now()
 
     koc_user = koc.user
@@ -989,10 +994,9 @@ def submit_tax_form_link(request):
     URL: /koc/mission/submitTaxFormLink
 
     同時間只能有一張進行中的單：如果上一張還在審核中，不能再開新的；如果上一張被
-    退回，只能在同一張單上重新提交（換連結、重新送審），金額維持退回當時的原始
-    金額不變——不會因為重新提交而悄悄改變，避免 KOC 已經印出來簽名的單子金額
-    對不起來。退回之後新增加的分潤仍是「未申報」狀態，會留到這張單審核通過後、
-    下一次開新單時才會被納入。
+    退回，只能在同一張單上重新提交（換連結、重新送審）——這時候會順便把退回期間
+    新累積的未申報分潤一起併進這張單，金額可能因此變大。回傳的 amount_changed
+    會標示金額是否因此變動，前端要提醒 KOC 金額變了的話記得重新列印、簽名。
     """
     user_id = request.data.get('User_id')
     url = (request.data.get('url') or '').strip()
@@ -1018,20 +1022,35 @@ def submit_tax_form_link(request):
         return Response({'success': False, 'err': '您已有一張審核中的勞務報酬單，請等候審核結果'}, status=http_status.HTTP_400_BAD_REQUEST)
 
     now = timezone.now()
+    amount_changed = False
 
     if open_form:
-        # 重新提交被退回的單：只換連結、重置審核狀態，金額跟涵蓋的分潤都不變
-        form = open_form
-        form.cloud_link_url = url
-        form.status = 'pending_review'
-        form.submitted_at = now
-        form.reject_reason = None
-        form.reviewed_at = None
-        form.reviewed_by_admin_id = None
-        form.save(update_fields=[
-            'cloud_link_url', 'status', 'submitted_at',
-            'reject_reason', 'reviewed_at', 'reviewed_by_admin_id',
-        ])
+        # 重新提交被退回的單：換連結、重置審核狀態，並把退回期間新累積的未申報
+        # 分潤一起併進這張單（同一張單、同一個 form_id，不是開新單）。
+        with transaction.atomic():
+            form = RemunerationForm.objects.select_for_update().get(pk=open_form.pk)
+            previous_amount = form.amount
+
+            newly_undeclared = Earnings.objects.select_for_update().filter(
+                user=koc.user, remuneration_form__isnull=True
+            )
+            additional = newly_undeclared.aggregate(total=Sum('amount'))['total'] or 0
+
+            if additional > 0:
+                newly_undeclared.update(remuneration_form=form)
+                form.amount = previous_amount + additional
+
+            form.cloud_link_url = url
+            form.status = 'pending_review'
+            form.submitted_at = now
+            form.reject_reason = None
+            form.reviewed_at = None
+            form.reviewed_by_admin_id = None
+            form.save(update_fields=[
+                'amount', 'cloud_link_url', 'status', 'submitted_at',
+                'reject_reason', 'reviewed_at', 'reviewed_by_admin_id',
+            ])
+            amount_changed = form.amount != previous_amount
     else:
         with transaction.atomic():
             # 用 select_for_update 鎖住還沒申報過的分潤，避免跟同一時間另一次
@@ -1058,6 +1077,7 @@ def submit_tax_form_link(request):
         'err': '',
         'form_id': form.form_id,
         'amount': form.amount,
+        'amount_changed': amount_changed,
         'tax_form_status': form.status,
         'tax_form_url': form.cloud_link_url,
     }, status=http_status.HTTP_200_OK)
@@ -1235,16 +1255,12 @@ def get_revenue_total(request):
     unapproved_amount = _get_unapproved_declared_amount(koc)
     confirmed_amount = max(0, total_balance - undeclared_amount - unapproved_amount)
 
-    # 是否已綁定銀行帳戶：檢查 KOC 的 bank_account 欄位是否有值
-    has_bank_account = bool(koc.bank_account)
-
     return Response({
         "success": True,
         "err": "",
         "undeclared_amount": undeclared_amount,
         "unapproved_amount": unapproved_amount,
         "confirmed_amount": confirmed_amount,
-        "hasBankAccount": has_bank_account,
     }, status=http_status.HTTP_200_OK)
 
 
