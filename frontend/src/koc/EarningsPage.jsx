@@ -14,6 +14,7 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
   // _get_open_form 邏輯一致：同時間最多一張，不是 approved 就算進行中。
   const [openForm, setOpenForm] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [submitNotice, setSubmitNotice] = useState('');
 
   const fetchRevenue = useCallback(async () => {
     try {
@@ -44,7 +45,9 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
   const isReviewing = openForm?.status === 'pending_review';
   const isResubmit = openForm?.status === 'rejected';
   const canDeclare = !isReviewing && (isResubmit || undeclaredAmount > 0);
-  const modalAmount = isResubmit ? openForm.amount : undeclaredAmount;
+  // 重新提交會把期間新累積的未申報金額一起併進這張單，所以預覽金額要是合計後的總額。
+  const modalAmount = isResubmit ? openForm.amount + undeclaredAmount : undeclaredAmount;
+  const mergeAmount = isResubmit ? undeclaredAmount : 0;
 
   return (
     <div className="animate-in fade-in duration-500 font-sans p-4 md:p-0 max-w-5xl mx-auto pb-12">
@@ -111,6 +114,12 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
               {isResubmit && openForm.reject_reason && (
                 <p className="text-xs font-bold text-[#C8522A] mb-4">上一張勞報單被退回：{openForm.reject_reason}</p>
               )}
+              {submitNotice && (
+                <div className="flex items-start justify-between gap-2 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl md:rounded-2xl px-4 py-3 mb-4 text-xs text-[#C8522A] leading-relaxed">
+                  <span>{submitNotice}</span>
+                  <button onClick={() => setSubmitNotice('')} className="shrink-0 font-bold hover:opacity-70">✕</button>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 bg-[#F5F0E8] rounded-xl md:rounded-2xl px-4 py-3 mb-6 mt-4 text-xs text-[#1A1A18] leading-relaxed">
                 <CheckCircle2 size={15} className="shrink-0 mt-0.5 text-[#C8522A]" />
@@ -158,10 +167,17 @@ export default function EarningsPage({ onDetail, onTaxFormRecords, onPayoutRecor
           amount={modalAmount}
           isResubmit={isResubmit}
           rejectReason={openForm?.reject_reason}
-          formId={openForm?.form_id}
+          mergeAmount={mergeAmount}
           userId={user_id}
           onClose={() => setModalOpen(false)}
-          onSubmitted={() => fetchRevenue()}
+          onSubmitted={(data) => {
+            fetchRevenue();
+            setSubmitNotice(
+              data?.amount_changed
+                ? `申報金額因為併入新累積的分潤而變成 NT$ ${(data.amount || 0).toLocaleString()}，請重新列印、簽署勞務報酬單後再上傳連結。`
+                : '已成功送出，請等候審核。'
+            );
+          }}
         />
       )}
     </div>

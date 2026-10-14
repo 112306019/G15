@@ -12,9 +12,11 @@ function isValidUrl(value) {
   }
 }
 
-// isResubmit：true 代表在修正一張被退回的單，金額是固定的（退回當時的金額，
-// 不會因為重新提交而改變）；false 代表要開一張全新的單，金額是目前所有還沒申報過的分潤加總。
-export default function TaxFormModal({ amount, isResubmit, rejectReason, formId, userId, onClose, onSubmitted }) {
+// isResubmit：true 代表在修正一張被退回的單——重新提交時會把退回期間新累積的
+// 未申報分潤一併併入這張單，amount 是併入後的總額，mergeAmount 是其中新併入的
+// 那部分金額（> 0 時代表金額跟退回當時不一樣了）；false 代表要開一張全新的單，
+// 金額是目前所有還沒申報過的分潤加總。
+export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAmount, userId, onClose, onSubmitted }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -73,7 +75,7 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, formId,
           </button>
         </div>
         <p className="text-[10px] md:text-xs font-bold text-[#8C8880] mb-5 md:mb-6 shrink-0">
-          {isResubmit ? '修正連結後重新送審，金額維持不變' : '本次申報將涵蓋目前所有還沒申報過的分潤'}
+          {isResubmit ? '修正連結後重新送審，會一併併入這段期間新累積的未申報分潤' : '本次申報將涵蓋目前所有還沒申報過的分潤'}
         </p>
 
         <div className="overflow-y-auto pr-1 shrink">
@@ -81,6 +83,13 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, formId,
             <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl md:rounded-2xl p-3.5 md:p-4 mb-4 md:mb-5 text-[11px] md:text-xs text-[#C8522A] leading-relaxed">
               <span className="font-bold">上次退回原因：</span>
               {rejectReason}
+            </div>
+          )}
+
+          {isResubmit && mergeAmount > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl md:rounded-2xl p-3.5 md:p-4 mb-4 md:mb-5 text-[11px] md:text-xs text-amber-800 leading-relaxed">
+              將一併併入期間新增加的 <span className="font-bold">NT$ {mergeAmount.toLocaleString()}</span> 未申報分潤，
+              金額跟上次退回時不一樣，送出後請重新列印、簽署勞務報酬單。
             </div>
           )}
 
@@ -99,10 +108,11 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, formId,
           </div>
 
           {/* 開啟勞報單列印頁面：瀏覽器直接渲染表單，用「列印/儲存為 PDF」輸出。
-              重新提交時帶上 formId，顯示的是當初退回那張單鎖定的金額，不是現在的
-              即時預覽（重新提交不會改變金額，見上面的說明文字）。 */}
+              一律連到即時預覽（不帶 formId）：後端的預覽邏輯本來就會在有退回單
+              待重新提交時，自動把退回單的金額併入未申報金額，跟這裡顯示的
+              申報金額（amount）一致。 */}
           <a
-            href={isResubmit && formId ? `/tax-form-print/${formId}` : '/tax-form-print'}
+            href="/tax-form-print"
             target="_blank"
             rel="noreferrer"
             className="w-full mb-4 md:mb-5 flex items-center justify-center gap-1.5 md:gap-2 bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
