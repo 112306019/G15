@@ -105,6 +105,13 @@ function AiCheckResult({ result }) {
         </div>
       )}
 
+      {/* AI 服務額度用完或忙碌時，後端只會回規則比對的結果，沒有 AI 分析 */}
+      {!analysis && (
+        <div className="rounded-lg border border-[#E2DDD4] bg-white px-3 py-2 text-xs font-bold text-[#8C8880]">
+          AI 語意分析目前無法使用（服務忙碌或額度已用完），以上是依法規關鍵字比對的結果，可稍後再試一次。
+        </div>
+      )}
+
       {analysis && (
         <div>
           <div className="font-bold text-[#1A1A18] mb-1">AI 整體評估</div>
@@ -253,7 +260,7 @@ export default function AiCheckPanel({ missionId, text }) {
         className="w-full bg-white border-2 border-[#C8522A] text-[#C8522A] py-3 rounded-xl font-bold hover:bg-[#FDF0ED] transition-all text-xs xl:text-sm flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {checking ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-        {checking ? 'AI 檢測中...' : 'AI 文案檢測（自行檢查法規風險）'}
+        {checking ? 'AI 檢測中，約需 1–2 分鐘，請不要關閉頁面...' : 'AI 文案檢測（自行檢查法規風險）'}
       </button>
 
       {checking && (
