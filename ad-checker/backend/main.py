@@ -45,7 +45,7 @@ app.add_middleware(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-
+    
 NGROK_ENDPOINT = os.getenv("NGROK_ENDPOINT", "")  # e.g. https://xxxx.ngrok-free.dev/api/generate
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5:7b-instruct-q4_K_M")
 
@@ -337,25 +337,43 @@ def build_compliance_prompt(text, violations, category, retrieved_cases=None):
     return prompt
 
 
+# Gemini 模型依序嘗試：前一個額度用完（429）、服務忙碌（503）或逾時，就換下一個。
+# (模型名稱, 單次呼叫最多等幾秒)
+GEMINI_MODELS = [
+    ("gemini-3.8-flash", 60),
+    ("gemini-flash-latest", 60),
+    ("gemini-flash-lite-latest", 100),
+]
+
+
 def call_gemini(prompt):
+    """
+    呼叫 Gemini。SDK 內建的自動重試要關掉（retry=None）：
+    它遇到 429 額度用完／503 服務忙碌時會默默重試好幾分鐘都不回報，
+    使用者看到的就是檢測一直轉圈圈。關掉後失敗會立刻知道，改用下一個模型；
+    全部都失敗就把最後的錯誤往上拋，/api/analyze 會退回只用規則比對的結果。
+    """
     if not GEMINI_API_KEY:
         return None
 
-    model = genai.GenerativeModel("gemini-flash-latest")
-    response = None
-    for attempt in range(3):
+    last_error = None
+    for model_name, timeout_seconds in GEMINI_MODELS:
+        started = time.time()
         try:
-            response = model.generate_content(
+            response = genai.GenerativeModel(model_name).generate_content(
                 prompt,
                 generation_config={"temperature": 0.2},
+                request_options={"retry": None, "timeout": timeout_seconds},
             )
-            break
+            print(f"[Gemini] {model_name} 回應成功，耗時 {time.time() - started:.1f} 秒")
+            return response.text
         except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                time.sleep(10)
-                continue
-            raise
-    return response.text
+            last_error = e
+            print(
+                f"[Gemini] {model_name} 失敗（{time.time() - started:.1f} 秒）："
+                f"{type(e).__name__}: {str(e)[:200]}"
+            )
+    raise last_error
 
 
 def call_taide(prompt):
