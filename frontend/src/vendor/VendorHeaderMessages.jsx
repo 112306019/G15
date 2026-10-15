@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Briefcase, MessageCircle, Users } from 'lucide-react';
 import { getVendorChatrooms, getVendorInquiryList } from '../api/vendor';
 import usePolling from '../usePolling';
+import { ICON_BADGE } from '../badgeStyle';
 
 // 後台每一頁都會輪詢，間隔抓長一點，不要拖慢後端
 const MESSAGE_UNREAD_POLL_MS = 20000;
 
 const sumUnread = (rows) => (rows || []).reduce((total, row) => total + Number(row.unread_count || 0), 0);
 
+// 未讀數字的小紅點。字級、大小由呼叫的地方決定
 function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
@@ -65,11 +67,8 @@ export default function VendorHeaderMessages({ onNavigate }) {
         title="聊天室"
       >
         <MessageCircle size={20} className="md:w-[22px] md:h-[22px]" />
-        {/* 大小跟旁邊通知鈴鐺、客服的數字圈一樣 */}
-        <CountBadge
-          count={total}
-          className="absolute top-0.5 right-0.5 md:top-1 md:right-1 text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 border-2 border-white box-content"
-        />
+        {/* 跟旁邊通知鈴鐺、客服共用同一個數字圈樣式 */}
+        <CountBadge count={total} className={`${ICON_BADGE} top-0 right-0`} />
       </button>
 
       {open && (

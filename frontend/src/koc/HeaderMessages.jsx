@@ -4,6 +4,7 @@ import { Briefcase, MessageCircle, Store } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { getKocChatrooms } from '../api/koc';
 import usePolling from '../usePolling';
+import { ICON_BADGE } from '../badgeStyle';
 
 // 每個登入中的頁面都會輪詢，間隔抓長一點，不要拖慢後端
 const MESSAGE_UNREAD_POLL_MS = 20000;
@@ -44,11 +45,12 @@ export function useMessageUnread(userRole) {
   return { ...unread, total: unread.task + unread.inquiry, refresh };
 }
 
-// 未讀數字的小紅點（跟通知鈴鐺同一個樣式）
+// 未讀數字的小紅點。字級、大小由呼叫的地方決定，
+// 這裡不寫字級，避免跟 ICON_BADGE 的字級互相打架
 function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
-    <span className={`bg-[#C8522A] text-white text-[10px] font-bold flex items-center justify-center rounded-full ${className}`}>
+    <span className={`bg-[#C8522A] text-white font-bold flex items-center justify-center rounded-full ${className}`}>
       {count > max ? `${max}+` : count}
     </span>
   );
@@ -86,8 +88,8 @@ export default function HeaderMessages({ userRole, active = false, unread }) {
         title="我的訊息"
       >
         <MessageCircle size={22} strokeWidth={2.5} className={active || open ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
-        {/* 大小跟旁邊通知鈴鐺、購物車的數字圈一樣 */}
-        <CountBadge count={unread.total} className="absolute top-1 right-1 min-w-4 h-4 px-0.5 border-2 border-white box-content" />
+        {/* 跟旁邊通知鈴鐺、購物車共用同一個數字圈樣式 */}
+        <CountBadge count={unread.total} className={`${ICON_BADGE} top-0 right-0`} />
       </div>
 
       {open && (
@@ -103,7 +105,7 @@ export default function HeaderMessages({ userRole, active = false, unread }) {
                   <Icon size={16} strokeWidth={2.5} />
                   {label}
                 </span>
-                <CountBadge count={count} className="min-w-[18px] h-[18px] px-1" />
+                <CountBadge count={count} className="text-[10px] min-w-[18px] h-[18px] px-1" />
               </button>
             ))}
           </div>

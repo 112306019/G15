@@ -5,6 +5,7 @@ import LogoIcon from '../assets/logo.jpg';
 import HeaderPreview from './HeaderPreview';
 import HeaderMessages, { useMessageUnread } from './HeaderMessages';
 import LogoText from '../assets/ShareBuy.png';
+import { ICON_BADGE } from '../badgeStyle';
 
 // 通知下拉最多列出幾則，更早的到完整的通知頁看
 const NOTIFICATION_DROPDOWN_LIMIT = 20;
@@ -152,7 +153,7 @@ export default function Header({
           >
             <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
             {cartCount > 0 && (
-              <span className="absolute top-0 right-0 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+              <span className={`${ICON_BADGE} top-0 right-0`}>
                 {cartCount > 99 ? '99+' : cartCount}
               </span>
             )}
@@ -174,8 +175,9 @@ export default function Header({
           >
             <Bell size={22} strokeWidth={2.5} className={notifOpen ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
+            {/* 鈴鐺在手機版的 padding 比購物車大 2px，所以手機版多內縮 2px，紅點位置才會對齊 */}
             {notifications.unreadCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+              <span className={`${ICON_BADGE} top-0.5 right-0.5 md:top-0 md:right-0`}>
                 {notifications.unreadCount > 99 ? '99+' : notifications.unreadCount}
               </span>
             )}
@@ -267,7 +269,7 @@ export default function Header({
             <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
 
             {supportUnreadCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 md:top-1 md:right-1 bg-[#C8522A] text-white text-[9px] md:text-[10px] min-w-3.5 h-3.5 md:min-w-4 md:h-4 px-0.5 flex items-center justify-center rounded-full border-2 border-white box-content font-bold">
+              <span className={`${ICON_BADGE} top-0 right-0`}>
                 {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
               </span>
             )}
