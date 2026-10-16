@@ -16,17 +16,17 @@ const STATUS_BADGE = {
 };
 
 function PayoutRow({ payout }) {
-  const badge = STATUS_BADGE[payout.status] || { label: payout.status, cls: 'bg-[#F5F0E8] text-[#8C8880]' };
+  const badge = STATUS_BADGE[payout.status] || { label: payout.status, cls: 'bg-cream text-muted' };
 
   return (
-    <div className="grid grid-cols-3 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-      <div className="font-black text-[#C8522A]">NT$ {(payout.amount || 0).toLocaleString()}</div>
+    <div className="grid grid-cols-3 px-8 py-5 items-center text-sm border-b border-edge last:border-0 hover:bg-mist transition-colors">
+      <div className="font-black text-brand">NT$ {(payout.amount || 0).toLocaleString()}</div>
       <div>
         <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${badge.cls}`}>
           {badge.label}
         </span>
       </div>
-      <div className="text-[#8C8880] font-medium">{formatDateTime(payout.payout_date)}</div>
+      <div className="text-muted font-medium">{formatDateTime(payout.payout_date)}</div>
     </div>
   );
 }
@@ -59,25 +59,25 @@ export default function PayoutRecordsPage({ onBack }) {
     <div className="max-w-5xl animate-in fade-in duration-500 p-4 md:p-0 mx-auto">
       <button
         onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group w-fit"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回我的收益
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">撥款紀錄</h2>
+      <h2 className="text-[28px] font-display font-bold mb-10 text-ink">撥款紀錄</h2>
 
       {loading ? (
-        <div className="py-16 text-center text-[#8C8880] font-bold">載入中...</div>
+        <div className="py-16 text-center text-muted font-bold">載入中...</div>
       ) : (
-        <div className="w-full bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-          <div className="grid grid-cols-3 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+        <div className="w-full bg-white rounded-3xl border border-edge shadow-sm overflow-hidden">
+          <div className="grid grid-cols-3 px-8 py-4 bg-mist border-b border-edge text-muted text-sm font-bold">
             <span>實付金額</span>
             <span>狀態</span>
             <span>申請日期</span>
           </div>
           {payouts.length === 0 ? (
-            <div className="py-16 text-center text-[#8C8880] font-bold">目前沒有撥款紀錄</div>
+            <div className="py-16 text-center text-muted font-bold">目前沒有撥款紀錄</div>
           ) : (
             payouts.map((payout) => <PayoutRow key={payout.payout_id} payout={payout} />)
           )}

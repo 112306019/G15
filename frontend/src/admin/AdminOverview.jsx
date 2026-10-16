@@ -16,10 +16,10 @@ import { exportOverviewReport } from './overviewReport';
 function InputField({ label, ...props }) {
   return (
     <div className="mb-4 sm:mb-5">
-      <label className="block text-xs sm:text-sm font-bold text-[#1A1A18] mb-1.5 sm:mb-2 tracking-wide">{label}</label>
+      <label className="block text-xs sm:text-sm font-bold text-ink mb-1.5 sm:mb-2 tracking-wide">{label}</label>
       <input
         {...props}
-        className="w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-[#1A1A18] shadow-sm outline-none transition-all placeholder:text-[#8C8880]/60 focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10"
+        className="w-full rounded-xl border border-edge bg-mist px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-ink shadow-sm outline-none transition-all placeholder:text-muted/60 focus:border-brand focus:ring-4 focus:ring-brand/10"
       />
     </div>
   );
@@ -157,13 +157,14 @@ export default function AdminOverview({ currentRole }) {
       ========================================== */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 md:mb-8 gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-black text-[#1A1A18] tracking-tight flex items-center gap-2 sm:gap-3">
+          <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] mb-2 md:mb-2.5 uppercase">DASHBOARD</p>
+          <h1 className="text-2xl md:text-[28px] font-display font-bold text-ink flex items-center gap-2 sm:gap-3">
             平台營運總覽
-            <span className="text-[10px] md:text-xs font-bold bg-[#FDF0ED] text-[#C8522A] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md tracking-wider font-sans border border-[#C8522A]/20">
+            <span className="text-[10px] md:text-xs font-bold bg-brand-soft text-brand px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md tracking-wider font-sans border border-brand/20">
               {currentRole || 'Admin'}
             </span>
           </h1>
-          <p className="text-[#8C8880] mt-1.5 md:mt-2 text-xs md:text-sm font-medium">歡迎回來！以下是今日的系統數據與最新操作紀錄。</p>
+          <p className="text-muted mt-1.5 md:mt-2 text-xs md:text-sm font-medium">歡迎回來！以下是今日的系統數據與最新操作紀錄。</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto">
@@ -171,7 +172,7 @@ export default function AdminOverview({ currentRole }) {
             type="button"
             onClick={handleExport}
             disabled={exporting}
-            className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-[#E2DDD4] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-[#1A1A18] hover:bg-[#F8F9FA] hover:border-[#1A1A18] transition-all shadow-sm disabled:opacity-60 disabled:cursor-wait"
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-white border border-edge px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-ink hover:bg-mist hover:border-brand transition-all shadow-sm disabled:opacity-60 disabled:cursor-wait"
           >
             {exporting ? (
               <Loader2 size={16} className="animate-spin sm:w-4 sm:h-4" />
@@ -185,7 +186,7 @@ export default function AdminOverview({ currentRole }) {
           {currentRole === 'super_admin' && (
             <button 
               onClick={openAddAdminModal}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-[#1A1A18] text-[#F5F0E8] px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md hover:-translate-y-0.5"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 sm:gap-2 bg-brand text-white px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold hover:bg-brand-dark transition-all shadow-md hover:-translate-y-0.5"
             >
               <UserPlus size={16} className="sm:w-4 sm:h-4" /> 新增管理員
             </button>
@@ -194,13 +195,13 @@ export default function AdminOverview({ currentRole }) {
       </div>
 
       {loading && (
-        <div className="bg-white border border-[#E2DDD4] rounded-xl p-4 text-xs sm:text-sm font-bold text-[#8C8880] text-center">
+        <div className="bg-white border border-edge rounded-xl p-4 text-xs sm:text-sm font-bold text-muted text-center">
           平台總覽載入中...
         </div>
       )}
 
       {error && (
-        <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-4 text-xs sm:text-sm font-bold text-[#C8522A] text-center">
+        <div className="bg-brand-soft border border-brand/20 rounded-xl p-4 text-xs sm:text-sm font-bold text-brand text-center">
           {error}
         </div>
       )}
@@ -210,72 +211,71 @@ export default function AdminOverview({ currentRole }) {
       ========================================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
-        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] hover:border-[#B89B6A] transition-all group">
+        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-edge hover:border-gold transition-all group">
           <div className="flex justify-between items-start mb-2">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-cream text-ink flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">
+            <span className="text-[10px] font-bold text-brand bg-brand-soft px-2 py-1 rounded-md border border-brand/10">
               近 30 天 +{stats.newUsers30d.toLocaleString()} 人
             </span>
           </div>
-          <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">總註冊會員 / KOC</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A18] mt-1">{stats.users.toLocaleString()}</h3>
+          <p className="text-muted text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">總註冊會員 / KOC</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-ink mt-1">{stats.users.toLocaleString()}</h3>
         </div>
         
-        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] hover:border-[#B89B6A] transition-all group">
+        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-edge hover:border-gold transition-all group">
           <div className="flex justify-between items-start mb-2">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-cream text-ink flex items-center justify-center group-hover:scale-110 transition-transform">
               <Store size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
-            <span className="text-[10px] font-bold text-[#C8522A] bg-[#FDF0ED] px-2 py-1 rounded-md border border-[#C8522A]/10">
+            <span className="text-[10px] font-bold text-brand bg-brand-soft px-2 py-1 rounded-md border border-brand/10">
               近 30 天 +{stats.newVendors30d.toLocaleString()} 家
             </span>
           </div>
-          <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">合作廠商總數</p>
-          <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A18] mt-1">{stats.vendors}</h3>
+          <p className="text-muted text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">合作廠商總數</p>
+          <h3 className="text-2xl sm:text-3xl font-black text-ink mt-1">{stats.vendors}</h3>
         </div>
 
-        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] hover:border-[#B89B6A] transition-all group">
+        <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] shadow-sm border border-edge hover:border-gold transition-all group">
           <div className="flex justify-between items-start mb-2">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#F5F0E8] text-[#1A1A18] flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-cream text-ink flex items-center justify-center group-hover:scale-110 transition-transform">
               <ClipboardList size={20} className="sm:w-[22px] sm:h-[22px]" />
             </div>
           </div>
-          <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">
+          <p className="text-muted text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4">
             KOC 任務總數
           </p>
-          <h3 className="text-2xl sm:text-3xl font-black text-[#1A1A18] mt-1">
+          <h3 className="text-2xl sm:text-3xl font-black text-ink mt-1">
             {stats.kocMissions}
           </h3>
         </div>
 
         {/* 只有 Super Admin 或 Finance 能看到收益 */}
         {canViewFinance ? (
-          <div className="bg-[#1A1A18] p-5 sm:p-6 rounded-[1.5rem] shadow-md border border-[#1A1A18] relative overflow-hidden group">
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#B89B6A] rounded-full filter blur-[50px] opacity-20 group-hover:opacity-40 transition-opacity" />
+          <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] border-2 border-brand-pale relative overflow-hidden group">
 
             <div className="flex justify-between items-start mb-2 relative z-10">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/10 text-[#F5F0E8] flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gold-soft text-gold-ink flex items-center justify-center">
                 <Wallet size={20} className="sm:w-[22px] sm:h-[22px]" />
               </div>
-              <span className="text-[10px] font-bold text-[#1A1A18] bg-[#B89B6A] px-2 py-1 rounded-md">
+              <span className="text-[10px] font-bold text-gold-ink bg-gold-soft px-2 py-1 rounded-md">
                 本月結算
               </span>
             </div>
 
-            <p className="text-[#8C8880] text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4 relative z-10">
+            <p className="text-muted text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-3 sm:mt-4 relative z-10">
               本月平台總收益 (NT$)
             </p>
 
-            <h3 className="text-2xl sm:text-3xl font-black text-[#F5F0E8] mt-1 relative z-10 truncate">
+            <h3 className="text-2xl sm:text-3xl font-black text-gold mt-1 relative z-10 truncate">
               NT$ {stats.totalRevenue.toLocaleString()}
             </h3>
           </div>
         ) : (
-          <div className="bg-[#F8F9FA] p-5 sm:p-6 rounded-[1.5rem] border border-[#E2DDD4] border-dashed flex flex-col items-center justify-center opacity-60">
-            <ShieldCheck size={28} className="text-[#8C8880] mb-2 sm:w-8 sm:h-8" />
-            <p className="text-xs sm:text-sm font-bold text-[#8C8880]">無權限檢視財務數據</p>
+          <div className="bg-mist p-5 sm:p-6 rounded-[1.5rem] border border-edge border-dashed flex flex-col items-center justify-center opacity-60">
+            <ShieldCheck size={28} className="text-muted mb-2 sm:w-8 sm:h-8" />
+            <p className="text-xs sm:text-sm font-bold text-muted">無權限檢視財務數據</p>
           </div>
         )}
       </div>
@@ -296,17 +296,17 @@ export default function AdminOverview({ currentRole }) {
           Super Admin 專屬彈出視窗：新增管理員
       ========================================== */}
       {showAddAdminModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4">
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-edge max-h-[90vh] overflow-y-auto custom-scrollbar">
             
             <div className="flex justify-between items-center mb-6 sm:mb-8">
               <div className="flex items-center gap-2.5 sm:gap-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-soft text-brand rounded-full flex items-center justify-center shrink-0">
                   <ShieldCheck size={16} className="sm:w-5 sm:h-5" />
                 </div>
-                <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18]">配發管理員帳號</h3>
+                <h3 className="text-lg sm:text-xl font-display font-black text-ink">配發管理員帳號</h3>
               </div>
-              <button onClick={() => setShowAddAdminModal(false)} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors p-1">
+              <button onClick={() => setShowAddAdminModal(false)} className="text-muted hover:text-ink transition-colors p-1">
                 <X size={20} className="sm:w-6 sm:h-6" />
               </button>
             </div>
@@ -339,11 +339,11 @@ export default function AdminOverview({ currentRole }) {
               />
               
               <div className="mb-6 sm:mb-8">
-                <label className="block text-xs sm:text-sm font-bold text-[#1A1A18] mb-1.5 sm:mb-2 tracking-wide">指派角色權限 (RBAC)</label>
+                <label className="block text-xs sm:text-sm font-bold text-ink mb-1.5 sm:mb-2 tracking-wide">指派角色權限 (RBAC)</label>
                 <select 
                   value={newAdmin.role}
                   onChange={(e) => setNewAdmin({...newAdmin, role: e.target.value})}
-                  className="w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 appearance-none cursor-pointer"
+                  className="w-full rounded-xl border border-edge bg-mist px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 appearance-none cursor-pointer"
                 >
                   <option value="reviewer">審核員 (Reviewer) - 追蹤活動與操作紀錄</option>
                   <option value="finance">財務管理 (Finance) - 處理訂單與分潤撥款</option>
@@ -352,7 +352,7 @@ export default function AdminOverview({ currentRole }) {
               </div>
 
               {addAdminError && (
-                <div className="mb-4 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs sm:text-sm font-bold text-[#C8522A]">
+                <div className="mb-4 bg-brand-soft border border-brand/20 rounded-xl p-3 text-xs sm:text-sm font-bold text-brand">
                   {addAdminError}
                 </div>
               )}
@@ -361,14 +361,14 @@ export default function AdminOverview({ currentRole }) {
                 <button 
                   type="button" 
                   onClick={() => setShowAddAdminModal(false)}
-                  className="w-full sm:w-auto flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3 sm:py-3.5 rounded-xl font-bold hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all text-xs sm:text-sm"
+                  className="w-full sm:w-auto flex-1 bg-white border border-edge text-muted py-3 sm:py-3.5 rounded-xl font-bold hover:bg-mist hover:text-ink transition-all text-xs sm:text-sm"
                 >
                   取消
                 </button>
                 <button 
                   type="submit" 
                   disabled={addingAdmin}
-                  className="w-full sm:w-auto flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 sm:py-3.5 rounded-xl font-bold hover:bg-[#C8522A] transition-all shadow-lg text-xs sm:text-sm tracking-widest disabled:opacity-60 disabled:cursor-wait"
+                  className="w-full sm:w-auto flex-[2] bg-brand text-white py-3 sm:py-3.5 rounded-xl font-bold hover:bg-brand-dark transition-all shadow-lg text-xs sm:text-sm tracking-widest disabled:opacity-60 disabled:cursor-wait"
                 >
                   {addingAdmin ? '建立中...' : '確認配發帳號'}
                 </button>

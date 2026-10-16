@@ -50,13 +50,13 @@ function CouponBadge({ status }) {
   const config = {
     active: {
       label: '啟用中',
-      cls: 'bg-[#FDF0ED] text-[#C8522A]',
-      dot: 'bg-[#C8522A]'
+      cls: 'bg-brand-soft text-brand',
+      dot: 'bg-brand'
     },
     inactive: {
       label: '尚未啟用',
-      cls: 'bg-[#F5F0E8] text-[#8C8880]',
-      dot: 'bg-[#8C8880]'
+      cls: 'bg-cream text-muted',
+      dot: 'bg-muted'
     },
     expired: {
       label: '已到期',
@@ -72,8 +72,8 @@ function CouponBadge({ status }) {
 
   const current = config[status] || {
     label: status || '未知',
-    cls: 'bg-gray-100 text-gray-500',
-    dot: 'bg-gray-400'
+    cls: 'bg-mist text-muted',
+    dot: 'bg-muted/50'
   }
 
   return (
@@ -95,11 +95,11 @@ function CouponBadge({ status }) {
 
 function MissionStageBadge({ stage }) {
   const config = {
-    pending: 'bg-[#F8F9FA] text-[#8C8880]',
+    pending: 'bg-mist text-muted',
     writing: 'bg-[#FFF8E7] text-[#9A6700]',
-    reviewing: 'bg-[#FDF0ED] text-[#C8522A]',
-    publishing: 'bg-[#F5F0E8] text-[#1A1A18]',
-    promoting: 'bg-[#FDF0ED] text-[#C8522A]',
+    reviewing: 'bg-brand-soft text-brand',
+    publishing: 'bg-cream text-ink',
+    promoting: 'bg-brand-soft text-brand',
     completed: 'bg-green-50 text-green-700'
   }
 
@@ -111,7 +111,7 @@ function MissionStageBadge({ stage }) {
           rounded-md text-[10px]
           font-bold tracking-wider whitespace-nowrap
         `,
-        config[stage] || 'bg-gray-100 text-gray-500'
+        config[stage] || 'bg-mist text-muted'
       )}
     >
       {missionStageLabels[stage] || stage || '未知'}
@@ -123,13 +123,13 @@ function SummaryCard({ icon: Icon, label, value, compact = false }) {
   return (
     <div
       className={cn(
-        'bg-white border border-[#E2DDD4] shadow-sm flex flex-col justify-between',
+        'bg-white border border-edge shadow-sm flex flex-col justify-between',
         compact ? 'rounded-xl p-3 sm:p-4' : 'rounded-2xl p-4 sm:p-5'
       )}
     >
       <div
         className={cn(
-          'flex items-center gap-1.5 font-bold text-[#8C8880]',
+          'flex items-center gap-1.5 font-bold text-muted',
           compact
             ? 'text-[10px] sm:text-[11px] mb-1.5 sm:mb-2'
             : 'text-[11px] sm:text-xs gap-2 mb-2 sm:mb-3'
@@ -141,7 +141,7 @@ function SummaryCard({ icon: Icon, label, value, compact = false }) {
 
       <div
         className={cn(
-          'font-black text-[#1A1A18] truncate',
+          'font-black text-ink truncate',
           compact ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl'
         )}
       >
@@ -167,18 +167,18 @@ function CouponDetailModal({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
       <div
-        className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-start justify-between px-4 sm:px-6 py-4 sm:py-5 bg-[#F8F9FA] border-b border-[#E2DDD4]">
+      <div className="relative w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-start justify-between px-4 sm:px-6 py-4 sm:py-5 bg-mist border-b border-edge">
           <div>
-            <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-lg sm:text-xl font-display font-bold text-ink">
               優惠碼詳細資訊
             </h2>
 
-            <div className="text-[11px] sm:text-sm font-bold text-[#8C8880] mt-0.5 sm:mt-1 truncate max-w-[200px] sm:max-w-[400px]">
+            <div className="text-[11px] sm:text-sm font-bold text-muted mt-0.5 sm:mt-1 truncate max-w-[200px] sm:max-w-[400px]">
               {coupon.campaignName}
             </div>
           </div>
@@ -186,16 +186,16 @@ function CouponDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] -mr-2 sm:mr-0 shrink-0"
+            className="p-2 rounded-full text-muted hover:bg-edge hover:text-ink -mr-2 sm:mr-0 shrink-0"
           >
             <X size={19} />
           </button>
         </div>
 
         <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-          <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl p-4">
+          <div className="bg-brand-soft border border-brand/20 rounded-2xl p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-3">
-              <span className="text-[11px] sm:text-xs font-bold text-[#C8522A] uppercase tracking-widest">
+              <span className="text-[11px] sm:text-xs font-bold text-brand uppercase tracking-widest">
                 優惠碼
               </span>
 
@@ -208,43 +208,43 @@ function CouponDetailModal({
             <button
               type="button"
               onClick={() => onCopy(coupon.promotionCode)}
-              className="flex items-center justify-between gap-4 w-full bg-white border border-[#E2DDD4] hover:border-[#C8522A] rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 transition-colors"
+              className="flex items-center justify-between gap-4 w-full bg-white border border-edge hover:border-brand rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 transition-colors"
             >
-              <span className="text-base sm:text-lg font-mono font-black text-[#1A1A18]">
+              <span className="text-base sm:text-lg font-mono font-black text-ink">
                 {coupon.promotionCode}
               </span>
 
               {copied === coupon.promotionCode ? (
-                <Check size={17} className="text-[#C8522A] shrink-0" />
+                <Check size={17} className="text-brand shrink-0" />
               ) : (
-                <Copy size={17} className="text-[#8C8880] shrink-0" />
+                <Copy size={17} className="text-muted shrink-0" />
               )}
             </button>
           </div>
 
-          <div className="border border-[#E2DDD4] rounded-2xl divide-y divide-[#E2DDD4] overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-y sm:divide-y-0 divide-[#E2DDD4]">
+          <div className="border border-edge rounded-2xl divide-y divide-edge overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-y sm:divide-y-0 divide-edge">
               <div className="px-4 py-3 flex items-center justify-between gap-3">
-                <span className="text-[11px] sm:text-xs font-bold text-[#8C8880] shrink-0">
+                <span className="text-[11px] sm:text-xs font-bold text-muted shrink-0">
                   KOC
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate">
+                <span className="text-xs sm:text-sm font-bold text-ink truncate">
                   {coupon.kocId}
                 </span>
               </div>
 
               <div className="px-4 py-3 flex items-center justify-between gap-3">
-                <span className="text-[11px] sm:text-xs font-bold text-[#8C8880] shrink-0">
+                <span className="text-[11px] sm:text-xs font-bold text-muted shrink-0">
                   活動
                 </span>
-                <span className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate">
+                <span className="text-xs sm:text-sm font-bold text-ink truncate">
                   {coupon.campaignName}
                 </span>
               </div>
             </div>
 
             <div className="px-4 py-3 flex items-center justify-between gap-3">
-              <span className="text-[11px] sm:text-xs font-bold text-[#8C8880] shrink-0">
+              <span className="text-[11px] sm:text-xs font-bold text-muted shrink-0">
                 優惠碼到期日
               </span>
 
@@ -254,7 +254,7 @@ function CouponDetailModal({
                     'text-xs sm:text-sm font-bold',
                     new Date(coupon.campaignEndDate) < new Date()
                       ? 'text-[#D93025]'
-                      : 'text-[#1A1A18]'
+                      : 'text-ink'
                   )}
                 >
                   {new Date(coupon.campaignEndDate).toLocaleDateString(
@@ -264,14 +264,14 @@ function CouponDetailModal({
                     '（已過期）'}
                 </span>
               ) : (
-                <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
+                <span className="text-xs sm:text-sm font-bold text-muted">
                   —
                 </span>
               )}
             </div>
 
             <div className="px-4 py-3">
-              <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1 sm:mb-2">
+              <div className="text-[11px] sm:text-xs font-bold text-muted mb-1 sm:mb-2">
                 KOC 發布連結
               </div>
 
@@ -280,18 +280,18 @@ function CouponDetailModal({
                   href={coupon.contentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block text-xs sm:text-sm font-bold text-[#C8522A] break-all hover:underline"
+                  className="block text-xs sm:text-sm font-bold text-brand break-all hover:underline"
                 >
                   {coupon.contentUrl}
                 </a>
               ) : (
-                <div className="text-xs sm:text-sm font-bold text-[#8C8880]">
+                <div className="text-xs sm:text-sm font-bold text-muted">
                   KOC 尚未提交發布連結
                 </div>
               )}
 
               {coupon.linkSubmittedTime && (
-                <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] font-bold text-[#8C8880]">
+                <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] font-bold text-muted">
                   提交時間：
                   {new Date(coupon.linkSubmittedTime).toLocaleString(
                     'zh-TW'
@@ -335,16 +335,16 @@ function CouponDetailModal({
             />
           </div>
 
-          <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-[10px] sm:text-xs font-bold text-[#8C8880] leading-relaxed">
+          <div className="bg-mist border border-edge rounded-xl px-4 py-3 text-[10px] sm:text-xs font-bold text-muted leading-relaxed">
             優惠碼在廠商核准接案申請時即會自動啟用，KOC 不需要等上傳作品連結。
           </div>
         </div>
 
-        <div className="px-4 sm:px-6 py-4 sm:py-5 border-t border-[#E2DDD4] bg-[#F8F9FA] flex flex-col sm:flex-row sm:flex-wrap justify-end gap-2 sm:gap-3 shrink-0">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-t border-edge bg-mist flex flex-col sm:flex-row sm:flex-wrap justify-end gap-2 sm:gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-full border border-[#E2DDD4] bg-white text-sm font-bold text-[#1A1A18] hover:bg-[#F5F0E8] w-full sm:w-auto order-3 sm:order-1"
+            className="px-5 py-2.5 rounded-full border border-edge bg-white text-sm font-bold text-ink hover:bg-cream w-full sm:w-auto order-3 sm:order-1"
           >
             關閉
           </button>
@@ -366,7 +366,7 @@ function CouponDetailModal({
               type="button"
               disabled={updating}
               onClick={() => onUpdateStatus(coupon, 'active')}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#1A1A18] text-white text-sm font-bold hover:bg-[#C8522A] disabled:opacity-50 w-full sm:w-auto order-1 sm:order-3"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-brand text-white text-sm font-bold hover:bg-brand-dark disabled:opacity-50 w-full sm:w-auto order-1 sm:order-3"
             >
               {updating ? (
                 <Loader2 size={15} className="animate-spin" />
@@ -592,7 +592,7 @@ export default function KocManagement() {
   if (loading) {
     return (
       <div className="py-24 text-center">
-        <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
+        <div className="inline-flex items-center gap-2 text-sm font-bold text-muted">
           <Loader2 size={18} className="animate-spin" />
           KOC 與優惠碼資料載入中...
         </div>
@@ -618,7 +618,7 @@ export default function KocManagement() {
       {/* 搜尋與過濾列 */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 flex-wrap w-full">
         {/* 手機版橫向滾動頁籤 */}
-        <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
+        <div className="flex gap-2 p-1 bg-edge/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
           {couponStatusFilters.map(status => (
             <button
               key={status}
@@ -631,8 +631,8 @@ export default function KocManagement() {
                   whitespace-nowrap transition-all
                 `,
                 statusFilter === status
-                  ? 'bg-[#1A1A18] text-white shadow-sm'
-                  : 'text-[#8C8880] hover:text-[#1A1A18]'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-muted hover:text-ink'
               )}
             >
               {couponStatusLabels[status]}
@@ -640,13 +640,13 @@ export default function KocManagement() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 bg-white border border-[#E2DDD4] rounded-full px-4 sm:px-5 py-2.5 w-full sm:w-72 sm:ml-auto focus-within:border-[#C8522A] shadow-sm">
-          <Search size={16} className="text-[#8C8880] shrink-0" />
+        <div className="flex items-center gap-2 sm:gap-3 bg-white border border-edge rounded-full px-4 sm:px-5 py-2.5 w-full sm:w-72 sm:ml-auto focus-within:border-brand shadow-sm">
+          <Search size={16} className="text-muted shrink-0" />
           <input
             value={search}
             onChange={event => setSearch(event.target.value)}
             placeholder="搜尋 KOC、活動或優惠碼…"
-            className="bg-transparent text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full font-bold"
+            className="bg-transparent text-sm text-ink placeholder:text-muted/60 outline-none w-full font-bold"
           />
         </div>
       </div>
@@ -658,11 +658,11 @@ export default function KocManagement() {
       )}
 
       {/* 優惠碼表格 */}
-      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-sm overflow-hidden w-full">
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+              <tr className="bg-mist border-b border-edge">
                 {[
                   'KOC',
                   '參與任務',
@@ -674,7 +674,7 @@ export default function KocManagement() {
                 ].map(header => (
                   <th
                     key={header}
-                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
+                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-muted tracking-widest whitespace-nowrap"
                   >
                     {header}
                   </th>
@@ -682,7 +682,7 @@ export default function KocManagement() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#E2DDD4]">
+            <tbody className="divide-y divide-edge">
               {groupedKocs.length > 0 ? (
                 groupedKocs.map(koc => {
                   const isExpanded = expanded[koc.kocId]
@@ -694,19 +694,19 @@ export default function KocManagement() {
                         onClick={() => toggleExpand(koc.kocId)}
                         className={cn(
                           `
-                            cursor-pointer transition-colors hover:bg-[#F8F9FA]
+                            cursor-pointer transition-colors hover:bg-mist
                           `,
-                          isExpanded ? 'bg-[#F5F0E8]/50' : ''
+                          isExpanded ? 'bg-cream/50' : ''
                         )}
                       >
                         <td className="p-4 sm:p-5">
                           <div className="flex items-center gap-3 sm:gap-4">
                             <Avatar name={koc.name} size="sm" />
                             <div>
-                              <div className="text-sm font-bold text-[#1A1A18]">
+                              <div className="text-sm font-bold text-ink">
                                 {koc.name}
                               </div>
-                              <div className="text-[10px] font-bold text-[#8C8880] font-mono mt-1">
+                              <div className="text-[10px] font-bold text-muted font-mono mt-1">
                                 {koc.kocId}
                               </div>
                             </div>
@@ -714,20 +714,20 @@ export default function KocManagement() {
                         </td>
 
                         <td className="p-4 sm:p-5">
-                          <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md font-bold text-[11px] sm:text-xs bg-[#FDF0ED] text-[#C8522A] whitespace-nowrap">
+                          <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md font-bold text-[11px] sm:text-xs bg-brand-soft text-brand whitespace-nowrap">
                             {koc.coupons.length} 個任務
                           </span>
                         </td>
 
-                        <td className="p-4 sm:p-5 text-sm font-black text-[#1A1A18]">
+                        <td className="p-4 sm:p-5 text-sm font-black text-ink">
                           {koc.coupons.length}
                         </td>
 
-                        <td className="p-4 sm:p-5 text-sm font-black text-[#1A1A18]">
+                        <td className="p-4 sm:p-5 text-sm font-black text-ink">
                           {koc.totalUsage}
                         </td>
 
-                        <td className="p-4 sm:p-5 text-sm font-black text-[#C8522A]">
+                        <td className="p-4 sm:p-5 text-sm font-black text-brand">
                           {formatCurrency(koc.totalCommission)}
                         </td>
 
@@ -739,16 +739,16 @@ export default function KocManagement() {
                                 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap
                               `,
                               koc.activeCouponCount > 0
-                                ? 'bg-[#FDF0ED] text-[#C8522A]'
-                                : 'bg-[#F5F0E8] text-[#8C8880]'
+                                ? 'bg-brand-soft text-brand'
+                                : 'bg-cream text-muted'
                             )}
                           >
                             {koc.activeCouponCount > 0 ? '推廣中' : '未推廣'}
                           </span>
                         </td>
 
-                        <td className="p-4 sm:p-5 text-[#8C8880]">
-                          <div className="p-1.5 rounded-full w-fit hover:bg-[#E2DDD4]">
+                        <td className="p-4 sm:p-5 text-muted">
+                          <div className="p-1.5 rounded-full w-fit hover:bg-edge">
                             {isExpanded ? (
                               <ChevronUp size={16} />
                             ) : (
@@ -763,13 +763,13 @@ export default function KocManagement() {
                         koc.coupons.map(coupon => (
                           <tr
                             key={coupon.couponId}
-                            className="bg-[#F8F9FA]/80"
+                            className="bg-mist/80"
                           >
                             <td className="p-3 sm:p-4 pl-12 sm:pl-20">
-                              <div className="text-[11px] sm:text-xs font-bold text-[#1A1A18] truncate max-w-[150px] sm:max-w-xs">
+                              <div className="text-[11px] sm:text-xs font-bold text-ink truncate max-w-[150px] sm:max-w-xs">
                                 {coupon.campaignName}
                               </div>
-                              <div className="text-[9px] sm:text-[10px] font-mono text-[#8C8880] mt-1">
+                              <div className="text-[9px] sm:text-[10px] font-mono text-muted mt-1">
                                 任務 #{coupon.kocMissionId}
                               </div>
                             </td>
@@ -782,21 +782,21 @@ export default function KocManagement() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedCoupon(coupon)}
-                                className="flex items-center justify-between gap-2 sm:gap-3 bg-white border border-[#E2DDD4] hover:border-[#C8522A] rounded-xl px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-mono font-bold text-[#1A1A18] transition-all shadow-sm w-full sm:w-auto"
+                                className="flex items-center justify-between gap-2 sm:gap-3 bg-white border border-edge hover:border-brand rounded-xl px-3 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-mono font-bold text-ink transition-all shadow-sm w-full sm:w-auto"
                               >
                                 <span>{coupon.promotionCode}</span>
                                 <Ticket
                                   size={14}
-                                  className="text-[#C8522A] shrink-0"
+                                  className="text-brand shrink-0"
                                 />
                               </button>
                             </td>
 
-                            <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-[#1A1A18]">
+                            <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-ink">
                               {coupon.usageCount}
                             </td>
 
-                            <td className="p-3 sm:p-4 text-xs sm:text-sm font-black text-[#C8522A]">
+                            <td className="p-3 sm:p-4 text-xs sm:text-sm font-black text-brand">
                               {formatCurrency(coupon.totalCommission)}
                             </td>
 
@@ -808,7 +808,7 @@ export default function KocManagement() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedCoupon(coupon)}
-                                className="text-[11px] sm:text-xs font-bold text-[#C8522A] hover:underline whitespace-nowrap"
+                                className="text-[11px] sm:text-xs font-bold text-brand hover:underline whitespace-nowrap"
                               >
                                 查看詳情
                               </button>
@@ -822,7 +822,7 @@ export default function KocManagement() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="py-20 text-center text-xs sm:text-sm font-bold text-[#8C8880]"
+                    className="py-20 text-center text-xs sm:text-sm font-bold text-muted"
                   >
                     目前沒有符合條件的 KOC 或優惠碼資料
                   </td>

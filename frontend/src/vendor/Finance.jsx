@@ -94,13 +94,13 @@ const BATCH_STATUS = {
   draft: {
     label: '月結建立中',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 
   ready: {
     label: '待撥款',
     style:
-      'bg-[#F5F0E8] text-[#8A6734]',
+      'bg-cream text-gold-ink',
   },
 
   paid: {
@@ -118,13 +118,13 @@ const BATCH_STATUS = {
   cancelled: {
     label: '已取消',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 
   adjusted: {
     label: '已調整',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 }
 
@@ -133,19 +133,19 @@ const RECEIVABLE_STATUS = {
   pending: {
     label: '等待結算資格',
     style:
-      'bg-white border border-[#E2DDD4] text-[#8C8880]',
+      'bg-white border border-edge text-muted',
   },
 
   eligible: {
     label: '等待月結',
     style:
-      'bg-[#F5F0E8] text-[#8A6734]',
+      'bg-cream text-gold-ink',
   },
 
   included: {
     label: '已納入月結',
     style:
-      'bg-[#FDF0ED] text-[#C8522A]',
+      'bg-brand-soft text-brand',
   },
 
   paid: {
@@ -163,13 +163,13 @@ const RECEIVABLE_STATUS = {
   cancelled: {
     label: '已取消',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 
   adjusted: {
     label: '已調整',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 }
 
@@ -178,19 +178,19 @@ const SETTLEMENT_STATUS = {
   draft: {
     label: '月結建立中',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 
   awaiting_payment: {
     label: '待付款',
     style:
-      'bg-[#FDF0ED] text-[#C8522A]',
+      'bg-brand-soft text-brand',
   },
 
   partially_paid: {
     label: '部分已繳',
     style:
-      'bg-[#FDF0ED] text-[#C8522A]',
+      'bg-brand-soft text-brand',
   },
 
   paid: {
@@ -208,7 +208,7 @@ const SETTLEMENT_STATUS = {
   cancelled: {
     label: '已取消',
     style:
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
   },
 }
 
@@ -231,7 +231,7 @@ function Badge({
     map[status] || {
       label: status || '未知',
       style:
-        'bg-[#F8F9FA] text-[#8C8880]',
+        'bg-mist text-muted',
     }
 
   return (
@@ -255,17 +255,17 @@ function SummaryCard({
     <div
       className={`rounded-[1.5rem] border p-5 ${
         emphasis
-          ? 'border-[#DED6C8] bg-[#F5F0E8]'
-          : 'border-[#E2DDD4] bg-white'
+          ? 'border-edge bg-cream'
+          : 'border-edge bg-white'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold tracking-wider text-[#8C8880] sm:text-xs">
+          <p className="text-[10px] font-bold tracking-wider text-muted sm:text-xs">
             {label}
           </p>
 
-          <p className="mt-2 text-xl font-black text-[#1A1A18] sm:text-2xl">
+          <p className="mt-2 text-xl font-black text-ink sm:text-2xl">
             {money(value)}
           </p>
         </div>
@@ -273,8 +273,8 @@ function SummaryCard({
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
             emphasis
-              ? 'bg-white text-[#C8522A]'
-              : 'bg-[#F5F0E8] text-[#B89B6A]'
+              ? 'bg-white text-brand'
+              : 'bg-cream text-gold'
           }`}
         >
           <Icon size={18} />
@@ -282,7 +282,7 @@ function SummaryCard({
       </div>
 
       {hint && (
-        <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880] sm:text-[11px]">
+        <p className="mt-3 text-[10px] leading-relaxed text-muted sm:text-[11px]">
           {hint}
         </p>
       )}
@@ -300,23 +300,23 @@ function SectionTitle({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F5F0E8] text-[#C8522A]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cream text-brand">
           <Icon size={18} />
         </div>
 
         <div>
-          <h2 className="text-base font-serif font-black text-[#1A1A18] sm:text-lg">
+          <h2 className="text-base font-display font-black text-ink sm:text-lg">
             {title}
           </h2>
 
-          <p className="mt-1 text-[11px] leading-relaxed text-[#8C8880] sm:text-xs">
+          <p className="mt-1 text-[11px] leading-relaxed text-muted sm:text-xs">
             {description}
           </p>
         </div>
       </div>
 
       {direction && (
-        <span className="inline-flex self-start rounded-full border border-[#E2DDD4] bg-[#F8F9FA] px-3 py-1.5 text-[10px] font-bold text-[#8C8880]">
+        <span className="inline-flex self-start rounded-full border border-edge bg-mist px-3 py-1.5 text-[10px] font-bold text-muted">
           {direction}
         </span>
       )}
@@ -327,7 +327,7 @@ function SectionTitle({
 
 function EmptyState({ text }) {
   return (
-    <div className="py-12 text-center text-xs font-bold text-[#8C8880] sm:text-sm">
+    <div className="py-12 text-center text-xs font-bold text-muted sm:text-sm">
       {text}
     </div>
   )
@@ -620,10 +620,10 @@ export default function Finance() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 text-[#8C8880]">
+      <div className="flex min-h-[420px] flex-col items-center justify-center gap-3 text-muted">
         <Loader2
           size={28}
-          className="animate-spin text-[#C8522A]"
+          className="animate-spin text-brand"
         />
 
         <p className="text-sm font-bold">
@@ -638,11 +638,7 @@ export default function Finance() {
     <div className="relative space-y-6 p-4 animate-in fade-in duration-300 sm:space-y-8 sm:p-0">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-serif font-black text-[#1A1A18] sm:text-2xl">
-          財務中心
-        </h1>
-
-        <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-[#8C8880] sm:text-xs">
+        <p className="text-[11px] leading-relaxed text-muted sm:text-xs">
           貨款與平台服務費採兩筆獨立月結。ShareBuy
           每月依貨款月結單將應撥貨款全額匯入您的收款帳戶；您再依同月份有效成交額支付
           15% 平台服務費。
@@ -721,13 +717,13 @@ export default function Finance() {
 
 
         {/* 貨款月結列表 */}
-        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-            <h3 className="text-sm font-black text-[#1A1A18]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+          <div className="border-b border-edge bg-mist px-5 py-4">
+            <h3 className="text-sm font-black text-ink">
               貨款月結紀錄
             </h3>
 
-            <p className="mt-1 text-[10px] text-[#8C8880]">
+            <p className="mt-1 text-[10px] text-muted">
               每個月份會產生一張貨款月結單，點擊「查看明細」可查看本期包含的訂單。
             </p>
           </div>
@@ -739,8 +735,8 @@ export default function Finance() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[880px]">
-                <thead className="border-b border-[#E2DDD4]">
-                  <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                <thead className="border-b border-edge">
+                  <tr className="text-left text-[10px] font-bold text-muted">
                     <th className="px-5 py-3">
                       月份
                     </th>
@@ -771,31 +767,31 @@ export default function Finance() {
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {batches.map(batch => (
                     <tr
                       key={batch.batch_id}
                     >
-                      <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                      <td className="px-5 py-4 text-xs font-black text-ink">
                         {monthLabel(
                           batch.month
                         )}
                       </td>
 
-                      <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                      <td className="px-5 py-4 text-xs font-bold text-ink">
                         {
                           batch.receivable_count
                         }{' '}
                         筆
                       </td>
 
-                      <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                      <td className="px-5 py-4 text-xs font-black text-brand">
                         {money(
                           batch.amount_due
                         )}
                       </td>
 
-                      <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                      <td className="px-5 py-4 text-[10px] text-muted">
                         {dateText(
                           batch.scheduled_payout_date
                         )}
@@ -809,7 +805,7 @@ export default function Finance() {
                         />
                       </td>
 
-                      <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                      <td className="px-5 py-4 text-[10px] text-muted">
                         {batch.status ===
                         'paid' ? (
                           <>
@@ -841,7 +837,7 @@ export default function Finance() {
                               batch
                             )
                           }
-                          className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8]"
+                          className="rounded-xl border border-edge bg-white px-3 py-2 text-[10px] font-bold text-ink hover:bg-cream"
                         >
                           查看明細
                         </button>
@@ -856,13 +852,13 @@ export default function Finance() {
 
 
         {/* 尚未納入月結 */}
-        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-            <h3 className="text-sm font-black text-[#1A1A18]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+          <div className="border-b border-edge bg-mist px-5 py-4">
+            <h3 className="text-sm font-black text-ink">
               尚未納入月結
             </h3>
 
-            <p className="mt-1 text-[10px] text-[#8C8880]">
+            <p className="mt-1 text-[10px] text-muted">
               這些訂單尚在退貨風險期，或已取得資格、等待下一次月結產生。
             </p>
           </div>
@@ -875,8 +871,8 @@ export default function Finance() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px]">
-                <thead className="border-b border-[#E2DDD4]">
-                  <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                <thead className="border-b border-edge">
+                  <tr className="text-left text-[10px] font-bold text-muted">
                     <th className="px-5 py-3">
                       訂單
                     </th>
@@ -895,7 +891,7 @@ export default function Finance() {
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {unbatchedReceivables.map(
                     item => (
                       <tr
@@ -903,19 +899,19 @@ export default function Finance() {
                           item.receivable_id
                         }
                       >
-                        <td className="px-5 py-4 text-[10px] font-bold text-[#1A1A18]">
+                        <td className="px-5 py-4 text-[10px] font-bold text-ink">
                           {String(
                             item.order_id
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                        <td className="px-5 py-4 text-xs font-black text-ink">
                           {money(
                             item.amount_due
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                        <td className="px-5 py-4 text-[10px] text-muted">
                           {dateTimeText(
                             item.eligible_at
                           )}
@@ -1014,13 +1010,13 @@ export default function Finance() {
 
 
         {/* 服務費月結列表 */}
-        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-            <h3 className="text-sm font-black text-[#1A1A18]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+          <div className="border-b border-edge bg-mist px-5 py-4">
+            <h3 className="text-sm font-black text-ink">
               服務費月結紀錄
             </h3>
 
-            <p className="mt-1 text-[10px] text-[#8C8880]">
+            <p className="mt-1 text-[10px] text-muted">
               每張月結單會列出本期有效成交額、應繳金額（15% 服務費加上您設定的 KOC 加碼獎勵）與付款狀態。
             </p>
           </div>
@@ -1032,8 +1028,8 @@ export default function Finance() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[940px]">
-                <thead className="border-b border-[#E2DDD4]">
-                  <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                <thead className="border-b border-edge">
+                  <tr className="text-left text-[10px] font-bold text-muted">
                     <th className="px-5 py-3">
                       月份
                     </th>
@@ -1064,7 +1060,7 @@ export default function Finance() {
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {settlements.map(
                     settlement => (
                       <tr
@@ -1072,31 +1068,31 @@ export default function Finance() {
                           settlement.settlement_id
                         }
                       >
-                        <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                        <td className="px-5 py-4 text-xs font-black text-ink">
                           {monthLabel(
                             settlement.month
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                        <td className="px-5 py-4 text-xs font-bold text-ink">
                           {money(
                             settlement.gross_sales
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                        <td className="px-5 py-4 text-xs font-black text-brand">
                           {money(
                             settlement.amount_due
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                        <td className="px-5 py-4 text-xs font-bold text-ink">
                           {money(
                             settlement.paid_amount
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                        <td className="px-5 py-4 text-[10px] text-muted">
                           {dateText(
                             settlement.due_date
                           )}
@@ -1119,7 +1115,7 @@ export default function Finance() {
                                 settlement
                               )
                             }
-                            className="rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-[10px] font-bold text-[#1A1A18] hover:bg-[#F5F0E8]"
+                            className="rounded-xl border border-edge bg-white px-3 py-2 text-[10px] font-bold text-ink hover:bg-cream"
                           >
                             查看明細
                           </button>
@@ -1135,13 +1131,13 @@ export default function Finance() {
 
 
         {/* 尚未納入服務費月結 */}
-        <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-          <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-            <h3 className="text-sm font-black text-[#1A1A18]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+          <div className="border-b border-edge bg-mist px-5 py-4">
+            <h3 className="text-sm font-black text-ink">
               尚未納入服務費月結
             </h3>
 
-            <p className="mt-1 text-[10px] text-[#8C8880]">
+            <p className="mt-1 text-[10px] text-muted">
               顯示目前尚未被加入月結單的訂單服務費明細。
             </p>
           </div>
@@ -1154,8 +1150,8 @@ export default function Finance() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[820px]">
-                <thead className="border-b border-[#E2DDD4]">
-                  <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                <thead className="border-b border-edge">
+                  <tr className="text-left text-[10px] font-bold text-muted">
                     <th className="px-5 py-3">
                       訂單
                     </th>
@@ -1178,7 +1174,7 @@ export default function Finance() {
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {pendingSettlementItems.map(
                     item => (
                       <tr
@@ -1186,30 +1182,30 @@ export default function Finance() {
                           item.settlement_item_id
                         }
                       >
-                        <td className="px-5 py-4 text-[10px] font-bold text-[#1A1A18]">
+                        <td className="px-5 py-4 text-[10px] font-bold text-ink">
                           {String(
                             item.order_id
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                        <td className="px-5 py-4 text-xs font-bold text-ink">
                           {money(
                             item.sales_amount
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                        <td className="px-5 py-4 text-xs font-black text-brand">
                           {money(
                             item.settlement_amount
                           )}
                           {Number(item.koc_bonus_amount) > 0 && (
-                            <span className="block mt-0.5 text-[9px] font-bold text-[#8C8880]">
+                            <span className="block mt-0.5 text-[9px] font-bold text-muted">
                               含 KOC 加碼 {money(item.koc_bonus_amount)}
                             </span>
                           )}
                         </td>
 
-                        <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                        <td className="px-5 py-4 text-[10px] text-muted">
                           {dateTimeText(
                             item.eligible_at
                           )}
@@ -1234,15 +1230,15 @@ export default function Finance() {
 
 
         {/* 說明 */}
-        <div className="rounded-[1.5rem] border border-[#DED6C8] bg-[#F5F0E8] p-5">
+        <div className="rounded-[1.5rem] border border-edge bg-cream p-5">
           <div className="flex gap-3">
             <CalendarClock
               size={18}
-              className="mt-0.5 shrink-0 text-[#C8522A]"
+              className="mt-0.5 shrink-0 text-brand"
             />
 
-            <div className="text-[10px] leading-relaxed text-[#6F6A61] sm:text-[11px]">
-              <p className="font-black text-[#1A1A18]">
+            <div className="text-[10px] leading-relaxed text-muted sm:text-[11px]">
+              <p className="font-black text-ink">
                 月結說明
               </p>
 
@@ -1260,24 +1256,24 @@ export default function Finance() {
       ================================================== */}
       {selectedBatch && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
           onClick={() =>
             setSelectedBatch(null)
           }
         >
           <div
-            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-[#E2DDD4] bg-white"
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-edge bg-white"
             onClick={event =>
               event.stopPropagation()
             }
           >
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E2DDD4] bg-white px-5 py-4">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-edge bg-white px-5 py-4">
               <div>
-                <p className="text-[10px] font-bold text-[#8C8880]">
+                <p className="text-[10px] font-bold text-muted">
                   貨款月結
                 </p>
 
-                <h3 className="mt-1 text-lg font-black text-[#1A1A18]">
+                <h3 className="mt-1 text-lg font-black text-ink">
                   {monthLabel(
                     selectedBatch.month
                   )}
@@ -1289,7 +1285,7 @@ export default function Finance() {
                 onClick={() =>
                   setSelectedBatch(null)
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F8F9FA]"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-edge text-muted hover:bg-mist"
               >
                 <X size={17} />
               </button>
@@ -1297,24 +1293,24 @@ export default function Finance() {
 
             <div className="space-y-5 p-5">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     本期貨款
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {money(
                       selectedBatch.amount_due
                     )}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     訂單數
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {
                       selectedBatch.receivable_count
                     }{' '}
@@ -1322,20 +1318,20 @@ export default function Finance() {
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     預計撥款
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {dateText(
                       selectedBatch.scheduled_payout_date
                     )}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     狀態
                   </p>
 
@@ -1349,12 +1345,12 @@ export default function Finance() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[#E2DDD4] p-4">
-                <p className="text-xs font-black text-[#1A1A18]">
+              <div className="rounded-xl border border-edge p-4">
+                <p className="text-xs font-black text-ink">
                   收款帳戶
                 </p>
 
-                <p className="mt-2 text-[10px] leading-relaxed text-[#8C8880]">
+                <p className="mt-2 text-[10px] leading-relaxed text-muted">
                   {
                     selectedBatch.bank_code ||
                     '—'
@@ -1374,7 +1370,7 @@ export default function Finance() {
               </div>
 
               <div>
-                <p className="text-xs font-black text-[#1A1A18]">
+                <p className="text-xs font-black text-ink">
                   本期訂單明細
                 </p>
 
@@ -1387,17 +1383,17 @@ export default function Finance() {
                           key={
                             item.receivable_id
                           }
-                          className="flex items-center justify-between gap-4 rounded-xl border border-[#E2DDD4] p-4"
+                          className="flex items-center justify-between gap-4 rounded-xl border border-edge p-4"
                         >
                           <div>
-                            <p className="text-[10px] font-bold text-[#1A1A18]">
+                            <p className="text-[10px] font-bold text-ink">
                               訂單{' '}
                               {
                                 item.order_id
                               }
                             </p>
 
-                            <p className="mt-1 text-[9px] text-[#8C8880]">
+                            <p className="mt-1 text-[9px] text-muted">
                               取得資格：
                               {dateTimeText(
                                 item.eligible_at
@@ -1405,7 +1401,7 @@ export default function Finance() {
                             </p>
                           </div>
 
-                          <p className="text-xs font-black text-[#1A1A18]">
+                          <p className="text-xs font-black text-ink">
                             {money(
                               item.amount_due
                             )}
@@ -1415,7 +1411,7 @@ export default function Finance() {
                     )}
                   </div>
                 ) : (
-                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                  <p className="mt-3 rounded-xl bg-mist py-6 text-center text-xs font-bold text-muted">
                     尚無訂單明細
                   </p>
                 )}
@@ -1431,24 +1427,24 @@ export default function Finance() {
       ================================================== */}
       {selectedSettlement && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
           onClick={() =>
             setSelectedSettlement(null)
           }
         >
           <div
-            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-[#E2DDD4] bg-white"
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-edge bg-white"
             onClick={event =>
               event.stopPropagation()
             }
           >
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[#E2DDD4] bg-white px-5 py-4">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-edge bg-white px-5 py-4">
               <div>
-                <p className="text-[10px] font-bold text-[#8C8880]">
+                <p className="text-[10px] font-bold text-muted">
                   平台服務費月結
                 </p>
 
-                <h3 className="mt-1 text-lg font-black text-[#1A1A18]">
+                <h3 className="mt-1 text-lg font-black text-ink">
                   {monthLabel(
                     selectedSettlement.month
                   )}
@@ -1462,7 +1458,7 @@ export default function Finance() {
                     null
                   )
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F8F9FA]"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-edge text-muted hover:bg-mist"
               >
                 <X size={17} />
               </button>
@@ -1470,24 +1466,24 @@ export default function Finance() {
 
             <div className="space-y-5 p-5">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     有效成交額
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {money(
                       selectedSettlement.gross_sales
                     )}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     本期應繳
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#C8522A]">
+                  <p className="mt-1 text-sm font-black text-brand">
                     {money(
                       selectedSettlement.amount_due
                     )}
@@ -1495,7 +1491,7 @@ export default function Finance() {
 
                   {/* 應繳金額 = 15% 平台服務費 + 您設定的 KOC 分潤超過平台基本額度的加碼 */}
                   {Number(selectedSettlement.koc_bonus_amount) > 0 && (
-                    <p className="mt-1 text-[9px] font-bold text-[#8C8880] leading-relaxed">
+                    <p className="mt-1 text-[9px] font-bold text-muted leading-relaxed">
                       15% 服務費{' '}
                       {money(
                         Number(selectedSettlement.amount_due) -
@@ -1508,24 +1504,24 @@ export default function Finance() {
                   )}
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     已繳
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {money(
                       selectedSettlement.paid_amount
                     )}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-[#F8F9FA] p-3">
-                  <p className="text-[9px] font-bold text-[#8C8880]">
+                <div className="rounded-xl bg-mist p-3">
+                  <p className="text-[9px] font-bold text-muted">
                     付款期限
                   </p>
 
-                  <p className="mt-1 text-sm font-black text-[#1A1A18]">
+                  <p className="mt-1 text-sm font-black text-ink">
                     {dateText(
                       selectedSettlement.due_date
                     )}
@@ -1533,9 +1529,9 @@ export default function Finance() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[#E2DDD4] p-4">
+              <div className="rounded-xl border border-edge p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-black text-[#1A1A18]">
+                  <p className="text-xs font-black text-ink">
                     狀態
                   </p>
 
@@ -1547,14 +1543,14 @@ export default function Finance() {
                   />
                 </div>
 
-                <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
+                <p className="mt-3 text-[10px] leading-relaxed text-muted">
                   此服務費為 Vendor → ShareBuy
                   的獨立付款，不會直接從貨款中扣除。
                 </p>
               </div>
 
               <div>
-                <p className="text-xs font-black text-[#1A1A18]">
+                <p className="text-xs font-black text-ink">
                   本期訂單明細
                 </p>
 
@@ -1567,24 +1563,24 @@ export default function Finance() {
                           key={
                             item.settlement_item_id
                           }
-                          className="rounded-xl border border-[#E2DDD4] p-4"
+                          className="rounded-xl border border-edge p-4"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-[10px] font-bold text-[#1A1A18]">
+                            <p className="text-[10px] font-bold text-ink">
                               訂單{' '}
                               {
                                 item.order_id
                               }
                             </p>
 
-                            <p className="text-xs font-black text-[#C8522A]">
+                            <p className="text-xs font-black text-brand">
                               {money(
                                 item.settlement_amount
                               )}
                             </p>
                           </div>
 
-                          <div className="mt-2 grid grid-cols-2 gap-2 text-[9px] text-[#8C8880]">
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[9px] text-muted">
                             <p>
                               有效成交額：
                               {money(
@@ -1613,7 +1609,7 @@ export default function Finance() {
                     )}
                   </div>
                 ) : (
-                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                  <p className="mt-3 rounded-xl bg-mist py-6 text-center text-xs font-bold text-muted">
                     尚無訂單明細
                   </p>
                 )}
@@ -1622,8 +1618,8 @@ export default function Finance() {
               {['awaiting_payment', 'partially_paid', 'overdue'].includes(
                 selectedSettlement.status
               ) && (
-                <div className="rounded-xl border border-[#E2DDD4] p-4">
-                  <p className="text-xs font-black text-[#1A1A18]">
+                <div className="rounded-xl border border-edge p-4">
+                  <p className="text-xs font-black text-ink">
                     回報匯款
                   </p>
 
@@ -1638,7 +1634,7 @@ export default function Finance() {
 
                     if (isPendingReview) {
                       return (
-                        <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
+                        <p className="mt-3 text-[10px] leading-relaxed text-muted">
                           已回報帳號後 5 碼 {latestPayment.reference_no}，
                           匯款日期 {dateText(latestPayment.paid_at)}，
                           請等待平台確認。
@@ -1659,7 +1655,7 @@ export default function Finance() {
                           <div className="mt-3 space-y-3">
                             <div className="flex flex-col gap-3 sm:flex-row">
                               <label className="flex flex-1 flex-col gap-1">
-                                <span className="text-[9px] font-bold uppercase tracking-widest text-[#8C8880]">
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted">
                                   匯款帳號後 5 碼
                                 </span>
                                 <input
@@ -1675,12 +1671,12 @@ export default function Finance() {
                                       ),
                                     }))
                                   }
-                                  className="rounded-lg border border-[#E2DDD4] px-3 py-2 text-sm font-bold text-[#1A1A18]"
+                                  className="rounded-lg border border-edge px-3 py-2 text-sm font-bold text-ink"
                                   placeholder="12345"
                                 />
                               </label>
                               <label className="flex flex-1 flex-col gap-1">
-                                <span className="text-[9px] font-bold uppercase tracking-widest text-[#8C8880]">
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted">
                                   匯款日期
                                 </span>
                                 <input
@@ -1692,7 +1688,7 @@ export default function Finance() {
                                       transfer_date: e.target.value,
                                     }))
                                   }
-                                  className="rounded-lg border border-[#E2DDD4] px-3 py-2 text-sm font-bold text-[#1A1A18]"
+                                  className="rounded-lg border border-edge px-3 py-2 text-sm font-bold text-ink"
                                 />
                               </label>
                             </div>
@@ -1703,7 +1699,7 @@ export default function Finance() {
                                 onClick={() =>
                                   submitSettlementReport(selectedSettlement)
                                 }
-                                className="flex items-center gap-2 rounded-full bg-[#C8522A] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#B04A24] disabled:opacity-60"
+                                className="flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
                               >
                                 {submittingReport && (
                                   <Loader2 size={14} className="animate-spin" />
@@ -1714,7 +1710,7 @@ export default function Finance() {
                                 type="button"
                                 disabled={submittingReport}
                                 onClick={() => setReportingSettlementId(null)}
-                                className="rounded-full border border-[#E2DDD4] bg-white px-4 py-2 text-xs font-bold text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+                                className="rounded-full border border-edge bg-white px-4 py-2 text-xs font-bold text-muted transition-colors hover:text-ink"
                               >
                                 取消
                               </button>
@@ -1722,10 +1718,10 @@ export default function Finance() {
                           </div>
                         ) : (
                           <>
-                            <div className="mt-3 flex items-start gap-2 rounded-lg border border-[#E2DDD4] bg-[#F8F9FA] p-3 text-[10px] font-bold text-[#1A1A18]">
+                            <div className="mt-3 flex items-start gap-2 rounded-lg border border-edge bg-mist p-3 text-[10px] font-bold text-ink">
                               <Landmark
                                 size={14}
-                                className="mt-0.5 shrink-0 text-[#C8522A]"
+                                className="mt-0.5 shrink-0 text-brand"
                               />
                               匯款帳戶資訊：請洽財務人員
                             </div>
@@ -1734,7 +1730,7 @@ export default function Finance() {
                               onClick={() =>
                                 openSettlementReportForm(selectedSettlement)
                               }
-                              className="mt-3 rounded-full bg-[#C8522A] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#B04A24]"
+                              className="mt-3 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-dark"
                             >
                               回報匯款
                             </button>
@@ -1747,12 +1743,12 @@ export default function Finance() {
               )}
 
               {selectedSettlement.invoice && (
-                <div className="rounded-xl border border-[#E2DDD4] p-4">
-                  <p className="text-xs font-black text-[#1A1A18]">
+                <div className="rounded-xl border border-edge p-4">
+                  <p className="text-xs font-black text-ink">
                     服務費發票
                   </p>
                   {selectedSettlement.invoice.status === 'issued' && (
-                    <p className="mt-2 text-xs font-bold text-[#1A1A18]">
+                    <p className="mt-2 text-xs font-bold text-ink">
                       發票號碼：{selectedSettlement.invoice.invoice_number}
                     </p>
                   )}
@@ -1768,7 +1764,7 @@ export default function Finance() {
               )}
 
               <div>
-                <p className="text-xs font-black text-[#1A1A18]">
+                <p className="text-xs font-black text-ink">
                   付款紀錄
                 </p>
 
@@ -1781,23 +1777,23 @@ export default function Finance() {
                           key={
                             payment.payment_id
                           }
-                          className="rounded-xl border border-[#E2DDD4] p-4"
+                          className="rounded-xl border border-edge p-4"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-black text-[#1A1A18]">
+                            <p className="text-xs font-black text-ink">
                               {money(
                                 payment.amount
                               )}
                             </p>
 
-                            <span className="text-[10px] font-bold text-[#8C8880]">
+                            <span className="text-[10px] font-bold text-muted">
                               {
                                 payment.status
                               }
                             </span>
                           </div>
 
-                          <p className="mt-2 text-[9px] leading-relaxed text-[#8C8880]">
+                          <p className="mt-2 text-[9px] leading-relaxed text-muted">
                             交易編號：
                             {
                               payment.reference_no ||
@@ -1814,7 +1810,7 @@ export default function Finance() {
                     )}
                   </div>
                 ) : (
-                  <p className="mt-3 rounded-xl bg-[#F8F9FA] py-6 text-center text-xs font-bold text-[#8C8880]">
+                  <p className="mt-3 rounded-xl bg-mist py-6 text-center text-xs font-bold text-muted">
                     尚無付款紀錄
                   </p>
                 )}

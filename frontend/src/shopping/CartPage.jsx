@@ -312,15 +312,15 @@ export default function CartPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F0E8] flex flex-col items-center justify-center font-sans text-[#8C8880] animate-pulse">
-        <div className="w-8 h-8 border-2 border-[#C8522A] border-t-transparent rounded-full animate-spin mb-4"></div>
+      <div className="min-h-screen bg-cream flex flex-col items-center justify-center font-sans text-muted animate-pulse">
+        <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="font-bold tracking-widest text-sm uppercase">Loading</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans pb-32 md:pb-24">
+    <div className="min-h-screen bg-cream text-ink font-sans pb-32 md:pb-24">
       <div className="mx-auto max-w-[860px] px-4 md:px-6 pt-6 md:pt-12 animate-in fade-in duration-500">
 
         {paymentCancelledNotice && (
@@ -340,25 +340,25 @@ export default function CartPage({
         {/* 🌟 統一風格的大標題 (移除橘色底線) */}
         <div className="mb-6 md:mb-10">
           <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4">
-            <h1 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold text-[#1A1A18]">購物車</h1>
-            <span className="text-xs md:text-sm font-bold text-[#8C8880] tracking-wide">
+            <h1 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold text-ink">購物車</h1>
+            <span className="text-xs md:text-sm font-bold text-muted tracking-wide">
               {count > 0 ? `共 ${count} 件商品` : ''}
             </span>
           </div>
           {vendorGroups.length > 1 && (
-            <p className="mt-2 md:mt-3 text-[11px] md:text-xs font-bold text-[#8C8880]">
+            <p className="mt-2 md:mt-3 text-[11px] md:text-xs font-bold text-muted">
               💡 不同廠商的商品需要分開結帳，一次只能勾選同一個廠商的商品喔。
             </p>
           )}
         </div>
 
         {items.length === 0 ? (
-          <div className="py-20 md:py-24 text-center text-[#8C8880] bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4]">
-            <p className="text-base md:text-lg font-bold mb-3 md:mb-4 text-[#1A1A18]">購物車是空的</p>
+          <div className="py-20 md:py-24 text-center text-muted bg-white rounded-2xl md:rounded-[2rem] border border-edge">
+            <p className="text-base md:text-lg font-bold mb-3 md:mb-4 text-ink">購物車是空的</p>
             <p className="text-xs md:text-sm font-medium mb-6 md:mb-8 px-4">看起來您還沒有挑選任何商品。</p>
             <button 
               onClick={onContinueShopping} 
-              className="rounded-full bg-[#1A1A18] px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 shadow-md"
+              className="rounded-full bg-brand px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-white transition-all hover:bg-brand-dark hover:-translate-y-1 shadow-md"
             >
               前往購物
             </button>
@@ -368,15 +368,15 @@ export default function CartPage({
             {vendorGroups.map((group) => {
               const groupAllDelisted = group.items.every((it) => it.isDelisted);
               return (
-                <div key={group.vendorId} className="mb-6 md:mb-8 overflow-hidden rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white shadow-sm">
+                <div key={group.vendorId} className="mb-6 md:mb-8 overflow-hidden rounded-2xl md:rounded-[2rem] border border-edge bg-white shadow-sm">
 
                   {/* 廠商表頭 */}
-                  <div className="flex items-center justify-between border-b border-[#E2DDD4] bg-[#FDFAF6] px-4 py-3 md:px-8 md:py-4">
+                  <div className="flex items-center justify-between border-b border-edge bg-[#FDFAF6] px-4 py-3 md:px-8 md:py-4">
                     <div className="flex items-center gap-2 md:gap-3">
-                      <span className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-[#8C8880]">廠商</span>
-                      <span className="text-xs md:text-sm font-black text-[#1A1A18]">{group.vendorName}</span>
+                      <span className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-muted">廠商</span>
+                      <span className="text-xs md:text-sm font-black text-ink">{group.vendorName}</span>
                       {groupAllDelisted && (
-                        <span className="rounded-full bg-[#E2DDD4] px-2 py-0.5 md:px-2.5 md:py-0.5 text-[9px] md:text-[10px] font-bold text-[#8C8880] whitespace-nowrap">
+                        <span className="rounded-full bg-edge px-2 py-0.5 md:px-2.5 md:py-0.5 text-[9px] md:text-[10px] font-bold text-muted whitespace-nowrap">
                           商品皆已下架
                         </span>
                       )}
@@ -385,18 +385,18 @@ export default function CartPage({
                       <button
                         type="button"
                         onClick={() => selectAllInVendor(group.vendorId)}
-                        className="text-[11px] md:text-xs font-bold text-[#C8522A] hover:underline whitespace-nowrap ml-2"
+                        className="text-[11px] md:text-xs font-bold text-brand hover:underline whitespace-nowrap ml-2"
                       >
                         全選此廠商
                       </button>
                     )}
                   </div>
 
-                  <div className="hidden md:grid grid-cols-[1fr_100px_140px_100px_56px] gap-0 border-b border-[#E2DDD4] px-8 py-3 bg-white">
-                    <div className="text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">項目</div>
-                    <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">價格</div>
-                    <div className="text-center text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">數量</div>
-                    <div className="text-right text-[11px] font-bold tracking-widest uppercase text-[#8C8880]">總計</div>
+                  <div className="hidden md:grid grid-cols-[1fr_100px_140px_100px_56px] gap-0 border-b border-edge px-8 py-3 bg-white">
+                    <div className="text-[11px] font-bold tracking-widest uppercase text-muted">項目</div>
+                    <div className="text-center text-[11px] font-bold tracking-widest uppercase text-muted">價格</div>
+                    <div className="text-center text-[11px] font-bold tracking-widest uppercase text-muted">數量</div>
+                    <div className="text-right text-[11px] font-bold tracking-widest uppercase text-muted">總計</div>
                     <div />
                   </div>
 
@@ -408,8 +408,8 @@ export default function CartPage({
                         key={it.id}
                         className={[
                           // [RWD 優化] 手機版改為 flex-col
-                          "flex flex-col md:grid md:grid-cols-[1fr_100px_140px_100px_56px] md:items-center px-4 py-5 md:px-8 md:py-6 border-b border-[#E2DDD4] last:border-0 transition-colors gap-4 md:gap-0",
-                          it.isDelisted ? "bg-[#F8F9FA] opacity-50" : "hover:bg-[#FDFAF6]",
+                          "flex flex-col md:grid md:grid-cols-[1fr_100px_140px_100px_56px] md:items-center px-4 py-5 md:px-8 md:py-6 border-b border-edge last:border-0 transition-colors gap-4 md:gap-0",
+                          it.isDelisted ? "bg-mist opacity-50" : "hover:bg-[#FDFAF6]",
                           it.removing ? "opacity-0 translate-x-5 md:translate-x-10 transition-all duration-300 ease-out" : "",
                         ].join(" ")}
                       >
@@ -421,7 +421,7 @@ export default function CartPage({
                               checked={selectedIds.has(it.id)}
                               disabled={it.isDelisted}
                               onChange={() => toggleSelect(it)}
-                              className="h-4 w-4 md:h-5 md:w-5 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer disabled:cursor-not-allowed"
+                              className="h-4 w-4 md:h-5 md:w-5 rounded border-edge text-brand focus:ring-brand cursor-pointer disabled:cursor-not-allowed"
                             />
                           </div>
                           {/* 點照片或名稱進商品說明頁（已下架的商品沒有頁面可看，不能點） */}
@@ -445,46 +445,46 @@ export default function CartPage({
                           <div className="flex flex-col gap-1 md:gap-0 min-w-0 flex-1">
                             <span
                               onClick={() => !it.isDelisted && navigate(`/product/${it.productId}`)}
-                              className={`text-sm font-bold leading-snug md:leading-relaxed line-clamp-2 md:line-clamp-none ${it.isDelisted ? "text-[#8C8880]" : "cursor-pointer hover:text-[#C8522A] transition-colors"}`}
+                              className={`text-sm font-bold leading-snug md:leading-relaxed line-clamp-2 md:line-clamp-none ${it.isDelisted ? "text-muted" : "cursor-pointer hover:text-brand transition-colors"}`}
                             >
                               {it.name}
                             </span>
                             
                             {it.isDelisted ? (
                               <div className="mt-1">
-                                <span className="rounded-full bg-[#E2DDD4] px-2 py-0.5 text-[10px] font-bold text-[#8C8880]">
+                                <span className="rounded-full bg-edge px-2 py-0.5 text-[10px] font-bold text-muted">
                                   已下架
                                 </span>
                               </div>
                             ) : (
                               // 手機版價格顯示在名稱下方
-                              <span className="md:hidden text-xs font-bold text-[#8C8880] tracking-wide mt-1">{fmt(it.price)}</span>
+                              <span className="md:hidden text-xs font-bold text-muted tracking-wide mt-1">{fmt(it.price)}</span>
                             )}
                           </div>
                         </div>
 
                         {/* 電腦版價格 (手機隱藏) */}
-                        <div className="hidden md:block text-center text-sm font-bold text-[#8C8880] tracking-wide">{fmt(it.price)}</div>
+                        <div className="hidden md:block text-center text-sm font-bold text-muted tracking-wide">{fmt(it.price)}</div>
 
                         {/* 下排操作區 (手機版)：數量 + 總價 + 刪除 */}
                         <div className="flex items-center justify-between pl-8 md:pl-0 w-full md:w-auto mt-1 md:mt-0">
                           
                           <div className="flex justify-center md:mx-auto">
-                            <div className="flex items-center overflow-hidden rounded-full border border-[#E2DDD4] bg-[#F5F0E8] h-8 md:h-9">
-                              <button type="button" disabled={it.isDelisted} className="h-full w-8 md:w-9 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60 disabled:cursor-not-allowed" onClick={() => changeQty(it.id, -1)}>−</button>
+                            <div className="flex items-center overflow-hidden rounded-full border border-edge bg-cream h-8 md:h-9">
+                              <button type="button" disabled={it.isDelisted} className="h-full w-8 md:w-9 text-sm font-bold text-ink transition-colors hover:bg-edge/60 disabled:cursor-not-allowed" onClick={() => changeQty(it.id, -1)}>−</button>
                               <span className="min-w-6 md:min-w-8 px-1 text-center text-[13px] md:text-sm font-bold">{it.qty}</span>
-                              <button type="button" disabled={it.isDelisted} className="h-full w-8 md:w-9 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#E2DDD4]/60 disabled:cursor-not-allowed" onClick={() => changeQty(it.id, 1)}>+</button>
+                              <button type="button" disabled={it.isDelisted} className="h-full w-8 md:w-9 text-sm font-bold text-ink transition-colors hover:bg-edge/60 disabled:cursor-not-allowed" onClick={() => changeQty(it.id, 1)}>+</button>
                             </div>
                           </div>
 
-                          <div className="md:hidden text-sm font-black tracking-wide text-[#1A1A18] px-2">{fmt(rowTotal)}</div>
+                          <div className="md:hidden text-sm font-black tracking-wide text-ink px-2">{fmt(rowTotal)}</div>
 
                           <div className="md:hidden flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => toggleWish(it.id)}
                               disabled={it.isDelisted}
-                              className={["h-8 w-8 rounded-full transition-all flex items-center justify-center disabled:cursor-not-allowed", it.wish ? "text-[#C8522A]" : "text-[#E2DDD4]", "hover:bg-[#F5F0E8] hover:text-[#1A1A18]"].join(" ")}
+                              className={["h-8 w-8 rounded-full transition-all flex items-center justify-center disabled:cursor-not-allowed", it.wish ? "text-brand" : "text-edge", "hover:bg-cream hover:text-ink"].join(" ")}
                               aria-label="wishlist"
                             >
                               <HeartIcon filled={it.wish} />
@@ -492,7 +492,7 @@ export default function CartPage({
                             <button
                               type="button"
                               onClick={() => removeItem(it.id)}
-                              className="h-8 w-8 rounded-full text-[#E2DDD4] transition-all hover:bg-[#FEF5F3] hover:text-[#C8522A] flex items-center justify-center"
+                              className="h-8 w-8 rounded-full text-edge transition-all hover:bg-brand-softer hover:text-brand flex items-center justify-center"
                               aria-label="remove"
                             >
                               <XIcon />
@@ -502,7 +502,7 @@ export default function CartPage({
                         </div>
 
                         {/* 電腦版總計 (手機隱藏) */}
-                        <div className="hidden md:block text-right text-sm font-black tracking-wide text-[#1A1A18]">{fmt(rowTotal)}</div>
+                        <div className="hidden md:block text-right text-sm font-black tracking-wide text-ink">{fmt(rowTotal)}</div>
 
                         {/* 電腦版操作區 (手機隱藏) */}
                         <div className="hidden md:flex items-center justify-end gap-2">
@@ -510,7 +510,7 @@ export default function CartPage({
                             type="button"
                             onClick={() => toggleWish(it.id)}
                             disabled={it.isDelisted}
-                            className={["h-8 w-8 rounded-full transition-all flex items-center justify-center disabled:cursor-not-allowed", it.wish ? "text-[#C8522A]" : "text-[#E2DDD4]", "hover:bg-[#F5F0E8] hover:text-[#1A1A18]"].join(" ")}
+                            className={["h-8 w-8 rounded-full transition-all flex items-center justify-center disabled:cursor-not-allowed", it.wish ? "text-brand" : "text-edge", "hover:bg-cream hover:text-ink"].join(" ")}
                             aria-label="wishlist"
                           >
                             <HeartIcon filled={it.wish} />
@@ -518,7 +518,7 @@ export default function CartPage({
                           <button
                             type="button"
                             onClick={() => removeItem(it.id)}
-                            className="h-8 w-8 rounded-full text-[#E2DDD4] transition-all hover:bg-[#FEF5F3] hover:text-[#C8522A] flex items-center justify-center"
+                            className="h-8 w-8 rounded-full text-edge transition-all hover:bg-brand-softer hover:text-brand flex items-center justify-center"
                             aria-label="remove"
                           >
                             <XIcon />
@@ -532,21 +532,21 @@ export default function CartPage({
             })}
 
             {/* Footer / 結帳列 */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-6 pt-2 md:pt-4 md:relative fixed bottom-0 left-0 right-0 bg-[#F5F0E8]/95 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-4 md:p-0 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] md:shadow-none border-t border-[#E2DDD4] md:border-none">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 md:gap-6 pt-2 md:pt-4 md:relative fixed bottom-0 left-0 right-0 bg-cream/95 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-4 md:p-0 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] md:shadow-none border-t border-edge md:border-none">
               
               <button 
                 type="button" 
                 onClick={onContinueShopping} 
-                className="inline-flex items-center justify-center sm:justify-start w-full sm:w-auto gap-2 text-xs md:text-sm font-bold tracking-wide text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+                className="inline-flex items-center justify-center sm:justify-start w-full sm:w-auto gap-2 text-xs md:text-sm font-bold tracking-wide text-muted transition-colors hover:text-ink"
               >
                 <BackIcon />
                 繼續購物
               </button>
               
-              <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-6 bg-white border border-[#E2DDD4] pl-5 md:pl-6 pr-1.5 md:pr-2 py-1.5 md:py-2 rounded-[1.25rem] md:rounded-full shadow-sm">
+              <div className="flex items-center justify-between w-full md:w-auto gap-4 md:gap-6 bg-white border border-edge pl-5 md:pl-6 pr-1.5 md:pr-2 py-1.5 md:py-2 rounded-[1.25rem] md:rounded-full shadow-sm">
                 <div className="flex items-baseline gap-1.5 md:gap-2">
-                  <span className="text-[10px] md:text-xs font-bold text-[#8C8880] tracking-widest uppercase">Total</span>
-                  <span className="text-xl md:text-2xl font-black text-[#1A1A18] tracking-tight">
+                  <span className="text-[10px] md:text-xs font-bold text-muted tracking-widest uppercase">Total</span>
+                  <span className="text-xl md:text-2xl font-black text-ink tracking-tight">
                     {selectedIds.size === 0 ? "NT$0" : fmt(grandTotal)}
                   </span>
                 </div>
@@ -554,7 +554,7 @@ export default function CartPage({
                   type="button"
                   disabled={selectedIds.size === 0}
                   onClick={() => onCheckout?.({ subtotal, couponDiscount, pointsDiscount, grandTotal, items: items.filter(it => selectedIds.has(it.id)) })}
-                  className="rounded-xl md:rounded-full bg-[#1A1A18] px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md whitespace-nowrap active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  className="rounded-xl md:rounded-full bg-brand px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold tracking-widest text-white transition-all hover:bg-brand-dark hover:-translate-y-1 hover:shadow-md whitespace-nowrap active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                 >
                   去結帳
                 </button>

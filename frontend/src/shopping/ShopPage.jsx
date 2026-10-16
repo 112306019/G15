@@ -4,6 +4,17 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 import KOCVideo from '../assets/KOC_ad.mp4';
 import { getErrorMessage } from '../errorMessage';
 
+// 主打區小標籤用：分類清單還沒載到或對不到時，退回這份中文對照（跟後端 PRODUCT_CATEGORY_CHOICES 一致）
+const CATEGORY_LABEL_FALLBACK = {
+  clothing: "服飾鞋包與配件",
+  beauty: "美妝保健與母嬰",
+  food: "飲食",
+  household: "生活百貨",
+  electronics: "3C 電子與家電",
+  custom: "客製化",
+  culture: "文創、娛樂與其他",
+};
+
 export function formatNTD(amount) {
   const value = Number(amount);
   return `NT$${Number.isFinite(value) ? Math.round(value).toLocaleString("zh-TW") : "0"}`;
@@ -12,7 +23,7 @@ export function formatNTD(amount) {
 // === Icons ===
 function SearchIcon() {
   return (
-    <svg className="h-4 w-4 text-[#8C8880]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <svg className="h-4 w-4 text-muted" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
       <circle cx="11" cy="11" r="8" />
       <path d="M21 21l-4.35-4.35" />
     </svg>
@@ -62,9 +73,8 @@ export function ProductCard({ name, price, stock, gradient = "linear-gradient(13
     : "";
 
   return (
-    <div className="group flex flex-col gap-2 md:gap-3 cursor-pointer" onClick={onClick}>
-      {/* [RWD 優化] 縮小卡片圓角 rounded-xl */}
-      <div className="relative flex aspect-square w-full items-center justify-center rounded-xl md:rounded-2xl overflow-hidden bg-[#E2DDD4]/20 shadow-sm transition-all duration-300 group-hover:shadow-md">
+    <div className="group flex flex-col gap-2 md:gap-3 cursor-pointer bg-white rounded-[1.25rem] md:rounded-[2rem] p-2 md:p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_14px_34px_rgba(80,71,133,0.10)]" onClick={onClick}>
+      <div className="relative flex aspect-square w-full items-center justify-center rounded-2xl md:rounded-[1.5rem] overflow-hidden bg-brand-softer">
         <div
           className="absolute inset-0 transition-transform duration-700 ease-out group-hover:scale-105"
           style={imageUrl ? undefined : { background: gradient }}
@@ -76,41 +86,41 @@ export function ProductCard({ name, price, stock, gradient = "linear-gradient(13
 
         {/* 缺圖時的 Icon */}
         {!imageUrl && (
-          <svg className="h-8 w-8 md:h-10 md:w-10 text-[#1A1A18]/10 relative z-10 transition-transform duration-700 group-hover:scale-105" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="h-8 w-8 md:h-10 md:w-10 text-ink/10 relative z-10 transition-transform duration-700 group-hover:scale-105" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
           </svg>
         )}
 
         {isBundle && (
-          <span className="absolute top-2 left-2 md:top-3 md:left-3 z-10 rounded-full bg-[#C8522A] px-2 py-0.5 text-[10px] md:text-[11px] font-bold tracking-wider text-white shadow-sm">
+          <span className="absolute top-2 left-2 md:top-3 md:left-3 z-10 rounded-full bg-brand px-2 py-0.5 text-[10px] md:text-[11px] font-bold tracking-wider text-white shadow-sm">
             組合
           </span>
         )}
 
-        {/* 購物車按鈕：售罄時不給加入購物車 */}
-        {!isSoldOut && (
-          // [RWD 優化] 手機版縮小按鈕與圖標，且不隱藏(直接顯示)
-          <button
-            onClick={(e) => { e.stopPropagation(); onAdd(); }}
-            className="absolute bottom-2 right-2 md:bottom-4 md:right-4 md:translate-y-6 md:opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100 bg-[#1A1A18]/80 md:bg-[#1A1A18] text-[#F5F0E8] p-2 md:p-2.5 rounded-full hover:bg-[#C8522A] shadow-md backdrop-blur-sm md:backdrop-blur-none"
-          >
-            <ShoppingBagIcon />
-          </button>
-        )}
       </div>
 
-      <div className="flex flex-col px-1 pt-1 md:pt-0 font-sans">
-        <h3 className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug md:leading-relaxed transition-colors group-hover:text-[#C8522A] min-h-[36px] md:min-h-[40px]">
+      <div className="flex flex-1 flex-col px-1.5 pb-1 font-sans">
+        <h3 className="font-sans text-[13px] md:text-base font-bold text-ink line-clamp-2 leading-snug transition-colors group-hover:text-brand min-h-[36px] md:min-h-[44px]">
           {name}
         </h3>
         {bundleSummary && (
-          <div className="text-[10px] md:text-xs text-[#8C8880] line-clamp-1" title={`內含：${bundleSummary}`}>
+          <div className="text-[10px] md:text-xs text-muted line-clamp-1" title={`內含：${bundleSummary}`}>
             內含：{bundleSummary}
           </div>
         )}
-        <div className="mt-0.5 md:mt-1 text-sm md:text-base font-black tracking-wide text-[#8C8880]">
-          {isSoldOut ? "已售罄" : price}
+        <div className="mt-1 md:mt-1.5 font-mono text-sm md:text-base font-medium text-ink">
+          {isSoldOut ? <span className="text-muted">已售罄</span> : price}
         </div>
+
+        {/* 加入購物車：售罄時不給按 */}
+        <button
+          onClick={(e) => { e.stopPropagation(); if (!isSoldOut) onAdd(); }}
+          disabled={isSoldOut}
+          className="mt-2.5 md:mt-3 self-start inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-xs font-bold tracking-wider text-brand transition-colors hover:bg-brand hover:text-white disabled:bg-edge disabled:text-muted disabled:cursor-not-allowed"
+        >
+          <ShoppingBagIcon />
+          {isSoldOut ? "已售罄" : "加入購物車"}
+        </button>
       </div>
     </div>
   );
@@ -126,6 +136,16 @@ const GRADIENTS = [
   "linear-gradient(135deg,#C8C4B4,#A8A494)",
   "linear-gradient(135deg,#BEC8C4,#9EA8A4)",
 ];
+
+// 區塊標題：小的英文標籤 + 襯線中文標題
+function SectionHeading({ label, title }) {
+  return (
+    <div className="mb-6 md:mb-8">
+      <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] uppercase">{label}</p>
+      <h2 className="mt-2 font-display text-[26px] md:text-[38px] font-bold text-ink">{title}</h2>
+    </div>
+  );
+}
 
 // KOC 專屬：個人熱銷爆款榜 + 智慧選品推薦（只有 userRole === "koc" 時顯示）
 function KocInsightsSection({ products, categories, onNavigate }) {
@@ -177,7 +197,7 @@ function KocInsightsSection({ products, categories, onNavigate }) {
   if (error) {
     return (
       <div className="pb-12 md:pb-16 font-sans">
-        <div className="rounded-2xl border border-[#C8522A]/30 bg-[#FDF0ED] px-5 py-4 text-xs md:text-sm font-bold text-[#C8522A]">
+        <div className="rounded-2xl border border-brand/30 bg-brand-soft px-5 py-4 text-xs md:text-sm font-bold text-brand">
           {error}
         </div>
       </div>
@@ -187,7 +207,7 @@ function KocInsightsSection({ products, categories, onNavigate }) {
   if (!top || !recs) {
     return (
       <div className="pb-12 md:pb-16 font-sans">
-        <div className="h-40 rounded-2xl bg-[#E2DDD4]/40 animate-pulse" />
+        <div className="h-40 rounded-2xl bg-edge/40 animate-pulse" />
       </div>
     );
   }
@@ -198,14 +218,14 @@ function KocInsightsSection({ products, categories, onNavigate }) {
   return (
     <div className="pb-12 md:pb-16 font-sans grid gap-6 md:gap-8 md:grid-cols-5">
       {/* 個人熱銷爆款榜 */}
-      <div className="md:col-span-2 rounded-2xl md:rounded-3xl bg-white border border-[#E2DDD4] p-5 md:p-7 shadow-sm">
-        <p className="text-[#C8522A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Top Converting Products</p>
-        <h2 className="font-serif text-xl md:text-2xl font-black text-[#1A1A18] mb-4">你的熱銷榜</h2>
+      <div className="md:col-span-2 rounded-[1.5rem] md:rounded-[2rem] bg-white p-5 md:p-7">
+        <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Top Converting Products</p>
+        <h2 className="font-display text-xl md:text-2xl font-bold text-ink mb-4">你的熱銷榜</h2>
 
         {best && (
-          <div className="mb-5 rounded-xl bg-[#1A1A18] text-[#F5F0E8] px-4 py-3 text-xs md:text-sm leading-relaxed font-bold">
-            你的粉絲對「<span className="text-[#E8A27F]">{categoryLabel(best.category)}</span>」的購買力最高
-            <span className="text-gray-400 font-medium">
+          <div className="mb-5 rounded-2xl bg-brand-soft text-brand-dark px-4 py-3 text-xs md:text-sm leading-relaxed font-bold">
+            你的粉絲對「<span className="text-brand">{categoryLabel(best.category)}</span>」的購買力最高
+            <span className="text-muted font-medium">
               {best.metric === "conversion_rate"
                 ? `（轉化率 ${best.conversion_rate}%，${best.click_count.toLocaleString()} 次點擊帶出 ${best.order_count} 單）`
                 : `（平均 ${best.avg_orders_per_mission} 單/任務）`}
@@ -214,12 +234,12 @@ function KocInsightsSection({ products, categories, onNavigate }) {
         )}
 
         {top.top_products.length === 0 ? (
-          <p className="text-xs md:text-sm text-[#8C8880] leading-relaxed">
+          <p className="text-xs md:text-sm text-muted leading-relaxed">
             還沒有優惠碼成交紀錄。完成第一檔任務、粉絲用你的優惠碼下單後，這裡就會出現你的爆款榜。
           </p>
         ) : (
           <>
-            <ol className="flex flex-col divide-y divide-[#E2DDD4]/70">
+            <ol className="flex flex-col divide-y divide-edge/70">
               {topList.map((p) => (
                 <li
                   key={p.product_id}
@@ -227,27 +247,27 @@ function KocInsightsSection({ products, categories, onNavigate }) {
                   title={p.latest_task ? "查看最新一筆優惠碼的成效分析" : "查看商品"}
                   className="flex items-center gap-3 py-3 cursor-pointer group"
                 >
-                  <span className={`w-6 shrink-0 text-center font-serif text-lg font-black ${p.rank <= 3 ? "text-[#C8522A]" : "text-[#8C8880]"}`}>
+                  <span className={`w-6 shrink-0 text-center font-display text-lg font-black ${p.rank <= 3 ? "text-brand" : "text-muted"}`}>
                     {p.rank}
                   </span>
-                  <div className="h-11 w-11 shrink-0 rounded-lg overflow-hidden bg-[#E2DDD4]/50">
+                  <div className="h-11 w-11 shrink-0 rounded-lg overflow-hidden bg-edge/50">
                     {p.image_url && <img src={p.image_url} alt={p.product_name} className="h-full w-full object-cover" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1 group-hover:text-[#C8522A] transition-colors">{p.product_name}</p>
-                    <p className="text-[11px] text-[#8C8880] mt-0.5">
+                    <p className="text-xs md:text-sm font-bold text-ink line-clamp-1 group-hover:text-brand transition-colors">{p.product_name}</p>
+                    <p className="text-[11px] text-muted mt-0.5">
                       {categoryLabel(p.category)} · {p.order_count} 單 · {p.units_sold} 件
                       {p.conversion_rate !== null && ` · 轉化率 ${p.conversion_rate}%`}
                     </p>
                     {p.latest_task && (
-                      <p className="text-[10px] font-bold text-[#B89B6A] mt-0.5 group-hover:text-[#C8522A] transition-colors">
+                      <p className="text-[10px] font-bold text-gold mt-0.5 group-hover:text-brand transition-colors">
                         查看成效分析 →
                       </p>
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-xs md:text-sm font-black text-[#1A1A18]">{formatNTD(p.commission)}</p>
-                    <p className="text-[10px] text-[#8C8880]">分潤</p>
+                    <p className="font-mono text-xs md:text-sm font-semibold text-gold">{formatNTD(p.commission)}</p>
+                    <p className="text-[10px] text-muted">分潤</p>
                   </div>
                 </li>
               ))}
@@ -255,7 +275,7 @@ function KocInsightsSection({ products, categories, onNavigate }) {
             {top.top_products.length > 5 && (
               <button
                 onClick={() => setShowAllTop((v) => !v)}
-                className="mt-3 text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] underline underline-offset-4"
+                className="mt-3 text-xs font-bold text-muted hover:text-ink underline underline-offset-4"
               >
                 {showAllTop ? "收合" : `查看全部 ${top.top_products.length} 名`}
               </button>
@@ -265,36 +285,36 @@ function KocInsightsSection({ products, categories, onNavigate }) {
       </div>
 
       {/* 智慧選品推薦 */}
-      <div className="md:col-span-3 rounded-2xl md:rounded-3xl bg-white border border-[#E2DDD4] p-5 md:p-7 shadow-sm">
-        <p className="text-[#B89B6A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Smart Picks For You</p>
-        <h2 className="font-serif text-xl md:text-2xl font-black text-[#1A1A18] mb-1">智慧選品推薦</h2>
-        <p className="text-[11px] md:text-xs text-[#8C8880] mb-5">
+      <div className="md:col-span-3 rounded-[1.5rem] md:rounded-[2rem] bg-white p-5 md:p-7">
+        <p className="font-mono text-gold font-medium text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase">Smart Picks For You</p>
+        <h2 className="font-display text-xl md:text-2xl font-bold text-ink mb-1">智慧選品推薦</h2>
+        <p className="text-[11px] md:text-xs text-muted mb-5">
           {recs.source === "similar"
             ? `根據 ${recs.similar_koc_count} 位跟你粉絲群相似的 KOC，近 ${recs.recent_days} 天的實際分潤`
             : `你的帶貨紀錄還不夠比對相似 KOC，先依全平台近 ${recs.recent_days} 天的實際分潤推薦`}
         </p>
 
         {recs.recommendations.length === 0 ? (
-          <p className="text-xs md:text-sm text-[#8C8880] leading-relaxed">目前沒有符合條件的進行中活動，之後再回來看看吧！</p>
+          <p className="text-xs md:text-sm text-muted leading-relaxed">目前沒有符合條件的進行中活動，之後再回來看看吧！</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
             {recs.recommendations.map((r) => (
-              <div key={r.product_id} className="flex gap-3 rounded-xl border border-[#E2DDD4] p-3 hover:border-[#1A1A18] transition-colors">
-                <div className="h-20 w-20 shrink-0 rounded-lg overflow-hidden bg-[#E2DDD4]/50">
+              <div key={r.product_id} className="flex gap-3 rounded-2xl border border-edge p-3 hover:border-brand transition-colors">
+                <div className="h-20 w-20 shrink-0 rounded-lg overflow-hidden bg-edge/50">
                   {r.image_url && <img src={r.image_url} alt={r.product_name} className="h-full w-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col">
-                  <p className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1">{r.product_name}</p>
-                  <p className="text-[11px] text-[#8C8880] leading-snug mt-1 line-clamp-3">
+                  <p className="text-xs md:text-sm font-bold text-ink line-clamp-1">{r.product_name}</p>
+                  <p className="text-[11px] text-muted leading-snug mt-1 line-clamp-3">
                     {recs.source === "similar"
                       ? `${r.koc_count} 位相似粉絲群的 KOC 近期推這款，平均賺了 `
                       : `${r.koc_count} 位 KOC 近期推這款，平均賺了 `}
-                    <span className="font-black text-[#C8522A]">{formatNTD(r.avg_earning)}</span>
+                    <span className="font-bold text-gold">{formatNTD(r.avg_earning)}</span>
                     ，要申請試試看嗎？
                   </p>
                   <button
                     onClick={() => goProduct(r)}
-                    className="mt-auto pt-2 self-start text-[11px] md:text-xs font-bold text-[#1A1A18] hover:text-[#C8522A] transition-colors"
+                    className="mt-auto pt-2 self-start text-[11px] md:text-xs font-bold text-ink hover:text-brand transition-colors"
                   >
                     前往購買，購買後即可申請代言 →
                   </button>
@@ -319,6 +339,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([{ id: "all", label: "所有分類" }]);
+  const heroCategoryLabel = (code) =>
+    categories.find((c) => c.id === code)?.label || CATEGORY_LABEL_FALLBACK[code] || "其他";
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -438,10 +460,10 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
     sortType === "default" ? "價格排序" : sortType === "asc" ? "價格由低到高 ↑" : "價格由高到低 ↓";
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-sans pb-24 relative animate-in fade-in duration-500">
+    <div className="min-h-screen bg-cream text-ink font-sans relative overflow-x-clip animate-in fade-in duration-500">
 
       {/* 過濾導覽列 */}
-      <div className="sticky top-[60px] md:top-[73px] z-30 bg-white/95 backdrop-blur-md border-b border-[#E2DDD4] shadow-sm">
+      <div className="sticky top-[72px] md:top-[80px] z-30 bg-cream/95 backdrop-blur-md">
         {/* [RWD 優化] 手機版縮小內距 p-3 */}
         <div className="mx-auto max-w-6xl px-4 md:px-6 py-3 md:py-4 flex flex-wrap items-center justify-between gap-3 md:gap-6 font-sans">
 
@@ -449,19 +471,19 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
             <div className="relative" ref={categoryMenuRef}>
               <button
                 onClick={() => setIsCategoryMenuOpen(!isCategoryMenuOpen)}
-                className={`text-xs md:text-sm font-bold flex items-center gap-1.5 md:gap-2 transition-colors px-3 py-1.5 md:px-4 md:py-2 rounded-full border ${activeCategory !== "all" || isCategoryMenuOpen ? "bg-[#1A1A18] text-white border-[#1A1A18]" : "bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]/50 border-transparent"}`}
+                className={`text-xs md:text-sm font-bold flex items-center gap-1.5 md:gap-2 transition-colors px-3 py-1.5 md:px-4 md:py-2 rounded-full border ${activeCategory !== "all" || isCategoryMenuOpen ? "bg-brand text-white border-brand" : "bg-white text-ink hover:bg-brand-soft border-transparent"}`}
               >
                 <FilterIcon />
                 {activeCategory === "all" ? "分類" : categories.find((c) => c.id === activeCategory)?.label}
                 <ChevronDown className={`h-3 w-3 md:h-4 md:w-4 transition-transform ${isCategoryMenuOpen ? "rotate-180" : ""}`} />
               </button>
               {isCategoryMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 md:mt-3 w-36 md:w-40 bg-white border border-[#E2DDD4] rounded-xl md:rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                <div className="absolute top-full left-0 mt-2 md:mt-3 w-36 md:w-40 bg-white border border-edge rounded-xl md:rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
                   {categories.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => { setActiveCategory(c.id); setIsCategoryMenuOpen(false); }}
-                      className={`w-full text-left px-4 py-2.5 md:px-5 text-xs md:text-sm font-bold transition-colors hover:bg-[#F5F0E8] ${activeCategory === c.id ? "text-[#C8522A] bg-[#FDF0ED]" : "text-[#1A1A18]"}`}
+                      className={`w-full text-left px-4 py-2.5 md:px-5 text-xs md:text-sm font-bold transition-colors hover:bg-cream ${activeCategory === c.id ? "text-brand bg-brand-soft" : "text-ink"}`}
                     >
                       {c.label}
                     </button>
@@ -470,7 +492,7 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
               )}
             </div>
 
-            <button onClick={toggleSort} className="text-xs md:text-sm font-bold text-[#1A1A18] flex items-center gap-1 md:gap-1.5 hover:text-[#C8522A] transition-colors">
+            <button onClick={toggleSort} className="text-xs md:text-sm font-bold text-ink flex items-center gap-1 md:gap-1.5 bg-white rounded-full px-3 py-1.5 md:px-4 md:py-2 hover:text-brand transition-colors">
               <span className="hidden sm:inline">{sortLabel}</span>
               <span className="sm:hidden">{sortType === "default" ? "排序" : sortType === "asc" ? "價格 ↑" : "價格 ↓"}</span> 
               <ChevronDown className={`h-3 w-3 md:h-4 md:w-4 transition-transform ${sortType === "desc" ? "rotate-180" : ""}`} />
@@ -478,15 +500,15 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
           </div>
 
           {/* 搜尋框 - [RWD 優化] 手機版自動佔滿整列 (w-full order-last) */}
-          <div className="w-full md:w-auto md:ml-auto order-last md:order-none flex items-center gap-2 md:gap-3 bg-[#F5F0E8] border border-transparent rounded-full px-4 py-2 md:px-5 md:py-2.5 focus-within:bg-white focus-within:border-[#1A1A18] transition-all">
+          <div className="w-full md:w-auto md:ml-auto order-last md:order-none flex items-center gap-2 md:gap-3 bg-white border-2 border-transparent rounded-full px-4 py-2 md:px-5 md:py-2.5 focus-within:border-brand transition-all">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-transparent text-[13px] md:text-sm font-medium outline-none placeholder:text-[#8C8880]"
+              className="w-full bg-transparent text-[13px] md:text-sm font-medium outline-none placeholder:text-muted"
               placeholder="搜尋商品名稱..."
             />
             {search.trim() ? (
-              <button onClick={() => setSearch("")} className="text-[#1A1A18] hover:text-[#C8522A] transition-colors p-1 rounded-full">
+              <button onClick={() => setSearch("")} className="text-ink hover:text-brand transition-colors p-1 rounded-full">
                 <XIcon />
               </button>
             ) : (
@@ -500,8 +522,8 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
       <div className="mx-auto max-w-6xl px-4 md:px-6 mt-2 md:mt-4">
 
         {loading && (
-          <div className="py-24 flex flex-col items-center justify-center text-[#8C8880] animate-pulse font-sans">
-            <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-[#C8522A] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="py-24 flex flex-col items-center justify-center text-muted animate-pulse font-sans">
+            <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-brand border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="font-bold tracking-widest text-xs md:text-sm uppercase">Loading</p>
           </div>
         )}
@@ -509,119 +531,122 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
         {!loading && !isFiltering && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
 
-            {/* 🌟 本期主打 */}
-            {/* [RWD 優化] 手機版改為純垂直疊加，置中對齊 */}
-            <div className="py-8 md:py-20 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-10">
-              
-              {/* 1. 左側：大標題與探索按鈕 */}
-              <div className="shrink-0 flex flex-col items-center md:items-start text-center md:text-left w-full md:w-auto order-1 md:order-1">
-                <p className="font-sans text-[#C8522A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-3 md:mb-4 uppercase">Featured Item</p>
-                <h1 className="font-serif text-[32px] md:text-5xl font-black tracking-wide leading-tight mb-6 md:mb-8 text-[#1A1A18]">
-                  本期主打<br className="hidden md:block" />
-                  <span className="md:hidden"> </span>商品精選
+            {/* 本期主打 */}
+            <section className="py-8 md:py-12 flex flex-col md:flex-row md:items-center gap-8 md:gap-10 lg:gap-12">
+              <div className="md:flex-1 min-w-0 text-center md:text-left">
+                <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] mb-3 md:mb-5 uppercase">Featured Item</p>
+                <h1 className="font-display text-[40px] md:text-6xl font-bold leading-[1.2] text-brand-dark">
+                  本期主打<br />商品精選
                 </h1>
-                <button 
-                  onClick={() => products[0] && onNavigate?.("product_detail", products[0])} 
-                  className="hidden md:inline-flex font-sans items-center justify-center rounded-full bg-[#1A1A18] px-8 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:-translate-y-1 hover:shadow-lg hover:bg-[#C8522A] active:translate-y-0"
-                >
-                  探索細節
-                </button>
-              </div>
-
-              {/* 3. 右側：主打圖片 (手機版移至中間) */}
-              <div
-                className="w-full md:w-[450px] aspect-square md:aspect-[4/3] shrink-0 rounded-2xl md:rounded-3xl flex items-center justify-center cursor-pointer hover:shadow-xl transition-all duration-500 overflow-hidden group shadow-sm border border-[#E2DDD4]/50 order-2 md:order-3"
-                style={products[0]?.image_url ? undefined : { background: "linear-gradient(135deg,#D8D4CC,#C4BDB4)" }}
-                onClick={() => products[0] && onNavigate?.("product_detail", products[0])}
-              >
-                {products[0]?.image_url ? (
-                  <img src={products[0].image_url} alt={products[0].Product_name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                ) : (
-                  <svg className="h-16 w-16 md:h-20 md:w-20 text-[#1A1A18]/10 transition-transform duration-700 group-hover:scale-105" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
-                  </svg>
-                )}
-              </div>
-
-              {/* 2. 中間：商品名稱 (手機版移至圖片下方) */}
-              <div className="w-full md:flex-1 flex justify-center md:justify-end items-center mt-2 md:mt-0 mb-4 md:mb-0 order-3 md:order-2">
                 {products[0] && (
-                  <div className="flex flex-col items-center md:items-end text-center md:text-right pl-0 md:pl-0 md:pr-8 border-l-0 md:border-r-2 border-[#C8522A]">
-                    <p className="font-sans text-[#8C8880] text-[10px] md:text-xs font-bold tracking-[0.1em] mb-1.5 md:mb-2 uppercase">Latest Pick</p>
-                    <p className="font-sans text-[#1A1A18] text-base md:text-lg font-bold leading-snug md:max-w-[220px]">
-                      {products[0].Product_name}
-                    </p>
+                  <p className="mt-4 md:mt-5 font-wordmark italic text-lg md:text-[22px] text-gold-bright">
+                    Latest pick — <span className="font-display not-italic font-semibold text-base md:text-xl">{products[0].Product_name}</span>
+                  </p>
+                )}
+                {products[0] && (
+                  <div className="mt-5 md:mt-6 mx-auto md:mx-0 max-w-md rounded-2xl border border-edge bg-white px-5 py-4 text-left">
+                    {products[0].Vendor_name && (
+                      <p className="font-mono text-[10px] md:text-[11px] tracking-[0.18em] uppercase text-muted">{products[0].Vendor_name}</p>
+                    )}
+                    {products[0].description && (
+                      <p className="mt-1.5 text-sm leading-relaxed text-ink/80 line-clamp-2">{products[0].description}</p>
+                    )}
+                    <div className="mt-3 flex items-baseline gap-2.5">
+                      <span className="font-display text-2xl md:text-[28px] font-bold text-brand-dark">{formatNTD(products[0].discounted_price || products[0].price)}</span>
+                      {products[0].discounted_price && Number(products[0].discounted_price) < Number(products[0].price) && (
+                        <span className="text-sm text-muted line-through">{formatNTD(products[0].price)}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-6 md:mt-7 flex flex-col sm:flex-row items-center md:items-center justify-center md:justify-start gap-2 sm:gap-3">
+                  <button
+                    onClick={() => products[0] && onNavigate?.("product_detail", products[0])}
+                    className="w-full sm:w-auto inline-flex items-center justify-center rounded-full bg-brand px-8 py-3.5 md:py-4 text-sm font-bold tracking-wider text-white transition-colors hover:bg-brand-dark"
+                  >
+                    探索細節 →
+                  </button>
+                  <button
+                    onClick={() => document.getElementById("all-products")?.scrollIntoView({ behavior: "smooth" })}
+                    className="w-full sm:w-auto inline-flex items-center justify-center rounded-full px-6 py-3.5 md:py-4 text-sm font-bold text-brand hover:text-brand-dark transition-colors"
+                  >
+                    看所有商品
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative w-full md:w-[440px] lg:w-[520px] shrink-0">
+                <div
+                  className="aspect-[5/4] rounded-[2rem] md:rounded-[2.5rem_8rem_2.5rem_2.5rem] bg-brand-soft overflow-hidden flex items-center justify-center cursor-pointer group"
+                  onClick={() => products[0] && onNavigate?.("product_detail", products[0])}
+                >
+                  {products[0]?.image_url ? (
+                    <img src={products[0].image_url} alt={products[0].Product_name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  ) : (
+                    <svg className="h-16 w-16 md:h-20 md:w-20 text-brand/20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 4c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm-3 8.5h9V19H5l5.5-7 3.5 4.5z" />
+                    </svg>
+                  )}
+                </div>
+                {products[0]?.category && (
+                  <div className="absolute left-3 md:-left-6 bottom-4 md:bottom-7 flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_14px_34px_rgba(63,56,112,0.12)] max-w-[75%]">
+                    <span className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full bg-gold-soft text-gold-ink font-bold" aria-hidden="true">✦</span>
+                    <span className="min-w-0">
+                      <span className="block text-[11px] md:text-xs text-muted">商品分類</span>
+                      <span className="block text-sm md:text-[15px] font-bold text-ink truncate">{heroCategoryLabel(products[0].category)}</span>
+                    </span>
                   </div>
                 )}
               </div>
-              
-              {/* 手機版的探索按鈕 */}
-              <button 
-                  onClick={() => products[0] && onNavigate?.("product_detail", products[0])} 
-                  className="md:hidden w-full order-4 font-sans inline-flex items-center justify-center rounded-xl bg-[#1A1A18] px-6 py-3.5 text-sm font-bold tracking-widest text-[#F5F0E8] transition-all hover:bg-[#C8522A] shadow-md"
-                >
-                  探索細節
-                </button>
-            </div>
+            </section>
 
-            {/* KOC Banner */}
-            <div className="pb-12 md:pb-16 pt-2 md:pt-4 font-sans">
-              {/* [RWD 優化] 手機版 p-6，圓角縮小 */}
+            {/* KOC 廣告欄：白卡 + 淡紫框 */}
+            <section className="pt-4 md:pt-10 font-sans">
               <div
-                className="bg-[#1A1A18] rounded-2xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between shadow-2xl relative overflow-hidden group cursor-pointer hover:-translate-y-1 transition-all duration-300"
                 onClick={handleKocClick}
+                className="group relative overflow-hidden cursor-pointer bg-white border-2 border-brand-pale rounded-[2rem] md:rounded-[2.5rem_7.5rem_2.5rem_2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center gap-8 md:gap-10 transition-shadow duration-300 hover:shadow-[0_20px_50px_rgba(80,71,133,0.10)]"
               >
-                <div className="absolute -right-10 -top-10 md:-right-20 md:-top-20 w-48 h-48 md:w-64 md:h-64 bg-[#C8522A] rounded-full blur-[60px] md:blur-[80px] opacity-30 group-hover:scale-110 transition-transform duration-700 ease-out"></div>
-                <div className="absolute -left-10 -bottom-10 md:-bottom-20 w-32 h-32 md:w-48 md:h-48 bg-[#B89B6A] rounded-full blur-[40px] md:blur-[60px] opacity-20 group-hover:scale-110 transition-transform duration-700 ease-out"></div>
-                
-                <div className="relative z-10 text-[#F5F0E8] max-w-lg mb-6 md:mb-0 pointer-events-none text-center md:text-left">
-                  <div className="text-[#C8522A] font-bold text-[10px] md:text-xs tracking-[0.2em] mb-3 md:mb-4 uppercase">KOC Partner Program</div>
-                  
+                <div className="relative md:flex-1 min-w-0 text-center md:text-left">
+                  <div className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] mb-3 md:mb-4 uppercase">KOC Partner Program</div>
                   {userRole === "koc" ? (
                     <>
-                      <h2 className="font-serif text-2xl md:text-4xl font-black mb-3 md:mb-4 leading-tight">歡迎回來！<br />前往專屬接案大廳</h2>
-                      <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-6 md:mb-8 font-medium">查看最新的代言商品、追蹤您的專屬優惠碼成效，並管理您的收益。</p>
+                      <h2 className="font-display text-[28px] md:text-[38px] font-bold leading-snug text-brand-dark mb-3 md:mb-4">歡迎回來！<br />前往專屬接案大廳</h2>
+                      <p className="text-brand-dark/75 text-sm md:text-[15px] leading-relaxed mb-6 md:mb-7 max-w-md mx-auto md:mx-0">查看最新的代言商品、追蹤您的專屬優惠碼成效，並管理您的收益。</p>
                     </>
                   ) : (
                     <>
-                      <h2 className="font-serif text-2xl md:text-4xl font-black mb-3 md:mb-4 leading-tight">成為專屬 KOC<br />將影響力變現！</h2>
-                      <p className="text-gray-400 text-xs md:text-sm leading-relaxed mb-6 md:mb-8 font-medium">加入 KOC 行銷接案計畫，領取專屬優惠碼。每一筆使用您優惠碼的訂單都能帶來豐厚分潤。</p>
+                      <h2 className="font-display text-[28px] md:text-[38px] font-bold leading-snug text-brand-dark mb-3 md:mb-4">成為專屬 KOC<br />將影響力變現！</h2>
+                      <p className="text-brand-dark/75 text-sm md:text-[15px] leading-relaxed mb-6 md:mb-7 max-w-md mx-auto md:mx-0">加入 KOC 行銷接案計畫，領取專屬優惠碼。每一筆使用您優惠碼的訂單都能帶來分潤。</p>
                     </>
                   )}
-                  <button onClick={handleKocClick} className="bg-[#C8522A] text-white w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-[#A64220] transition-all shadow-md pointer-events-auto">
-                    {userRole === "koc" ? "進入接案大廳" : "了解 KOC 計畫"}
+                  <button onClick={handleKocClick} className="w-full md:w-auto rounded-full bg-brand px-7 md:px-8 py-3.5 text-sm font-bold text-white transition-colors hover:bg-brand-dark">
+                    {userRole === "koc" ? "進入接案大廳 →" : "了解 KOC 計畫 →"}
                   </button>
                 </div>
-                
-                {/* 影片區塊 (取代原本的手機版隱藏圖標 SVG) */}
-                <div className="hidden md:flex relative z-10 w-full md:w-[35%] aspect-video bg-black/20 border border-white/10 rounded-2xl items-center justify-center backdrop-blur-md overflow-hidden group-hover:rotate-2 transition-transform duration-500">
-                  <video 
-                    src={KOCVideo} 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline
-                    className="w-full h-full object-cover pointer-events-none"
-                  />
+
+                <div className="relative w-full md:w-[44%] max-w-[440px] rounded-[1.5rem] md:rounded-[1.9rem] bg-white p-2 md:p-2.5 shadow-[0_18px_40px_rgba(63,56,112,0.14)]">
+                  <video src={KOCVideo} autoPlay loop muted playsInline className="block w-full aspect-video object-cover rounded-[1.1rem] md:rounded-[1.4rem] pointer-events-none" />
+                  <span className="absolute -right-2 md:-right-4 -top-3 md:-top-4 rotate-3 rounded-full bg-gold-soft px-3 md:px-3.5 py-1.5 md:py-2 text-[11px] md:text-[13px] font-bold text-gold-ink shadow-[0_8px_20px_rgba(122,90,30,0.16)]">
+                    ✦ 每筆訂單都有分潤
+                  </span>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* KOC 專屬：熱銷爆款榜 + 智慧選品推薦 */}
             {userRole === "koc" && (
-              <KocInsightsSection products={products} categories={categories} onNavigate={onNavigate} />
+              <div className="pt-10 md:pt-14">
+                <KocInsightsSection products={products} categories={categories} onNavigate={onNavigate} />
+              </div>
             )}
+
+            <div className="h-[3px] rounded-full bg-brand my-12 md:my-16" aria-hidden="true" />
 
             {/* 推薦商品 */}
             {featured.length > 0 && (
-              <div className="pb-8 md:pb-12 border-t border-[#E2DDD4]/60 pt-8 md:pt-12">
-                <h2 className="font-serif text-xl md:text-3xl font-bold text-[#1A1A18] flex flex-col gap-2 mb-6 md:mb-8">
-                  推薦商品
-                  <span className="h-1 w-8 md:w-10 rounded-full bg-[#C8522A]"></span>
-                </h2>
-                
-                {/* [RWD 優化] grid-cols-2 維持不變，但縮小 gap */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-6 md:gap-x-6 md:gap-y-10">
+              <section className="pb-10 md:pb-14">
+                <SectionHeading label="Recommended" title="推薦商品" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
                   {featured.map((p) => (
                     <ProductCard
                       key={p.product_id}
@@ -637,18 +662,14 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
             {/* 本期最熱賣 */}
             {bestSellers.length > 0 && (
-              <div className="py-8 md:py-12 border-t border-[#E2DDD4]/60">
-                <h2 className="font-serif text-xl md:text-3xl font-bold text-[#1A1A18] flex flex-col gap-2 mb-6 md:mb-8">
-                  本期最熱賣
-                  <span className="h-1 w-8 md:w-10 rounded-full bg-[#B89B6A]"></span>
-                </h2>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-6 md:gap-x-6 md:gap-y-10">
+              <section className="pb-10 md:pb-14">
+                <SectionHeading label="Best Sellers" title="本期最熱賣" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
                   {bestSellers.map((p) => (
                     <ProductCard
                       key={p.product_id}
@@ -664,23 +685,18 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
           </div>
         )}
 
         {/* 所有商品 / 搜尋結果 */}
         {!loading && (
-          <div className={`py-8 md:py-12 ${!isFiltering ? "border-t border-[#E2DDD4]/60" : "pt-8 animate-in fade-in duration-500"}`}>
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 md:gap-4 mb-6 md:mb-8">
-              
-              <h2 className="font-serif text-xl md:text-3xl font-bold text-[#1A1A18] flex flex-col gap-2">
-                {isFiltering ? "搜尋與篩選結果" : "所有商品"}
-                <span className="h-1 w-8 md:w-10 rounded-full bg-[#C8522A]"></span>
-              </h2>
-
+          <section id="all-products" className={`scroll-mt-40 pb-6 md:pb-10 ${isFiltering ? "pt-8 animate-in fade-in duration-500" : ""}`}>
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 md:gap-4">
+              <SectionHeading label={isFiltering ? "Search Results" : "All Products"} title={isFiltering ? "搜尋與篩選結果" : "所有商品"} />
               {isFiltering && (
-                <button onClick={clearFilters} className="font-sans text-[13px] md:text-sm font-bold text-[#8C8880] hover:text-[#1A1A18] transition-colors underline underline-offset-4 mb-1 self-start sm:self-auto">
+                <button onClick={clearFilters} className="font-sans text-[13px] md:text-sm font-bold text-muted hover:text-brand transition-colors underline underline-offset-4 mb-6 md:mb-8 self-start sm:self-auto">
                   清除篩選，返回首頁
                 </button>
               )}
@@ -688,12 +704,11 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
 
             {displayProducts.length === 0 ? (
               <div className="py-16 md:py-24 flex flex-col items-center text-center font-sans">
-                <SearchIcon className="h-8 w-8 md:h-10 md:w-10 text-[#E2DDD4] mb-4" />
-                <p className="text-base md:text-lg font-bold text-[#1A1A18] mb-1.5 md:mb-2">找不到相關商品</p>
-                <p className="text-xs md:text-sm text-[#8C8880]">請嘗試更換分類或搜尋關鍵字</p>
+                <p className="text-base md:text-lg font-bold text-ink mb-1.5 md:mb-2">找不到相關商品</p>
+                <p className="text-xs md:text-sm text-muted">請嘗試更換分類或搜尋關鍵字</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-6 md:gap-x-6 md:gap-y-10">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
                 {displayProducts.map((p) => (
                   <ProductCard
                     key={p.product_id}
@@ -710,16 +725,16 @@ export default function ShopPage({ onNavigate, userRole = "guest", onAddToCart }
                 ))}
               </div>
             )}
-          </div>
+          </section>
         )}
 
       </div>
 
       {/* Toast */}
-      <div className={`fixed bottom-6 md:bottom-10 left-1/2 z-[999] flex w-[92%] sm:w-max max-w-md -translate-x-1/2 items-center justify-between md:justify-center gap-3 md:gap-4 rounded-xl md:rounded-full bg-[#1A1A18] pl-4 md:pl-6 pr-2 py-2 text-[11px] md:text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 font-sans ${toastMsg ? "translate-y-0 opacity-100 scale-100" : "pointer-events-none translate-y-10 opacity-0 scale-95"}`}>
+      <div className={`fixed bottom-6 md:bottom-10 left-1/2 z-[999] flex w-[92%] sm:w-max max-w-md -translate-x-1/2 items-center justify-between md:justify-center gap-3 md:gap-4 rounded-xl md:rounded-full bg-ink pl-4 md:pl-6 pr-2 py-2 text-[11px] md:text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 font-sans ${toastMsg ? "translate-y-0 opacity-100 scale-100" : "pointer-events-none translate-y-10 opacity-0 scale-95"}`}>
         <span className="line-clamp-2 leading-relaxed">{toastMsg}</span>
         {userRole === "guest" && toastMsg.includes("登入") && (
-          <button onClick={() => onNavigate?.("login")} className="flex-shrink-0 whitespace-nowrap rounded-lg md:rounded-full bg-[#C8522A] px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-xs transition-colors hover:bg-[#A64220]">
+          <button onClick={() => onNavigate?.("login")} className="flex-shrink-0 whitespace-nowrap rounded-lg md:rounded-full bg-brand px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-xs transition-colors hover:bg-brand-dark">
             前往登入
           </button>
         )}

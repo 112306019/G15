@@ -159,7 +159,7 @@ export default function SecurityPage({ onLogout }) {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-4xl p-4 md:p-0 mx-auto pb-12">
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">登入與安全性</h2>
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-6 md:mb-10 text-ink">登入與安全</h2>
 
       {/* =========================================
           1. 密碼管理區塊

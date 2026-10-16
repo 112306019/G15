@@ -34,15 +34,15 @@ function ProtectedRoute({ allowedRoles, adminRole, children }) {
 
   if (!allowedRoles.includes(adminRole)) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm animate-in fade-in px-4 text-center">
-        <div className="w-20 h-20 bg-[#FDF0ED] text-[#C8522A] rounded-full flex items-center justify-center mb-6 border-4 border-[#C8522A]/10">
+      <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-[1.5rem] border border-edge shadow-sm animate-in fade-in px-4 text-center">
+        <div className="w-20 h-20 bg-brand-soft text-brand rounded-full flex items-center justify-center mb-6 border-4 border-brand/10">
           <ShieldAlert size={36} />
         </div>
-        <h3 className="text-2xl font-serif font-black text-[#1A1A18] mb-2">權限不足</h3>
-        <p className="text-[#8C8880] font-medium">您的帳號角色 <span className="font-bold text-[#1A1A18]">{adminRole}</span> 無法存取此管理模組。</p>
+        <h3 className="text-2xl font-display font-black text-ink mb-2">權限不足</h3>
+        <p className="text-muted font-medium">您的帳號角色 <span className="font-bold text-ink">{adminRole}</span> 無法存取此管理模組。</p>
         <button
           onClick={() => navigate('/admin')}
-          className="mt-6 px-6 py-3 bg-[#1A1A18] text-[#F5F0E8] rounded-xl font-bold text-sm hover:bg-[#333] transition-all shadow-md"
+          className="mt-6 px-6 py-3 bg-brand text-white rounded-xl font-bold text-sm hover:bg-brand-dark transition-all shadow-md"
         >
           返回平台總覽
         </button>
@@ -88,6 +88,11 @@ export default function AdminApp() {
     setIsProfileMenuOpen(false);
   }, [location.pathname]);
 
+  // 切換到新頁面時捲回頁頭
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_email');
@@ -116,7 +121,7 @@ export default function AdminApp() {
   const allowedMenuItems = allMenuItems.filter(item => item.roles.includes(adminRole));
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex font-sans text-slate-800 overflow-x-hidden">
+    <div className="min-h-screen bg-cream flex font-sans text-ink overflow-x-hidden">
 
       {isMobileMenuOpen && (
         <div 
@@ -126,17 +131,17 @@ export default function AdminApp() {
       )}
 
       {/* 側邊欄 (支援響應式滑動，桌面版可收合) */}
-      <aside className={`${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} w-64 bg-white border-r border-[#E2DDD4] flex flex-col fixed h-full z-30 transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      <aside className={`${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} w-64 bg-white border-r border-edge flex flex-col fixed h-full z-30 transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <button
           onClick={() => setIsSidebarCollapsed(v => !v)}
-          className="hidden md:flex absolute top-20 -right-3 w-6 h-6 bg-white border border-[#E2DDD4] rounded-full items-center justify-center shadow-sm hover:bg-[#F5F0E8] transition-colors z-40"
+          className="hidden md:flex absolute top-20 -right-3 w-6 h-6 bg-white border border-edge rounded-full items-center justify-center shadow-sm hover:bg-cream transition-colors z-40"
         >
           {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="h-16 md:h-20 flex items-center px-4 border-b border-[#E2DDD4] cursor-pointer" onClick={() => navigate('/admin')}>
+        <div className="h-16 md:h-20 flex items-center px-4 border-b border-edge cursor-pointer" onClick={() => navigate('/admin')}>
 
-          <div className={`bg-[#F5F0E8] w-full px-2.5 py-2 rounded-xl flex items-center gap-2 hover:bg-[#E2DDD4] transition-colors shadow-sm ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
+          <div className={`bg-cream w-full px-2.5 py-2 rounded-xl flex items-center gap-2 hover:bg-edge transition-colors shadow-sm ${isSidebarCollapsed ? 'md:justify-center' : ''}`}>
             <img
               src={LogoIcon}
               alt="ShareBuy Logo"
@@ -149,7 +154,7 @@ export default function AdminApp() {
                   alt="ShareBuy Text"
                   className="h-5 md:h-6 w-auto object-contain mix-blend-multiply"
                 />
-                <span className="text-[10px] bg-[#1A1A18] text-white px-2 py-0.5 rounded-md font-bold tracking-wider ml-auto flex-shrink-0">
+                <span className="text-[10px] bg-brand text-white px-2 py-0.5 rounded-full font-bold tracking-wider ml-auto flex-shrink-0">
                   ADMIN
                 </span>
               </>
@@ -167,23 +172,23 @@ export default function AdminApp() {
                 key={item.id}
                 onClick={() => navigate(item.path)}
                 title={isSidebarCollapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : ''} px-4 py-3 md:py-3.5 rounded-xl font-bold text-sm transition-all ${isActive
-                    ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
-                    : 'text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18]'
+                className={`w-full flex items-center gap-3 ${isSidebarCollapsed ? 'md:justify-center' : ''} px-4 py-3 md:py-3.5 rounded-full font-bold text-sm transition-all ${isActive
+                    ? 'bg-brand-soft text-brand'
+                    : 'text-muted hover:bg-cream hover:text-ink'
                   }`}
               >
-                <span className={isActive ? 'text-[#C8522A]' : ''}>{item.icon}</span>
+                <span className={isActive ? 'text-brand' : ''}>{item.icon}</span>
                 {!isSidebarCollapsed && item.label}
               </button>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-[#E2DDD4]">
+        <div className="p-4 border-t border-edge">
           <button
             onClick={handleLogout}
             title={isSidebarCollapsed ? '登出系統' : undefined}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm text-[#8C8880] border border-[#E2DDD4] hover:bg-[#FDF0ED] hover:text-[#C8522A] hover:border-[#C8522A]/30 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm text-muted border border-edge hover:bg-brand-soft hover:text-brand hover:border-brand/30 transition-all"
           >
             <LogOut size={16} /> {!isSidebarCollapsed && '登出系統'}
           </button>
@@ -194,17 +199,17 @@ export default function AdminApp() {
       <main className={`flex-1 w-full ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'} flex flex-col min-h-screen transition-all duration-300`}>
 
         {/* 頂部 Header */}
-        <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-[#E2DDD4] sticky top-0 z-10 flex items-center justify-between md:justify-end px-4 md:px-10">
+        <header className="h-16 md:h-20 bg-white/80 backdrop-blur-md border-b border-edge sticky top-0 z-10 flex items-center justify-between md:justify-end px-4 md:px-10">
           
           <button 
-            className="md:hidden p-2 text-[#1A1A18] hover:bg-[#F5F0E8] rounded-lg transition-colors"
+            className="md:hidden p-2 text-ink hover:bg-cream rounded-lg transition-colors"
             onClick={() => setIsMobileMenuOpen(true)}
           >
             <Menu size={24} />
           </button>
 
           <div className="flex items-center gap-3 md:gap-5">
-            <div className="hidden md:block text-sm font-bold text-[#8C8880] pr-5 border-r border-[#E2DDD4]">
+            <div className="hidden md:block text-sm font-bold text-muted pr-5 border-r border-edge">
               系統時間：{new Date().toLocaleDateString('zh-TW')}
             </div>
             
@@ -218,10 +223,10 @@ export default function AdminApp() {
                 className="flex items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none py-2"
               >
                 <div className="text-right hidden sm:block">
-                  <div className="text-sm font-black text-[#1A1A18]">{adminEmail.split('@')[0]}</div>
-                  <div className="text-[10px] font-bold text-[#C8522A] tracking-wider uppercase">{adminRole}</div>
+                  <div className="text-sm font-black text-ink">{adminEmail.split('@')[0]}</div>
+                  <div className="text-[10px] font-bold text-brand tracking-wider uppercase">{adminRole}</div>
                 </div>
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#1A1A18] text-white flex items-center justify-center font-bold uppercase text-sm md:text-base shadow-sm">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-brand text-white flex items-center justify-center font-bold uppercase text-sm md:text-base shadow-sm">
                   {adminEmail.charAt(0)}
                 </div>
               </button>
@@ -229,18 +234,18 @@ export default function AdminApp() {
               {/* 下拉選單內容 */}
               {isProfileMenuOpen && (
                 <div className="absolute right-0 top-full pt-1 z-50">
-                  <div className="w-44 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#E2DDD4] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="w-44 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-edge overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-1.5">
                       <button
                         onClick={() => navigate('/admin/security')}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-[#1A1A18] hover:bg-[#F5F0E8] rounded-lg transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-ink hover:bg-cream rounded-lg transition-colors"
                       >
                         <ShieldCheck size={16} />
                         登入與安全性
                       </button>
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-[#C8522A] hover:bg-[#FDF0ED] rounded-lg transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold text-brand hover:bg-brand-soft rounded-lg transition-colors"
                       >
                         <LogOut size={16} />
                         登出系統

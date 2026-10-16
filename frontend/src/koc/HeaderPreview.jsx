@@ -117,25 +117,25 @@ export default function HeaderPreview({ kind, isGuest = false, onViewAll, refres
 
       {open && (
         <div className="hidden md:block absolute right-0 top-full pt-2 z-50">
-          <div className="w-80 rounded-2xl border border-[#E2DDD4] bg-white shadow-xl overflow-hidden animate-in fade-in duration-150">
-            <div className="px-4 py-3 border-b border-[#E2DDD4] flex items-center justify-between">
-              <span className="text-sm font-bold text-[#1A1A18]">{config.title}</span>
+          <div className="w-80 rounded-2xl border border-edge bg-white shadow-xl overflow-hidden animate-in fade-in duration-150">
+            <div className="px-4 py-3 border-b border-edge flex items-center justify-between">
+              <span className="text-sm font-bold text-ink">{config.title}</span>
               {items && items.length > 0 && (
-                <span className="text-xs font-bold text-[#8C8880]">共 {items.length} 件</span>
+                <span className="text-xs font-bold text-muted">共 {items.length} 件</span>
               )}
             </div>
 
             {isGuest ? (
-              <div className="px-4 py-8 text-center text-xs font-bold text-[#8C8880]">{config.guestText}</div>
+              <div className="px-4 py-8 text-center text-xs font-bold text-muted">{config.guestText}</div>
             ) : items === null && loading ? (
               <div className="px-4 py-8 flex justify-center">
-                <Loader2 size={18} className="animate-spin text-[#C8522A]" />
+                <Loader2 size={18} className="animate-spin text-brand" />
               </div>
             ) : items === null && failed ? (
-              <div className="px-4 py-8 text-center text-xs font-bold text-[#8C8880]">載入失敗，請稍後再試</div>
+              <div className="px-4 py-8 text-center text-xs font-bold text-muted">載入失敗，請稍後再試</div>
             ) : visible.length === 0 ? (
-              <div className="px-4 py-8 flex flex-col items-center gap-2 text-[#8C8880]">
-                <Package size={22} className="text-[#E2DDD4]" />
+              <div className="px-4 py-8 flex flex-col items-center gap-2 text-muted">
+                <Package size={22} className="text-edge" />
                 <span className="text-xs font-bold">{config.emptyText}</span>
               </div>
             ) : (
@@ -148,9 +148,9 @@ export default function HeaderPreview({ kind, isGuest = false, onViewAll, refres
                         close();
                         navigate(`/product/${item.productId}`);
                       }}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#F5F0E8] transition-colors ${item.isDelisted ? 'opacity-50' : ''}`}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-cream transition-colors ${item.isDelisted ? 'opacity-50' : ''}`}
                     >
-                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[#F5F0E8] flex items-center justify-center text-[#C4BDB4]">
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-cream flex items-center justify-center text-[#C4BDB4]">
                         {isValidImageUrl(item.imageUrl) ? (
                           <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
                         ) : (
@@ -158,8 +158,8 @@ export default function HeaderPreview({ kind, isGuest = false, onViewAll, refres
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-[#1A1A18] line-clamp-1">{item.name}</div>
-                        <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">
+                        <div className="text-xs font-bold text-ink line-clamp-1">{item.name}</div>
+                        <div className="text-[11px] font-bold text-muted mt-0.5">
                           {item.isDelisted ? '已下架' : item.detail}
                         </div>
                       </div>
@@ -167,20 +167,20 @@ export default function HeaderPreview({ kind, isGuest = false, onViewAll, refres
                   </li>
                 ))}
                 {hiddenCount > 0 && (
-                  <li className="px-4 py-2 text-[11px] font-bold text-[#8C8880] text-center">還有 {hiddenCount} 件商品</li>
+                  <li className="px-4 py-2 text-[11px] font-bold text-muted text-center">還有 {hiddenCount} 件商品</li>
                 )}
               </ul>
             )}
 
             {!isGuest && (
-              <div className="p-3 border-t border-[#E2DDD4]">
+              <div className="p-3 border-t border-edge">
                 <button
                   type="button"
                   onClick={() => {
                     close();
                     onViewAll?.();
                   }}
-                  className="w-full rounded-xl bg-[#1A1A18] py-2.5 text-xs font-bold text-white hover:bg-[#C8522A] transition-colors"
+                  className="w-full rounded-xl bg-brand py-2.5 text-xs font-bold text-white hover:bg-brand-dark transition-colors"
                 >
                   {config.actionLabel}
                 </button>

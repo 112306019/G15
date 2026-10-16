@@ -99,16 +99,17 @@ export default function AdminMissions() {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif font-black text-[#1A1A18] tracking-tight">任務與活動追蹤</h1>
-          <p className="text-[#8C8880] mt-1.5 md:mt-2 text-xs md:text-sm font-medium">管理 KOC 的接案進度與推薦碼轉換成效。</p>
+          <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] mb-2 md:mb-2.5 uppercase">MISSIONS</p>
+          <h1 className="text-2xl md:text-[28px] font-display font-bold text-ink">任務與活動追蹤</h1>
+          <p className="text-muted mt-1.5 md:mt-2 text-xs md:text-sm font-medium">管理 KOC 的接案進度與推薦碼轉換成效。</p>
         </div>
       </div>
 
-      <div className="flex gap-1 sm:gap-4 border-b border-[#E2DDD4] pb-px overflow-x-auto custom-scrollbar whitespace-nowrap">
+      <div className="flex gap-1 sm:gap-4 border-b border-edge pb-px overflow-x-auto custom-scrollbar whitespace-nowrap">
         <button
           onClick={() => setActiveTab('missions')}
           className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all ${
-            activeTab === 'missions' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+            activeTab === 'missions' ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink'
           }`}
         >
           <ClipboardList size={16} className="sm:w-[18px] sm:h-[18px]" /> KOC 任務進度
@@ -116,7 +117,7 @@ export default function AdminMissions() {
         <button
           onClick={() => setActiveTab('performance')}
           className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 font-bold text-xs sm:text-sm border-b-2 transition-all ${
-            activeTab === 'performance' ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+            activeTab === 'performance' ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink'
           }`}
         >
           <TrendingUp size={16} className="sm:w-[18px] sm:h-[18px]" /> 成效與分潤追蹤
@@ -125,50 +126,50 @@ export default function AdminMissions() {
 
       {/* 任務進度表格 (Missions) */}
       {activeTab === 'missions' && (
-        <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-[#E2DDD4] overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-          <div className="p-4 sm:p-5 border-b border-[#E2DDD4] flex justify-end bg-[#F8F9FA]">
+        <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-sm border border-edge overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+          <div className="p-4 sm:p-5 border-b border-edge flex justify-end bg-mist">
             <div className="relative w-full sm:w-64">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C8880]" />
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 type="text"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 placeholder="搜尋任務編號或 KOC..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E2DDD4] rounded-xl text-xs sm:text-sm outline-none focus:border-[#C8522A] focus:ring-2 focus:ring-[#C8522A]/10 transition-all shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-edge rounded-xl text-xs sm:text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 transition-all shadow-sm"
               />
             </div>
           </div>
           
-          <div className="md:hidden flex flex-col divide-y divide-[#E2DDD4]">
-            {loading && <div className="p-10 text-center text-sm font-bold text-[#8C8880]">載入中...</div>}
+          <div className="md:hidden flex flex-col divide-y divide-edge">
+            {loading && <div className="p-10 text-center text-sm font-bold text-muted">載入中...</div>}
             {!loading && error && <div className="p-10 text-center text-sm font-bold text-red-500">{error}</div>}
             {!loading && !error && filteredMissions.length === 0 && (
-              <div className="p-10 text-center text-sm font-bold text-[#8C8880]">目前沒有任務資料</div>
+              <div className="p-10 text-center text-sm font-bold text-muted">目前沒有任務資料</div>
             )}
             {!loading && !error && filteredMissions.map((mission) => (
-              <div key={mission.kocmission_id} className="p-5 sm:p-6 hover:bg-[#F8F9FA] transition-colors">
+              <div key={mission.kocmission_id} className="p-5 sm:p-6 hover:bg-mist transition-colors">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <div className="text-[10px] font-bold text-[#8C8880] mb-1">任務編號</div>
-                    <div className="font-black text-[#1A1A18] text-sm">{mission.kocmission_id}</div>
+                    <div className="text-[10px] font-bold text-muted mb-1">任務編號</div>
+                    <div className="font-black text-ink text-sm">{mission.kocmission_id}</div>
                   </div>
-                  <span className="bg-white border border-[#E2DDD4] px-2 py-1 rounded-md text-[10px] sm:text-xs font-bold text-[#1A1A18] shadow-sm whitespace-nowrap">
+                  <span className="bg-white border border-edge px-2 py-1 rounded-md text-[10px] sm:text-xs font-bold text-ink shadow-sm whitespace-nowrap">
                     {STAGE_LABELS[mission.stage] ?? '未知'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-4 bg-[#F5F0E8]/50 p-3.5 rounded-xl border border-[#E2DDD4]/50">
+                <div className="grid grid-cols-2 gap-3 mb-4 bg-cream/50 p-3.5 rounded-xl border border-edge/50">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-[#8C8880]">KOC / 廠商</span>
-                    <span className="text-xs font-bold text-[#C8522A] truncate">
+                    <span className="text-[10px] font-bold text-muted">KOC / 廠商</span>
+                    <span className="text-xs font-bold text-brand truncate">
                       {mission.koc_name || '未指派'} 
-                      <span className="text-[#8C8880] font-normal mx-1">|</span> 
-                      <span className="text-[#1A1A18]">{mission.vendor_name}</span>
+                      <span className="text-muted font-normal mx-1">|</span> 
+                      <span className="text-ink">{mission.vendor_name}</span>
                     </span>
                   </div>
                   <div className="flex flex-col gap-1 text-right">
-                    <span className="text-[10px] font-bold text-[#8C8880]">截止時間</span>
-                    <span className="text-xs font-bold text-[#1A1A18] flex justify-end items-center gap-1">
+                    <span className="text-[10px] font-bold text-muted">截止時間</span>
+                    <span className="text-xs font-bold text-ink flex justify-end items-center gap-1">
                       <Clock size={12} /> {mission.deadline || '未設定'}
                     </span>
                   </div>
@@ -176,7 +177,7 @@ export default function AdminMissions() {
 
                 <button
                   onClick={() => handleUpdateClick(mission)}
-                  className="w-full inline-flex items-center justify-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#333] transition-all shadow-sm"
+                  className="w-full inline-flex items-center justify-center gap-1.5 bg-brand text-white px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-brand-dark transition-all shadow-sm"
                 >
                   <Edit size={14} /> 例外處理
                 </button>
@@ -187,38 +188,38 @@ export default function AdminMissions() {
           <div className="hidden md:block overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
-                <tr className="bg-white border-b border-[#E2DDD4]">
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">任務編號 / KOC</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">合作廠商</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">目前階段 (Stage)</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase">截止時間</th>
-                  <th className="px-6 py-4 text-xs font-bold text-[#8C8880] uppercase text-center">操作</th>
+                <tr className="bg-white border-b border-edge">
+                  <th className="px-6 py-4 text-xs font-bold text-muted uppercase">任務編號 / KOC</th>
+                  <th className="px-6 py-4 text-xs font-bold text-muted uppercase">合作廠商</th>
+                  <th className="px-6 py-4 text-xs font-bold text-muted uppercase">目前階段 (Stage)</th>
+                  <th className="px-6 py-4 text-xs font-bold text-muted uppercase">截止時間</th>
+                  <th className="px-6 py-4 text-xs font-bold text-muted uppercase text-center">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2DDD4]">
+              <tbody className="divide-y divide-edge">
                 {loading && (
-                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">載入中...</td></tr>
+                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-muted">載入中...</td></tr>
                 )}
                 {!loading && error && (
                   <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-red-500">{error}</td></tr>
                 )}
                 {!loading && !error && filteredMissions.length === 0 && (
-                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-[#8C8880]">目前沒有任務資料</td></tr>
+                  <tr><td colSpan="5" className="px-6 py-16 text-center text-sm font-bold text-muted">目前沒有任務資料</td></tr>
                 )}
 
                 {!loading && !error && filteredMissions.map((mission) => (
-                  <tr key={mission.kocmission_id} className="hover:bg-[#F8F9FA] transition-colors">
+                  <tr key={mission.kocmission_id} className="hover:bg-mist transition-colors">
                     <td className="px-6 py-4">
-                      <div className="font-black text-[#1A1A18] text-sm">{mission.kocmission_id}</div>
-                      <div className="text-xs font-bold text-[#C8522A] mt-1">{mission.koc_name || '未指派'}</div>
+                      <div className="font-black text-ink text-sm">{mission.kocmission_id}</div>
+                      <div className="text-xs font-bold text-brand mt-1">{mission.koc_name || '未指派'}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-[#8C8880]">{mission.vendor_name}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-muted">{mission.vendor_name}</td>
                     <td className="px-6 py-4">
-                      <span className="bg-white border border-[#E2DDD4] px-3 py-1.5 rounded-md text-sm font-bold text-[#1A1A18] shadow-sm">
+                      <span className="bg-white border border-edge px-3 py-1.5 rounded-md text-sm font-bold text-ink shadow-sm">
                         {STAGE_LABELS[mission.stage] ?? '未知'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs font-bold text-[#8C8880]">
+                    <td className="px-6 py-4 text-xs font-bold text-muted">
                       <div className="flex items-center gap-1.5">
                         <Clock size={14} /> {mission.deadline || '未設定'}
                       </div>
@@ -226,7 +227,7 @@ export default function AdminMissions() {
                     <td className="px-6 py-4 text-center">
                       <button
                         onClick={() => handleUpdateClick(mission)}
-                        className="inline-flex items-center gap-1.5 bg-[#1A1A18] text-[#F5F0E8] px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#333] transition-all shadow-sm"
+                        className="inline-flex items-center gap-1.5 bg-brand text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-brand-dark transition-all shadow-sm"
                       >
                         <Edit size={12} /> 例外處理
                       </button>

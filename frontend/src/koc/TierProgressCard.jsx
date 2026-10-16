@@ -56,29 +56,29 @@ export default function TierProgressCard({ tier }) {
     : 100;
 
   return (
-    <div className="mt-6 xl:mt-8 w-full bg-white border border-[#E2DDD4] rounded-xl xl:rounded-2xl p-4 xl:p-6">
+    <div className="mt-6 xl:mt-8 w-full bg-white border border-edge rounded-xl xl:rounded-2xl p-4 xl:p-6">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <p className="text-[#1A1A18] font-black text-base xl:text-lg flex items-center gap-2">
-            <TrendingUp size={18} className="text-[#C8522A]" />
+          <p className="text-ink font-black text-base xl:text-lg flex items-center gap-2">
+            <TrendingUp size={18} className="text-brand" />
             {text.title}
           </p>
-          <p className="text-[11px] xl:text-xs text-[#8C8880] mt-1">
+          <p className="text-[11px] xl:text-xs text-muted mt-1">
             {Number(year)} 年 {Number(month)} 月・這個任務本月已售出{' '}
-            <span className="font-black text-[#1A1A18]">{tier.quantity}</span> 件活動商品
+            <span className="font-black text-ink">{tier.quantity}</span> 件活動商品
             {mode !== 'platform_tier' && (
               <>
                 ・本月分潤{' '}
-                <span className="font-black text-[#1A1A18]">NT$ {monthAmount.toLocaleString()}</span>
+                <span className="font-black text-ink">NT$ {monthAmount.toLocaleString()}</span>
               </>
             )}
           </p>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-[10px] xl:text-xs font-bold text-[#8C8880]">
+          <div className="text-[10px] xl:text-xs font-bold text-muted">
             {mode === 'progressive' ? '目前這一層' : tier.tier_name}
           </div>
-          <div className="text-2xl xl:text-3xl font-black text-[#C8522A]">{tier.rate}%</div>
+          <div className="text-2xl xl:text-3xl font-black text-brand">{tier.rate}%</div>
         </div>
       </div>
 
@@ -98,14 +98,14 @@ export default function TierProgressCard({ tier }) {
                   key={item.name}
                   className={`rounded-lg xl:rounded-xl border px-2 py-2 text-center transition-colors ${
                     active
-                      ? 'bg-[#FDF0ED] border-[#C8522A] text-[#C8522A]'
+                      ? 'bg-brand-soft border-brand text-brand'
                       : passed
-                        ? 'bg-[#FDF0ED]/50 border-[#E2DDD4] text-[#8C8880]'
-                        : 'bg-[#F8F9FA] border-[#E2DDD4] text-[#8C8880]'
+                        ? 'bg-brand-soft/50 border-edge text-muted'
+                        : 'bg-mist border-edge text-muted'
                   }`}
                 >
                   <div className="text-[11px] xl:text-xs font-bold">{item.name}</div>
-                  <div className={`text-sm xl:text-base font-black ${active ? '' : 'text-[#1A1A18]'}`}>{item.rate}%</div>
+                  <div className={`text-sm xl:text-base font-black ${active ? '' : 'text-ink'}`}>{item.rate}%</div>
                   <div className="text-[10px] xl:text-[11px] font-medium">
                     {mode === 'progressive' ? tierRangeText(item) : fmtRange(item)}
                   </div>
@@ -114,22 +114,22 @@ export default function TierProgressCard({ tier }) {
             })}
           </div>
 
-          <div className="h-2 bg-[#F5F0E8] rounded-full overflow-hidden mb-2">
+          <div className="h-2 bg-cream rounded-full overflow-hidden mb-2">
             <div
-              className="h-full bg-gradient-to-r from-[#D6714E] to-[#C8522A] rounded-full transition-all"
+              className="h-full bg-gradient-to-r from-brand-light to-brand rounded-full transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
           {next ? (
-            <p className="text-xs xl:text-sm font-bold text-[#1A1A18]">
-              再售出 <span className="text-[#C8522A] font-black">{next.remaining}</span> 件，
+            <p className="text-xs xl:text-sm font-bold text-ink">
+              再售出 <span className="text-brand font-black">{next.remaining}</span> 件，
               {mode === 'progressive'
                 ? `之後售出的每一件改以 ${next.rate}% 計算`
                 : `之後新成立的分潤升級到「${next.name}」${next.rate}%`}
             </p>
           ) : (
-            <p className="text-xs xl:text-sm font-bold text-[#1A1A18] flex items-center gap-1.5">
-              <Trophy size={14} className="text-[#B89B6A]" />
+            <p className="text-xs xl:text-sm font-bold text-ink flex items-center gap-1.5">
+              <Trophy size={14} className="text-gold" />
               {mode === 'progressive'
                 ? `已進入最高一層，之後售出的每一件都以 ${tier.rate}% 計算`
                 : `已達最高級距，之後這個任務的分潤都會以 ${tier.rate}% 計算`}
@@ -138,7 +138,7 @@ export default function TierProgressCard({ tier }) {
         </>
       )}
 
-      <p className="text-[10px] xl:text-[11px] text-[#8C8880] mt-3 leading-relaxed">{text.note}</p>
+      <p className="text-[10px] xl:text-[11px] text-muted mt-3 leading-relaxed">{text.note}</p>
     </div>
   );
 }

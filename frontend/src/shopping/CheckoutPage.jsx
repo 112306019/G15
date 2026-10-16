@@ -1037,7 +1037,7 @@ export default function CheckoutPage({
     )?.label ?? "信用卡";
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-serif">
+    <div className="min-h-screen bg-cream text-ink font-display">
 
       <div className="mx-auto max-w-[1000px] px-4 md:px-6 pb-12 md:pb-20 pt-6 md:pt-12">
         
@@ -1045,7 +1045,7 @@ export default function CheckoutPage({
         <button
           type="button"
           onClick={() => onBack?.()}
-          className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-xs md:text-sm group w-fit"
+          className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-ink transition-colors font-bold text-xs md:text-sm group w-fit"
         >
           <svg
             viewBox="0 0 24 24"
@@ -1066,17 +1066,17 @@ export default function CheckoutPage({
           {/* ================= RIGHT (手機版改放上方) ================= */}
           <aside className="lg:sticky lg:top-20 order-1 lg:order-2">
 
-            <div className="rounded-[1.25rem] md:rounded-[16px] border border-[#E2DDD4] bg-white p-5 md:p-7 shadow-sm">
+            <div className="rounded-[1.25rem] md:rounded-[16px] border border-edge bg-white p-5 md:p-7 shadow-sm">
 
               <div className="relative inline-block font-['DM_Serif_Display'] text-xl md:text-[22px] mb-4 md:mb-6">
 
                 付款詳情
 
-                <span className="absolute left-0 -bottom-1 h-[2px] w-7 rounded bg-[#B89B6A]" />
+                <span className="absolute left-0 -bottom-1 h-[2px] w-7 rounded bg-gold" />
 
               </div>
 
-              <div className="text-[13px] text-[#8C8880]">
+              <div className="text-[13px] text-muted">
 
                 {normalizedCartItems.map(
                   (item, idx) => {
@@ -1104,10 +1104,10 @@ export default function CheckoutPage({
                           {item.name} <span className="whitespace-nowrap">× {item.qty}</span>
                         </span>
 
-                        <span className="font-mono text-[#1A1A18] whitespace-nowrap">
+                        <span className="font-mono text-ink whitespace-nowrap">
 
                           {hasDiscount && (
-                            <span className="line-through text-[#8C8880] mr-2">
+                            <span className="line-through text-muted mr-2">
 
                               {formatNTD(
                                 baseSubtotal
@@ -1127,13 +1127,13 @@ export default function CheckoutPage({
                   }
                 )}
 
-                <div className="flex items-center justify-between border-b border-t border-[#E2DDD4] py-2 md:py-2.5 mt-2">
+                <div className="flex items-center justify-between border-b border-t border-edge py-2 md:py-2.5 mt-2">
 
                   <span>
                     運費
                   </span>
 
-                  <span className="font-mono text-[#1A1A18]">
+                  <span className="font-mono text-ink">
 
                     {formatNTD(
                       shippingAmount
@@ -1153,7 +1153,7 @@ export default function CheckoutPage({
                     className={`font-mono ${
                       couponDiscount > 0
                         ? "text-[#6BBF6B]"
-                        : "text-[#8C8880]"
+                        : "text-muted"
                     }`}
                   >
 
@@ -1170,9 +1170,9 @@ export default function CheckoutPage({
               </div>
 
               {/* 優惠碼 */}
-              <div className="mt-4 border-t border-[#E2DDD4] pt-4">
+              <div className="mt-4 border-t border-edge pt-4">
 
-                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                <label className="mb-2 block text-[11px] tracking-[0.1em] uppercase text-muted">
                   輸入優惠碼
                 </label>
 
@@ -1186,7 +1186,7 @@ export default function CheckoutPage({
                         {appliedCoupon.code}
                       </div>
 
-                      <div className="text-[11px] text-[#8C8880]">
+                      <div className="text-[11px] text-muted">
 
                         適用於：
 
@@ -1203,7 +1203,7 @@ export default function CheckoutPage({
                       onClick={
                         handleRemoveCoupon
                       }
-                      className="text-[11px] text-[#8C8880] underline hover:text-[#C8522A]"
+                      className="text-[11px] text-muted underline hover:text-brand"
                     >
                       移除
                     </button>
@@ -1224,7 +1224,7 @@ export default function CheckoutPage({
                         )
                       }
                       placeholder="輸入優惠碼"
-                      className="flex-1 w-full rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-3 md:px-4 py-2 md:py-2.5 font-mono text-[13px] outline-none focus:border-[#1A1A18] tracking-[0.08em]"
+                      className="flex-1 w-full rounded-[10px] border-[1.5px] border-edge bg-white px-3 md:px-4 py-2 md:py-2.5 font-mono text-[13px] outline-none focus:border-ink tracking-[0.08em]"
                     />
 
                     <button
@@ -1236,7 +1236,7 @@ export default function CheckoutPage({
                         couponLoading ||
                         !couponCode.trim()
                       }
-                      className="rounded-[10px] bg-[#1A1A18] px-4 md:px-2.5 py-2 md:py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-[#C8522A] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="rounded-[10px] bg-brand px-4 md:px-2.5 py-2 md:py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-brand-dark disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
 
                       {couponLoading
@@ -1254,7 +1254,7 @@ export default function CheckoutPage({
                     className={`mt-2 text-[12px] font-bold ${
                       couponMsg.ok
                         ? "text-[#6BBF6B]"
-                        : "text-[#C8522A]"
+                        : "text-brand"
                     }`}
                   >
 
@@ -1267,19 +1267,19 @@ export default function CheckoutPage({
               </div>
 
               {/* 總額 */}
-              <div className="mt-4 flex items-center justify-between rounded-[10px] bg-[#F5F0E8] px-4 py-3 md:py-3.5">
+              <div className="mt-4 flex items-center justify-between rounded-[10px] bg-cream px-4 py-3 md:py-3.5">
 
-                <div className="text-xs md:text-[13px] font-bold text-[#1A1A18]">
+                <div className="text-xs md:text-[13px] font-bold text-ink">
 
                   總付款金額{" "}
 
-                  <span className="ml-1 text-[10px] md:text-[11px] font-normal text-[#8C8880]">
+                  <span className="ml-1 text-[10px] md:text-[11px] font-normal text-muted">
                     (TWD)
                   </span>
 
                 </div>
 
-                <div className="font-mono text-base md:text-[18px] font-bold text-[#1A1A18]">
+                <div className="font-mono text-base md:text-[18px] font-bold text-ink">
 
                   {formatNTD(
                     grandTotal
@@ -1289,7 +1289,7 @@ export default function CheckoutPage({
 
               </div>
 
-              <div className="mt-4 md:mt-5 border-t border-[#E2DDD4] pt-3 md:pt-4 flex items-center gap-1.5 md:gap-2 text-[10px] md:text-[11px] tracking-[0.05em] text-[#8C8880]">
+              <div className="mt-4 md:mt-5 border-t border-edge pt-3 md:pt-4 flex items-center gap-1.5 md:gap-2 text-[10px] md:text-[11px] tracking-[0.05em] text-muted">
 
                 <span className="text-[#6BBF6B]">
                   <ShieldIcon />
@@ -1312,9 +1312,9 @@ export default function CheckoutPage({
             </h1>
 
             {!isLoggedIn && (
-              <div className="mb-5 md:mb-7 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 rounded-[14px] border-[1.5px] border-[#C8522A] bg-[#FBEAE3] px-4 md:px-5 py-3 md:py-4">
+              <div className="mb-5 md:mb-7 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 rounded-[14px] border-[1.5px] border-brand bg-[#FBEAE3] px-4 md:px-5 py-3 md:py-4">
 
-                <span className="text-xs md:text-[14px] text-[#1A1A18]">
+                <span className="text-xs md:text-[14px] text-ink">
                   需要登入會員才能結帳，目前不提供訪客結帳。
                 </span>
 
@@ -1323,7 +1323,7 @@ export default function CheckoutPage({
                   onClick={() =>
                     onGoToLogin?.()
                   }
-                  className="w-full md:w-auto whitespace-nowrap rounded-lg md:rounded-full bg-[#1A1A18] px-5 py-2.5 md:py-2 text-xs md:text-[13px] font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A]"
+                  className="w-full md:w-auto whitespace-nowrap rounded-lg md:rounded-full bg-brand px-5 py-2.5 md:py-2 text-xs md:text-[13px] font-bold text-white transition-colors hover:bg-brand-dark"
                 >
                   前往登入
                 </button>
@@ -1331,7 +1331,7 @@ export default function CheckoutPage({
               </div>
             )}
 
-            <div className="h-px bg-[#E2DDD4] mb-5 md:mb-7" />
+            <div className="h-px bg-edge mb-5 md:mb-7" />
 
             {/* ================= 配送資訊 ================= */}
             <div className="mb-5 md:mb-7">
@@ -1343,7 +1343,7 @@ export default function CheckoutPage({
               {/* 配送方式 */}
               <div className="mb-4 md:mb-5">
 
-                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                   配送方式
                 </label>
 
@@ -1358,8 +1358,8 @@ export default function CheckoutPage({
                     }
                     className={`flex-1 md:flex-none rounded-xl md:rounded-full border-[1.5px] px-4 py-2.5 md:px-5 md:py-2.5 text-xs md:text-[13px] transition-all ${
                       shippingMethod === "home"
-                        ? "border-[#1A1A18] bg-[#1A1A18] text-white"
-                        : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
+                        ? "border-ink bg-ink text-white"
+                        : "border-edge bg-white text-muted hover:border-ink hover:text-ink"
                     }`}
                   >
                     宅配
@@ -1374,8 +1374,8 @@ export default function CheckoutPage({
                     }
                     className={`flex-1 md:flex-none rounded-xl md:rounded-full border-[1.5px] px-4 py-2.5 md:px-5 md:py-2.5 text-xs md:text-[13px] transition-all ${
                       shippingMethod === "cvs"
-                        ? "border-[#1A1A18] bg-[#1A1A18] text-white"
-                        : "border-[#E2DDD4] bg-white text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]"
+                        ? "border-ink bg-ink text-white"
+                        : "border-edge bg-white text-muted hover:border-ink hover:text-ink"
                     }`}
                   >
                     超商取貨
@@ -1388,7 +1388,7 @@ export default function CheckoutPage({
               {/* 收件人姓名 */}
               <div className="mb-4">
 
-                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                   收件人姓名
                 </label>
 
@@ -1405,16 +1405,16 @@ export default function CheckoutPage({
                     recipient.trim() && receiverNameValid
                       ? "border-[#6BBF6B] bg-white"
                       : recipient.trim() && !receiverNameValid
-                      ? "border-[#C8522A] bg-white"
-                      : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                      ? "border-brand bg-white"
+                      : "border-edge bg-slate-100 focus:border-ink focus:bg-white"
                   }`}
                 />
 
                 <p
                   className={`mt-1.5 md:mt-2 text-[10px] md:text-[11px] ${
                     recipient.trim() && !receiverNameValid
-                      ? "font-bold text-[#C8522A]"
-                      : "text-[#8C8880]"
+                      ? "font-bold text-brand"
+                      : "text-muted"
                   }`}
                 >
                   收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。
@@ -1425,7 +1425,7 @@ export default function CheckoutPage({
               {/* 收件人電話 */}
               <div className="mb-4">
 
-                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                   收件人電話
                 </label>
 
@@ -1446,7 +1446,7 @@ export default function CheckoutPage({
                   className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors ${
                     recipientPhoneValid
                       ? "border-[#6BBF6B] bg-white"
-                      : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                      : "border-edge bg-slate-100 focus:border-ink focus:bg-white"
                   }`}
                 />
 
@@ -1460,7 +1460,7 @@ export default function CheckoutPage({
                   <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 md:gap-4">
 
                     <div>
-                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                         縣市
                       </label>
 
@@ -1470,7 +1470,7 @@ export default function CheckoutPage({
                         className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors appearance-none ${
                           recipientCity
                             ? "border-[#6BBF6B] bg-white"
-                            : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                            : "border-edge bg-slate-100 focus:border-ink focus:bg-white"
                         }`}
                       >
                         <option value="">請選擇縣市</option>
@@ -1484,7 +1484,7 @@ export default function CheckoutPage({
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                      <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                         鄉鎮市區
                       </label>
 
@@ -1495,7 +1495,7 @@ export default function CheckoutPage({
                         className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 appearance-none ${
                           recipientDistrict
                             ? "border-[#6BBF6B] bg-white"
-                            : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                            : "border-edge bg-slate-100 focus:border-ink focus:bg-white"
                         }`}
                       >
                         <option value="">
@@ -1518,7 +1518,7 @@ export default function CheckoutPage({
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                       郵遞區號
                     </label>
 
@@ -1528,14 +1528,14 @@ export default function CheckoutPage({
                       placeholder="選擇鄉鎮市區後帶入"
                       className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none ${
                         recipientPostalCode
-                          ? "border-[#6BBF6B] bg-[#F8F9FA]"
-                          : "border-[#E2DDD4] bg-slate-100"
+                          ? "border-[#6BBF6B] bg-mist"
+                          : "border-edge bg-slate-100"
                       }`}
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                    <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                       詳細地址
                     </label>
 
@@ -1550,7 +1550,7 @@ export default function CheckoutPage({
                       className={`w-full rounded-[10px] border-[1.5px] px-3.5 md:px-4 py-3 md:py-[13px] text-xs md:text-sm outline-none transition-colors ${
                         recipientAddress.trim()
                           ? "border-[#6BBF6B] bg-white"
-                          : "border-[#E2DDD4] bg-slate-100 focus:border-[#1A1A18] focus:bg-white"
+                          : "border-edge bg-slate-100 focus:border-ink focus:bg-white"
                       }`}
                     />
                   </div>
@@ -1562,7 +1562,7 @@ export default function CheckoutPage({
                 /* ================= 超商取貨 ================= */
                 <div className="mb-4">
 
-                  <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-[#8C8880]">
+                  <label className="mb-2 block text-[10px] md:text-[11px] tracking-[0.1em] uppercase text-muted">
                     取貨門市
                   </label>
 
@@ -1573,14 +1573,14 @@ export default function CheckoutPage({
                       onClick={
                         handleSelectStore
                       }
-                      className="w-full rounded-[10px] border-[1.5px] border-[#E2DDD4] bg-white px-3.5 md:px-4 py-3 md:py-[13px] text-left text-xs md:text-sm transition-colors hover:border-[#1A1A18]"
+                      className="w-full rounded-[10px] border-[1.5px] border-edge bg-white px-3.5 md:px-4 py-3 md:py-[13px] text-left text-xs md:text-sm transition-colors hover:border-ink"
                     >
 
-                      <div className="font-bold text-[#1A1A18]">
+                      <div className="font-bold text-ink">
                         選擇 7-ELEVEN 取貨門市
                       </div>
 
-                      <div className="mt-1 text-[11px] md:text-[12px] text-[#8C8880]">
+                      <div className="mt-1 text-[11px] md:text-[12px] text-muted">
                         點擊後將開啟綠界超商選店
                       </div>
 
@@ -1594,7 +1594,7 @@ export default function CheckoutPage({
 
                         <div>
 
-                          <div className="mb-1 flex items-center gap-1.5 md:gap-2 text-sm md:text-[14px] font-bold text-[#1A1A18]">
+                          <div className="mb-1 flex items-center gap-1.5 md:gap-2 text-sm md:text-[14px] font-bold text-ink">
 
                             <span className="flex h-4 w-4 md:h-5 md:w-5 items-center justify-center rounded-full bg-[#6BBF6B] text-white">
                               <CheckIcon className="h-2.5 w-2.5 md:h-3 md:w-3" />
@@ -1605,12 +1605,12 @@ export default function CheckoutPage({
 
                           </div>
 
-                          <div className="mt-2 text-[11px] md:text-[12px] text-[#8C8880]">
+                          <div className="mt-2 text-[11px] md:text-[12px] text-muted">
                             門市代號：
                             {selectedStore.store_id}
                           </div>
 
-                          <div className="mt-1 text-[11px] md:text-[12px] leading-5 text-[#8C8880] pr-2">
+                          <div className="mt-1 text-[11px] md:text-[12px] leading-5 text-muted pr-2">
                             {selectedStore.store_address}
                           </div>
 
@@ -1621,7 +1621,7 @@ export default function CheckoutPage({
                           onClick={
                             handleSelectStore
                           }
-                          className="whitespace-nowrap text-[11px] md:text-[12px] font-bold text-[#C8522A] hover:underline shrink-0"
+                          className="whitespace-nowrap text-[11px] md:text-[12px] font-bold text-brand hover:underline shrink-0"
                         >
                           更換門市
                         </button>
@@ -1636,7 +1636,7 @@ export default function CheckoutPage({
 
             </div>
 
-            <div className="h-px bg-[#E2DDD4] mb-5 md:mb-7" />
+            <div className="h-px bg-edge mb-5 md:mb-7" />
 
             {/* ================= 支付方式 ================= */}
             <div className="flex items-center justify-between mb-4 md:mb-5">
@@ -1645,7 +1645,7 @@ export default function CheckoutPage({
                 支付方式
               </div>
 
-              <span className="rounded-full bg-[#1A1A18] px-3 py-1 text-[10px] md:text-[12px] tracking-[0.06em] text-[#F5F0E8] font-mono">
+              <span className="rounded-full bg-ink px-3 py-1 text-[10px] md:text-[12px] tracking-[0.06em] text-cream font-mono">
                 {badgeText}
               </span>
 
@@ -1672,8 +1672,8 @@ export default function CheckoutPage({
                       }
                       className={`flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-1.5 md:gap-2 rounded-xl md:rounded-full border-[1.5px] px-3 md:px-4 py-2 md:py-[9px] text-[12px] md:text-[13px] transition-all ${
                         active
-                          ? "border-[#1A1A18] bg-[#F5F0E8] text-[#1A1A18]"
-                          : "border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18]"
+                          ? "border-ink bg-cream text-ink"
+                          : "border-edge bg-white text-muted hover:text-ink"
                       }`}
                     >
                       <Icon />
@@ -1686,11 +1686,11 @@ export default function CheckoutPage({
             </div>
 
             {method === "card" && (
-              <div className="mb-6 md:mb-7 flex items-start gap-2.5 md:gap-3 rounded-[12px] md:rounded-[14px] border-[1.5px] border-[#E2DDD4] bg-[#F5F0E8] px-4 md:px-5 py-3 md:py-4">
+              <div className="mb-6 md:mb-7 flex items-start gap-2.5 md:gap-3 rounded-[12px] md:rounded-[14px] border-[1.5px] border-edge bg-cream px-4 md:px-5 py-3 md:py-4">
                 <span className="mt-0.5 shrink-0 text-[#6BBF6B]">
                   <ShieldIcon />
                 </span>
-                <p className="text-[11px] md:text-[13px] text-[#8C8880] leading-relaxed">
+                <p className="text-[11px] md:text-[13px] text-muted leading-relaxed">
                   按下「確認並支付」後會導向綠界金流的安全刷卡頁面填寫卡片資訊，本頁不會收集您的卡號。
                 </p>
               </div>
@@ -1722,11 +1722,11 @@ export default function CheckoutPage({
                 ${
                   submitState ===
                   "success"
-                    ? "bg-[#6BBF6B] text-[#F5F0E8]"
+                    ? "bg-[#6BBF6B] text-cream"
                     : submitState ===
                       "error"
-                    ? "bg-[#C8522A] text-[#F5F0E8]"
-                    : "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A]"
+                    ? "bg-brand text-cream"
+                    : "bg-brand text-white hover:bg-brand-dark"
                 }`}
             >
 
@@ -1766,13 +1766,13 @@ export default function CheckoutPage({
 
             {!isLoggedIn ? (
 
-              <p className="mt-3 text-[11px] md:text-[12px] text-[#C8522A] font-bold text-center md:text-left">
+              <p className="mt-3 text-[11px] md:text-[12px] text-brand font-bold text-center md:text-left">
                 請先登入會員才能結帳。
               </p>
 
             ) : !shippingValid ? (
 
-              <p className="mt-3 text-[11px] md:text-[12px] text-[#8C8880] text-center md:text-left">
+              <p className="mt-3 text-[11px] md:text-[12px] text-muted text-center md:text-left">
 
                 {!receiverNameValid
                   ? "收件人姓名需為中文 2～5 個字，或英文 4～10 個字元。"

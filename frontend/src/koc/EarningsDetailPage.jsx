@@ -38,17 +38,17 @@ export default function EarningsDetailPage({ onBack }) {
       
       <button 
         onClick={onBack} 
-        className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
+        className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-edge md:border-transparent shadow-sm md:shadow-none"
       >
         <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
         返回我的收益
       </button>
 
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">分潤詳情</h2>
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-6 md:mb-10 text-ink">分潤詳情</h2>
 
-      <div className="w-full bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
+      <div className="w-full bg-white rounded-2xl md:rounded-3xl border border-edge shadow-sm overflow-hidden">
 
-        <div className="hidden md:grid grid-cols-4 px-10 py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+        <div className="hidden md:grid grid-cols-4 px-10 py-5 bg-mist border-b border-edge text-muted text-sm font-bold">
           <span>收款金額</span>
           <span>接案名稱</span>
           <span>分潤比例</span>
@@ -58,33 +58,33 @@ export default function EarningsDetailPage({ onBack }) {
         {/* 列表內容 */}
         <div className="flex flex-col">
           {loading ? (
-            <div className="py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">載入中...</div>
+            <div className="py-16 text-center text-muted font-bold text-sm md:text-base">載入中...</div>
           ) : details.length === 0 ? (
-            <div className="py-16 text-center text-[#8C8880] font-bold text-sm md:text-base">目前沒有分潤詳情</div>
+            <div className="py-16 text-center text-muted font-bold text-sm md:text-base">目前沒有分潤詳情</div>
           ) : (
             details.map((item, index) => (
               <div
                 key={index}
-                className={`px-5 py-4 md:px-10 md:py-6 transition-colors hover:bg-[#F8F9FA] ${
-                  index !== details.length - 1 ? 'border-b border-[#E2DDD4]' : ''
+                className={`px-5 py-4 md:px-10 md:py-6 transition-colors hover:bg-mist ${
+                  index !== details.length - 1 ? 'border-b border-edge' : ''
                 }`}
               >
                 {/* ======== 手機版排版 (卡片式直排) ======== */}
                 <div className="md:hidden flex flex-col gap-2.5">
                   <div className="flex justify-between items-start gap-4">
-                    <div className="font-bold text-[#1A1A18] text-sm leading-snug line-clamp-2">{item.task}</div>
-                    <div className="font-bold text-[#C8522A] whitespace-nowrap text-base">{item.amount}</div>
+                    <div className="font-bold text-ink text-sm leading-snug line-clamp-2">{item.task}</div>
+                    <div className="font-bold text-brand whitespace-nowrap text-base">{item.amount}</div>
                   </div>
                   <div className="flex justify-between items-end mt-1">
                     <div className="flex flex-col gap-1">
                       {item.commissionRate && (
-                        <span className="text-[10px] text-[#8C8880] font-medium">
+                        <span className="text-[10px] text-muted font-medium">
                           分潤比例 {item.commissionRate}%
                         </span>
                       )}
                     </div>
                     <div className={`text-[10px] font-bold px-2 py-1 rounded-md ${
-                      item.status === '待轉帳' ? 'text-[#C8522A] bg-[#FDF0ED]' : 'text-[#8C8880] bg-[#F5F0E8]'
+                      item.status === '待轉帳' ? 'text-brand bg-brand-soft' : 'text-muted bg-cream'
                     }`}>
                       {item.status}
                     </div>
@@ -94,11 +94,11 @@ export default function EarningsDetailPage({ onBack }) {
                 {/* ======== 電腦版排版 (傳統表格橫排) ======== */}
                 <div className="hidden md:grid grid-cols-4 items-center text-sm gap-4">
                   {/* 金額使用焦糖橘色強調 */}
-                  <div className="font-bold text-[#C8522A] text-base">{item.amount}</div>
-                  <div className="font-bold text-[#1A1A18] truncate pr-4">{item.task}</div>
-                  <div className="text-[#8C8880] font-medium">{item.commissionRate ? `${item.commissionRate}%` : '—'}</div>
+                  <div className="font-bold text-brand text-base">{item.amount}</div>
+                  <div className="font-bold text-ink truncate pr-4">{item.task}</div>
+                  <div className="text-muted font-medium">{item.commissionRate ? `${item.commissionRate}%` : '—'}</div>
                   {/* 根據狀態變色 */}
-                  <div className={`font-bold ${item.status === '待轉帳' ? 'text-[#C8522A]' : 'text-[#1A1A18]'}`}>
+                  <div className={`font-bold ${item.status === '待轉帳' ? 'text-brand' : 'text-ink'}`}>
                     {item.status}
                   </div>
                 </div>

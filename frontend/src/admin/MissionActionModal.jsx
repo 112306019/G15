@@ -56,44 +56,44 @@ export default function MissionActionModal({ mission, onClose, onDone }) {
   const optionClass = (value) =>
     `w-full text-left rounded-xl border p-3 sm:p-4 transition-colors ${
       action === value
-        ? 'border-[#C8522A] bg-[#FDF0ED]'
-        : 'border-[#E2DDD4] bg-white hover:bg-[#F8F9FA]'
+        ? 'border-brand bg-brand-soft'
+        : 'border-edge bg-white hover:bg-mist'
     }`;
 
   return (
-    <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="relative bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="relative bg-white rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border border-edge animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 text-[#8C8880] hover:text-[#1A1A18] transition-colors"
+          className="absolute top-4 right-4 p-1.5 text-muted hover:text-ink transition-colors"
         >
           <X size={18} />
         </button>
 
-        <h3 className="text-xl font-serif font-black text-[#1A1A18] mb-1">任務例外處理</h3>
-        <p className="text-[#8C8880] text-xs sm:text-sm mb-1">
+        <h3 className="text-xl font-display font-black text-ink mb-1">任務例外處理</h3>
+        <p className="text-muted text-xs sm:text-sm mb-1">
           {mission.title ? `${mission.title}・` : ''}任務編號 {mission.id}
         </p>
-        <p className="text-xs sm:text-sm font-bold text-[#1A1A18] mb-4">
+        <p className="text-xs sm:text-sm font-bold text-ink mb-4">
           目前階段：{STAGE_LABELS[mission.stage] || '未知'}
         </p>
 
-        <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 text-[11px] sm:text-xs text-[#8C8880] leading-relaxed mb-5">
+        <div className="bg-mist border border-edge rounded-xl p-3 text-[11px] sm:text-xs text-muted leading-relaxed mb-5">
           任務階段會隨 KOC 交件、廠商審核與活動期間自動推進，這裡只處理例外狀況。
           所有操作都會寫入操作紀錄，並通知 KOC 與廠商。
         </div>
 
         {isCompleted ? (
-          <div className="py-6 text-center text-sm font-bold text-[#8C8880]">這個任務已經結束，無法再處理。</div>
+          <div className="py-6 text-center text-sm font-bold text-muted">這個任務已經結束，無法再處理。</div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2.5">
               <button type="button" onClick={() => setAction('close')} className={optionClass('close')}>
-                <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
-                  <ShieldAlert size={16} className="text-[#C8522A]" /> 強制結案
+                <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                  <ShieldAlert size={16} className="text-brand" /> 強制結案
                 </div>
-                <p className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+                <p className="text-[11px] sm:text-xs text-muted mt-1">
                   例如 KOC 違規、廠商要求終止合作。任務會標示為「平台終止」，優惠碼與推廣連結停止使用。
                 </p>
               </button>
@@ -104,29 +104,29 @@ export default function MissionActionModal({ mission, onClose, onDone }) {
                 disabled={!canRevert}
                 className={`${optionClass('revert')} disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
-                  <Undo2 size={16} className="text-[#B89B6A]" /> 退回上一階段
+                <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                  <Undo2 size={16} className="text-gold" /> 退回上一階段
                 </div>
-                <p className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+                <p className="text-[11px] sm:text-xs text-muted mt-1">
                   {canRevert ? REVERT_EFFECTS[mission.stage] : '只有「推廣中」的任務可以退回上一階段。'}
                 </p>
               </button>
             </div>
 
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-[#1A1A18] mb-2">處理原因（必填，會通知 KOC 與廠商）</label>
+              <label className="block text-xs sm:text-sm font-bold text-ink mb-2">處理原因（必填，會通知 KOC 與廠商）</label>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 required
                 rows={3}
                 placeholder="例如：作品連結無法開啟，請 KOC 重新提交"
-                className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all resize-none"
+                className="w-full bg-mist border border-edge rounded-xl px-3 sm:px-4 py-2.5 text-xs sm:text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all resize-none"
               />
             </div>
 
             {error && (
-              <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs sm:text-sm font-bold text-[#C8522A]">
+              <div className="bg-brand-soft border border-brand/20 rounded-xl p-3 text-xs sm:text-sm font-bold text-brand">
                 {error}
               </div>
             )}
@@ -135,14 +135,14 @@ export default function MissionActionModal({ mission, onClose, onDone }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2.5 sm:py-3 bg-white border border-[#E2DDD4] text-[#8C8880] rounded-xl font-bold text-xs sm:text-sm hover:bg-[#F8F9FA] transition-colors"
+                className="flex-1 px-4 py-2.5 sm:py-3 bg-white border border-edge text-muted rounded-xl font-bold text-xs sm:text-sm hover:bg-mist transition-colors"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={submitting || !reason.trim()}
-                className="flex-1 px-4 py-2.5 sm:py-3 bg-[#1A1A18] text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-[#C8522A] transition-all shadow-md disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 sm:py-3 bg-brand text-white rounded-xl font-bold text-xs sm:text-sm hover:bg-brand-dark transition-all shadow-md disabled:opacity-50"
               >
                 {submitting ? '處理中...' : action === 'revert' ? '確認退回' : '確認結案'}
               </button>

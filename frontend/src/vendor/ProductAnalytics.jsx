@@ -48,7 +48,7 @@ function Card({
       className={cn(
         `
           bg-white rounded-[1.5rem] sm:rounded-2xl
-          border border-[#E2DDD4]
+          border border-edge
           shadow-sm
         `,
         className
@@ -78,12 +78,12 @@ function StatCard({
           hover:shadow-md
         `,
         accent
-          ? 'border-[#C8522A]/30'
+          ? 'border-brand/30'
           : ''
       )}
     >
       <div className="flex items-center justify-between mb-3 sm:mb-5">
-        <span className="text-[11px] sm:text-sm font-bold text-[#8C8880] truncate pr-2">
+        <span className="text-[11px] sm:text-sm font-bold text-muted truncate pr-2">
           {label}
         </span>
 
@@ -91,8 +91,8 @@ function StatCard({
           className={cn(
             'p-2 sm:p-2.5 rounded-xl shrink-0',
             accent
-              ? 'bg-[#FDF0ED] text-[#C8522A]'
-              : 'bg-[#F5F0E8] text-[#1A1A18]'
+              ? 'bg-brand-soft text-brand'
+              : 'bg-cream text-ink'
           )}
         >
           <Icon size={16} className="sm:w-[19px] sm:h-[19px]" />
@@ -104,15 +104,15 @@ function StatCard({
           className={cn(
             'text-lg sm:text-2xl font-black truncate',
             accent
-              ? 'text-[#C8522A]'
-              : 'text-[#1A1A18]'
+              ? 'text-brand'
+              : 'text-ink'
           )}
         >
           {value}
         </div>
 
         {sub && (
-          <div className="text-[9px] sm:text-xs font-bold text-[#8C8880] mt-1 sm:mt-2 truncate">
+          <div className="text-[9px] sm:text-xs font-bold text-muted mt-1 sm:mt-2 truncate">
             {sub}
           </div>
         )}
@@ -121,7 +121,7 @@ function StatCard({
           <button
             type="button"
             onClick={onDetail}
-            className="mt-2 sm:mt-3 text-[10px] sm:text-xs font-bold text-[#C8522A] hover:underline"
+            className="mt-2 sm:mt-3 text-[10px] sm:text-xs font-bold text-brand hover:underline"
           >
             詳細成效分析 →
           </button>
@@ -136,11 +136,11 @@ function CouponRateBadge({
   value
 }) {
   let className =
-    'bg-[#F5F0E8] text-[#8C8880]'
+    'bg-cream text-muted'
 
   if (value >= 50) {
     className =
-      'bg-[#FDF0ED] text-[#C8522A]'
+      'bg-brand-soft text-brand'
   } else if (value > 0) {
     className =
       'bg-[#FFF8E7] text-[#9A6700]'
@@ -487,7 +487,7 @@ export default function ProductAnalytics() {
       <Card className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:items-end">
           <div className="flex-1 w-full">
-            <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
+            <label className="block text-[11px] sm:text-xs font-bold text-muted mb-1.5 sm:mb-2">
               活動
             </label>
 
@@ -500,13 +500,13 @@ export default function ProductAnalytics() {
               }
               disabled={campaignLoading}
               className="
-                w-full bg-[#F8F9FA]
-                border border-[#E2DDD4]
+                w-full bg-mist
+                border border-edge
                 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
                 text-[13px] sm:text-sm font-bold
-                text-[#1A1A18]
+                text-ink
                 outline-none
-                focus:border-[#C8522A]
+                focus:border-brand
                 disabled:opacity-50
               "
             >
@@ -533,7 +533,7 @@ export default function ProductAnalytics() {
 
           <div className="flex gap-3 w-full lg:w-auto flex-1">
             <div className="flex-1 w-full">
-              <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
+              <label className="block text-[11px] sm:text-xs font-bold text-muted mb-1.5 sm:mb-2">
                 開始日期
               </label>
 
@@ -546,20 +546,20 @@ export default function ProductAnalytics() {
                   )
                 }
                 className="
-                  w-full bg-[#F8F9FA]
-                  border border-[#E2DDD4]
+                  w-full bg-mist
+                  border border-edge
                   rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
                   text-[13px] sm:text-sm font-bold
-                  text-[#1A1A18]
+                  text-ink
                   outline-none
-                  focus:border-[#C8522A]
+                  focus:border-brand
                 "
               />
             </div>
 
 
             <div className="flex-1 w-full">
-              <label className="block text-[11px] sm:text-xs font-bold text-[#8C8880] mb-1.5 sm:mb-2">
+              <label className="block text-[11px] sm:text-xs font-bold text-muted mb-1.5 sm:mb-2">
                 結束日期
               </label>
 
@@ -573,13 +573,13 @@ export default function ProductAnalytics() {
                 }
                 min={startDate || undefined}
                 className="
-                  w-full bg-[#F8F9FA]
-                  border border-[#E2DDD4]
+                  w-full bg-mist
+                  border border-edge
                   rounded-xl px-3 sm:px-4 py-2.5 sm:py-3
                   text-[13px] sm:text-sm font-bold
-                  text-[#1A1A18]
+                  text-ink
                   outline-none
-                  focus:border-[#C8522A]
+                  focus:border-brand
                 "
               />
             </div>
@@ -596,11 +596,11 @@ export default function ProductAnalytics() {
                 inline-flex items-center
                 justify-center gap-2
                 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl
-                border border-[#E2DDD4]
-                bg-white text-[#8C8880]
+                border border-edge
+                bg-white text-muted
                 text-[13px] sm:text-sm font-bold
-                hover:text-[#1A1A18]
-                hover:bg-[#F8F9FA]
+                hover:text-ink
+                hover:bg-mist
                 disabled:opacity-50
                 whitespace-nowrap
               "
@@ -618,9 +618,9 @@ export default function ProductAnalytics() {
                 inline-flex items-center
                 justify-center gap-2
                 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl
-                bg-[#1A1A18] text-white
+                bg-brand text-white
                 text-[13px] sm:text-sm font-bold
-                hover:bg-[#C8522A]
+                hover:bg-brand-dark
                 disabled:opacity-50
                 transition-colors
                 whitespace-nowrap
@@ -691,11 +691,11 @@ export default function ProductAnalytics() {
       {/* 商品銷售排行 */}
       <Card className="p-4 sm:p-6 overflow-hidden">
         <div className="mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+          <h2 className="text-base sm:text-lg font-display font-bold text-ink">
             商品銷售額排行
           </h2>
 
-          <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+          <p className="text-[10px] sm:text-xs text-muted mt-1">
             依目前查詢條件顯示前十名商品
           </p>
         </div>
@@ -704,18 +704,18 @@ export default function ProductAnalytics() {
           <div className="h-[240px] sm:h-[280px] flex flex-col items-center justify-center">
             <Loader2
               size={22}
-              className="animate-spin text-[#C8522A]"
+              className="animate-spin text-brand"
             />
 
-            <div className="text-xs font-bold text-[#8C8880] mt-3">
+            <div className="text-xs font-bold text-muted mt-3">
               商品成效載入中...
             </div>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-[240px] sm:h-[280px] flex flex-col items-center justify-center text-[#8C8880]">
+          <div className="h-[240px] sm:h-[280px] flex flex-col items-center justify-center text-muted">
             <ShoppingBag
               size={30}
-              className="text-[#E2DDD4] mb-3"
+              className="text-edge mb-3"
             />
 
             <div className="text-xs sm:text-sm font-bold">
@@ -741,7 +741,7 @@ export default function ProductAnalytics() {
                   dataKey="name"
                   tick={{
                     fontSize: window.innerWidth < 640 ? 9 : 11,
-                    fill: '#8C8880',
+                    fill: '#6B6780',
                     fontWeight: 'bold'
                   }}
                   axisLine={false}
@@ -767,12 +767,12 @@ export default function ProductAnalytics() {
                       ?.fullName || label
                   }
                   cursor={{
-                    fill: '#F8F9FA'
+                    fill: '#F8F8FB'
                   }}
                   contentStyle={{
                     borderRadius: 14,
                     border:
-                      '1px solid #E2DDD4',
+                      '1px solid #E4E2EC',
                     boxShadow:
                       '0 8px 24px rgba(26,26,24,0.08)',
                     fontSize: 12,
@@ -782,7 +782,7 @@ export default function ProductAnalytics() {
 
                 <Bar
                   dataKey="totalSales"
-                  fill="#C8522A"
+                  fill="#6E64AF"
                   radius={[8, 8, 0, 0]}
                   barSize={window.innerWidth < 640 ? 20 : 42}
                 />
@@ -795,21 +795,21 @@ export default function ProductAnalytics() {
 
       {/* 商品明細 */}
       <Card className="overflow-hidden w-full">
-        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#E2DDD4] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-edge flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-base sm:text-lg font-display font-bold text-ink">
               商品成效明細
             </h2>
 
-            <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+            <p className="text-[10px] sm:text-xs text-muted mt-1">
               共 {filteredProducts.length} 項商品
             </p>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 bg-[#F8F9FA] border border-[#E2DDD4] rounded-full px-3 sm:px-4 py-2 sm:py-2.5 w-full sm:w-72">
+          <div className="flex items-center gap-2 sm:gap-3 bg-mist border border-edge rounded-full px-3 sm:px-4 py-2 sm:py-2.5 w-full sm:w-72">
             <Search
               size={15}
-              className="text-[#8C8880] shrink-0"
+              className="text-muted shrink-0"
             />
 
             <input
@@ -820,7 +820,7 @@ export default function ProductAnalytics() {
                 )
               }
               placeholder="搜尋商品名稱或編號…"
-              className="w-full bg-transparent outline-none text-[13px] sm:text-sm font-bold text-[#1A1A18] placeholder:text-[#8C8880]/60"
+              className="w-full bg-transparent outline-none text-[13px] sm:text-sm font-bold text-ink placeholder:text-muted/60"
             />
           </div>
         </div>
@@ -829,7 +829,7 @@ export default function ProductAnalytics() {
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left min-w-[700px]">
             <thead>
-              <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+              <tr className="bg-mist border-b border-edge">
                 {[
                   '商品',
                   '銷售量',
@@ -841,7 +841,7 @@ export default function ProductAnalytics() {
                 ].map(header => (
                   <th
                     key={header}
-                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
+                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-muted tracking-widest whitespace-nowrap"
                   >
                     {header}
                   </th>
@@ -850,7 +850,7 @@ export default function ProductAnalytics() {
             </thead>
 
 
-            <tbody className="divide-y divide-[#E2DDD4]">
+            <tbody className="divide-y divide-edge">
               {loading ? (
                 <tr>
                   <td
@@ -859,10 +859,10 @@ export default function ProductAnalytics() {
                   >
                     <Loader2
                       size={20}
-                      className="animate-spin mx-auto text-[#C8522A]"
+                      className="animate-spin mx-auto text-brand"
                     />
 
-                    <div className="text-[11px] sm:text-sm font-bold text-[#8C8880] mt-3">
+                    <div className="text-[11px] sm:text-sm font-bold text-muted mt-3">
                       商品成效載入中...
                     </div>
                   </td>
@@ -872,7 +872,7 @@ export default function ProductAnalytics() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="py-20 text-center text-[11px] sm:text-sm font-bold text-[#8C8880]"
+                    className="py-20 text-center text-[11px] sm:text-sm font-bold text-muted"
                   >
                     目前沒有符合條件的商品成效資料
                   </td>
@@ -889,16 +889,16 @@ export default function ProductAnalytics() {
                       key={
                         product.productId
                       }
-                      className="hover:bg-[#F8F9FA] transition-colors"
+                      className="hover:bg-mist transition-colors"
                     >
                       <td className="p-4 sm:p-5">
-                        <div className="font-bold text-[13px] sm:text-sm text-[#1A1A18] max-w-[150px] sm:max-w-xs truncate">
+                        <div className="font-bold text-[13px] sm:text-sm text-ink max-w-[150px] sm:max-w-xs truncate">
                           {
                             product.productName
                           }
                         </div>
 
-                        <div className="text-[9px] sm:text-[10px] font-mono font-bold text-[#8C8880] mt-1">
+                        <div className="text-[9px] sm:text-[10px] font-mono font-bold text-muted mt-1">
                           商品 #
                           {
                             product.productId
@@ -906,7 +906,7 @@ export default function ProductAnalytics() {
                         </div>
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-ink whitespace-nowrap">
                         {
                           product.quantitySold
                         }
@@ -914,19 +914,19 @@ export default function ProductAnalytics() {
                         件
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-ink">
                         {
                           product.totalOrders
                         }
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#C8522A] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-brand whitespace-nowrap">
                         {formatCurrency(
                           product.totalSales
                         )}
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-[#1A1A18]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-bold text-ink">
                         {
                           product.couponOrders
                         }
@@ -940,7 +940,7 @@ export default function ProductAnalytics() {
                         />
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-ink whitespace-nowrap">
                         {formatCurrency(
                           product.totalCommission
                         )}

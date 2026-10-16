@@ -18,7 +18,7 @@ export function showsOrderTag(messages, index) {
 export function OrderTag({ order, inverted = false, onClick }) {
   if (!order?.order_id) return null;
   const className = `mb-2 inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-bold ${
-    inverted ? 'bg-white/10 border-white/15 text-white/80' : 'bg-[#F8F9FA] border-[#E2DDD4] text-[#8C8880]'
+    inverted ? 'bg-white/10 border-white/15 text-white/80' : 'bg-mist border-edge text-muted'
   } ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`;
   const content = (
     <>

@@ -436,13 +436,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
       <div className="animate-in fade-in duration-500 max-w-5xl p-4 md:p-0 mx-auto">
         <button
           onClick={onBack}
-          className="mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
+          className="mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-edge md:border-transparent shadow-sm md:shadow-none"
         >
           <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
           返回訂單列表
         </button>
 
-        <div className="py-20 text-center text-[#8C8880] font-bold text-sm md:text-base">
+        <div className="py-20 text-center text-muted font-bold text-sm md:text-base">
           訂單載入中...
         </div>
       </div>
@@ -454,13 +454,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
       <div className="animate-in fade-in duration-500 max-w-5xl p-4 md:p-0 mx-auto">
         <button
           onClick={onBack}
-          className="mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
+          className="mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-edge md:border-transparent shadow-sm md:shadow-none"
         >
           <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
           返回訂單列表
         </button>
 
-        <div className="py-20 text-center text-[#8C8880] font-bold text-sm md:text-base">
+        <div className="py-20 text-center text-muted font-bold text-sm md:text-base">
           找不到訂單資料，請返回訂單列表重新查看
         </div>
       </div>
@@ -471,33 +471,33 @@ export default function OrderDetailPage({ onBack, orderId }) {
     <div className="animate-in fade-in duration-500 max-w-5xl p-4 md:p-0 mx-auto pb-12">
       <button
         onClick={onBack}
-        className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
+        className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-edge md:border-transparent shadow-sm md:shadow-none"
       >
         <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
         返回訂單列表
       </button>
 
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18] mb-6 md:mb-8">
+      <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink mb-6 md:mb-8">
         訂單細節
       </h2>
 
       {/* 第一區塊：進度條 */}
-      <div className="mb-6 md:mb-16 rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white px-4 md:px-6 py-6 md:py-8 shadow-sm">
+      <div className="mb-6 md:mb-16 rounded-2xl md:rounded-[2rem] border border-edge bg-white px-4 md:px-6 py-6 md:py-8 shadow-sm">
         {isCancelled ? (
           <div className="flex flex-col items-center justify-center gap-2 md:gap-3 py-2">
-            <div className="grid h-10 w-10 md:h-12 md:w-12 place-items-center rounded-full border-[3px] md:border-4 border-[#C8522A] text-[#C8522A]">
+            <div className="grid h-10 w-10 md:h-12 md:w-12 place-items-center rounded-full border-[3px] md:border-4 border-brand text-brand">
               <Box size={18} className="md:w-5 md:h-5" />
             </div>
-            <div className="text-sm md:text-base font-bold text-[#C8522A]">
+            <div className="text-sm md:text-base font-bold text-brand">
               訂單已取消
             </div>
           </div>
         ) : (
           <div className="relative px-2 md:px-4 max-w-2xl mx-auto">
             {/* [RWD 優化] 手機版進度條線條調整位置與寬度 */}
-            <div className="absolute left-8 right-8 md:left-10 md:right-10 top-[18px] md:top-[22px] h-1 md:h-1.5 rounded-full bg-[#F5F0E8]" />
+            <div className="absolute left-8 right-8 md:left-10 md:right-10 top-[18px] md:top-[22px] h-1 md:h-1.5 rounded-full bg-cream" />
             <div
-              className="absolute left-8 md:left-10 top-[18px] md:top-[22px] h-1 md:h-1.5 rounded-full bg-[#C8522A] transition-all duration-700 ease-out"
+              className="absolute left-8 md:left-10 top-[18px] md:top-[22px] h-1 md:h-1.5 rounded-full bg-brand transition-all duration-700 ease-out"
               style={{ width: `calc(${fillWidth} - 2rem)` }}
             />
 
@@ -515,10 +515,10 @@ export default function OrderDetailPage({ onBack, orderId }) {
                     <div
                       className={`grid h-10 w-10 md:h-12 md:w-12 place-items-center rounded-full border-[3px] md:border-4 transition-all duration-500 ${
                         isDone
-                          ? "border-[#C8522A] bg-[#C8522A] text-white shadow-[0_0_10px_rgba(200,82,42,0.3)] md:shadow-[0_0_15px_rgba(200,82,42,0.3)]"
+                          ? "border-brand bg-brand text-white shadow-[0_0_10px_rgba(110,100,175,0.3)] md:shadow-[0_0_15px_rgba(110,100,175,0.3)]"
                           : isActive
-                          ? "border-[#C8522A] bg-white text-[#C8522A] shadow-sm"
-                          : "border-[#E2DDD4] bg-white text-[#8C8880]"
+                          ? "border-brand bg-white text-brand shadow-sm"
+                          : "border-edge bg-white text-muted"
                       }`}
                     >
                       <DotIcon
@@ -530,8 +530,8 @@ export default function OrderDetailPage({ onBack, orderId }) {
                     <div
                       className={`text-center text-[10px] md:text-sm font-bold transition-colors ${
                         i <= step
-                          ? "text-[#1A1A18]"
-                          : "text-[#8C8880]"
+                          ? "text-ink"
+                          : "text-muted"
                       }`}
                     >
                       {s.label}
@@ -546,26 +546,26 @@ export default function OrderDetailPage({ onBack, orderId }) {
       </div>
 
       {/* 第二區塊：訂單操作 */}
-      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 md:p-8 shadow-sm">
-        <h3 className="mb-4 md:mb-5 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-          <span className="w-1.5 h-5 md:h-6 bg-[#C8522A] rounded-full inline-block" />
+      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-edge bg-white p-5 md:p-8 shadow-sm">
+        <h3 className="mb-4 md:mb-5 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block" />
           訂單操作
         </h3>
 
         {shippingStatus !== "delivered" ? (
-          <div className="text-xs md:text-sm text-[#8C8880] leading-relaxed">
+          <div className="text-xs md:text-sm text-muted leading-relaxed">
             商品送達後，可在這裡確認完成訂單或申請退貨退款。
           </div>
         ) : (
           <div className="space-y-4 md:space-y-5">
-            <div className="rounded-xl md:rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-4 md:p-5">
+            <div className="rounded-xl md:rounded-2xl border border-edge bg-mist p-4 md:p-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <div className="font-bold text-[#1A1A18] text-sm md:text-base">
+                  <div className="font-bold text-ink text-sm md:text-base">
                     {orderData.order_status === "completed" ? "✓ 訂單已完成" : "商品已送達"}
                   </div>
 
-                  <div className="mt-1 md:mt-1.5 text-[11px] md:text-xs leading-relaxed text-[#8C8880]">
+                  <div className="mt-1 md:mt-1.5 text-[11px] md:text-xs leading-relaxed text-muted">
                     {orderData.order_status === "completed"
                       ? "你已確認收到商品；若仍在退貨申請期限內，仍可依規則提出退貨退款。完成訂單後，對應商品的代言任務也會開放申請。"
                       : "確認收到商品後可完成訂單，完成後即可解鎖對應商品的代言任務。若商品有問題，也可在期限內申請退貨退款。"}
@@ -577,7 +577,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                     type="button"
                     onClick={handleCompleteOrder}
                     disabled={completingOrder || Boolean(hasOpenReturn)}
-                    className="w-full md:w-auto shrink-0 rounded-xl md:rounded-full bg-[#C8522A] px-6 md:px-7 py-3 text-xs md:text-sm font-bold text-white shadow-sm transition-all hover:bg-[#A64220] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="w-full md:w-auto shrink-0 rounded-xl md:rounded-full bg-brand px-6 md:px-7 py-3 text-xs md:text-sm font-bold text-white shadow-sm transition-all hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {completingOrder ? "處理中..." : "完成訂單"}
                   </button>
@@ -585,35 +585,35 @@ export default function OrderDetailPage({ onBack, orderId }) {
               </div>
 
               {hasOpenReturn && orderData.order_status !== "completed" && (
-                <div className="mt-3 text-[11px] md:text-xs font-bold text-[#C8522A]">
+                <div className="mt-3 text-[11px] md:text-xs font-bold text-brand">
                   此訂單目前有退貨退款申請處理中，暫不開放完成訂單。
                 </div>
               )}
             </div>
 
-            <div className="border-t border-[#E2DDD4] pt-4 md:pt-5">
-              <div className="mb-2 md:mb-3 text-xs md:text-sm font-bold text-[#1A1A18]">退貨退款</div>
+            <div className="border-t border-edge pt-4 md:pt-5">
+              <div className="mb-2 md:mb-3 text-xs md:text-sm font-bold text-ink">退貨退款</div>
 
               {returnLoading ? (
-                <div className="text-xs md:text-sm text-[#8C8880]">退貨退款資料載入中...</div>
+                <div className="text-xs md:text-sm text-muted">退貨退款資料載入中...</div>
               ) : latestReturn ? (
-                <div className="rounded-xl md:rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-4 md:p-5">
+                <div className="rounded-xl md:rounded-2xl bg-mist border border-edge p-4 md:p-5">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-1.5 md:gap-2">
                         {latestReturn.status === "refunded" ? (
                           <CheckCircle2 size={16} className="text-green-600 md:w-[18px] md:h-[18px]" />
                         ) : latestReturn.status === "rejected" ? (
-                          <AlertTriangle size={16} className="text-[#C8522A] md:w-[18px] md:h-[18px]" />
+                          <AlertTriangle size={16} className="text-brand md:w-[18px] md:h-[18px]" />
                         ) : (
-                          <RotateCcw size={16} className="text-[#C8522A] md:w-[18px] md:h-[18px]" />
+                          <RotateCcw size={16} className="text-brand md:w-[18px] md:h-[18px]" />
                         )}
-                        <span className="text-sm font-bold text-[#1A1A18]">
+                        <span className="text-sm font-bold text-ink">
                           {RETURN_STATUS_LABELS[latestReturn.status] || latestReturn.status}
                         </span>
                       </div>
 
-                      <div className="mt-2 text-[11px] md:text-xs text-[#8C8880] space-y-1">
+                      <div className="mt-2 text-[11px] md:text-xs text-muted space-y-1">
                         <div>申請退款金額：{formatNTD(latestReturn.requested_amount)}</div>
                         {latestReturn.refunded_amount != null && (
                           <div>實際退款金額：{formatNTD(latestReturn.refunded_amount)}</div>
@@ -628,7 +628,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                         type="button"
                         onClick={handleDispute}
                         disabled={returnSubmitting}
-                        className="w-full md:w-auto rounded-xl md:rounded-full border border-[#C8522A] px-6 py-2.5 md:py-3 text-xs md:text-sm font-bold text-[#C8522A] hover:bg-[#FDF0ED] disabled:opacity-50"
+                        className="w-full md:w-auto rounded-xl md:rounded-full border border-brand px-6 py-2.5 md:py-3 text-xs md:text-sm font-bold text-brand hover:bg-brand-soft disabled:opacity-50"
                       >
                         提出爭議
                       </button>
@@ -637,13 +637,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 </div>
               ) : canCreateReturn ? (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="text-[11px] md:text-sm text-[#8C8880] leading-relaxed">
+                  <div className="text-[11px] md:text-sm text-muted leading-relaxed">
                     若商品有問題，可在平台允許的退貨期限內申請整張訂單全額退款。
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowReturnModal(true)}
-                    className="w-full md:w-auto shrink-0 rounded-xl md:rounded-full border border-[#1A1A18] bg-white px-6 md:px-7 py-3 text-xs md:text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#1A1A18] hover:text-white"
+                    className="w-full md:w-auto shrink-0 rounded-xl md:rounded-full border border-ink bg-white px-6 md:px-7 py-3 text-xs md:text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-white"
                   >
                     申請退貨退款
                   </button>
@@ -651,7 +651,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
               ) : orderData.payment_status === "refunded" ? (
                 <div className="text-xs md:text-sm font-bold text-green-700">此訂單已完成退款。</div>
               ) : (
-                <div className="text-[11px] md:text-sm text-[#8C8880]">
+                <div className="text-[11px] md:text-sm text-muted">
                   此訂單目前沒有可操作的退貨退款申請。
                 </div>
               )}
@@ -660,12 +660,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
         )}
 
         {!isCancelled && orderData.order_status === "cancel_requested" && (
-          <div className="mt-6 md:mt-8 border-t border-[#E2DDD4] pt-5 md:pt-6 text-center">
+          <div className="mt-6 md:mt-8 border-t border-edge pt-5 md:pt-6 text-center">
             <div className="text-xs md:text-sm font-bold text-[#9A6700]">
               取消申請審核中
             </div>
 
-            <div className="mt-1 text-[10px] md:text-xs text-[#8C8880]">
+            <div className="mt-1 text-[10px] md:text-xs text-muted">
               廠商已開始備貨，正在等待廠商確認是否同意取消
             </div>
           </div>
@@ -675,12 +675,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
           orderData.order_status === "pending" &&
           orderData.cancel_rejected &&
           (shippingStatus === "unshipped" || shippingStatus === "preparing") && (
-            <div className="mt-6 md:mt-8 border-t border-[#E2DDD4] pt-5 md:pt-6 text-center">
-              <div className="text-xs md:text-sm font-bold text-[#C8522A]">
+            <div className="mt-6 md:mt-8 border-t border-edge pt-5 md:pt-6 text-center">
+              <div className="text-xs md:text-sm font-bold text-brand">
                 賣家已拒絕取消訂單
               </div>
 
-              <div className="mt-1 text-[10px] md:text-xs text-[#8C8880]">
+              <div className="mt-1 text-[10px] md:text-xs text-muted">
                 此訂單將依原訂流程繼續處理，無法再次申請取消
               </div>
             </div>
@@ -690,15 +690,15 @@ export default function OrderDetailPage({ onBack, orderId }) {
           !orderData.cancel_rejected &&
           orderData.order_status === "pending" &&
           (shippingStatus === "unshipped" || shippingStatus === "preparing") && (
-            <div className="mt-6 md:mt-8 border-t border-[#E2DDD4] pt-5 md:pt-6">
+            <div className="mt-6 md:mt-8 border-t border-edge pt-5 md:pt-6">
               <div className="flex flex-col items-center justify-center gap-3 md:gap-4 text-center">
                 <div>
-                  <div className="text-xs md:text-sm font-bold text-[#1A1A18]">
+                  <div className="text-xs md:text-sm font-bold text-ink">
                     {shippingStatus === "unshipped" ? "尚未開始備貨，可取消訂單" : "已開始備貨，取消需經廠商同意"}
                   </div>
 
                   {shippingStatus === "preparing" && (
-                    <div className="mt-1 text-[10px] md:text-xs text-[#8C8880]">
+                    <div className="mt-1 text-[10px] md:text-xs text-muted">
                       送出申請後，需等待廠商核准才會正式取消
                     </div>
                   )}
@@ -707,7 +707,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 <button
                   type="button"
                   onClick={openCancelModal}
-                  className="w-full md:w-auto rounded-xl md:rounded-full border border-[#C8522A] px-8 py-3 text-xs md:text-sm font-bold text-[#C8522A] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#FDF0ED] disabled:opacity-50"
+                  className="w-full md:w-auto rounded-xl md:rounded-full border border-brand px-8 py-3 text-xs md:text-sm font-bold text-brand shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-soft disabled:opacity-50"
                 >
                   {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
                 </button>
@@ -717,30 +717,30 @@ export default function OrderDetailPage({ onBack, orderId }) {
       </div>
 
       {/* 第三區塊：配送資訊 */}
-      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 md:p-8 shadow-sm">
-        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-          <span className="w-1.5 h-5 md:h-6 bg-[#C8522A] rounded-full inline-block" />
+      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-edge bg-white p-5 md:p-8 shadow-sm">
+        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block" />
           配送資訊
         </h3>
 
         {!shipment ? (
-          <div className="rounded-xl md:rounded-2xl bg-[#F8F9FA] px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm text-[#8C8880]">
+          <div className="rounded-xl md:rounded-2xl bg-mist px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm text-muted">
             此訂單目前沒有物流資料。
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4 md:gap-y-5 text-xs md:text-sm">
             <div className="flex items-start gap-2.5 md:gap-3">
               {isCVS ? (
-                <Store size={16} className="mt-0.5 text-[#C8522A] md:w-[18px] md:h-[18px]" />
+                <Store size={16} className="mt-0.5 text-brand md:w-[18px] md:h-[18px]" />
               ) : (
-                <Home size={16} className="mt-0.5 text-[#C8522A] md:w-[18px] md:h-[18px]" />
+                <Home size={16} className="mt-0.5 text-brand md:w-[18px] md:h-[18px]" />
               )}
 
               <div>
-                <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-[#8C8880]">
+                <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-muted">
                   配送方式
                 </div>
-                <div className="font-bold text-[#1A1A18]">
+                <div className="font-bold text-ink">
                   {getDeliveryMethodLabel(shipment)}
                 </div>
               </div>
@@ -749,17 +749,17 @@ export default function OrderDetailPage({ onBack, orderId }) {
             {isCVS && (
               <>
                 <div className="flex items-start gap-2.5 md:gap-3">
-                  <Store size={16} className="mt-0.5 text-[#8C8880] md:w-[18px] md:h-[18px]" />
+                  <Store size={16} className="mt-0.5 text-muted md:w-[18px] md:h-[18px]" />
 
                   <div>
-                    <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-[#8C8880]">
+                    <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-muted">
                       取貨門市
                     </div>
-                    <div className="font-bold text-[#1A1A18]">
+                    <div className="font-bold text-ink">
                       {shipment.store_name || "未提供"}
                     </div>
                     {shipment.store_id && (
-                      <div className="mt-1 text-[10px] md:text-xs text-[#8C8880]">
+                      <div className="mt-1 text-[10px] md:text-xs text-muted">
                         門市代號：{shipment.store_id}
                       </div>
                     )}
@@ -767,13 +767,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 </div>
 
                 <div className="flex items-start gap-2.5 md:gap-3">
-                  <MapPin size={16} className="mt-0.5 text-[#8C8880] md:w-[18px] md:h-[18px]" />
+                  <MapPin size={16} className="mt-0.5 text-muted md:w-[18px] md:h-[18px]" />
 
                   <div>
-                    <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-[#8C8880]">
+                    <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-muted">
                       門市地址
                     </div>
-                    <div className="font-bold leading-relaxed text-[#1A1A18]">
+                    <div className="font-bold leading-relaxed text-ink">
                       {shipment.store_address || "未提供"}
                     </div>
                   </div>
@@ -783,12 +783,12 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
             {isHome && (
               <div className="flex items-start gap-2.5 md:gap-3 md:col-span-2">
-                <MapPin size={16} className="mt-0.5 text-[#8C8880] md:w-[18px] md:h-[18px]" />
+                <MapPin size={16} className="mt-0.5 text-muted md:w-[18px] md:h-[18px]" />
                 <div>
-                  <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-[#8C8880]">
+                  <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-muted">
                     配送地址
                   </div>
-                  <div className="font-bold leading-relaxed text-[#1A1A18]">
+                  <div className="font-bold leading-relaxed text-ink">
                     {getFullRecipientAddress(recipient)}
                   </div>
                 </div>
@@ -797,13 +797,13 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
             {shipment.ecpay_logistics_id && (
               <div className="flex items-start gap-2.5 md:gap-3 md:col-span-2">
-                <FileText size={16} className="mt-0.5 text-[#8C8880] md:w-[18px] md:h-[18px]" />
+                <FileText size={16} className="mt-0.5 text-muted md:w-[18px] md:h-[18px]" />
 
                 <div>
-                  <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-[#8C8880]">
+                  <div className="mb-0.5 md:mb-1 text-[10px] md:text-xs font-bold tracking-wider text-muted">
                     綠界物流編號
                   </div>
-                  <div className="font-mono font-bold text-[#1A1A18]">
+                  <div className="font-mono font-bold text-ink">
                     {shipment.ecpay_logistics_id}
                   </div>
                 </div>
@@ -814,55 +814,55 @@ export default function OrderDetailPage({ onBack, orderId }) {
       </div>
 
       {/* 第四區塊：收件資訊 */}
-      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 md:p-8 shadow-sm">
-        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-          <span className="w-1.5 h-5 md:h-6 bg-[#8C8880] rounded-full inline-block" />
+      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-edge bg-white p-5 md:p-8 shadow-sm">
+        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-5 md:h-6 bg-muted rounded-full inline-block" />
           收件資訊
         </h3>
 
         <div className="space-y-3 md:space-y-4 text-xs md:text-sm font-medium">
           <div className="flex items-start">
-            <span className="w-24 md:w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-1.5 md:gap-2">
+            <span className="w-24 md:w-28 flex-shrink-0 text-muted flex items-center gap-1.5 md:gap-2">
               <UserRound size={14} className="md:w-[15px] md:h-[15px]" />
               收件人
             </span>
-            <span className="text-[#1A1A18] font-bold">
+            <span className="text-ink font-bold">
               {recipient?.recipient_name || "未填寫"}
             </span>
           </div>
 
           <div className="flex items-start">
-            <span className="w-24 md:w-28 flex-shrink-0 text-[#8C8880] flex items-center gap-1.5 md:gap-2">
+            <span className="w-24 md:w-28 flex-shrink-0 text-muted flex items-center gap-1.5 md:gap-2">
               <Phone size={14} className="md:w-[15px] md:h-[15px]" />
               聯絡電話
             </span>
-            <span className="text-[#1A1A18] font-bold">
+            <span className="text-ink font-bold">
               {recipient?.phone || "未填寫"}
             </span>
           </div>
 
           {isHome && (
             <div className="flex items-start">
-              <span className="w-24 md:w-28 flex-shrink-0 text-[#8C8880] pl-[22px] md:pl-[23px]">
+              <span className="w-24 md:w-28 flex-shrink-0 text-muted pl-[22px] md:pl-[23px]">
                 配送地址
               </span>
-              <span className="text-[#1A1A18] font-bold leading-relaxed">
+              <span className="text-ink font-bold leading-relaxed">
                 {getFullRecipientAddress(recipient) === "未提供" ? "未填寫" : getFullRecipientAddress(recipient)}
               </span>
             </div>
           )}
 
-          <div className="flex items-start pt-2 border-t border-[#F5F0E8] md:pt-0 md:border-0">
-            <span className="w-24 md:w-28 text-[#8C8880]">付款狀態</span>
-            <span className="text-[#1A1A18] font-bold">
+          <div className="flex items-start pt-2 border-t border-cream md:pt-0 md:border-0">
+            <span className="w-24 md:w-28 text-muted">付款狀態</span>
+            <span className="text-ink font-bold">
               {orderData.payment_status === "paid" ? "已付款" : "未付款"}
             </span>
           </div>
 
           {orderData.Promotion_code && (
             <div className="flex items-start">
-              <span className="w-24 md:w-28 text-[#8C8880]">優惠碼</span>
-              <span className="text-[#1A1A18] font-bold">
+              <span className="w-24 md:w-28 text-muted">優惠碼</span>
+              <span className="text-ink font-bold">
                 {orderData.Promotion_code}
               </span>
             </div>
@@ -871,35 +871,35 @@ export default function OrderDetailPage({ onBack, orderId }) {
       </div>
 
       {/* 第五區塊：訂單資訊明細 */}
-      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 md:p-8 shadow-sm overflow-hidden">
-        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-          <span className="w-1.5 h-5 md:h-6 bg-[#1A1A18] rounded-full inline-block" />
+      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[2rem] border border-edge bg-white p-5 md:p-8 shadow-sm overflow-hidden">
+        <h3 className="mb-4 md:mb-6 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block" />
           訂單資訊
         </h3>
 
         {/* 手機版：卡片式堆疊 */}
-        <div className="md:hidden flex flex-col gap-4 border-b border-[#E2DDD4] pb-4 mb-4">
+        <div className="md:hidden flex flex-col gap-4 border-b border-edge pb-4 mb-4">
           {(orderData.items || []).length === 0 ? (
-            <div className="py-4 text-center text-xs text-[#8C8880]">無商品資料</div>
+            <div className="py-4 text-center text-xs text-muted">無商品資料</div>
           ) : (
             (orderData.items || []).map((item, idx) => (
-              <div key={idx} className="flex gap-3 bg-[#F8F9FA] p-3 rounded-xl">
-                <div className="h-16 w-16 flex-shrink-0 rounded-xl bg-white flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+              <div key={idx} className="flex gap-3 bg-mist p-3 rounded-xl">
+                <div className="h-16 w-16 flex-shrink-0 rounded-xl bg-white flex items-center justify-center border border-edge overflow-hidden">
                   {isValidImageUrl(item.image_url) ? (
                     <img src={item.image_url} alt={item.product_name || ""} className="h-full w-full object-cover" />
                   ) : (
-                    <Smartphone size={20} className="text-[#8C8880]" />
+                    <Smartphone size={20} className="text-muted" />
                   )}
                 </div>
                 <div className="flex-1 flex flex-col justify-between">
-                  <div className="text-[13px] font-bold text-[#1A1A18] leading-snug line-clamp-2">
+                  <div className="text-[13px] font-bold text-ink leading-snug line-clamp-2">
                     {item.product_name || `商品 ${item.Product_id}`}
                   </div>
                   <div className="flex justify-between items-end">
-                    <div className="text-xs font-mono font-bold text-[#8C8880]">
+                    <div className="text-xs font-mono font-bold text-muted">
                       {formatNTD(item.Unit_price)} x {item.quantity}
                     </div>
-                    <div className="font-mono text-sm font-black text-[#C8522A]">
+                    <div className="font-mono text-sm font-black text-brand">
                       {formatNTD(item.subtotal)}
                     </div>
                   </div>
@@ -912,8 +912,8 @@ export default function OrderDetailPage({ onBack, orderId }) {
         {/* 電腦/平板版：表格 */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="border-b border-[#E2DDD4]">
-              <tr className="text-xs font-bold text-[#8C8880] tracking-wider">
+            <thead className="border-b border-edge">
+              <tr className="text-xs font-bold text-muted tracking-wider">
                 <th className="pb-4 pr-4">商品名稱</th>
                 <th className="pb-4 px-4 text-center">價格</th>
                 <th className="pb-4 px-4 text-center">數量</th>
@@ -924,7 +924,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
             <tbody>
               {(orderData.items || []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-[#8C8880]">
+                  <td colSpan={4} className="py-6 text-center text-muted">
                     無商品資料
                   </td>
                 </tr>
@@ -932,11 +932,11 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 (orderData.items || []).map((item, idx) => (
                   <tr
                     key={idx}
-                    className="border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors"
+                    className="border-b border-cream last:border-0 hover:bg-mist transition-colors"
                   >
                     <td className="py-6 pr-4">
                       <div className="flex items-center gap-5">
-                        <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-[#F5F0E8] flex items-center justify-center border border-[#E2DDD4] overflow-hidden">
+                        <div className="h-16 w-16 flex-shrink-0 rounded-2xl bg-cream flex items-center justify-center border border-edge overflow-hidden">
                           {isValidImageUrl(item.image_url) ? (
                             <img
                               src={item.image_url}
@@ -944,25 +944,25 @@ export default function OrderDetailPage({ onBack, orderId }) {
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <Smartphone size={24} className="text-[#8C8880]" />
+                            <Smartphone size={24} className="text-muted" />
                           )}
                         </div>
 
-                        <div className="text-sm font-bold text-[#1A1A18] max-w-sm leading-relaxed">
+                        <div className="text-sm font-bold text-ink max-w-sm leading-relaxed">
                           {item.product_name || `商品 ${item.Product_id}`}
                         </div>
                       </div>
                     </td>
 
-                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-muted">
                       {formatNTD(item.Unit_price)}
                     </td>
 
-                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-[#8C8880]">
+                    <td className="py-6 px-4 text-center font-mono text-sm font-bold text-muted">
                       x{item.quantity}
                     </td>
 
-                    <td className="py-6 pl-4 text-right font-mono text-base font-black text-[#C8522A]">
+                    <td className="py-6 pl-4 text-right font-mono text-base font-black text-brand">
                       {formatNTD(item.subtotal)}
                     </td>
                   </tr>
@@ -973,36 +973,36 @@ export default function OrderDetailPage({ onBack, orderId }) {
         </div>
 
         {/* 結算金額區 */}
-        <div className="space-y-1.5 md:space-y-2 md:border-t md:border-[#E2DDD4] md:pt-6 text-xs md:text-sm font-medium">
+        <div className="space-y-1.5 md:space-y-2 md:border-t md:border-edge md:pt-6 text-xs md:text-sm font-medium">
           <div className="flex items-center justify-between">
-            <span className="text-[#8C8880]">商品小計</span>
-            <span className="font-mono font-bold text-[#1A1A18]">
+            <span className="text-muted">商品小計</span>
+            <span className="font-mono font-bold text-ink">
               {formatNTD(itemsRawTotal)}
             </span>
           </div>
 
           {couponDiscount > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-[#8C8880]">
+              <span className="text-muted">
                 優惠券折抵
                 <span className="hidden md:inline">{orderData.Promotion_code ? `（${orderData.Promotion_code}）` : ""}</span>
               </span>
-              <span className="font-mono font-bold text-[#C8522A]">
+              <span className="font-mono font-bold text-brand">
                 -{formatNTD(couponDiscount)}
               </span>
             </div>
           )}
 
           <div className="flex items-center justify-between">
-            <span className="text-[#8C8880]">運費</span>
-            <span className="font-mono font-bold text-[#1A1A18]">
+            <span className="text-muted">運費</span>
+            <span className="font-mono font-bold text-ink">
               {formatNTD(shippingFee)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-3 border-t border-[#E2DDD4] pt-3 md:pt-4 mt-2">
-            <span className="text-sm md:text-base font-bold text-[#1A1A18]">訂單金額：</span>
-            <span className="font-mono text-lg md:text-xl font-black text-[#C8522A]">
+          <div className="flex items-center justify-between md:justify-end gap-3 border-t border-edge pt-3 md:pt-4 mt-2">
+            <span className="text-sm md:text-base font-bold text-ink">訂單金額：</span>
+            <span className="font-mono text-lg md:text-xl font-black text-brand">
               {formatNTD(totalAmount)}
             </span>
           </div>
@@ -1010,38 +1010,38 @@ export default function OrderDetailPage({ onBack, orderId }) {
       </div>
 
       {/* 底部總覽卡片 */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 md:p-6 shadow-sm gap-2 md:gap-0">
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between rounded-2xl md:rounded-[2rem] border border-edge bg-white p-5 md:p-6 shadow-sm gap-2 md:gap-0">
         <div>
-          <div className="mb-1 md:mb-2 font-mono text-sm md:text-base font-bold text-[#1A1A18]">
+          <div className="mb-1 md:mb-2 font-mono text-sm md:text-base font-bold text-ink">
             訂單編號：#{orderData.Order_id}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-[#8C8880]">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-muted">
             <span>訂購於 {createdDate}</span>
             <span className="hidden md:inline">•</span>
             <span>{createdTime}</span>
           </div>
         </div>
 
-        <div className="font-mono text-lg md:text-xl font-black text-[#C8522A] text-right md:text-left">
+        <div className="font-mono text-lg md:text-xl font-black text-brand text-right md:text-left">
           {formatNTD(totalAmount)}
         </div>
       </div>
 
       {/* 退貨申請彈窗 */}
       {showReturnModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm overflow-y-auto py-8">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm overflow-y-auto py-8">
           <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 shadow-2xl">
-            <h3 className="text-xl font-serif font-black text-[#1A1A18]">申請退貨退款</h3>
-            <p className="mt-2 text-sm text-[#8C8880]">
+            <h3 className="text-xl font-display font-black text-ink">申請退貨退款</h3>
+            <p className="mt-2 text-sm text-muted">
               請選擇要退貨的商品與數量，退款金額（含優惠碼折扣平分）由後端自動計算。
             </p>
 
-            <label className="mt-6 block text-sm font-bold text-[#1A1A18]">退貨商品</label>
+            <label className="mt-6 block text-sm font-bold text-ink">退貨商品</label>
             <select
               value={returnItemId}
               onChange={(e) => { setReturnItemId(e.target.value); setReturnQuantity(1); }}
-              className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+              className="mt-2 w-full rounded-xl border border-edge bg-mist px-4 py-3 text-sm outline-none focus:border-brand"
             >
               <option value="">請選擇商品</option>
               {(orderData.items || []).map((item) => (
@@ -1053,53 +1053,53 @@ export default function OrderDetailPage({ onBack, orderId }) {
 
             {returnItemId && (
               <>
-                <label className="mt-5 block text-sm font-bold text-[#1A1A18]">退貨數量</label>
+                <label className="mt-5 block text-sm font-bold text-ink">退貨數量</label>
                 <input
                   type="number"
                   min={1}
                   max={(orderData.items || []).find((i) => i.Order_item_id === returnItemId)?.quantity || 1}
                   value={returnQuantity}
                   onChange={(e) => setReturnQuantity(Number(e.target.value))}
-                  className="mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-4 py-3 text-sm outline-none focus:border-[#C8522A]"
+                  className="mt-2 w-full rounded-xl border border-edge bg-mist px-4 py-3 text-sm outline-none focus:border-brand"
                 />
               </>
             )}
 
-            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">退貨原因</label>
+            <label className="mt-5 block text-sm font-bold text-ink">退貨原因</label>
             <select
               value={returnReason}
               onChange={(e) => setReturnReason(e.target.value)}
-              className="mt-1.5 md:mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3.5 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:border-[#C8522A]"
+              className="mt-1.5 md:mt-2 w-full rounded-xl border border-edge bg-mist px-3.5 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:border-brand"
             >
               {RETURN_REASON_OPTIONS.map((item) => (
                 <option key={item.value} value={item.value}>{item.label}</option>
               ))}
             </select>
 
-            <label className="mt-4 md:mt-5 block text-xs md:text-sm font-bold text-[#1A1A18]">補充說明</label>
+            <label className="mt-4 md:mt-5 block text-xs md:text-sm font-bold text-ink">補充說明</label>
             <textarea
               value={returnDescription}
               onChange={(e) => setReturnDescription(e.target.value)}
               rows={4}
               placeholder="可補充商品狀況或退貨原因..."
-              className="mt-1.5 md:mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3.5 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:border-[#C8522A]"
+              className="mt-1.5 md:mt-2 w-full resize-none rounded-xl border border-edge bg-mist px-3.5 md:px-4 py-2.5 md:py-3 text-sm outline-none focus:border-brand"
             />
 
-            <label className="mt-5 block text-sm font-bold text-[#1A1A18]">
+            <label className="mt-5 block text-sm font-bold text-ink">
               打包證明照片（1~5 張，必填）
             </label>
-            <p className="mt-1 text-xs text-[#8C8880]">
+            <p className="mt-1 text-xs text-muted">
               寄出退貨商品前，請拍下裝箱時商品外觀完好、配件齊全、緩衝材包好的照片，作為爭議發生時的舉證。
             </p>
 
             <div className="mt-3 flex flex-wrap gap-3">
               {packingProofUrls.map((url) => (
-                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-edge">
                   <img src={url} alt="打包證明" className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => handleRemovePackingProofUrl(url)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-xs text-white"
                   >
                     ×
                   </button>
@@ -1107,7 +1107,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
               ))}
 
               {packingProofUrls.length < 5 && (
-                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-edge text-xs font-bold text-muted hover:border-brand hover:text-brand">
                   {packingProofUploading ? "上傳中..." : "＋ 新增"}
                   <input
                     type="file"
@@ -1131,7 +1131,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 type="button"
                 onClick={() => setShowReturnModal(false)}
                 disabled={returnSubmitting}
-                className="flex-1 rounded-xl border border-[#E2DDD4] py-2.5 md:py-3 text-xs md:text-sm font-bold text-[#8C8880]"
+                className="flex-1 rounded-xl border border-edge py-2.5 md:py-3 text-xs md:text-sm font-bold text-muted"
               >
                 取消
               </button>
@@ -1139,7 +1139,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 type="button"
                 onClick={handleCreateReturn}
                 disabled={returnSubmitting || packingProofUploading}
-                className="flex-[2] rounded-xl bg-[#1A1A18] py-3 text-sm font-bold text-white hover:bg-[#C8522A] disabled:opacity-50"
+                className="flex-[2] rounded-xl bg-brand py-3 text-sm font-bold text-white hover:bg-brand-dark disabled:opacity-50"
               >
                 {returnSubmitting ? "送出中..." : "確認申請退貨"}
               </button>
@@ -1151,17 +1151,17 @@ export default function OrderDetailPage({ onBack, orderId }) {
       {/* 取消訂單彈窗 */}
       {cancelModalOpen && (
         <div
-          className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          className="fixed inset-0 bg-ink/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={() => !cancelSubmitting && setCancelModalOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl md:rounded-[2rem] p-6 md:p-8 max-w-sm w-full shadow-2xl border border-[#E2DDD4] animate-in zoom-in-95 duration-200"
+            className="bg-white rounded-2xl md:rounded-[2rem] p-6 md:p-8 max-w-sm w-full shadow-2xl border border-edge animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base md:text-lg font-bold text-[#1A1A18] mb-1">
+            <h3 className="text-base md:text-lg font-bold text-ink mb-1">
               {shippingStatus === "unshipped" ? "取消訂單" : "申請取消訂單"}
             </h3>
-            <p className="text-[11px] md:text-xs font-bold text-[#8C8880] mb-4">
+            <p className="text-[11px] md:text-xs font-bold text-muted mb-4">
               請告訴我們取消原因，方便我們了解並改善服務
             </p>
 
@@ -1170,11 +1170,11 @@ export default function OrderDetailPage({ onBack, orderId }) {
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="請輸入取消原因"
-              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-3"
+              className="w-full resize-none bg-mist border border-edge rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all mb-3"
             />
 
             {cancelError && (
-              <div className="mb-3 text-[11px] md:text-xs font-bold text-[#C8522A]">
+              <div className="mb-3 text-[11px] md:text-xs font-bold text-brand">
                 {cancelError}
               </div>
             )}
@@ -1184,7 +1184,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 type="button"
                 onClick={() => setCancelModalOpen(false)}
                 disabled={cancelSubmitting}
-                className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-2.5 md:py-3 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F8F9FA] disabled:opacity-50"
+                className="flex-1 rounded-xl md:rounded-2xl border border-edge py-2.5 md:py-3 text-xs md:text-sm font-bold text-muted transition-colors hover:bg-mist disabled:opacity-50"
               >
                 返回
               </button>
@@ -1192,7 +1192,7 @@ export default function OrderDetailPage({ onBack, orderId }) {
                 type="button"
                 onClick={handleCancelOrder}
                 disabled={cancelSubmitting}
-                className="flex-1 rounded-xl md:rounded-2xl bg-[#C8522A] py-2.5 md:py-3 text-xs md:text-sm font-bold text-white transition-all hover:bg-[#A64220] disabled:opacity-50"
+                className="flex-1 rounded-xl md:rounded-2xl bg-brand py-2.5 md:py-3 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark disabled:opacity-50"
               >
                 {cancelSubmitting ? "處理中..." : "確認送出"}
               </button>

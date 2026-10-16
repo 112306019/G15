@@ -113,17 +113,17 @@ export default function ApplyPage() {
 
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto p-4 md:p-0 pb-12">
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">代言申請區</h2>
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-6 md:mb-10 text-ink">代言申請區</h2>
 
       {/* 頂部提示卡片 */}
-      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-[#F8F9FA] px-4 md:px-6 py-4 md:py-5 shadow-sm">
+      <div className="mb-6 md:mb-8 rounded-2xl md:rounded-[1.5rem] border border-edge bg-mist px-4 md:px-6 py-4 md:py-5 shadow-sm">
         <div className="flex items-start gap-3 md:gap-4">
-          <div className="mt-0.5 grid h-8 w-8 md:h-10 md:w-10 shrink-0 place-items-center rounded-full bg-[#FDF0ED] text-[#C8522A]">
+          <div className="mt-0.5 grid h-8 w-8 md:h-10 md:w-10 shrink-0 place-items-center rounded-full bg-brand-soft text-brand">
             <PackageCheck size={18} className="md:w-5 md:h-5" />
           </div>
           <div>
-            <div className="font-bold text-[#1A1A18] text-sm md:text-base">完成訂單後，即可解鎖對應商品的代言任務</div>
-            <div className="mt-1 md:mt-1.5 text-xs md:text-sm leading-relaxed text-[#8C8880]">
+            <div className="font-bold text-ink text-sm md:text-base">完成訂單後，即可解鎖對應商品的代言任務</div>
+            <div className="mt-1 md:mt-1.5 text-xs md:text-sm leading-relaxed text-muted">
               商品送達後，請先到「我的訂單」確認收貨並完成訂單；系統確認你已收到商品後，
               該商品目前可申請的代言活動才會出現在「待申請」列表。
             </div>
@@ -136,8 +136,8 @@ export default function ApplyPage() {
           onClick={() => setActiveTab('pending')}
           className={`flex-1 sm:flex-none px-6 md:px-8 py-2 md:py-2.5 rounded-xl md:rounded-full font-bold text-sm transition-all shadow-sm ${
             activeTab === 'pending'
-              ? 'bg-[#C8522A] text-white'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              ? 'bg-brand text-white'
+              : 'bg-white border border-edge text-muted hover:bg-cream'
           }`}
         >
           待申請
@@ -146,8 +146,8 @@ export default function ApplyPage() {
           onClick={() => setActiveTab('applied')}
           className={`flex-1 sm:flex-none px-6 md:px-8 py-2 md:py-2.5 rounded-xl md:rounded-full font-bold text-sm transition-all shadow-sm ${
             activeTab === 'applied'
-              ? 'bg-[#C8522A] text-white'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              ? 'bg-brand text-white'
+              : 'bg-white border border-edge text-muted hover:bg-cream'
           }`}
         >
           已申請
@@ -155,9 +155,9 @@ export default function ApplyPage() {
       </div>
 
       {/* 清單區域 */}
-      <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl md:rounded-3xl border border-edge shadow-sm overflow-hidden">
         
-        <div className="hidden md:flex justify-between items-center bg-[#F8F9FA] border-b border-[#E2DDD4] px-10 py-4 text-sm font-bold text-[#8C8880]">
+        <div className="hidden md:flex justify-between items-center bg-mist border-b border-edge px-10 py-4 text-sm font-bold text-muted">
           <div>任務</div>
           <div>{activeTab === 'applied' ? '狀態' : '動作'}</div>
         </div>
@@ -166,12 +166,12 @@ export default function ApplyPage() {
           {/* 狀態 1：資料載入中 (顯示骨架屏 Skeleton) */}
           {loading ? (
             [1, 2].map((n) => (
-              <div key={n} className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-10 md:py-6 border-b border-[#E2DDD4] animate-pulse gap-4 md:gap-0">
+              <div key={n} className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-10 md:py-6 border-b border-edge animate-pulse gap-4 md:gap-0">
                 <div className="flex items-center gap-4 md:gap-6 flex-1 pr-0 md:pr-8">
-                  <div className="w-[64px] h-[48px] md:w-[88px] md:h-[64px] bg-[#E2DDD4] rounded-xl flex-shrink-0" />
-                  <div className="h-4 md:h-6 bg-[#E2DDD4] rounded-lg w-full max-w-[200px]" />
+                  <div className="w-[64px] h-[48px] md:w-[88px] md:h-[64px] bg-edge rounded-xl flex-shrink-0" />
+                  <div className="h-4 md:h-6 bg-edge rounded-lg w-full max-w-[200px]" />
                 </div>
-                <div className="w-full md:w-[100px] h-9 bg-[#E2DDD4] rounded-xl md:rounded-2xl flex-shrink-0" />
+                <div className="w-full md:w-[100px] h-9 bg-edge rounded-xl md:rounded-2xl flex-shrink-0" />
               </div>
             ))
           ) : currentList.length > 0 ? (
@@ -179,30 +179,30 @@ export default function ApplyPage() {
             currentList.map((product, i) => (
               <div
                 key={product.id}
-                className={`flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-10 md:py-6 hover:bg-[#F8F9FA] transition-colors gap-4 md:gap-0 ${
-                  i !== currentList.length - 1 ? 'border-b border-[#E2DDD4]' : ''
+                className={`flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-10 md:py-6 hover:bg-mist transition-colors gap-4 md:gap-0 ${
+                  i !== currentList.length - 1 ? 'border-b border-edge' : ''
                 }`}
               >
                 {/* 左側：商品圖文 */}
                 <div className="flex items-center gap-4 md:gap-6 flex-1 pr-0 md:pr-8">
-                  <div className="w-[64px] h-[48px] md:w-[88px] md:h-[64px] bg-[#F5F0E8] rounded-xl flex-shrink-0 flex items-center justify-center border border-[#E2DDD4]">
-                    <ImageIcon className="text-[#8C8880]/50 md:w-6 md:h-6 w-5 h-5" />
+                  <div className="w-[64px] h-[48px] md:w-[88px] md:h-[64px] bg-cream rounded-xl flex-shrink-0 flex items-center justify-center border border-edge">
+                    <ImageIcon className="text-muted/50 md:w-6 md:h-6 w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-bold text-[#1A1A18] leading-snug">
+                    <div className="font-bold text-ink leading-snug">
                       {product.name}
                     </div>
                     {activeTab === 'pending' && product.recruitLimit != null && (
-                      <div className="mt-1 text-xs font-bold text-[#8C8880]">
+                      <div className="mt-1 text-xs font-bold text-muted">
                         招募進度 {product.approvedCount}/{product.recruitLimit} 人
                       </div>
                     )}
                     {/* 分潤條件：申請前就看得到是固定還是階層式、各層幾 % */}
                     {activeTab === 'pending' && product.commission && (
-                      <div className="mt-1 text-xs font-bold text-[#C8522A]">
+                      <div className="mt-1 text-xs font-bold text-brand">
                         分潤 {product.commission.label}
                         {commissionTiersText(product.commission) && (
-                          <span className="block mt-0.5 text-[11px] font-medium text-[#8C8880]">
+                          <span className="block mt-0.5 text-[11px] font-medium text-muted">
                             {commissionTiersText(product.commission)}
                           </span>
                         )}
@@ -215,19 +215,19 @@ export default function ApplyPage() {
                 <div className="flex-shrink-0 w-full md:w-[120px] text-center md:text-right">
                   {activeTab === 'pending' ? (
                     product.isFull ? (
-                      <span className="text-sm font-bold text-[#8C8880] bg-[#E2DDD4] px-6 py-2 rounded-xl">
+                      <span className="text-sm font-bold text-muted bg-edge px-6 py-2 rounded-xl">
                         已額滿
                       </span>
                     ) : (
                       <button
                         onClick={() => handleApply(product)}
-                        className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                        className="bg-brand text-white px-8 py-3 rounded-2xl text-sm font-bold hover:bg-brand-dark transition-all active:scale-95 shadow-sm"
                       >
                         申請任務
                       </button>
                     )
                   ) : (
-                    <span className="inline-block w-full md:w-auto text-xs md:text-sm font-bold text-[#C8522A] bg-[#FDF0ED] px-6 py-2.5 md:py-2 rounded-xl text-center">
+                    <span className="inline-block w-full md:w-auto text-xs md:text-sm font-bold text-brand bg-brand-soft px-6 py-2.5 md:py-2 rounded-xl text-center">
                       已申請
                     </span>
                   )}
@@ -239,22 +239,22 @@ export default function ApplyPage() {
             <div className="px-6 py-12 md:px-10 md:py-16 text-center">
               {activeTab === 'pending' ? (
                 <div className="mx-auto max-w-lg">
-                  <Info size={24} className="mx-auto mb-2.5 md:mb-3 text-[#C8522A] md:w-7 md:h-7" />
-                  <div className="font-bold text-[#1A1A18] text-sm md:text-base">目前沒有可申請的代言任務</div>
-                  <div className="mt-2 text-xs md:text-sm font-medium leading-relaxed text-[#8C8880]">
+                  <Info size={24} className="mx-auto mb-2.5 md:mb-3 text-brand md:w-7 md:h-7" />
+                  <div className="font-bold text-ink text-sm md:text-base">目前沒有可申請的代言任務</div>
+                  <div className="mt-2 text-xs md:text-sm font-medium leading-relaxed text-muted">
                     如果你已經購買商品，請確認對應訂單是否已完成。
                     完成訂單後，符合資格且仍在招募期間的代言任務才會出現在這裡。
                   </div>
                   <button
                     type="button"
                     onClick={() => window.location.assign('/orders')}
-                    className="mt-4 md:mt-5 w-full sm:w-auto rounded-xl md:rounded-full border border-[#1A1A18] bg-white px-6 py-2.5 text-sm font-bold text-[#1A1A18] transition-colors hover:bg-[#1A1A18] hover:text-white"
+                    className="mt-4 md:mt-5 w-full sm:w-auto rounded-xl md:rounded-full border border-ink bg-white px-6 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-ink hover:text-white"
                   >
                     前往我的訂單
                   </button>
                 </div>
               ) : (
-                <div className="font-bold text-[#8C8880] text-sm md:text-base">目前沒有已申請紀錄</div>
+                <div className="font-bold text-muted text-sm md:text-base">目前沒有已申請紀錄</div>
               )}
             </div>
           )}
@@ -263,17 +263,17 @@ export default function ApplyPage() {
 
       {/* 申請成功彈窗 */}
       {showModal && currentTask && (
-        <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300 p-4">
-          <div className="bg-white rounded-2xl md:rounded-[2rem] p-8 md:p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-[#E2DDD4]">
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300 p-4">
+          <div className="bg-white rounded-2xl md:rounded-[2rem] p-8 md:p-12 max-w-md w-full shadow-2xl text-center animate-in zoom-in-95 duration-300 border border-edge">
             <div className="mb-4 md:mb-6 flex justify-center">
-              <CheckCircle2 size={48} className="text-[#C8522A] md:w-16 md:h-16" />
+              <CheckCircle2 size={48} className="text-brand md:w-16 md:h-16" />
             </div>
-            <h4 className="text-xl md:text-2xl font-black text-[#1A1A18] mb-6 md:mb-8 leading-snug">
+            <h4 className="text-xl md:text-2xl font-black text-ink mb-6 md:mb-8 leading-snug">
               {currentTask.name}<br />已申請成功
             </h4>
             <button
               onClick={() => setShowModal(false)}
-              className="bg-[#1A1A18] text-[#F5F0E8] w-full py-3.5 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:bg-[#C8522A] transition-all active:scale-95 shadow-lg"
+              className="bg-brand text-white w-full py-3.5 md:py-4 rounded-xl md:rounded-2xl font-bold text-base md:text-lg hover:bg-brand-dark transition-all active:scale-95 shadow-lg"
             >
               確認
             </button>

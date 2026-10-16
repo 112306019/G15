@@ -148,25 +148,25 @@ export default function OrderChatPage({ orderId, onBack }) {
     <div className="animate-in fade-in duration-500 max-w-3xl mx-auto">
       <button
         onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group w-fit"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回訂單列表
       </button>
 
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center">
-          <MessageCircle size={20} className="text-[#C8522A]" />
+        <div className="w-10 h-10 rounded-full bg-brand-soft flex items-center justify-center">
+          <MessageCircle size={20} className="text-brand" />
         </div>
         <div>
-          <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">聯絡廠商</h2>
-          <p className="text-xs font-mono font-bold text-[#8C8880]">訂單 {orderId}</p>
+          <h2 className="text-[28px] font-display font-bold text-ink">聯絡廠商</h2>
+          <p className="text-xs font-mono font-bold text-muted">訂單 {orderId}</p>
         </div>
       </div>
 
       {orderSummary && orderSummary.items.length > 0 && (
-        <div className="mb-6 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5">
-          <div className="flex items-center gap-2 text-xs font-bold text-[#8C8880] tracking-wider mb-4">
+        <div className="mb-6 rounded-[1.5rem] border border-edge bg-white p-5">
+          <div className="flex items-center gap-2 text-xs font-bold text-muted tracking-wider mb-4">
             <Package size={14} />
             訂單商品
           </div>
@@ -174,30 +174,30 @@ export default function OrderChatPage({ orderId, onBack }) {
           <div className="flex flex-col gap-3">
             {orderSummary.items.map((item, idx) => (
               <div key={idx} className="flex items-center gap-3">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[#E2DDD4] bg-[#F5F0E8]">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-edge bg-cream">
                   {item.image_url && (
                     <img src={item.image_url} alt={item.product_name} className="h-full w-full object-cover" />
                   )}
                 </div>
-                <span className="flex-1 text-sm font-bold text-[#1A1A18] line-clamp-1">
+                <span className="flex-1 text-sm font-bold text-ink line-clamp-1">
                   {item.product_name || `商品 ${item.Product_id}`}
                 </span>
-                <span className="text-xs font-mono font-bold text-[#8C8880]">x{item.quantity}</span>
-                <span className="text-sm font-mono font-bold text-[#C8522A] w-20 text-right">
+                <span className="text-xs font-mono font-bold text-muted">x{item.quantity}</span>
+                <span className="text-sm font-mono font-bold text-brand w-20 text-right">
                   {formatNTD(item.subtotal)}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 flex items-center justify-between border-t border-[#E2DDD4] pt-4">
-            <span className="text-sm font-bold text-[#8C8880]">訂單總金額</span>
-            <span className="text-lg font-black text-[#C8522A]">{formatNTD(orderSummary.totalAmount)}</span>
+          <div className="mt-4 flex items-center justify-between border-t border-edge pt-4">
+            <span className="text-sm font-bold text-muted">訂單總金額</span>
+            <span className="text-lg font-black text-brand">{formatNTD(orderSummary.totalAmount)}</span>
           </div>
         </div>
       )}
 
-      <div className="flex flex-col h-[65vh] rounded-[2rem] border border-[#E2DDD4] bg-white shadow-sm overflow-hidden">
+      <div className="flex flex-col h-[65vh] rounded-[2rem] border border-edge bg-white shadow-sm overflow-hidden">
         {loadError && (
           <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold text-red-600">
             {loadError}
@@ -207,8 +207,8 @@ export default function OrderChatPage({ orderId, onBack }) {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
           {loading ? (
             <div className="h-full flex flex-col items-center justify-center">
-              <Loader2 size={20} className="animate-spin text-[#C8522A]" />
-              <div className="text-xs font-bold text-[#8C8880] mt-3">訊息載入中...</div>
+              <Loader2 size={20} className="animate-spin text-brand" />
+              <div className="text-xs font-bold text-muted mt-3">訊息載入中...</div>
             </div>
           ) : messages.length > 0 ? (
             messages.map((message, index) => {
@@ -223,8 +223,8 @@ export default function OrderChatPage({ orderId, onBack }) {
                     className={cn(
                       'max-w-[75%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words',
                       isMine
-                        ? 'bg-[#1A1A18] text-white rounded-br-sm'
-                        : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
+                        ? 'bg-ink text-white rounded-br-sm'
+                        : 'bg-white border border-edge text-ink shadow-sm rounded-bl-sm'
                     )}
                   >
                     {/* 這裡是跟這家廠商的完整對話，標出每段是在講哪張訂單、哪個商品 */}
@@ -234,7 +234,7 @@ export default function OrderChatPage({ orderId, onBack }) {
                     <div
                       className={cn(
                         'text-[10px] mt-1',
-                        isMine ? 'text-white/50 text-right' : 'text-[#8C8880]'
+                        isMine ? 'text-white/50 text-right' : 'text-muted'
                       )}
                     >
                       {formatTime(message.created_at)}
@@ -244,8 +244,8 @@ export default function OrderChatPage({ orderId, onBack }) {
               );
             })
           ) : (
-            <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
-              <MessageCircle size={28} className="mb-3 text-[#E2DDD4]" />
+            <div className="flex flex-col items-center justify-center h-full py-20 text-muted">
+              <MessageCircle size={28} className="mb-3 text-edge" />
               <p className="text-sm font-bold">尚無對話紀錄</p>
               <p className="text-xs mt-2">有任何關於這筆訂單的問題都可以在這裡詢問廠商</p>
             </div>
@@ -254,9 +254,9 @@ export default function OrderChatPage({ orderId, onBack }) {
           <div ref={bottomRef} />
         </div>
 
-        <div className="bg-white border-t border-[#E2DDD4] px-6 py-4 shrink-0">
+        <div className="bg-white border-t border-edge px-6 py-4 shrink-0">
           {sendError && (
-            <div className="mb-3 text-xs font-bold text-[#C8522A]">{sendError}</div>
+            <div className="mb-3 text-xs font-bold text-brand">{sendError}</div>
           )}
 
           <div className="flex items-center gap-3">
@@ -267,14 +267,14 @@ export default function OrderChatPage({ orderId, onBack }) {
               onKeyDown={handleKeyDown}
               disabled={sending || loading}
               placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
-              className="flex-1 max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+              className="flex-1 max-h-32 resize-none bg-mist border border-edge rounded-xl px-4 py-3 text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all disabled:opacity-60"
             />
 
             <button
               type="button"
               onClick={handleSend}
               disabled={!input.trim() || sending || loading}
-              className="bg-[#1A1A18] text-white p-3 rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              className="bg-brand text-white p-3 rounded-xl hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
               {sending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
             </button>

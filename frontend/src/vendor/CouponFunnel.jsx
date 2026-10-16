@@ -22,10 +22,10 @@ const fmtPercent = n =>
 
 function StatCard({ label, value, hint }) {
   return (
-    <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl p-4 sm:p-5">
-      <div className="text-xs font-bold text-[#8C8880] mb-2">{label}</div>
-      <div className="text-2xl sm:text-3xl font-black text-[#1A1A18]">{value}</div>
-      {hint && <div className="text-[11px] text-[#8C8880] mt-1">{hint}</div>}
+    <div className="bg-mist border border-edge rounded-2xl p-4 sm:p-5">
+      <div className="text-xs font-bold text-muted mb-2">{label}</div>
+      <div className="text-2xl sm:text-3xl font-black text-ink">{value}</div>
+      {hint && <div className="text-[11px] text-muted mt-1">{hint}</div>}
     </div>
   )
 }
@@ -82,23 +82,23 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
   return (
     <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white border border-[#E2DDD4] rounded-[2rem] shadow-2xl p-5 sm:p-8">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white border border-edge rounded-[2rem] shadow-2xl p-5 sm:p-8">
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 text-[#8C8880] hover:text-[#1A1A18] bg-[#F8F9FA] hover:bg-[#E2DDD4] rounded-full transition-colors"
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 text-muted hover:text-ink bg-mist hover:bg-edge rounded-full transition-colors"
       >
         <X size={18} />
       </button>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pr-12">
         <div>
-          <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+          <h2 className="text-base sm:text-lg font-display font-bold text-ink">
             優惠碼流量轉換分析
           </h2>
-          <p className="text-xs text-[#8C8880] mt-1">
+          <p className="text-xs text-muted mt-1">
             {campaignName ? `目前檢視活動：${campaignName}` : '目前檢視：全部活動'}
             {' '}｜ 追蹤消費者使用 KOC 優惠碼後的結帳表現
           </p>
@@ -107,7 +107,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
         <select
           value={range}
           onChange={e => setRange(e.target.value)}
-          className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-2 text-sm font-bold outline-none focus:border-[#C8522A]"
+          className="bg-mist border border-edge rounded-xl px-4 py-2 text-sm font-bold outline-none focus:border-brand"
         >
           {RANGE_OPTIONS.map(option => (
             <option key={option.value} value={option.value}>
@@ -125,8 +125,8 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
             onClick={() => setSource(tab.value)}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold border transition-colors ${
               source === tab.value
-                ? 'bg-[#1A1A18] text-white border-[#1A1A18]'
-                : 'bg-[#F8F9FA] text-[#8C8880] border-[#E2DDD4] hover:text-[#1A1A18]'
+                ? 'bg-brand text-white border-brand'
+                : 'bg-mist text-muted border-edge hover:text-ink'
             }`}
           >
             {tab.label}
@@ -135,19 +135,19 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
       </div>
 
       {loading ? (
-        <div className="py-12 flex items-center justify-center text-[#8C8880] gap-2">
+        <div className="py-12 flex items-center justify-center text-muted gap-2">
           <Loader2 size={18} className="animate-spin" />
           <span className="text-sm font-bold">讀取中...</span>
         </div>
       ) : error || linkError ? (
-        <div className="py-8 flex items-center justify-center text-[#C8522A] gap-2">
+        <div className="py-8 flex items-center justify-center text-brand gap-2">
           <AlertCircle size={18} />
           <span className="text-sm font-bold">{error || linkError}</span>
         </div>
       ) : (
         <>
           {!isLink && data?.ga4_error && (
-            <div className="mb-4 flex items-start gap-2 rounded-xl bg-[#FDF6E3] border border-[#E2DDD4] px-3 py-2.5 text-xs font-bold text-[#8A6D1F]">
+            <div className="mb-4 flex items-start gap-2 rounded-xl bg-gold-soft border border-edge px-3 py-2.5 text-xs font-bold text-gold-ink">
               <AlertCircle size={14} className="shrink-0 mt-0.5" />
               <span>{data.ga4_error}。優惠碼套用次數暫時無法顯示，開始結帳與購買數字不受影響。</span>
             </div>
@@ -199,7 +199,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-[#E2DDD4] text-xs font-bold text-[#8C8880]">
+                  <tr className="border-b border-edge text-xs font-bold text-muted">
                     <th className="pb-3 pr-4">優惠碼</th>
                     {isLink ? (
                       <>
@@ -214,10 +214,10 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
                     <th className="pb-3 pl-4 text-right">營收</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {view.by_code.map(row => (
                     <tr key={row.code} className="text-sm">
-                      <td className="py-3 pr-4 font-mono font-bold text-[#1A1A18]">
+                      <td className="py-3 pr-4 font-mono font-bold text-ink">
                         {row.code}
                       </td>
                       {isLink ? (
@@ -240,7 +240,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
                       <td className="py-3 px-4 text-right font-bold">
                         {fmtNumber(row.purchase_users)}
                       </td>
-                      <td className="py-3 pl-4 text-right font-black text-[#C8522A]">
+                      <td className="py-3 pl-4 text-right font-black text-brand">
                         NT$ {fmtNumber(row.revenue)}
                       </td>
                     </tr>
@@ -250,7 +250,7 @@ export default function CouponFunnel({ open, onClose, campaignId, campaignName }
             </div>
           )}
 
-          <p className="text-[11px] text-[#8C8880] mt-4">
+          <p className="text-[11px] text-muted mt-4">
             {isLink
               ? '資料來源：Google Analytics，可能有數小時延遲；人數以裝置（瀏覽器）計算。連結點擊由伺服器記錄、不受廣告攔截器影響，通常會比 GA4 的進站數多。'
               : '開始結帳、完成購買與營收來自平台訂單資料（即時，人數以會員帳號計算，同一人重新結帳只算一次）；優惠碼套用次數來自 Google Analytics，可能有數小時延遲。'}

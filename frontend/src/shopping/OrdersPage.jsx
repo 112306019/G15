@@ -36,18 +36,18 @@ function IconChevronDown(props) {
 function StatusBadge({ status }) {
   const map = {
     complete: { text: "訂單已完成", className: "bg-[#E8F5E8] text-[#4A9B4A]" },
-    cancelled: { text: "已取消", className: "bg-[#F5EAE8] text-[#C8522A]" },
+    cancelled: { text: "已取消", className: "bg-[#F5EAE8] text-brand" },
     shipping: { text: "運送中", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
     requested: { text: "退貨審核中", className: "bg-[#FFF8E7] text-[#9A6700]" },
     approved: { text: "已同意退貨", className: "bg-[#FFF8E7] text-[#9A6700]" },
-    rejected: { text: "退貨被拒絕", className: "bg-[#F5EAE8] text-[#C8522A]" },
-    disputed: { text: "爭議處理中", className: "bg-[#FDF0ED] text-[#C8522A]" },
+    rejected: { text: "退貨被拒絕", className: "bg-[#F5EAE8] text-brand" },
+    disputed: { text: "爭議處理中", className: "bg-brand-soft text-brand" },
     returning: { text: "退貨中", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
     received: { text: "廠商已收貨", className: "bg-[#E8EEF5] text-[#4A6A9B]" },
     refunding: { text: "退款處理中", className: "bg-[#FFF8E7] text-[#9A6700]" },
     refunded: { text: "已退款", className: "bg-[#E8F5E8] text-[#4A9B4A]" },
   };
-  const s = map[status] || { text: "狀態未知", className: "bg-[#F5F0E8] text-[#8C8880]" };
+  const s = map[status] || { text: "狀態未知", className: "bg-cream text-muted" };
   return (
     <span className={`rounded-full px-3 py-1 font-mono text-[10px] md:text-[11px] tracking-[0.07em] font-bold ${s.className}`}>
       {s.text}
@@ -57,9 +57,9 @@ function StatusBadge({ status }) {
 
 function OrderCard({ vendorName, items = [], totalAmount, onTrack, onChat, shippingStatus, orderStatus }) {
   return (
-    <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
+    <div className="cursor-pointer flex flex-col gap-4 md:gap-5 rounded-2xl md:rounded-[1.5rem] border border-edge bg-white p-5 md:p-6 transition-all hover:-translate-y-[2px] hover:border-gold hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)]">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">{vendorName || "賣家"}</span>
+        <span className="text-sm font-bold text-ink tracking-wide">{vendorName || "賣家"}</span>
         <button
           type="button"
           onClick={(e) => {
@@ -67,7 +67,7 @@ function OrderCard({ vendorName, items = [], totalAmount, onTrack, onChat, shipp
             onChat?.();
           }}
           title="與賣家聯絡"
-          className="flex items-center gap-1.5 rounded-full border border-[#E2DDD4] bg-white px-3 py-1.5 text-xs font-bold text-[#8C8880] transition-colors hover:border-[#C8522A] hover:text-[#C8522A]"
+          className="flex items-center gap-1.5 rounded-full border border-edge bg-white px-3 py-1.5 text-xs font-bold text-muted transition-colors hover:border-brand hover:text-brand"
         >
           <MessageCircle size={14} />
           聯絡賣家
@@ -80,35 +80,35 @@ function OrderCard({ vendorName, items = [], totalAmount, onTrack, onChat, shipp
         </div>
       )}
 
-      <div className="flex items-center gap-3 border-t border-[#E2DDD4] pt-4 md:pt-5">
+      <div className="flex items-center gap-3 border-t border-edge pt-4 md:pt-5">
         <div className="flex flex-col gap-3 flex-1 min-w-0">
           {items.map((it, idx) => (
             <div key={idx} className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[#E2DDD4] bg-[#F5F0E8]">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-edge bg-cream">
                 {it.image && (
                   <img src={it.image} alt={it.name} className="h-full w-full object-cover" />
                 )}
               </div>
-              <span className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug">{it.name}</span>
+              <span className="text-sm font-bold text-ink line-clamp-2 leading-snug">{it.name}</span>
             </div>
           ))}
         </div>
         {totalAmount != null && (
           <div className="shrink-0 text-right">
-            <div className="text-[10px] font-bold text-[#8C8880] mb-0.5">總金額</div>
-            <div className="text-base font-black text-[#1A1A18] whitespace-nowrap">{formatNTD(totalAmount)}</div>
+            <div className="text-[10px] font-bold text-muted mb-0.5">總金額</div>
+            <div className="text-base font-black text-ink whitespace-nowrap">{formatNTD(totalAmount)}</div>
           </div>
         )}
       </div>
 
-      <div className="flex justify-end border-t border-[#E2DDD4] pt-4 md:pt-5 mt-2 md:mt-0">
+      <div className="flex justify-end border-t border-edge pt-4 md:pt-5 mt-2 md:mt-0">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onTrack?.();
           }}
-          className="w-full md:w-auto whitespace-nowrap rounded-xl md:rounded-full bg-[#1A1A18] px-6 py-3 md:py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
+          className="w-full md:w-auto whitespace-nowrap rounded-xl md:rounded-full bg-brand px-6 py-3 md:py-3 text-xs md:text-sm font-bold text-white transition-colors hover:bg-brand-dark shadow-sm"
         >
           追蹤訂單
         </button>
@@ -125,9 +125,9 @@ function HistoryCard({ order, onOpenDetail }) {
   const extraCount = Math.max(0, order.items.length - 2);
 
   return (
-    <div className="rounded-2xl md:rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 md:p-6 transition-shadow hover:shadow-[0_8px_28px_rgba(26,26,24,0.04)]">
+    <div className="rounded-2xl md:rounded-[1.5rem] border border-edge bg-white p-5 md:p-6 transition-shadow hover:shadow-[0_8px_28px_rgba(26,26,24,0.04)]">
       <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-0">
-        <span className="text-sm font-bold text-[#1A1A18] tracking-wide">
+        <span className="text-sm font-bold text-ink tracking-wide">
           {order.vendorName || order.title || "廠商"}
         </span>
         <div className="self-start md:self-auto">
@@ -135,7 +135,7 @@ function HistoryCard({ order, onOpenDetail }) {
         </div>
       </div>
 
-      <div className="mb-5 md:mb-6 flex flex-wrap items-center gap-4 md:gap-5 text-xs md:text-sm font-medium text-[#8C8880]">
+      <div className="mb-5 md:mb-6 flex flex-wrap items-center gap-4 md:gap-5 text-xs md:text-sm font-medium text-muted">
         <div className="flex items-center gap-1.5 md:gap-2">
           <IconCalendar className="h-3.5 w-3.5 md:h-4 md:w-4" />
           {order.date}
@@ -151,12 +151,12 @@ function HistoryCard({ order, onOpenDetail }) {
         {shownItems.map((it, idx) => (
           <div
             key={`${it.name}-${idx}`}
-            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3 ${idx !== shownItems.length - 1 ? "border-b border-[#E2DDD4]" : ""}`}
+            className={`flex items-center gap-3 md:gap-4 py-2.5 md:py-3 ${idx !== shownItems.length - 1 ? "border-b border-edge" : ""}`}
           >
-            <span className="min-w-6 text-center font-mono text-xs md:text-sm font-bold text-[#1A1A18] bg-[#F5F0E8] rounded-md py-1">
+            <span className="min-w-6 text-center font-mono text-xs md:text-sm font-bold text-ink bg-cream rounded-md py-1">
               {it.qty}
             </span>
-            <span className="text-xs md:text-sm font-bold text-[#1A1A18] line-clamp-1">{it.name}</span>
+            <span className="text-xs md:text-sm font-bold text-ink line-clamp-1">{it.name}</span>
           </div>
         ))}
       </div>
@@ -166,7 +166,7 @@ function HistoryCard({ order, onOpenDetail }) {
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
-          className="mb-5 md:mb-6 flex w-full items-center justify-between border-t border-[#E2DDD4] pt-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:text-[#C8522A]"
+          className="mb-5 md:mb-6 flex w-full items-center justify-between border-t border-edge pt-4 text-xs md:text-sm font-bold text-muted transition-colors hover:text-brand"
         >
           <span>{extraCount} 更多項目</span>
           <IconChevronDown
@@ -183,14 +183,14 @@ function HistoryCard({ order, onOpenDetail }) {
             onOpenDetail?.(order.id);
             setDetailOpen((v) => !v);
           }}
-          className="w-full md:w-auto rounded-xl md:rounded-full bg-[#1A1A18] px-6 py-3 text-xs md:text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] shadow-sm"
+          className="w-full md:w-auto rounded-xl md:rounded-full bg-brand px-6 py-3 text-xs md:text-sm font-bold text-white transition-colors hover:bg-brand-dark shadow-sm"
         >
           {detailOpen ? "收起細節" : "訂單細節"}
         </button>
 
         <button
           type="button"
-          className="w-full md:w-auto rounded-xl md:rounded-full border border-[#E2DDD4] bg-white px-6 py-3 text-xs md:text-sm font-bold text-[#8C8880] transition-all hover:border-[#1A1A18] hover:text-[#1A1A18]"
+          className="w-full md:w-auto rounded-xl md:rounded-full border border-edge bg-white px-6 py-3 text-xs md:text-sm font-bold text-muted transition-all hover:border-ink hover:text-ink"
         >
           幫助
         </button>
@@ -198,25 +198,25 @@ function HistoryCard({ order, onOpenDetail }) {
 
       {/* expandable detail panel */}
       {order.detail && (
-        <div className={`mt-5 md:mt-6 border-t border-[#E2DDD4] pt-5 md:pt-6 ${detailOpen ? "block" : "hidden"}`}>
-          <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 bg-[#F8F9FA] p-5 md:p-6 rounded-2xl">
+        <div className={`mt-5 md:mt-6 border-t border-edge pt-5 md:pt-6 ${detailOpen ? "block" : "hidden"}`}>
+          <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-2 bg-mist p-5 md:p-6 rounded-2xl">
             <div>
-              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">送貨地址</div>
-              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.address}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted">送貨地址</div>
+              <p className="text-xs md:text-sm font-bold text-ink leading-relaxed">{order.detail.address}</p>
             </div>
             <div>
-              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">付款方式</div>
-              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">{order.detail.payment}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted">付款方式</div>
+              <p className="text-xs md:text-sm font-bold text-ink leading-relaxed">{order.detail.payment}</p>
             </div>
             <div>
-              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">訂單金額</div>
-              <p className="text-xs md:text-sm font-bold text-[#C8522A] leading-relaxed">{order.detail.amount}</p>
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted">訂單金額</div>
+              <p className="text-xs md:text-sm font-bold text-brand leading-relaxed">{order.detail.amount}</p>
             </div>
             <div>
-              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-[#8C8880]">
+              <div className="mb-1.5 md:mb-2 text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted">
                 {order.detail.reason ? "取消原因" : "配送方式"}
               </div>
-              <p className="text-xs md:text-sm font-bold text-[#1A1A18] leading-relaxed">
+              <p className="text-xs md:text-sm font-bold text-ink leading-relaxed">
                 {order.detail.reason || order.detail.shipping}
               </p>
             </div>
@@ -392,7 +392,7 @@ export default function OrdersPage({
   if (loading) {
     return (
       <div className="max-w-5xl animate-in fade-in duration-500 space-y-12 p-4 md:p-0 mx-auto">
-        <div className="py-20 text-center text-[#8C8880] font-bold">訂單載入中...</div>
+        <div className="py-20 text-center text-muted font-bold">訂單載入中...</div>
       </div>
     );
   }
@@ -404,23 +404,23 @@ export default function OrdersPage({
   return (
     <div className="max-w-5xl animate-in fade-in duration-500 p-4 md:p-0 mx-auto pb-12">
 
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-10 text-[#1A1A18]">
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-6 md:mb-10 text-ink">
         我的訂單
       </h2>
 
       {/* 當完全沒有資料時顯示的空狀態 */}
       {hasNoOrdersAtAll ? (
-        <div className="bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] p-8 md:p-16 flex flex-col items-center justify-center text-center shadow-sm">
-          <div className="w-16 h-16 md:w-20 md:h-20 bg-[#F8F9FA] rounded-full flex items-center justify-center mb-4 md:mb-6 text-[#8C8880]">
+        <div className="bg-white rounded-2xl md:rounded-[2rem] border border-edge p-8 md:p-16 flex flex-col items-center justify-center text-center shadow-sm">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-mist rounded-full flex items-center justify-center mb-4 md:mb-6 text-muted">
             <ShoppingBag size={32} className="md:w-10 md:h-10" />
           </div>
-          <h2 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-2">目前沒有訂單紀錄</h2>
-          <p className="text-sm text-[#8C8880] font-medium mb-6 md:mb-8">
+          <h2 className="text-xl md:text-2xl font-display font-bold text-ink mb-2">目前沒有訂單紀錄</h2>
+          <p className="text-sm text-muted font-medium mb-6 md:mb-8">
             您還沒有在 ShareBuy 購買過任何商品<br className="hidden md:block"/>歡迎前往購物頁面探索！
           </p>
           <a
             href="/shop"
-            className="bg-[#1A1A18] text-[#F5F0E8] px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md active:scale-95"
+            className="bg-brand text-white px-8 py-3.5 md:py-4 rounded-xl md:rounded-2xl text-sm font-bold hover:bg-brand-dark transition-all shadow-md active:scale-95"
           >
             前往購物頁面
           </a>
@@ -428,7 +428,7 @@ export default function OrdersPage({
       ) : (
         <div>
           {/* 分類圖示列：點選才會展開對應的訂單清單 */}
-          <div className="bg-white p-1.5 md:p-2 rounded-2xl shadow-sm border border-[#E2DDD4] mb-6 md:mb-8 flex justify-start md:justify-between overflow-x-auto hide-scrollbar gap-1 md:gap-0">
+          <div className="bg-white p-1.5 md:p-2 rounded-2xl shadow-sm border border-edge mb-6 md:mb-8 flex justify-start md:justify-between overflow-x-auto hide-scrollbar gap-1 md:gap-0">
             {ORDER_CATEGORIES.map((category) => {
               const Icon = category.icon;
               const isActive = activeCategory === category.key;
@@ -436,15 +436,15 @@ export default function OrdersPage({
                 <button
                   key={category.key}
                   onClick={() => handleSelectCategory(category)}
-                  className={`flex-shrink-0 min-w-[90px] md:flex-1 md:min-w-[120px] flex flex-col items-center justify-center py-3 md:py-4 rounded-xl transition-all relative ${isActive ? 'bg-[#FDF0ED]/50 border border-[#C8522A]/10' : 'hover:bg-[#F8F9FA] border border-transparent'}`}
+                  className={`flex-shrink-0 min-w-[90px] md:flex-1 md:min-w-[120px] flex flex-col items-center justify-center py-3 md:py-4 rounded-xl transition-all relative ${isActive ? 'bg-brand-soft/50 border border-brand/10' : 'hover:bg-mist border border-transparent'}`}
                 >
                   {category.badgeCount > 0 && (
-                    <span className="absolute top-2 right-3 md:top-3 md:right-6 w-4 h-4 md:w-5 md:h-5 bg-[#C8522A] text-white text-[9px] md:text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
+                    <span className="absolute top-2 right-3 md:top-3 md:right-6 w-4 h-4 md:w-5 md:h-5 bg-brand text-white text-[9px] md:text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
                       {category.badgeCount}
                     </span>
                   )}
-                  <Icon size={18} className={`mb-1.5 md:mb-2 md:w-5 md:h-5 ${isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}`} />
-                  <span className={`text-xs md:text-sm font-bold ${isActive ? 'text-[#1A1A18]' : 'text-[#8C8880]'}`}>{category.label}</span>
+                  <Icon size={18} className={`mb-1.5 md:mb-2 md:w-5 md:h-5 ${isActive ? 'text-brand' : 'text-muted'}`} />
+                  <span className={`text-xs md:text-sm font-bold ${isActive ? 'text-ink' : 'text-muted'}`}>{category.label}</span>
                 </button>
               );
             })}
@@ -452,7 +452,7 @@ export default function OrdersPage({
 
           {/* 目前選取分類的訂單清單 */}
           {activeCategoryData.list.length === 0 ? (
-            <div className="bg-white rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] border-dashed p-10 md:p-16 text-center text-sm md:text-base font-bold text-[#8C8880]">
+            <div className="bg-white rounded-2xl md:rounded-[2rem] border border-edge border-dashed p-10 md:p-16 text-center text-sm md:text-base font-bold text-muted">
               目前沒有「{activeCategoryData.label}」的訂單
             </div>
           ) : activeCategoryData.type === "active" ? (

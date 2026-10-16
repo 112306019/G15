@@ -6,7 +6,7 @@ import { formatCurrency, cn } from './lib/utils'
 
 // 每次任務的結果：顯示文字與顏色
 const OUTCOME = {
-  ongoing: { label: '進行中', cls: 'bg-[#F5F0E8] text-[#1A1A18]' },
+  ongoing: { label: '進行中', cls: 'bg-cream text-ink' },
   completed: { label: '已完成', cls: 'bg-green-50 text-green-700' },
   cancelled: { label: 'KOC 取消', cls: 'bg-red-50 text-red-600' },
   expired: { label: '逾期未完成', cls: 'bg-red-50 text-red-600' },
@@ -15,10 +15,10 @@ const OUTCOME = {
 
 function Stat({ label, value, hint, warn = false }) {
   return (
-    <div className={cn('rounded-xl sm:rounded-2xl border p-3 sm:p-4', warn ? 'border-[#F3C9BC] bg-[#FDF0ED]' : 'border-[#E2DDD4] bg-[#F8F9FA]')}>
-      <div className="text-[10px] sm:text-[11px] font-bold text-[#8C8880] tracking-wider">{label}</div>
-      <div className={cn('mt-1 text-lg sm:text-xl font-black', warn ? 'text-[#C8522A]' : 'text-[#1A1A18]')}>{value}</div>
-      {hint && <div className="mt-0.5 text-[10px] font-bold text-[#8C8880]">{hint}</div>}
+    <div className={cn('rounded-xl sm:rounded-2xl border p-3 sm:p-4', warn ? 'border-brand-pale bg-brand-soft' : 'border-edge bg-mist')}>
+      <div className="text-[10px] sm:text-[11px] font-bold text-muted tracking-wider">{label}</div>
+      <div className={cn('mt-1 text-lg sm:text-xl font-black', warn ? 'text-brand' : 'text-ink')}>{value}</div>
+      {hint && <div className="mt-0.5 text-[10px] font-bold text-muted">{hint}</div>}
     </div>
   )
 }
@@ -61,21 +61,21 @@ export default function KocHistoryPanel({ koc }) {
   const failedCount = summary ? summary.cancelled_count + summary.expired_count + summary.admin_closed_count : 0
 
   return (
-    <div className="rounded-xl sm:rounded-2xl border border-[#E2DDD4] bg-white p-4 sm:p-6">
-      <div className="mb-4 text-sm font-bold text-[#1A1A18]">
+    <div className="rounded-xl sm:rounded-2xl border border-edge bg-white p-4 sm:p-6">
+      <div className="mb-4 text-sm font-bold text-ink">
         {koc.name} 的過往接案紀錄
       </div>
       <div className="space-y-5 sm:space-y-6">
           {loading ? (
             <div className="py-16 flex justify-center">
-              <Loader2 size={22} className="animate-spin text-[#C8522A]" />
+              <Loader2 size={22} className="animate-spin text-brand" />
             </div>
           ) : error ? (
-            <div className="py-12 text-center text-sm font-bold text-[#C8522A]">{error}</div>
+            <div className="py-12 text-center text-sm font-bold text-brand">{error}</div>
           ) : (
             <>
               {data.koc.is_suspended && (
-                <div className="flex items-start gap-2 rounded-xl border border-[#F3C9BC] bg-[#FDF0ED] px-4 py-3 text-xs font-bold text-[#C8522A]">
+                <div className="flex items-start gap-2 rounded-xl border border-brand-pale bg-brand-soft px-4 py-3 text-xs font-bold text-brand">
                   <AlertTriangle size={15} className="mt-0.5 shrink-0" />
                   這位 KOC 目前因違規次數過多被停權中。
                 </div>
@@ -83,7 +83,7 @@ export default function KocHistoryPanel({ koc }) {
 
               {/* 違規與履約 */}
               <div>
-                <div className="text-xs font-bold text-[#1A1A18] mb-2.5">違規與履約</div>
+                <div className="text-xs font-bold text-ink mb-2.5">違規與履約</div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                   <Stat label="累計違規次數" value={`${summary.violation_count} 次`} hint="取消任務、逾期未完成都算" warn={summary.violation_count > 0} />
                   <Stat label="接案總數" value={`${summary.total_missions} 次`} hint={`進行中 ${summary.ongoing_count} 次`} />
@@ -99,7 +99,7 @@ export default function KocHistoryPanel({ koc }) {
 
               {/* 成效分析 */}
               <div>
-                <div className="text-xs font-bold text-[#1A1A18] mb-2.5">成效分析</div>
+                <div className="text-xs font-bold text-ink mb-2.5">成效分析</div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   <Stat
                     label="平均一次接案賣出"
@@ -113,36 +113,36 @@ export default function KocHistoryPanel({ koc }) {
 
               {/* 每次任務 */}
               <div>
-                <div className="text-xs font-bold text-[#1A1A18] mb-2.5">每次接案</div>
+                <div className="text-xs font-bold text-ink mb-2.5">每次接案</div>
                 {missions.length === 0 ? (
-                  <div className="rounded-xl border border-[#E2DDD4] py-10 text-center text-xs font-bold text-[#8C8880]">
+                  <div className="rounded-xl border border-edge py-10 text-center text-xs font-bold text-muted">
                     這位 KOC 還沒有接案紀錄，這是第一次申請。
                   </div>
                 ) : (
-                  <div className="rounded-xl sm:rounded-2xl border border-[#E2DDD4] overflow-hidden">
+                  <div className="rounded-xl sm:rounded-2xl border border-edge overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse min-w-[520px]">
                         <thead>
-                          <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                          <tr className="bg-mist border-b border-edge">
                             {['活動', '活動期間', '結果', '訂單', '銷售額'].map((h) => (
-                              <th key={h} className="px-4 py-3 text-[11px] font-bold text-[#8C8880] tracking-wider whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-4 py-3 text-[11px] font-bold text-muted tracking-wider whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#E2DDD4]">
+                        <tbody className="divide-y divide-edge">
                           {missions.map((m) => {
-                            const outcome = OUTCOME[m.outcome] || { label: m.outcome, cls: 'bg-gray-100 text-gray-500' }
+                            const outcome = OUTCOME[m.outcome] || { label: m.outcome, cls: 'bg-mist text-muted' }
                             return (
                               <tr key={m.kocmission_id}>
                                 <td className="px-4 py-3">
-                                  <div className={cn('text-sm font-bold', m.is_own_campaign ? 'text-[#1A1A18]' : 'text-[#8C8880]')}>
+                                  <div className={cn('text-sm font-bold', m.is_own_campaign ? 'text-ink' : 'text-muted')}>
                                     {m.campaign_name}
                                   </div>
                                   {m.missed_publishing_deadline && (
-                                    <div className="mt-0.5 text-[10px] font-bold text-[#C8522A]">曾逾期未交貼文連結</div>
+                                    <div className="mt-0.5 text-[10px] font-bold text-brand">曾逾期未交貼文連結</div>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-xs font-bold text-[#8C8880] whitespace-nowrap">
+                                <td className="px-4 py-3 text-xs font-bold text-muted whitespace-nowrap">
                                   {m.start_date || '—'} ~ {m.end_date || '—'}
                                 </td>
                                 <td className="px-4 py-3">
@@ -150,8 +150,8 @@ export default function KocHistoryPanel({ koc }) {
                                     {outcome.label}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-[#1A1A18]">{m.orders}</td>
-                                <td className="px-4 py-3 text-sm font-bold text-[#1A1A18] whitespace-nowrap">{formatCurrency(m.sales_amount)}</td>
+                                <td className="px-4 py-3 text-sm font-bold text-ink">{m.orders}</td>
+                                <td className="px-4 py-3 text-sm font-bold text-ink whitespace-nowrap">{formatCurrency(m.sales_amount)}</td>
                               </tr>
                             )
                           })}
@@ -161,9 +161,9 @@ export default function KocHistoryPanel({ koc }) {
                   </div>
                 )}
                 {data.missions_truncated && (
-                  <p className="mt-2 text-[11px] font-bold text-[#8C8880]">只列出最近 {missions.length} 次，上方的統計數字包含全部紀錄。</p>
+                  <p className="mt-2 text-[11px] font-bold text-muted">只列出最近 {missions.length} 次，上方的統計數字包含全部紀錄。</p>
                 )}
-                <p className="mt-2 text-[11px] font-bold text-[#8C8880]">
+                <p className="mt-2 text-[11px] font-bold text-muted">
                   為保護其他廠商的商業資訊，別家廠商的活動不顯示名稱，只顯示結果與成效。
                 </p>
               </div>

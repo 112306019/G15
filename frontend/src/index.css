@@ -1,6 +1,49 @@
 @import "tailwindcss";
 
+/*
+ * ShareBuy 主題色與字體（風格 2：冷白底 + 柔和紫 + logo 金）
+ * 全站顏色都從這裡來：要換顏色，只改這裡就好。
+ * 用法：bg-brand、text-ink、border-edge、bg-brand/10 ...
+ *
+ * 用色原則：
+ *   紫色 = 動作（按鈕、連結、選取狀態）
+ *   金色 = 錢（分潤、優惠碼、KOC 推薦），只當點綴，不做大面積
+ *   白 / 淡紫 = 底色
+ */
+@theme {
+  /* 主色：柔和紫（白字放上去對比 5.1，仍符合可讀性） */
+  --color-brand: #6E64AF;
+  --color-brand-dark: #504785;   /* hover / 按下、深色標題 */
+  --color-brand-soft: #ECEAF6;   /* 淡紫底：標籤、選取狀態、色塊 */
+  --color-brand-softer: #F5F4FA;
+  --color-brand-light: #948DC4;  /* 漸層的淺端 */
+  --color-brand-pale: #DCD7F0;   /* 淡紫框線、紫色底上的強調字 */
+
+  /* 第二色：logo 的金色 */
+  --color-gold: #8A6526;         /* 金色文字（白底上可讀） */
+  --color-gold-ink: #7A5A1E;     /* 金色標籤上的字 */
+  --color-gold-soft: #F5EAD0;    /* 金色標籤底 */
+  --color-gold-bright: #A8803A;  /* 大字、數字用的亮金 */
+
+  /* 中性色：帶一點紫的冷色系 */
+  --color-ink: #1F1D2B;          /* 主要文字 */
+  --color-muted: #6B6780;        /* 次要文字（在底色上對比 4.9） */
+  --color-edge: #E4E2EC;         /* 邊框、分隔線 */
+  --color-cream: #F4F3F9;        /* 頁面底色（名稱沿用舊的，實際是冷白） */
+  --color-mist: #F8F8FB;         /* 灰白底（後台用） */
+
+  /* 字體 */
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-wordmark: "DM Serif Display", "Noto Serif TC", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* DM Serif Display 只有一種粗細，不讓瀏覽器硬加粗 */
+.font-wordmark {
+  font-synthesis-weight: none;
+}
+
 body {
   margin: 0;
-  background-color: white;
+  background-color: var(--color-cream);
 }

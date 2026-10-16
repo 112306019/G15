@@ -280,18 +280,18 @@ export default function ProductDetailPage({
 
   if (!productDetail) {
     return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880] font-bold text-sm md:text-base">商品載入中...</p>
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <p className="text-muted font-bold text-sm md:text-base">商品載入中...</p>
       </div>
     );
   }
   return (
-    <div className="min-h-screen bg-[#F5F0E8] font-sans text-[#1A1A18] pb-24 relative">
+    <div className="min-h-screen bg-cream font-sans text-ink pb-24 relative">
       <div className="max-w-5xl mx-auto px-4 py-6 md:px-6 md:py-12">
         
         <button
           onClick={() => onBack?.()}
-          className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#1A1A18] transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-[#E2DDD4] md:border-transparent shadow-sm md:shadow-none"
+          className="mb-4 md:mb-6 flex items-center gap-1.5 md:gap-2 text-muted hover:text-ink transition-colors font-bold text-xs md:text-sm group w-fit bg-white md:bg-transparent px-3 md:px-0 py-1.5 md:py-0 rounded-full border border-edge md:border-transparent shadow-sm md:shadow-none"
         >
           <ArrowLeft size={16} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" />
           返回商品列表
@@ -312,7 +312,7 @@ export default function ProductDetailPage({
               <div className="mb-2 md:mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
                 <Link
                   to={`/store/${productDetail.vendorId}`}
-                  className="inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors group"
+                  className="inline-flex items-center gap-1.5 w-fit text-xs md:text-sm font-bold text-muted hover:text-brand transition-colors group"
                 >
                   <Store size={14} className="md:w-4 md:h-4" />
                   {productDetail.vendorName}
@@ -321,7 +321,7 @@ export default function ProductDetailPage({
                 <button
                   type="button"
                   onClick={handleContactVendor}
-                  className="inline-flex items-center gap-1 text-xs md:text-sm font-bold text-[#C8522A] hover:underline"
+                  className="inline-flex items-center gap-1 text-xs md:text-sm font-bold text-brand hover:underline"
                 >
                   <MessageCircle size={14} className="md:w-4 md:h-4" /> 詢問廠商
                 </button>
@@ -329,23 +329,23 @@ export default function ProductDetailPage({
             )}
 
             <div className="flex items-start justify-between gap-4 mb-3 md:mb-4">
-              <h1 className="font-serif text-xl md:text-3xl leading-snug pr-2">{productDetail.name}</h1>
+              <h1 className="font-display text-xl md:text-3xl leading-snug pr-2">{productDetail.name}</h1>
               <button
                 onClick={handleHeartClick}
-                className={`flex-shrink-0 p-2 md:p-2.5 rounded-full border transition-all ${isFavorited ? 'bg-[#FDF0ED] border-[#C8522A] text-[#C8522A]' : 'bg-white border-[#E2DDD4] text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18]'}`}
+                className={`flex-shrink-0 p-2 md:p-2.5 rounded-full border transition-all ${isFavorited ? 'bg-brand-soft border-brand text-brand' : 'bg-white border-edge text-muted hover:border-ink hover:text-ink'}`}
               >
                 <Heart size={18} className="md:w-5 md:h-5" fill={isFavorited ? "currentColor" : "none"} />
               </button>
             </div>
 
-            <div className="font-black text-xl md:text-2xl text-[#1A1A18] mb-4 md:mb-6">{productDetail.price}</div>
+            <div className="font-black text-xl md:text-2xl text-ink mb-4 md:mb-6">{productDetail.price}</div>
 
             <div className="mb-6 md:mb-8">
-              <label className="block text-[11px] md:text-xs font-bold text-[#8C8880] mb-2 uppercase">數量</label>
-              <div className="flex items-center bg-white border border-[#E2DDD4] rounded-full w-fit overflow-hidden h-10 md:h-12">
-                <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 md:w-12 h-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors flex items-center justify-center font-bold text-base md:text-lg">-</button>
-                <span className="w-8 md:w-10 text-center font-bold text-[#1A1A18] text-sm md:text-base">{quantity}</span>
-                <button onClick={() => setQuantity(quantity + 1)} className="w-10 md:w-12 h-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors flex items-center justify-center font-bold text-base md:text-lg">+</button>
+              <label className="block text-[11px] md:text-xs font-bold text-muted mb-2 uppercase">數量</label>
+              <div className="flex items-center bg-white border border-edge rounded-full w-fit overflow-hidden h-10 md:h-12">
+                <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 md:w-12 h-full text-muted hover:bg-cream hover:text-ink transition-colors flex items-center justify-center font-bold text-base md:text-lg">-</button>
+                <span className="w-8 md:w-10 text-center font-bold text-ink text-sm md:text-base">{quantity}</span>
+                <button onClick={() => setQuantity(quantity + 1)} className="w-10 md:w-12 h-full text-muted hover:bg-cream hover:text-ink transition-colors flex items-center justify-center font-bold text-base md:text-lg">+</button>
               </div>
             </div>
 
@@ -360,26 +360,26 @@ export default function ProductDetailPage({
                 </div>
               ) : (
                 <>
-                  <button onClick={handleBuyNow} className="flex-1 bg-[#C8522A] text-white py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-[#A64220] hover:-translate-y-0.5 transition-all shadow-md text-sm md:text-base">立即訂購</button>
-                  <button onClick={handleAddCart} className="flex-1 bg-white border border-[#1A1A18] text-[#1A1A18] py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-[#F5F0E8] hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2 text-sm md:text-base"><ShoppingBag size={16} className="md:w-[18px] md:h-[18px]" /> 加入購物車</button>
+                  <button onClick={handleBuyNow} className="flex-1 bg-brand text-white py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-brand-dark hover:-translate-y-0.5 transition-all shadow-md text-sm md:text-base">立即訂購</button>
+                  <button onClick={handleAddCart} className="flex-1 bg-white border border-ink text-ink py-3.5 md:py-4 rounded-xl md:rounded-full font-bold tracking-wide hover:bg-cream hover:-translate-y-0.5 transition-all flex justify-center items-center gap-2 text-sm md:text-base"><ShoppingBag size={16} className="md:w-[18px] md:h-[18px]" /> 加入購物車</button>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="border-b border-[#E2DDD4] flex gap-6 md:gap-8 mb-6 md:mb-8 overflow-x-auto hide-scrollbar whitespace-nowrap custom-scrollbar">
-          <button onClick={() => setActiveTab('description')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'description' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>商品描述</button>
-          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-[#1A1A18] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}>推廣活動詳情</button>
+        <div className="border-b border-edge flex gap-6 md:gap-8 mb-6 md:mb-8 overflow-x-auto hide-scrollbar whitespace-nowrap custom-scrollbar">
+          <button onClick={() => setActiveTab('description')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'description' ? 'border-b-2 border-ink text-ink' : 'text-muted hover:text-ink'}`}>商品描述</button>
+          <button onClick={() => setActiveTab('vendor')} className={`pb-2.5 md:pb-3 text-sm md:text-base font-bold transition-colors ${activeTab === 'vendor' ? 'border-b-2 border-ink text-ink' : 'text-muted hover:text-ink'}`}>推廣活動詳情</button>
         </div>
 
-        <div className="bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-5 md:p-8 mb-10 md:mb-16 min-h-[150px] md:min-h-[200px]">
+        <div className="bg-white rounded-2xl md:rounded-3xl border border-edge p-5 md:p-8 mb-10 md:mb-16 min-h-[150px] md:min-h-[200px]">
           {activeTab === 'vendor' && (
-            <div className="text-xs md:text-sm text-[#8C8880] leading-relaxed space-y-4">
+            <div className="text-xs md:text-sm text-muted leading-relaxed space-y-4">
               <div>
-                <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">廠商</h3>
+                <h3 className="font-bold text-ink mb-1 md:mb-2">廠商</h3>
                 {productDetail.vendorId ? (
-                  <Link to={`/store/${productDetail.vendorId}`} className="text-[#C8522A] font-bold hover:underline">
+                  <Link to={`/store/${productDetail.vendorId}`} className="text-brand font-bold hover:underline">
                     {productDetail.vendorName}（查看這個廠商的所有商品）
                   </Link>
                 ) : (
@@ -389,23 +389,23 @@ export default function ProductDetailPage({
               {campaignData ? (
                 <>
                   <div>
-                    <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">活動名稱</h3>
+                    <h3 className="font-bold text-ink mb-1 md:mb-2">活動名稱</h3>
                     <p>{campaignData.name}</p>
                   </div>
                   <div>
-                    <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">活動描述</h3>
+                    <h3 className="font-bold text-ink mb-1 md:mb-2">活動描述</h3>
                     <p>{campaignData.description || "暫無描述"}</p>
                   </div>
                   <div>
-                    <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">優惠折扣</h3>
-                    <p className="text-[#C8522A] font-medium">
+                    <h3 className="font-bold text-ink mb-1 md:mb-2">優惠折扣</h3>
+                    <p className="text-brand font-medium">
                       {campaignData.discount_type === 'percentage'
                         ? `${campaignData.discount_value}% off`
                         : `折 $${campaignData.discount_value}`}
                     </p>
                   </div>
                   <div>
-                    <h3 className="font-bold text-[#1A1A18] mb-1 md:mb-2">活動期間</h3>
+                    <h3 className="font-bold text-ink mb-1 md:mb-2">活動期間</h3>
                     <p>{new Date(campaignData.start_date).toLocaleDateString("zh-TW")} ~ {new Date(campaignData.end_date).toLocaleDateString("zh-TW")}</p>
                   </div>
                 </>
@@ -415,14 +415,14 @@ export default function ProductDetailPage({
             </div>
           )}
           {activeTab === 'description' && (
-            <div className="text-xs md:text-sm text-[#8C8880] leading-relaxed whitespace-pre-line">
+            <div className="text-xs md:text-sm text-muted leading-relaxed whitespace-pre-line">
               {productDetail.description || "暫無詳細描述"}
             </div>
           )}
         </div>
 
         <div>
-          <h2 className="font-serif text-lg md:text-xl text-[#1A1A18] mb-4 md:mb-6 font-bold">您可能也會喜歡...</h2>
+          <h2 className="font-display text-lg md:text-xl text-ink mb-4 md:mb-6 font-bold">您可能也會喜歡...</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
             {relatedProducts.map((p) => (
               <div key={p.id} onClick={() => handleRecommendClick(p.raw)} className="group cursor-pointer overflow-hidden flex flex-col gap-2.5 md:gap-3">
@@ -434,10 +434,10 @@ export default function ProductDetailPage({
                   )}
                 </div>
                 <div className="px-1">
-                  <div className="text-xs md:text-sm font-medium text-[#1A1A18] mb-1 line-clamp-2 leading-snug">{p.name}</div>
-                  <div className="font-black text-sm md:text-base text-[#1A1A18]">{p.price}</div>
-                  <div className="mt-0.5 md:mt-1 flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs text-[#8C8880]">
-                    <span className="text-[#B89B6A] tracking-widest text-[8px] md:text-[10px]">★★★★★</span>
+                  <div className="text-xs md:text-sm font-medium text-ink mb-1 line-clamp-2 leading-snug">{p.name}</div>
+                  <div className="font-black text-sm md:text-base text-ink">{p.price}</div>
+                  <div className="mt-0.5 md:mt-1 flex items-center gap-1 md:gap-1.5 text-[10px] md:text-xs text-muted">
+                    <span className="text-gold tracking-widest text-[8px] md:text-[10px]">★★★★★</span>
                     <span>(120)</span>
                   </div>
                 </div>
@@ -449,10 +449,10 @@ export default function ProductDetailPage({
       </div>
 
       {/* Toast */}
-      <div className={`fixed bottom-6 md:bottom-10 left-1/2 z-[999] flex w-[92%] sm:w-max max-w-md -translate-x-1/2 items-center justify-between md:justify-center gap-3 md:gap-4 rounded-xl md:rounded-full bg-[#1A1A18] pl-4 md:pl-6 pr-2 py-2 text-[11px] md:text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 font-sans ${toastMsg ? "translate-y-0 opacity-100 scale-100" : "pointer-events-none translate-y-10 opacity-0 scale-95"}`}>
+      <div className={`fixed bottom-6 md:bottom-10 left-1/2 z-[999] flex w-[92%] sm:w-max max-w-md -translate-x-1/2 items-center justify-between md:justify-center gap-3 md:gap-4 rounded-xl md:rounded-full bg-ink pl-4 md:pl-6 pr-2 py-2 text-[11px] md:text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 font-sans ${toastMsg ? "translate-y-0 opacity-100 scale-100" : "pointer-events-none translate-y-10 opacity-0 scale-95"}`}>
         <span className="line-clamp-2 leading-relaxed">{toastMsg}</span>
         {userRole === 'guest' && toastMsg.includes("登入") && (
-          <button onClick={() => onNavigate?.('login')} className="flex-shrink-0 whitespace-nowrap rounded-lg md:rounded-full bg-[#C8522A] px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-xs transition-colors hover:bg-[#A64220]">
+          <button onClick={() => onNavigate?.('login')} className="flex-shrink-0 whitespace-nowrap rounded-lg md:rounded-full bg-brand px-3.5 md:px-5 py-2 md:py-2.5 text-[11px] md:text-xs transition-colors hover:bg-brand-dark">
             前往登入
           </button>
         )}

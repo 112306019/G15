@@ -129,11 +129,11 @@ const normalizeKocList = (data) => {
 const PAYOUT_BATCH_STATUS = {
   draft: [
     '月結建立中',
-    'bg-[#F8F9FA] text-[#8C8880]',
+    'bg-mist text-muted',
   ],
   ready: [
     '待撥款',
-    'bg-[#F5F0E8] text-[#8A6734]',
+    'bg-cream text-gold-ink',
   ],
   paid: [
     '已撥款',
@@ -145,11 +145,11 @@ const PAYOUT_BATCH_STATUS = {
   ],
   cancelled: [
     '已取消',
-    'bg-[#F8F9FA] text-[#8C8880]',
+    'bg-mist text-muted',
   ],
   adjusted: [
     '已調整',
-    'bg-[#F8F9FA] text-[#8C8880]',
+    'bg-mist text-muted',
   ],
 }
 
@@ -157,15 +157,15 @@ const PAYOUT_BATCH_STATUS = {
 const SETTLEMENT_STATUS = {
   draft: [
     '月結建立中',
-    'bg-[#F8F9FA] text-[#8C8880]',
+    'bg-mist text-muted',
   ],
   awaiting_payment: [
     '待繳款',
-    'bg-[#FDF0ED] text-[#C8522A]',
+    'bg-brand-soft text-brand',
   ],
   partially_paid: [
     '部分已繳',
-    'bg-[#FDF0ED] text-[#C8522A]',
+    'bg-brand-soft text-brand',
   ],
   paid: [
     '已繳清',
@@ -177,7 +177,7 @@ const SETTLEMENT_STATUS = {
   ],
   cancelled: [
     '已取消',
-    'bg-[#F8F9FA] text-[#8C8880]',
+    'bg-mist text-muted',
   ],
 }
 
@@ -185,7 +185,7 @@ const SETTLEMENT_STATUS = {
 const KOC_STATUS = {
   pending: [
     '待撥款',
-    'bg-[#F5F0E8] text-[#8A6734]',
+    'bg-cream text-gold-ink',
   ],
   completed: [
     '已撥款',
@@ -219,7 +219,7 @@ function StatusBadge({
   const [label, style] =
     map[status] || [
       status || '未知',
-      'bg-[#F8F9FA] text-[#8C8880]',
+      'bg-mist text-muted',
     ]
 
   return (
@@ -247,17 +247,17 @@ function SummaryCard({
     <div
       className={`rounded-[1.5rem] border p-5 ${
         emphasis
-          ? 'border-[#DED6C8] bg-[#F5F0E8]'
-          : 'border-[#E2DDD4] bg-white'
+          ? 'border-edge bg-cream'
+          : 'border-edge bg-white'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold tracking-wider text-[#8C8880]">
+          <p className="text-[10px] font-bold tracking-wider text-muted">
             {title}
           </p>
 
-          <p className="mt-2 text-xl font-black text-[#1A1A18]">
+          <p className="mt-2 text-xl font-black text-ink">
             {money(value)}
           </p>
         </div>
@@ -265,8 +265,8 @@ function SummaryCard({
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-xl ${
             emphasis
-              ? 'bg-white text-[#C8522A]'
-              : 'bg-[#F5F0E8] text-[#B89B6A]'
+              ? 'bg-white text-brand'
+              : 'bg-cream text-gold'
           }`}
         >
           <Icon size={18} />
@@ -274,7 +274,7 @@ function SummaryCard({
       </div>
 
       {hint && (
-        <p className="mt-3 text-[10px] leading-relaxed text-[#8C8880]">
+        <p className="mt-3 text-[10px] leading-relaxed text-muted">
           {hint}
         </p>
       )}
@@ -285,7 +285,7 @@ function SummaryCard({
 
 function EmptyState({ children }) {
   return (
-    <div className="py-14 text-center text-xs font-bold text-[#8C8880]">
+    <div className="py-14 text-center text-xs font-bold text-muted">
       {children}
     </div>
   )
@@ -300,7 +300,7 @@ function ActionButton({
   primary = false,
 }) {
   let style =
-    'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F5F0E8]'
+    'border border-edge bg-white text-ink hover:bg-cream'
 
   if (danger) {
     style =
@@ -309,7 +309,7 @@ function ActionButton({
 
   if (primary) {
     style =
-      'border border-[#C8522A] bg-[#C8522A] text-white hover:bg-[#B44825]'
+      'border border-brand bg-brand text-white hover:bg-brand-dark'
   }
 
   return (
@@ -1002,10 +1002,10 @@ export default function AdminFinance() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[520px] flex-col items-center justify-center gap-3 text-[#8C8880]">
+      <div className="flex min-h-[520px] flex-col items-center justify-center gap-3 text-muted">
         <Loader2
           size={28}
-          className="animate-spin text-[#C8522A]"
+          className="animate-spin text-brand"
         />
 
         <p className="text-sm font-bold">
@@ -1025,11 +1025,12 @@ export default function AdminFinance() {
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-xl font-serif font-black text-[#1A1A18] sm:text-2xl">
+          <p className="font-mono text-brand font-medium text-[10px] md:text-xs tracking-[0.25em] mb-2 md:mb-2.5 uppercase">FINANCE</p>
+          <h1 className="text-2xl md:text-[28px] font-display font-bold text-ink">
             平台財務管理
           </h1>
 
-          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-[#8C8880] sm:text-xs">
+          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-muted sm:text-xs">
             廠商貨款與平台服務費採兩筆獨立月結金流。ShareBuy
             依月結單全額撥付貨款給廠商；廠商另外依有效成交額支付
             15% 平台服務費。KOC 5% 分潤由 ShareBuy
@@ -1041,7 +1042,7 @@ export default function AdminFinance() {
           type="button"
           onClick={() => loadAll(false)}
           disabled={refreshing}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E2DDD4] bg-white px-4 py-2.5 text-xs font-bold text-[#1A1A18] hover:bg-[#F5F0E8] disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-edge bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-cream disabled:opacity-50"
         >
           <RefreshCw
             size={15}
@@ -1112,7 +1113,7 @@ export default function AdminFinance() {
 
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-[#E2DDD4] pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-edge pb-3">
         {tabs.map((tab) => {
           const Icon = tab.icon
 
@@ -1125,8 +1126,8 @@ export default function AdminFinance() {
               }
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-[#F5F0E8] text-[#1A1A18]'
-                  : 'text-[#8C8880] hover:bg-[#F8F9FA] hover:text-[#1A1A18]'
+                  ? 'bg-cream text-ink'
+                  : 'text-muted hover:bg-mist hover:text-ink'
               }`}
             >
               <Icon size={15} />
@@ -1143,9 +1144,9 @@ export default function AdminFinance() {
       {activeTab === 'goods' && (
         <section className="space-y-5">
           {/* 月份工具列 */}
-          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-edge bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[10px] font-bold tracking-wider text-[#8C8880]">
+              <p className="text-[10px] font-bold tracking-wider text-muted">
                 月結月份
               </p>
 
@@ -1157,14 +1158,14 @@ export default function AdminFinance() {
                     event.target.value
                   )
                 }
-                className="mt-2 rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#B89B6A]"
+                className="mt-2 rounded-xl border border-edge bg-white px-3 py-2 text-sm font-bold text-ink outline-none focus:border-gold"
               />
             </div>
 
-            <div className="text-[10px] leading-relaxed text-[#8C8880] sm:text-right">
+            <div className="text-[10px] leading-relaxed text-muted sm:text-right">
               <p>
                 本期：
-                <span className="font-bold text-[#1A1A18]">
+                <span className="font-bold text-ink">
                   {monthLabel(
                     selectedMonth
                   )}
@@ -1221,14 +1222,14 @@ export default function AdminFinance() {
 
 
           {/* 待產生貨款月結 */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-            <div className="flex flex-col gap-3 border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+            <div className="flex flex-col gap-3 border-b border-edge bg-mist px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-black text-[#1A1A18]">
+                <h2 className="text-sm font-black text-ink">
                   待產生貨款月結
                 </h2>
 
-                <p className="mt-1 text-[10px] text-[#8C8880]">
+                <p className="mt-1 text-[10px] text-muted">
                   {monthLabel(
                     selectedMonth
                   )}符合資格、尚未加入月結單的貨款。
@@ -1262,8 +1263,8 @@ export default function AdminFinance() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px]">
-                  <thead className="border-b border-[#E2DDD4] bg-white">
-                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                  <thead className="border-b border-edge bg-white">
+                    <tr className="text-left text-[10px] font-bold text-muted">
                       <th className="px-5 py-3">
                         廠商
                       </th>
@@ -1286,7 +1287,7 @@ export default function AdminFinance() {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#E2DDD4]">
+                  <tbody className="divide-y divide-edge">
                     {readyVendors.map(
                       (vendor) => (
                         <tr
@@ -1295,35 +1296,35 @@ export default function AdminFinance() {
                           }
                         >
                           <td className="px-5 py-4">
-                            <p className="text-xs font-black text-[#1A1A18]">
+                            <p className="text-xs font-black text-ink">
                               {
                                 vendor.Vendor_name
                               }
                             </p>
 
-                            <p className="mt-1 text-[10px] text-[#8C8880]">
+                            <p className="mt-1 text-[10px] text-muted">
                               {
                                 vendor.Vendor_id
                               }
                             </p>
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-bold text-ink">
                             {
                               vendor.Receivable_count
                             }
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                          <td className="px-5 py-4 text-xs font-black text-brand">
                             {money(
                               vendor.Amount_due
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                          <td className="px-5 py-4 text-[10px] text-muted">
                             {vendor.Has_bank_account ? (
                               <>
-                                <p className="font-bold text-[#1A1A18]">
+                                <p className="font-bold text-ink">
                                   {
                                     vendor.Bank_code
                                   }{' '}
@@ -1376,13 +1377,13 @@ export default function AdminFinance() {
 
 
           {/* 已產生貨款月結 */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-              <h2 className="text-sm font-black text-[#1A1A18]">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+            <div className="border-b border-edge bg-mist px-5 py-4">
+              <h2 className="text-sm font-black text-ink">
                 貨款月結紀錄
               </h2>
 
-              <p className="mt-1 text-[10px] text-[#8C8880]">
+              <p className="mt-1 text-[10px] text-muted">
                 每個廠商每個月份一張貨款月結單。
               </p>
             </div>
@@ -1395,8 +1396,8 @@ export default function AdminFinance() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[980px]">
-                  <thead className="border-b border-[#E2DDD4]">
-                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                  <thead className="border-b border-edge">
+                    <tr className="text-left text-[10px] font-bold text-muted">
                       <th className="px-5 py-3">
                         月份
                       </th>
@@ -1431,7 +1432,7 @@ export default function AdminFinance() {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#E2DDD4]">
+                  <tbody className="divide-y divide-edge">
                     {payoutBatches.map(
                       (batch) => (
                         <tr
@@ -1439,46 +1440,46 @@ export default function AdminFinance() {
                             batch.Batch_id
                           }
                         >
-                          <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-black text-ink">
                             {monthLabel(
                               batch.Month
                             )}
                           </td>
 
                           <td className="px-5 py-4">
-                            <p className="text-xs font-black text-[#1A1A18]">
+                            <p className="text-xs font-black text-ink">
                               {
                                 batch.Vendor_name
                               }
                             </p>
 
-                            <p className="mt-1 text-[10px] text-[#8C8880]">
+                            <p className="mt-1 text-[10px] text-muted">
                               {
                                 batch.Vendor_id
                               }
                             </p>
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-bold text-ink">
                             {
                               batch.Receivable_count
                             }
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-black text-ink">
                             {money(
                               batch.Amount_due
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                          <td className="px-5 py-4 text-[10px] text-muted">
                             {dateText(
                               batch.Scheduled_payout_date
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-[10px] text-[#8C8880]">
-                            <p className="font-bold text-[#1A1A18]">
+                          <td className="px-5 py-4 text-[10px] text-muted">
+                            <p className="font-bold text-ink">
                               {
                                 batch.Bank_code
                               }{' '}
@@ -1557,7 +1558,7 @@ export default function AdminFinance() {
                                 重新確認匯款
                               </ActionButton>
                             ) : (
-                              <span className="text-[10px] text-[#8C8880]">
+                              <span className="text-[10px] text-muted">
                                 {batch.Transaction_reference
                                   ? `交易編號：${batch.Transaction_reference}`
                                   : '—'}
@@ -1582,9 +1583,9 @@ export default function AdminFinance() {
       {activeTab ===
         'settlement' && (
         <section className="space-y-5">
-          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[#E2DDD4] bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-[1.5rem] border border-edge bg-white p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[10px] font-bold tracking-wider text-[#8C8880]">
+              <p className="text-[10px] font-bold tracking-wider text-muted">
                 月結月份
               </p>
 
@@ -1596,14 +1597,14 @@ export default function AdminFinance() {
                     event.target.value
                   )
                 }
-                className="mt-2 rounded-xl border border-[#E2DDD4] bg-white px-3 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#B89B6A]"
+                className="mt-2 rounded-xl border border-edge bg-white px-3 py-2 text-sm font-bold text-ink outline-none focus:border-gold"
               />
             </div>
 
-            <div className="text-[10px] leading-relaxed text-[#8C8880] sm:text-right">
+            <div className="text-[10px] leading-relaxed text-muted sm:text-right">
               <p>
                 本期：
-                <span className="font-bold text-[#1A1A18]">
+                <span className="font-bold text-ink">
                   {monthLabel(
                     selectedMonth
                   )}
@@ -1658,14 +1659,14 @@ export default function AdminFinance() {
 
 
           {/* 待產生服務費月結 */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-            <div className="flex flex-col gap-3 border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+            <div className="flex flex-col gap-3 border-b border-edge bg-mist px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-black text-[#1A1A18]">
+                <h2 className="text-sm font-black text-ink">
                   待產生服務費月結
                 </h2>
 
-                <p className="mt-1 text-[10px] text-[#8C8880]">
+                <p className="mt-1 text-[10px] text-muted">
                   {monthLabel(
                     selectedMonth
                   )}已取得結算資格的 15% 平台服務費。
@@ -1700,8 +1701,8 @@ export default function AdminFinance() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px]">
-                  <thead className="border-b border-[#E2DDD4]">
-                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                  <thead className="border-b border-edge">
+                    <tr className="text-left text-[10px] font-bold text-muted">
                       <th className="px-5 py-3">
                         廠商
                       </th>
@@ -1724,7 +1725,7 @@ export default function AdminFinance() {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#E2DDD4]">
+                  <tbody className="divide-y divide-edge">
                     {settleableVendors.map(
                       (vendor) => (
                         <tr
@@ -1733,32 +1734,32 @@ export default function AdminFinance() {
                           }
                         >
                           <td className="px-5 py-4">
-                            <p className="text-xs font-black text-[#1A1A18]">
+                            <p className="text-xs font-black text-ink">
                               {
                                 vendor.Vendor_name
                               }
                             </p>
 
-                            <p className="mt-1 text-[10px] text-[#8C8880]">
+                            <p className="mt-1 text-[10px] text-muted">
                               {
                                 vendor.Vendor_id
                               }
                             </p>
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-bold text-ink">
                             {
                               vendor.Eligible_count
                             }
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                          <td className="px-5 py-4 text-xs font-bold text-ink">
                             {money(
                               vendor.Eligible_sales
                             )}
                           </td>
 
-                          <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                          <td className="px-5 py-4 text-xs font-black text-brand">
                             {money(
                               vendor.Eligible_amount
                             )}
@@ -1793,13 +1794,13 @@ export default function AdminFinance() {
 
 
           {/* 服務費月結紀錄 */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-            <div className="border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4">
-              <h2 className="text-sm font-black text-[#1A1A18]">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+            <div className="border-b border-edge bg-mist px-5 py-4">
+              <h2 className="text-sm font-black text-ink">
                 服務費月結紀錄
               </h2>
 
-              <p className="mt-1 text-[10px] text-[#8C8880]">
+              <p className="mt-1 text-[10px] text-muted">
                 Vendor → ShareBuy 的 15% 平台服務費。
               </p>
             </div>
@@ -1811,8 +1812,8 @@ export default function AdminFinance() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[980px]">
-                  <thead className="border-b border-[#E2DDD4]">
-                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                  <thead className="border-b border-edge">
+                    <tr className="text-left text-[10px] font-bold text-muted">
                       <th className="px-5 py-3">
                         月份
                       </th>
@@ -1847,7 +1848,7 @@ export default function AdminFinance() {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#E2DDD4]">
+                  <tbody className="divide-y divide-edge">
                     {settlements.map(
                       (item) => {
                         const settlementId =
@@ -1906,45 +1907,45 @@ export default function AdminFinance() {
                               settlementId
                             }
                           >
-                            <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                            <td className="px-5 py-4 text-xs font-black text-ink">
                               {monthLabel(
                                 month
                               )}
                             </td>
 
                             <td className="px-5 py-4">
-                              <p className="text-xs font-black text-[#1A1A18]">
+                              <p className="text-xs font-black text-ink">
                                 {
                                   vendorName
                                 }
                               </p>
 
-                              <p className="mt-1 text-[10px] text-[#8C8880]">
+                              <p className="mt-1 text-[10px] text-muted">
                                 {
                                   vendorId
                                 }
                               </p>
                             </td>
 
-                            <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                            <td className="px-5 py-4 text-xs font-bold text-ink">
                               {money(
                                 grossSales
                               )}
                             </td>
 
-                            <td className="px-5 py-4 text-xs font-black text-[#C8522A]">
+                            <td className="px-5 py-4 text-xs font-black text-brand">
                               {money(
                                 amountDue
                               )}
                             </td>
 
-                            <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                            <td className="px-5 py-4 text-xs font-bold text-ink">
                               {money(
                                 amountPaid
                               )}
                             </td>
 
-                            <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                            <td className="px-5 py-4 text-[10px] text-muted">
                               {dateText(
                                 dueDate
                               )}
@@ -1962,7 +1963,7 @@ export default function AdminFinance() {
                             <td className="px-5 py-4">
                               {item.latest_payment?.status === 'pending' ? (
                                 <div className="space-y-2">
-                                  <p className="text-[9px] leading-relaxed text-[#8C8880]">
+                                  <p className="text-[9px] leading-relaxed text-muted">
                                     廠商已回報：{money(item.latest_payment.amount)}
                                     <br />
                                     帳號後5碼：{item.latest_payment.reference_no || '—'}
@@ -2006,17 +2007,17 @@ export default function AdminFinance() {
                                   'partially_paid',
                                   'overdue',
                                 ].includes(status) ? (
-                                <span className="text-[10px] text-[#8C8880]">
+                                <span className="text-[10px] text-muted">
                                   等待廠商回報
                                 </span>
                               ) : (
-                                <span className="text-[10px] text-[#8C8880]">
+                                <span className="text-[10px] text-muted">
                                   —
                                 </span>
                               )}
 
                               {item.invoice?.status === 'issued' && (
-                                <p className="mt-2 text-[9px] font-bold text-[#1A1A18]">
+                                <p className="mt-2 text-[9px] font-bold text-ink">
                                   發票號碼：{item.invoice.invoice_number}
                                 </p>
                               )}
@@ -2038,7 +2039,7 @@ export default function AdminFinance() {
 
 
           {/* 服務費發票 */}
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
             <button
               type="button"
               onClick={() =>
@@ -2046,19 +2047,19 @@ export default function AdminFinance() {
                   (value) => !value
                 )
               }
-              className="flex w-full items-center justify-between gap-3 bg-[#F8F9FA] px-5 py-4 text-left"
+              className="flex w-full items-center justify-between gap-3 bg-mist px-5 py-4 text-left"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#B89B6A]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-gold">
                   <FileText size={17} />
                 </div>
 
                 <div>
-                  <p className="text-sm font-black text-[#1A1A18]">
+                  <p className="text-sm font-black text-ink">
                     服務費發票
                   </p>
 
-                  <p className="mt-1 text-[10px] text-[#8C8880]">
+                  <p className="mt-1 text-[10px] text-muted">
                     ShareBuy 開給 Vendor 的平台服務費發票
                   </p>
                 </div>
@@ -2067,12 +2068,12 @@ export default function AdminFinance() {
               {showInvoices ? (
                 <ChevronUp
                   size={17}
-                  className="text-[#8C8880]"
+                  className="text-muted"
                 />
               ) : (
                 <ChevronDown
                   size={17}
-                  className="text-[#8C8880]"
+                  className="text-muted"
                 />
               )}
             </button>
@@ -2086,8 +2087,8 @@ export default function AdminFinance() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[820px]">
-                      <thead className="border-t border-b border-[#E2DDD4]">
-                        <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                      <thead className="border-t border-b border-edge">
+                        <tr className="text-left text-[10px] font-bold text-muted">
                           <th className="px-5 py-3">
                             廠商
                           </th>
@@ -2118,7 +2119,7 @@ export default function AdminFinance() {
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-[#E2DDD4]">
+                      <tbody className="divide-y divide-edge">
                         {invoices.map(
                           (invoice) => (
                             <tr
@@ -2127,44 +2128,44 @@ export default function AdminFinance() {
                               }
                             >
                               <td className="px-5 py-4">
-                                <p className="text-xs font-black text-[#1A1A18]">
+                                <p className="text-xs font-black text-ink">
                                   {
                                     invoice.vendor_name
                                   }
                                 </p>
 
-                                <p className="mt-1 text-[10px] text-[#8C8880]">
+                                <p className="mt-1 text-[10px] text-muted">
                                   {
                                     invoice.vendor_id
                                   }
                                 </p>
                               </td>
 
-                              <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                              <td className="px-5 py-4 text-[10px] text-muted">
                                 {invoice.settlement_id
                                   ? `#${invoice.settlement_id}`
                                   : '—'}
                               </td>
 
-                              <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                              <td className="px-5 py-4 text-xs font-bold text-ink">
                                 {money(
                                   invoice.service_fee
                                 )}
                               </td>
 
-                              <td className="px-5 py-4 text-xs font-bold text-[#1A1A18]">
+                              <td className="px-5 py-4 text-xs font-bold text-ink">
                                 {money(
                                   invoice.tax_amount
                                 )}
                               </td>
 
-                              <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                              <td className="px-5 py-4 text-xs font-black text-ink">
                                 {money(
                                   invoice.total_amount
                                 )}
                               </td>
 
-                              <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                              <td className="px-5 py-4 text-[10px] text-muted">
                                 {
                                   invoice.invoice_number ||
                                   '—'
@@ -2180,7 +2181,7 @@ export default function AdminFinance() {
                                       : invoice.status ===
                                         'failed'
                                       ? 'bg-[#FFF0F0] text-[#D93025]'
-                                      : 'bg-[#F5F0E8] text-[#8A6734]'
+                                      : 'bg-cream text-gold-ink'
                                   }`}
                                 >
                                   {invoice.status ===
@@ -2229,14 +2230,14 @@ export default function AdminFinance() {
           </div>
 
 
-          <div className="overflow-hidden rounded-[1.5rem] border border-[#E2DDD4] bg-white">
-            <div className="flex flex-col gap-3 border-b border-[#E2DDD4] bg-[#F8F9FA] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="overflow-hidden rounded-[1.5rem] border border-edge bg-white">
+            <div className="flex flex-col gap-3 border-b border-edge bg-mist px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-black text-[#1A1A18]">
+                <h2 className="text-sm font-black text-ink">
                   KOC 待撥款
                 </h2>
 
-                <p className="mt-1 text-[10px] text-[#8C8880]">
+                <p className="mt-1 text-[10px] text-muted">
                   平台確認服務費入帳後，才能處理對應分潤。
                 </p>
               </div>
@@ -2261,8 +2262,8 @@ export default function AdminFinance() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px]">
-                  <thead className="border-b border-[#E2DDD4]">
-                    <tr className="text-left text-[10px] font-bold text-[#8C8880]">
+                  <thead className="border-b border-edge">
+                    <tr className="text-left text-[10px] font-bold text-muted">
                       <th className="px-5 py-3">
                         KOC
                       </th>
@@ -2289,7 +2290,7 @@ export default function AdminFinance() {
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#E2DDD4]">
+                  <tbody className="divide-y divide-edge">
                     {kocPayouts.map(
                       (payout) => {
                         const payoutId =
@@ -2330,26 +2331,26 @@ export default function AdminFinance() {
                             key={payoutId}
                           >
                             <td className="px-5 py-4">
-                              <p className="text-xs font-black text-[#1A1A18]">
+                              <p className="text-xs font-black text-ink">
                                 {name}
                               </p>
 
-                              <p className="mt-1 text-[10px] text-[#8C8880]">
+                              <p className="mt-1 text-[10px] text-muted">
                                 {userId}
                               </p>
                             </td>
 
-                            <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                            <td className="px-5 py-4 text-[10px] text-muted">
                               {bank}
                             </td>
 
-                            <td className="px-5 py-4 text-xs font-black text-[#1A1A18]">
+                            <td className="px-5 py-4 text-xs font-black text-ink">
                               {money(
                                 amount
                               )}
                             </td>
 
-                            <td className="px-5 py-4 text-[10px] text-[#8C8880]">
+                            <td className="px-5 py-4 text-[10px] text-muted">
                               {dateText(
                                 date
                               )}
@@ -2417,18 +2418,18 @@ export default function AdminFinance() {
       
       {/* 對話框 Modal (Confirm / Prompt) */}
       {modal.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm rounded-[2rem] border border-[#E2DDD4] bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-[2rem] border border-edge bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-300">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className={`text-lg font-black ${modal.danger ? 'text-[#D93025]' : 'text-[#1A1A18]'}`}>
+              <h3 className={`text-lg font-black ${modal.danger ? 'text-[#D93025]' : 'text-ink'}`}>
                 {modal.title}
               </h3>
-              <button onClick={closeModal} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors">
+              <button onClick={closeModal} className="text-muted hover:text-ink transition-colors">
                 <X size={20} />
               </button>
             </div>
             
-            <div className="mb-6 space-y-2 text-sm leading-relaxed text-[#8C8880]">
+            <div className="mb-6 space-y-2 text-sm leading-relaxed text-muted">
               {modal.msg.split('\n').map((line, idx) => (
                 <p key={idx}>{line}</p>
               ))}
@@ -2441,14 +2442,14 @@ export default function AdminFinance() {
                 placeholder={modal.placeholder}
                 value={promptValue}
                 onChange={(e) => setPromptValue(e.target.value)}
-                className="mb-6 w-full rounded-xl border border-[#E2DDD4] px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none placeholder:font-normal placeholder:text-[#B8B4AC] focus:border-[#C8522A] focus:ring-2 focus:ring-[#C8522A]/20"
+                className="mb-6 w-full rounded-xl border border-edge px-4 py-3 text-sm font-bold text-ink outline-none placeholder:font-normal placeholder:text-muted/70 focus:border-brand focus:ring-2 focus:ring-brand/20"
               />
             )}
 
             <div className="flex gap-3">
               <button
                 onClick={closeModal}
-                className="flex-1 rounded-xl border border-[#E2DDD4] bg-white py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all"
+                className="flex-1 rounded-xl border border-edge bg-white py-3 text-sm font-bold text-muted hover:bg-mist hover:text-ink transition-all"
               >
                 取消
               </button>
@@ -2458,7 +2459,7 @@ export default function AdminFinance() {
                 className={`flex-1 rounded-xl py-3 text-sm font-bold text-white transition-all disabled:opacity-50 ${
                   modal.danger 
                     ? 'bg-[#D93025] hover:bg-[#B3261D]' 
-                    : 'bg-[#C8522A] hover:bg-[#B44825]'
+                    : 'bg-brand hover:bg-brand-dark'
                 }`}
               >
                 確認

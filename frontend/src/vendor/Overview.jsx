@@ -38,7 +38,7 @@ function Card({
       className={cn(
         `
           bg-white rounded-[1.5rem] sm:rounded-2xl
-          border border-[#E2DDD4]
+          border border-edge
           shadow-sm
         `,
         className
@@ -55,7 +55,8 @@ function StatCard({
   value,
   sub,
   icon: Icon,
-  accent = false
+  accent = false,
+  gold = false
 }) {
   return (
     <Card
@@ -65,21 +66,23 @@ function StatCard({
           hover:shadow-md transition-all
         `,
         accent
-          ? 'border-[#C8522A]/30'
+          ? 'border-brand/30'
           : ''
       )}
     >
       <div className="flex items-center justify-between mb-3 sm:mb-5">
-        <span className="text-[11px] sm:text-sm font-bold text-[#8C8880] tracking-wide truncate pr-2">
+        <span className="text-[11px] sm:text-sm font-bold text-muted tracking-wide truncate pr-2">
           {label}
         </span>
 
         <div
           className={cn(
-            'p-2 sm:p-2.5 rounded-xl shrink-0',
-            accent
-              ? 'bg-[#FDF0ED] text-[#C8522A]'
-              : 'bg-[#F5F0E8] text-[#1A1A18]'
+            'p-2 sm:p-2.5 rounded-full shrink-0',
+            gold
+              ? 'bg-gold-soft text-gold-ink'
+              : accent
+                ? 'bg-brand text-white'
+                : 'bg-brand-soft text-brand'
           )}
         >
           <Icon
@@ -97,16 +100,18 @@ function StatCard({
               text-lg sm:text-2xl font-black
               font-sans tracking-tight truncate
             `,
-            accent
-              ? 'text-[#C8522A]'
-              : 'text-[#1A1A18]'
+            gold
+              ? 'text-gold-ink'
+              : accent
+                ? 'text-brand'
+                : 'text-ink'
           )}
         >
           {value}
         </div>
 
         {sub && (
-          <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mt-1 sm:mt-2 leading-snug break-words">
+          <div className="text-[10px] sm:text-xs font-bold text-muted mt-1 sm:mt-2 leading-snug break-words">
             {sub}
           </div>
         )}
@@ -122,18 +127,18 @@ function MetricRow({
   description
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 sm:gap-5 py-3 sm:py-4 border-b border-[#E2DDD4] last:border-b-0">
+    <div className="flex items-center justify-between gap-3 sm:gap-5 py-3 sm:py-4 border-b border-edge last:border-b-0">
       <div>
-        <div className="text-[13px] sm:text-sm font-bold text-[#1A1A18]">
+        <div className="text-[13px] sm:text-sm font-bold text-ink">
           {label}
         </div>
 
-        <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1 pr-2">
+        <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1 pr-2">
           {description}
         </div>
       </div>
 
-      <div className="text-base sm:text-lg font-black text-[#C8522A] shrink-0">
+      <div className="text-base sm:text-lg font-black text-brand shrink-0">
         {value}
       </div>
     </div>
@@ -332,7 +337,7 @@ export default function Overview() {
   if (loading) {
     return (
       <div className="py-24 text-center">
-        <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
+        <div className="inline-flex items-center gap-2 text-sm font-bold text-muted">
           <Loader2
             size={18}
             className="animate-spin"
@@ -360,7 +365,7 @@ export default function Overview() {
         <button
           type="button"
           onClick={loadAnalytics}
-          className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-full bg-[#1A1A18] text-white text-xs sm:text-sm font-bold hover:bg-[#C8522A] transition-colors"
+          className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-full bg-brand text-white text-xs sm:text-sm font-bold hover:bg-brand-dark transition-colors"
         >
           <RefreshCw size={15} />
           重新載入
@@ -406,6 +411,7 @@ export default function Overview() {
             analytics?.totalCouponUsage || 0
           ).toLocaleString()}
           icon={Ticket}
+          gold
         />
 
         <div className="col-span-2 lg:col-span-1">
@@ -422,30 +428,30 @@ export default function Overview() {
       {/* 各活動合作成效 */}
       <Card className="p-4 sm:p-6">
         <div className="mb-3 sm:mb-4">
-          <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+          <h2 className="text-base sm:text-lg font-display font-bold text-ink">
             各活動合作成效
           </h2>
 
-          <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+          <p className="text-[10px] sm:text-xs text-muted mt-1">
             ROAS 大於 1 代表這檔合作帶來的淨營業額高於分潤與平台費（未計入商品成本）
           </p>
         </div>
 
         {analytics?.campaignBreakdown.length === 0 ? (
-          <div className="py-8 text-center text-[12px] sm:text-sm text-[#8C8880]">
+          <div className="py-8 text-center text-[12px] sm:text-sm text-muted">
             目前還沒有 KOC 優惠碼帶出的訂單
           </div>
         ) : (
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className="w-full min-w-[640px] text-[12px] sm:text-sm">
               <thead>
-                <tr className="text-left text-[10px] sm:text-xs font-bold text-[#8C8880] border-b border-[#E2DDD4]">
-                  <th className="py-2.5 px-4 sm:px-2">活動</th>
+                <tr className="text-left text-[10px] sm:text-xs font-bold text-muted bg-brand-softer">
+                  <th className="py-2.5 px-4 sm:px-2 rounded-l-lg">活動</th>
                   <th className="py-2.5 px-2 text-right">GMV</th>
                   <th className="py-2.5 px-2 text-right">淨營業額</th>
                   <th className="py-2.5 px-2 text-right">分潤</th>
                   <th className="py-2.5 px-2 text-right">平台費</th>
-                  <th className="py-2.5 px-4 sm:px-2 text-right">ROAS</th>
+                  <th className="py-2.5 px-4 sm:px-2 text-right rounded-r-lg">ROAS</th>
                 </tr>
               </thead>
 
@@ -453,33 +459,33 @@ export default function Overview() {
                 {analytics?.campaignBreakdown.map((row) => (
                   <tr
                     key={row.campaign_id}
-                    className="border-b border-[#E2DDD4] last:border-b-0"
+                    className="border-b border-edge last:border-b-0"
                   >
-                    <td className="py-3 px-4 sm:px-2 font-bold text-[#1A1A18] max-w-[220px] truncate">
+                    <td className="py-3 px-4 sm:px-2 font-bold text-ink max-w-[220px] truncate">
                       {row.campaign_name || '（未命名活動）'}
-                      <div className="text-[10px] font-medium text-[#8C8880] mt-0.5">
+                      <div className="text-[10px] font-medium text-muted mt-0.5">
                         {row.order_count} 單，淨 {row.net_order_count} 單
                       </div>
                     </td>
-                    <td className="py-3 px-2 text-right text-[#1A1A18]">
+                    <td className="py-3 px-2 text-right text-ink">
                       {formatCurrency(row.gmv)}
                     </td>
-                    <td className="py-3 px-2 text-right font-bold text-[#1A1A18]">
+                    <td className="py-3 px-2 text-right font-bold text-ink">
                       {formatCurrency(row.net_sales)}
                     </td>
-                    <td className="py-3 px-2 text-right text-[#8C8880]">
+                    <td className="py-3 px-2 text-right font-bold text-gold">
                       {formatCurrency(row.commission)}
                     </td>
-                    <td className="py-3 px-2 text-right text-[#8C8880]">
+                    <td className="py-3 px-2 text-right text-muted">
                       {formatCurrency(row.platform_fee)}
                     </td>
                     <td
                       className={cn(
                         'py-3 px-4 sm:px-2 text-right font-black',
                         row.roas === null
-                          ? 'text-[#8C8880]'
+                          ? 'text-muted'
                           : row.roas >= 1
-                            ? 'text-[#C8522A]'
+                            ? 'text-brand'
                             : 'text-red-600'
                       )}
                     >
@@ -531,11 +537,11 @@ export default function Overview() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
         <Card className="p-4 sm:p-6">
           <div className="mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-base sm:text-lg font-display font-bold text-ink">
               成效摘要
             </h2>
 
-            <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+            <p className="text-[10px] sm:text-xs text-muted mt-1">
               由目前累積資料計算
             </p>
           </div>
@@ -564,62 +570,62 @@ export default function Overview() {
 
         <Card className="p-4 sm:p-6">
           <div className="mb-4 sm:mb-5">
-            <h2 className="text-base sm:text-lg font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-base sm:text-lg font-display font-bold text-ink">
               資料計算方式
             </h2>
 
-            <p className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+            <p className="text-[10px] sm:text-xs text-muted mt-1">
               目前後端採用的統計來源
             </p>
           </div>
 
           <div className="space-y-3 sm:space-y-4 text-[13px] sm:text-sm">
-            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
-              <div className="font-bold text-[#1A1A18]">
+            <div className="bg-mist border border-edge rounded-xl p-3 sm:p-4">
+              <div className="font-bold text-ink">
                 總帶貨 GMV / 淨營業額
               </div>
 
-              <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+              <div className="text-[11px] sm:text-xs text-muted mt-1">
                 GMV 加總使用 KOC 優惠碼、曾付款成功的訂單中屬於該活動商品的 subtotal（含之後退貨/取消）；淨營業額再扣除已取消與已退款的訂單
               </div>
 
-              <div className="text-[11px] sm:text-xs font-bold text-[#1A1A18] mt-2">
+              <div className="text-[11px] sm:text-xs font-bold text-ink mt-2">
                 目前共 {(analytics?.kocOrderCount || 0).toLocaleString()} 張 KOC 訂單，退貨/取消扣除 {formatCurrency(
                   Math.max(0, (analytics?.kocGmv || 0) - (analytics?.kocNetSales || 0))
                 )}
               </div>
             </div>
 
-            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
-              <div className="font-bold text-[#1A1A18]">
+            <div className="bg-mist border border-edge rounded-xl p-3 sm:p-4">
+              <div className="font-bold text-ink">
                 訂單數
               </div>
 
-              <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+              <div className="text-[11px] sm:text-xs text-muted mt-1">
                 計算包含廠商商品且已付款(paid/completed)的不重複訂單
               </div>
             </div>
 
-            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
-              <div className="font-bold text-[#1A1A18]">
+            <div className="bg-mist border border-edge rounded-xl p-3 sm:p-4">
+              <div className="font-bold text-ink">
                 優惠碼使用次數
               </div>
 
-              <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+              <div className="text-[11px] sm:text-xs text-muted mt-1">
                 加總所有 KOC 優惠碼的累計使用次數（訂單完成並產生分潤時才計入）
               </div>
             </div>
 
-            <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 sm:p-4">
-              <div className="font-bold text-[#1A1A18]">
+            <div className="bg-mist border border-edge rounded-xl p-3 sm:p-4">
+              <div className="font-bold text-ink">
                 網紅合作 ROAS
               </div>
 
-              <div className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+              <div className="text-[11px] sm:text-xs text-muted mt-1">
                 淨營業額 ÷（KOC 分潤 + 平台費）。分潤排除退貨後被收回的部分；平台費 = 淨營業額 × 目前費率 {analytics?.platformFeeRate || 0}%
               </div>
 
-              <div className="text-[11px] sm:text-xs font-bold text-[#1A1A18] mt-2">
+              <div className="text-[11px] sm:text-xs font-bold text-ink mt-2">
                 目前分潤 {formatCurrency(analytics?.kocCommission || 0)} + 平台費 {formatCurrency(analytics?.kocPlatformFee || 0)}
               </div>
             </div>

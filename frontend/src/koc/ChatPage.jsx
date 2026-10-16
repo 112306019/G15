@@ -34,18 +34,18 @@ function cn(...classes) {
 }
 
 const avatarCls = [
-  'bg-[#F5F0E8] text-[#1A1A18]',
-  'bg-[#FDF0ED] text-[#C8522A]',
-  'bg-[#E2DDD4] text-[#1A1A18]',
-  'bg-[#1A1A18] text-[#F5F0E8]',
-  'bg-[#B89B6A] text-white'
+  'bg-cream text-ink',
+  'bg-brand-soft text-brand',
+  'bg-edge text-ink',
+  'bg-ink text-cream',
+  'bg-gold text-white'
 ]
 
 function Avatar({ name = '?', size = 'md' }) {
   const idx = (name.charCodeAt(0) || 0) % avatarCls.length
   const sz = size === 'sm' ? 'w-8 h-8 md:w-10 md:h-10 text-xs md:text-sm' : size === 'lg' ? 'w-12 h-12 md:w-16 md:h-16 text-lg md:text-xl' : 'w-10 h-10 md:w-12 md:h-12 text-sm md:text-base'
   return (
-    <div className={cn('rounded-full flex items-center justify-center font-bold shrink-0 border border-[#E2DDD4]/50 shadow-sm', sz, avatarCls[idx])}>
+    <div className={cn('rounded-full flex items-center justify-center font-bold shrink-0 border border-edge/50 shadow-sm', sz, avatarCls[idx])}>
       {name.slice(0, 1)}
     </div>
   )
@@ -737,24 +737,24 @@ export default function ChatPage() {
 
 
   return (
-    <div className="flex h-[calc(100dvh-60px)] md:h-[calc(100vh-65px)] bg-white max-w-7xl mx-auto border-x border-[#E2DDD4] shadow-sm relative overflow-hidden">
+    <div className="flex h-[calc(100dvh-60px)] md:h-[calc(100vh-65px)] bg-white max-w-7xl mx-auto border-x border-edge shadow-sm relative overflow-hidden">
 
       {/* ======================= */}
       {/* 左側：廠商聊天室清單     */}
       {/* ======================= */}
       <div className={cn(
-        "border-r border-[#E2DDD4] flex flex-col bg-white shrink-0 absolute md:relative inset-0 md:inset-auto z-10 transition-transform duration-300 md:w-72 md:translate-x-0",
+        "border-r border-edge flex flex-col bg-white shrink-0 absolute md:relative inset-0 md:inset-auto z-10 transition-transform duration-300 md:w-72 md:translate-x-0",
         showListOnMobile ? "translate-x-0 w-full" : "-translate-x-full md:block"
       )}>
-        <div className="px-4 py-3 md:py-4 border-b border-[#E2DDD4] shrink-0">
+        <div className="px-4 py-3 md:py-4 border-b border-edge shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-[#1A1A18] text-sm md:text-base">
+            <h2 className="font-bold text-ink text-sm md:text-base">
               聊天室
             </h2>
 
             <div className="flex items-center gap-2">
               {totalUnread > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-brand text-white text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">
                   {totalUnread}
                 </span>
               )}
@@ -763,7 +763,7 @@ export default function ChatPage() {
                 type="button"
                 onClick={loadChatrooms}
                 disabled={roomLoading}
-                className="p-1.5 md:p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50 transition-colors"
+                className="p-1.5 md:p-2 rounded-full text-muted hover:bg-cream hover:text-brand disabled:opacity-50 transition-colors"
                 title="重新整理聊天室"
               >
                 <RefreshCw
@@ -777,10 +777,10 @@ export default function ChatPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-mist border border-edge rounded-xl px-3 py-2">
             <Search
               size={14}
-              className="text-[#8C8880]"
+              className="text-muted"
             />
 
             <input
@@ -791,7 +791,7 @@ export default function ChatPage() {
                 )
               }
               placeholder="搜尋廠商或活動…"
-              className="bg-transparent text-[13px] md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
+              className="bg-transparent text-[13px] md:text-sm text-ink placeholder:text-muted/60 outline-none w-full"
             />
           </div>
         </div>
@@ -802,10 +802,10 @@ export default function ChatPage() {
             <div className="py-16 text-center">
               <Loader2
                 size={20}
-                className="animate-spin mx-auto text-[#C8522A]"
+                className="animate-spin mx-auto text-brand"
               />
 
-              <div className="text-xs md:text-sm font-bold text-[#8C8880] mt-3">
+              <div className="text-xs md:text-sm font-bold text-muted mt-3">
                 聊天室載入中...
               </div>
             </div>
@@ -824,10 +824,10 @@ export default function ChatPage() {
             <div className="px-5 py-16 text-center">
               <MessageCircle
                 size={32}
-                className="mx-auto text-[#E2DDD4] mb-3"
+                className="mx-auto text-edge mb-3"
               />
 
-              <div className="text-xs md:text-sm font-bold text-[#8C8880]">
+              <div className="text-xs md:text-sm font-bold text-muted">
                 尚無聊天室
               </div>
             </div>
@@ -865,8 +865,8 @@ export default function ChatPage() {
                       transition-colors
                     `,
                     isActive
-                      ? 'bg-[#FDF0ED] border-[#C8522A]'
-                      : 'hover:bg-[#F8F9FA] border-transparent'
+                      ? 'bg-brand-soft border-brand'
+                      : 'hover:bg-mist border-transparent'
                   )}
                 >
                   <Avatar
@@ -876,11 +876,11 @@ export default function ChatPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm md:text-base font-bold text-[#1A1A18] truncate">
+                      <span className="text-sm md:text-base font-bold text-ink truncate">
                         {group.vendorName}
                       </span>
 
-                      <span className="text-[10px] md:text-[11px] font-medium text-[#8C8880] shrink-0">
+                      <span className="text-[10px] md:text-[11px] font-medium text-muted shrink-0">
                         {formatMessageDate(
                           latestRoom
                             ?.lastMessageTime
@@ -888,19 +888,19 @@ export default function ChatPage() {
                       </span>
                     </div>
 
-                    <div className="text-[11px] md:text-xs text-[#8C8880] mt-1 truncate">
+                    <div className="text-[11px] md:text-xs text-muted mt-1 truncate">
                       {latestRoom
                         ?.lastMessage ||
                         `${group.rooms.length} 個任務聊天室`}
                     </div>
 
-                    <div className="text-[9px] md:text-[10px] font-mono font-medium text-[#E2DDD4] mt-1">
+                    <div className="text-[9px] md:text-[10px] font-mono font-medium text-edge mt-1">
                       ID: {group.vendorId}
                     </div>
                   </div>
 
                   {unreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] md:text-xs font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center shrink-0">
+                    <span className="bg-brand text-white text-[10px] md:text-xs font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center shrink-0">
                       {unreadCount}
                     </span>
                   )}
@@ -916,18 +916,18 @@ export default function ChatPage() {
       {/* 右側：對話內容           */}
       {/* ======================= */}
       <div className={cn(
-        "flex-1 flex flex-col bg-[#F8F9FA] min-w-0 absolute md:relative inset-0 md:inset-auto z-0 transition-transform duration-300",
+        "flex-1 flex flex-col bg-mist min-w-0 absolute md:relative inset-0 md:inset-auto z-0 transition-transform duration-300",
         showListOnMobile ? "translate-x-full md:translate-x-0" : "translate-x-0"
       )}>
 
         {!activeRoom ? (
-          <div className="hidden md:flex flex-1 flex-col items-center justify-center text-[#8C8880]">
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center text-muted">
             <MessageCircle
               size={48}
-              className="mb-4 text-[#E2DDD4]"
+              className="mb-4 text-edge"
             />
 
-            <div className="text-base font-bold text-[#1A1A18]">
+            <div className="text-base font-bold text-ink">
               請選擇聊天室
             </div>
 
@@ -938,13 +938,13 @@ export default function ChatPage() {
         ) : (
           <>
             {/* 廠商資訊標頭 */}
-            <div className="bg-white border-b border-[#E2DDD4] px-4 md:px-6 py-2.5 md:py-4 flex items-center gap-3 shrink-0 shadow-sm z-10">
+            <div className="bg-white border-b border-edge px-4 md:px-6 py-2.5 md:py-4 flex items-center gap-3 shrink-0 shadow-sm z-10">
               <button 
                 onClick={() => {
                   setActiveRoomId(null);
                   setActiveVendorId(null);
                 }}
-                className="md:hidden p-1.5 -ml-2 mr-1 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+                className="md:hidden p-1.5 -ml-2 mr-1 rounded-full text-muted hover:bg-cream transition-colors"
               >
                 <ArrowLeft size={20} />
               </button>
@@ -959,11 +959,11 @@ export default function ChatPage() {
               />
 
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-[#1A1A18] text-[13px] md:text-base leading-tight">
+                <div className="font-bold text-ink text-[13px] md:text-base leading-tight">
                   {activeRoom.vendorName}
                 </div>
 
-                <div className="text-[10px] md:text-xs font-medium text-[#8C8880] mt-0.5 truncate">
+                <div className="text-[10px] md:text-xs font-medium text-muted mt-0.5 truncate">
                   {activeRoom.campaignName}
                 </div>
               </div>
@@ -976,7 +976,7 @@ export default function ChatPage() {
                   )
                 }
                 disabled={messageLoading}
-                className="p-1.5 md:p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50 transition-colors"
+                className="p-1.5 md:p-2 rounded-full text-muted hover:bg-cream hover:text-brand disabled:opacity-50 transition-colors"
                 title="重新整理訊息"
               >
                 <RefreshCw
@@ -991,7 +991,7 @@ export default function ChatPage() {
 
             {/* 任務聊天室 Tabs (若該廠商有多個任務) */}
             {(activeGroup?.rooms || []).length > 1 && (
-              <div className="bg-white border-b border-[#E2DDD4] px-4 md:px-6 flex gap-2 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="bg-white border-b border-edge px-4 md:px-6 flex gap-2 shrink-0 overflow-x-auto hide-scrollbar">
                 {(activeGroup?.rooms || []).map(
                   room => (
                     <button
@@ -1010,8 +1010,8 @@ export default function ChatPage() {
                         `,
                         activeRoomId ===
                           room.roomId
-                          ? 'border-[#C8522A] text-[#C8522A]'
-                          : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+                          ? 'border-brand text-brand'
+                          : 'border-transparent text-muted hover:text-ink'
                       )}
                     >
                       <Tag size={10} className="md:w-[12px] md:h-[12px]" />
@@ -1021,7 +1021,7 @@ export default function ChatPage() {
                       </span>
 
                       {room.unreadCount > 0 && (
-                        <span className="bg-[#C8522A] text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
+                        <span className="bg-brand text-white text-[9px] font-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
                           {room.unreadCount}
                         </span>
                       )}
@@ -1033,7 +1033,7 @@ export default function ChatPage() {
 
 
             {/* 任務狀態標籤 */}
-            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-4 md:px-6 py-2 flex flex-wrap md:flex-nowrap items-center gap-2 text-[10px] md:text-xs text-[#C8522A] shrink-0">
+            <div className="bg-brand-soft border-b border-brand/10 px-4 md:px-6 py-2 flex flex-wrap md:flex-nowrap items-center gap-2 text-[10px] md:text-xs text-brand shrink-0">
               <span className="font-bold truncate max-w-[150px] md:max-w-[200px]">
                 {activeRoom.campaignName}
               </span>
@@ -1046,7 +1046,7 @@ export default function ChatPage() {
 
               <span className="hidden sm:inline">·</span>
 
-              <span className="font-bold px-2 py-0.5 bg-white rounded-md shadow-sm border border-[#C8522A]/20">
+              <span className="font-bold px-2 py-0.5 bg-white rounded-md shadow-sm border border-brand/20">
                 {stageLabels[
                   activeRoom.missionStage
                 ] ||
@@ -1071,10 +1071,10 @@ export default function ChatPage() {
                 <div className="h-full flex flex-col items-center justify-center">
                   <Loader2
                     size={24}
-                    className="animate-spin text-[#C8522A]"
+                    className="animate-spin text-brand"
                   />
 
-                  <div className="text-xs font-bold text-[#8C8880] mt-3">
+                  <div className="text-xs font-bold text-muted mt-3">
                     訊息載入中...
                   </div>
                 </div>
@@ -1110,8 +1110,8 @@ export default function ChatPage() {
                             shadow-sm
                           `,
                           isKoc
-                            ? 'bg-[#1A1A18] text-white rounded-br-sm'
-                            : 'bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-bl-sm'
+                            ? 'bg-ink text-white rounded-br-sm'
+                            : 'bg-white border border-edge text-ink rounded-bl-sm'
                         )}
                       >
                         {message.content}
@@ -1121,7 +1121,7 @@ export default function ChatPage() {
                             'text-[9px] md:text-[10px] mt-1 md:mt-1.5 font-medium',
                             isKoc
                               ? 'text-white/50 text-right'
-                              : 'text-[#8C8880]'
+                              : 'text-muted'
                           )}
                         >
                           {formatTime(
@@ -1133,13 +1133,13 @@ export default function ChatPage() {
                   )
                 })
               ) : (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
+                <div className="flex flex-col items-center justify-center h-full py-20 text-muted">
                   <MessageCircle
                     size={36}
-                    className="mb-3 text-[#E2DDD4]"
+                    className="mb-3 text-edge"
                   />
 
-                  <p className="text-sm font-bold text-[#1A1A18]">
+                  <p className="text-sm font-bold text-ink">
                     尚無訊息
                   </p>
 
@@ -1154,7 +1154,7 @@ export default function ChatPage() {
 
 
             {/* 輸入區 */}
-            <div className="bg-white border-t border-[#E2DDD4] px-3 md:px-6 py-2.5 md:py-4 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+            <div className="bg-white border-t border-edge px-3 md:px-6 py-2.5 md:py-4 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
               <div className="flex items-end gap-2 md:gap-3">
                 <textarea
                   rows={1}
@@ -1169,7 +1169,7 @@ export default function ChatPage() {
                   }
                   disabled={sending}
                   placeholder="輸入訊息…"
-                  className="flex-1 max-h-24 md:max-h-32 min-h-[40px] md:min-h-[48px] resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-2xl px-4 py-2.5 md:py-3 text-[13px] md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60 custom-scrollbar"
+                  className="flex-1 max-h-24 md:max-h-32 min-h-[40px] md:min-h-[48px] resize-none bg-mist border border-edge rounded-2xl px-4 py-2.5 md:py-3 text-[13px] md:text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all disabled:opacity-60 custom-scrollbar"
                 />
 
                 <button
@@ -1179,7 +1179,7 @@ export default function ChatPage() {
                     !input.trim() ||
                     sending
                   }
-                  className="bg-[#1A1A18] text-white h-[40px] w-[40px] md:h-[48px] md:w-[48px] rounded-full flex items-center justify-center hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                  className="bg-brand text-white h-[40px] w-[40px] md:h-[48px] md:w-[48px] rounded-full flex items-center justify-center hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                 >
                   {sending ? (
                     <Loader2

@@ -11,16 +11,16 @@ function formatDateTime(value) {
 
 function FormRow({ form }) {
   return (
-    <div className="grid grid-cols-5 px-8 py-5 items-center text-sm border-b border-[#E2DDD4] last:border-0 hover:bg-[#F8F9FA] transition-colors">
-      <div className="font-black text-[#C8522A]">NT$ {(form.amount || 0).toLocaleString()}</div>
-      <div className="text-[#8C8880] font-medium">{formatDateTime(form.submitted_at)}</div>
-      <div className="text-[#8C8880] font-medium">{form.reviewed_at ? formatDateTime(form.reviewed_at) : '-'}</div>
+    <div className="grid grid-cols-5 px-8 py-5 items-center text-sm border-b border-edge last:border-0 hover:bg-mist transition-colors">
+      <div className="font-black text-brand">NT$ {(form.amount || 0).toLocaleString()}</div>
+      <div className="text-muted font-medium">{formatDateTime(form.submitted_at)}</div>
+      <div className="text-muted font-medium">{form.reviewed_at ? formatDateTime(form.reviewed_at) : '-'}</div>
       <div>
         <a
           href={`/tax-form-print/${form.form_id}`}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1 text-xs font-bold text-[#8C8880] hover:text-[#C8522A]"
+          className="flex items-center gap-1 text-xs font-bold text-muted hover:text-brand"
         >
           查看勞報單 <FileText size={10} />
         </a>
@@ -30,7 +30,7 @@ function FormRow({ form }) {
           href={form.cloud_link_url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1 text-xs font-bold text-[#8C8880] hover:text-[#C8522A]"
+          className="flex items-center gap-1 text-xs font-bold text-muted hover:text-brand"
         >
           查看已提交連結 <ExternalLink size={10} />
         </a>
@@ -41,8 +41,8 @@ function FormRow({ form }) {
 
 function FormsTable({ records, emptyText }) {
   return (
-    <div className="w-full bg-white rounded-3xl border border-[#E2DDD4] shadow-sm overflow-hidden">
-      <div className="grid grid-cols-5 px-8 py-4 bg-[#F8F9FA] border-b border-[#E2DDD4] text-[#8C8880] text-sm font-bold">
+    <div className="w-full bg-white rounded-3xl border border-edge shadow-sm overflow-hidden">
+      <div className="grid grid-cols-5 px-8 py-4 bg-mist border-b border-edge text-muted text-sm font-bold">
         <span>金額</span>
         <span>申報時間</span>
         <span>審核時間</span>
@@ -50,7 +50,7 @@ function FormsTable({ records, emptyText }) {
         <span>連結</span>
       </div>
       {records.length === 0 ? (
-        <div className="py-12 text-center text-[#8C8880] font-bold">{emptyText}</div>
+        <div className="py-12 text-center text-muted font-bold">{emptyText}</div>
       ) : (
         records.map((form) => <FormRow key={form.form_id} form={form} />)
       )}
@@ -90,21 +90,21 @@ export default function TaxFormRecordsPage({ onBack }) {
     <div className="max-w-5xl animate-in fade-in duration-500">
       <button
         onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group w-fit"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回我的收益
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-6 text-[#1A1A18]">勞報單紀錄</h2>
+      <h2 className="text-[28px] font-display font-bold mb-6 text-ink">勞報單紀錄</h2>
 
       <div className="flex gap-2 w-full sm:w-auto mb-6">
         <button
           onClick={() => setActiveTab('reviewing')}
           className={`flex-1 sm:flex-none px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
             activeTab === 'reviewing'
-              ? 'bg-[#C8522A] text-white'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              ? 'bg-brand text-white'
+              : 'bg-white border border-edge text-muted hover:bg-cream'
           }`}
         >
           已送出審核中（{reviewingForms.length}）
@@ -113,8 +113,8 @@ export default function TaxFormRecordsPage({ onBack }) {
           onClick={() => setActiveTab('completed')}
           className={`flex-1 sm:flex-none px-6 py-2 rounded-full font-bold text-sm transition-all shadow-sm ${
             activeTab === 'completed'
-              ? 'bg-[#C8522A] text-white'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+              ? 'bg-brand text-white'
+              : 'bg-white border border-edge text-muted hover:bg-cream'
           }`}
         >
           已完成（{completedForms.length}）
@@ -122,7 +122,7 @@ export default function TaxFormRecordsPage({ onBack }) {
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-[#8C8880] font-bold">載入中...</div>
+        <div className="py-16 text-center text-muted font-bold">載入中...</div>
       ) : activeTab === 'reviewing' ? (
         <FormsTable records={reviewingForms} emptyText="目前沒有審核中的勞報單" />
       ) : (

@@ -115,38 +115,38 @@ export default function FavoritesPage({ onNavigate }) {
 
   if (loading) {
     return (
-      <div className="animate-in fade-in duration-500 max-w-6xl pb-12 md:pb-24 p-4 md:p-0 mx-auto text-[#1A1A18]">
+      <div className="animate-in fade-in duration-500 max-w-6xl pb-12 md:pb-24 p-4 md:p-0 mx-auto text-ink">
         <div className="flex items-center justify-between mb-6 md:mb-10">
-          <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我的收藏</h2>
+          <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink">我的收藏</h2>
         </div>
-        <div className="py-20 text-center text-[#8C8880] font-bold text-sm md:text-base">載入中...</div>
+        <div className="py-20 text-center text-muted font-bold text-sm md:text-base">載入中...</div>
       </div>
     );
   }
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-6xl pb-12 md:pb-24 p-4 md:p-0 mx-auto text-[#1A1A18]">
+    <div className="animate-in fade-in duration-500 max-w-6xl pb-12 md:pb-24 p-4 md:p-0 mx-auto text-ink">
 
       {/* 標題區塊 */}
       <div className="flex items-center justify-between mb-6 md:mb-10">
-        <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我的收藏</h2>
-        <span className="text-[#8C8880] font-bold text-xs md:text-sm bg-white px-3 md:px-4 py-1.5 md:py-2 rounded-full shadow-sm border border-[#E2DDD4]">
+        <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink">我的收藏</h2>
+        <span className="text-muted font-bold text-xs md:text-sm bg-white px-3 md:px-4 py-1.5 md:py-2 rounded-full shadow-sm border border-edge">
           共 {favorites.length} 件
         </span>
       </div>
 
       {favorites.length === 0 ? (
-        <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-[#E2DDD4] p-8 md:p-16 flex flex-col items-center justify-center text-center shadow-sm mt-4 md:mt-8">
-          <div className="w-16 h-16 md:w-24 md:h-24 bg-[#F5F0E8] rounded-full flex items-center justify-center mb-4 md:mb-6 text-[#C8522A]">
+        <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-edge p-8 md:p-16 flex flex-col items-center justify-center text-center shadow-sm mt-4 md:mt-8">
+          <div className="w-16 h-16 md:w-24 md:h-24 bg-cream rounded-full flex items-center justify-center mb-4 md:mb-6 text-brand">
             <Heart size={32} className="md:w-10 md:h-10" strokeWidth={1.5} />
           </div>
           <h2 className="text-lg md:text-xl font-bold mb-2 md:mb-3">您的收藏清單目前是空的</h2>
-          <p className="text-[#8C8880] text-xs md:text-sm mb-6 md:mb-8 max-w-sm leading-relaxed">
+          <p className="text-muted text-xs md:text-sm mb-6 md:mb-8 max-w-sm leading-relaxed">
             看到喜歡的商品時，點擊愛心圖示就能將它們加入收藏，方便日後隨時查看與購買。
           </p>
           <button
             onClick={() => onNavigate?.('shop')}
-            className="bg-[#1A1A18] text-white px-6 md:px-8 py-3 md:py-3.5 rounded-full font-bold text-xs md:text-sm transition-all hover:bg-[#C8522A] hover:-translate-y-0.5 shadow-md flex items-center gap-1.5 md:gap-2"
+            className="bg-brand text-white px-6 md:px-8 py-3 md:py-3.5 rounded-full font-bold text-xs md:text-sm transition-all hover:bg-brand-dark hover:-translate-y-0.5 shadow-md flex items-center gap-1.5 md:gap-2"
           >
             去逛逛商品 <ArrowRight size={14} className="md:w-4 md:h-4" />
           </button>
@@ -156,14 +156,14 @@ export default function FavoritesPage({ onNavigate }) {
           {favorites.map((product) => (
             <div
               key={product.id}
-              className={`bg-white rounded-2xl md:rounded-3xl border border-[#E2DDD4] p-3 md:p-4 flex flex-col gap-3 md:gap-4 transition-all group relative ${
+              className={`bg-white rounded-2xl md:rounded-3xl border border-edge p-3 md:p-4 flex flex-col gap-3 md:gap-4 transition-all group relative ${
                 product.isDelisted ? 'opacity-50' : 'hover:shadow-lg hover:border-[#D8D4CC]'
               }`}
             >
               {/* 移除收藏按鈕 */}
               <button
                 onClick={() => handleRemoveFavorite(product.id)}
-                className="absolute top-5 right-5 md:top-7 md:right-7 z-10 w-7 h-7 md:w-8 md:h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-[#C8522A] hover:bg-[#C8522A] hover:text-white transition-colors shadow-sm"
+                className="absolute top-5 right-5 md:top-7 md:right-7 z-10 w-7 h-7 md:w-8 md:h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-brand hover:bg-brand hover:text-white transition-colors shadow-sm"
                 title="移除收藏"
               >
                 <Heart size={14} className="md:w-4 md:h-4" fill="currentColor" />
@@ -187,19 +187,19 @@ export default function FavoritesPage({ onNavigate }) {
               {/* 商品資訊 */}
               <div className="flex-1 flex flex-col px-0.5 md:px-1">
                 <div
-                  className={`text-xs md:text-sm font-bold text-[#1A1A18] mb-1 line-clamp-2 transition-colors leading-snug md:leading-normal ${
-                    product.isDelisted ? 'cursor-not-allowed' : 'cursor-pointer hover:text-[#C8522A]'
+                  className={`text-xs md:text-sm font-bold text-ink mb-1 line-clamp-2 transition-colors leading-snug md:leading-normal ${
+                    product.isDelisted ? 'cursor-not-allowed' : 'cursor-pointer hover:text-brand'
                   }`}
                   onClick={() => !product.isDelisted && onNavigate?.('product_detail', product.raw)}
                 >
                   {product.name}
                 </div>
                 {product.isDelisted ? (
-                  <span className="w-fit rounded-full bg-[#E2DDD4] px-2 py-0.5 text-[10px] font-bold text-[#8C8880] mt-1">
+                  <span className="w-fit rounded-full bg-edge px-2 py-0.5 text-[10px] font-bold text-muted mt-1">
                     已下架
                   </span>
                 ) : (
-                  <div className="font-black text-[#1A1A18] text-sm md:text-lg mt-auto pt-1">{product.price}</div>
+                  <div className="font-black text-ink text-sm md:text-lg mt-auto pt-1">{product.price}</div>
                 )}
               </div>
 
@@ -207,7 +207,7 @@ export default function FavoritesPage({ onNavigate }) {
               <button
                 onClick={() => handleAddToCart(product)}
                 disabled={product.isDelisted}
-                className="w-full py-2.5 md:py-3 rounded-xl border border-[#1A1A18] text-xs md:text-sm font-bold text-[#1A1A18] flex items-center justify-center gap-1.5 md:gap-2 transition-colors hover:bg-[#1A1A18] hover:text-[#F5F0E8] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[#1A1A18]"
+                className="w-full py-2.5 md:py-3 rounded-xl border border-ink text-xs md:text-sm font-bold text-ink flex items-center justify-center gap-1.5 md:gap-2 transition-colors hover:bg-ink hover:text-cream disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
               >
                 <ShoppingBag size={14} className="md:w-4 md:h-4" /> {product.isDelisted ? '已下架' : '加入購物車'}
               </button>

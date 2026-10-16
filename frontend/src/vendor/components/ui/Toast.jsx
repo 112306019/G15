@@ -22,8 +22,8 @@ const variantStyles = {
   },
   info: {
     icon: AlertCircle,
-    iconClass: 'text-[#C8522A]',
-    barClass: 'bg-[#C8522A]',
+    iconClass: 'text-brand',
+    barClass: 'bg-brand',
   },
 }
 
@@ -35,7 +35,7 @@ function ToastItem({ id, type, message, onDismiss }) {
       role="status"
       className="
         relative flex items-start gap-3 w-full max-w-sm
-        bg-white rounded-2xl border border-[#E2DDD4] shadow-lg
+        bg-white rounded-2xl border border-edge shadow-lg
         px-4 py-3.5 pl-4 overflow-hidden
         animate-in slide-in-from-bottom-3 fade-in duration-300
       "
@@ -44,14 +44,14 @@ function ToastItem({ id, type, message, onDismiss }) {
 
       <Icon size={20} className={`shrink-0 mt-0.5 ${iconClass}`} />
 
-      <p className="flex-1 text-sm font-bold text-[#1A1A18] leading-snug">
+      <p className="flex-1 text-sm font-bold text-ink leading-snug">
         {message}
       </p>
 
       <button
         type="button"
         onClick={() => onDismiss(id)}
-        className="shrink-0 p-1 rounded-full text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8] transition-colors"
+        className="shrink-0 p-1 rounded-full text-muted hover:text-ink hover:bg-cream transition-colors"
         aria-label="關閉通知"
       >
         <X size={14} />

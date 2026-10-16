@@ -156,7 +156,7 @@ export default function ApplyKOCPage({ onSubmit, onViewIntro }) {
     return (
         <div className="animate-in fade-in duration-500 max-w-3xl p-4 md:p-0 mx-auto pb-12">
             <div className="mb-8 md:mb-10 flex flex-col gap-2">
-                <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我想成為 KOC</h2>
+                <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink">我想成為 KOC</h2>
                 {onViewIntro && (
                     <button
                         type="button"

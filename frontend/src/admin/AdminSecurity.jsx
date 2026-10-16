@@ -41,7 +41,7 @@ function formatDateTime(value) {
 function Modal({ open, title, onClose, children }) {
   return (
     <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-4 transition-opacity duration-200 ${
+      className={`fixed inset-0 z-[200] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4 transition-opacity duration-200 ${
         open ? "opacity-100" : "opacity-0 pointer-events-none"
       }`}
       onMouseDown={(e) => {
@@ -55,7 +55,7 @@ function Modal({ open, title, onClose, children }) {
         className="w-full max-w-md rounded-2xl bg-white p-6 md:p-8 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="text-xl font-serif font-bold text-[#1A1A18] mb-6">{title}</div>
+        <div className="text-xl font-display font-bold text-ink mb-6">{title}</div>
         {children}
       </div>
     </div>
@@ -65,11 +65,11 @@ function Modal({ open, title, onClose, children }) {
 function PwInput({ label, ...props }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold text-[#5C5850]">{label}</label>
+      <label className="mb-1.5 block text-xs font-bold text-muted">{label}</label>
       <input
         type="password"
         {...props}
-        className="w-full rounded-xl border border-[#E2DDD4] bg-white px-4 py-3 text-sm text-[#1A1A18] outline-none transition-colors focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10"
+        className="w-full rounded-xl border border-edge bg-white px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-brand focus:ring-4 focus:ring-brand/10"
       />
     </div>
   );
@@ -203,15 +203,15 @@ export default function AdminSecurity({ onLogout }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-0 pb-12 text-[#1A1A18]">
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-2">登入與安全性</h2>
+    <div className="max-w-3xl mx-auto p-4 md:p-0 pb-12 text-ink">
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-2">登入與安全性</h2>
       {info && (
-        <p className="text-sm text-[#8C8880] mb-8 md:mb-10">
+        <p className="text-sm text-muted mb-8 md:mb-10">
           {info.name || info.email}（{ROLE_LABELS[info.role] || info.role}）・{info.email}
         </p>
       )}
       {infoError && (
-        <div className="mb-8 text-sm font-bold text-[#C8522A] bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl px-4 py-3">
+        <div className="mb-8 text-sm font-bold text-brand bg-brand-soft border border-brand/20 rounded-xl px-4 py-3">
           {infoError}
         </div>
       )}
@@ -219,13 +219,13 @@ export default function AdminSecurity({ onLogout }) {
       {/* 密碼 */}
       <section className="mb-10">
         <h3 className="mb-4 text-base md:text-lg font-bold flex items-center gap-2">
-          <Lock size={18} className="text-[#8C8880]" />
+          <Lock size={18} className="text-muted" />
           密碼
         </h3>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-[#E2DDD4] bg-white p-5 md:p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-edge bg-white p-5 md:p-6">
           <div>
             <div className="text-sm md:text-base font-bold">管理員登入密碼</div>
-            <div className="mt-1 text-xs md:text-sm text-[#8C8880]">
+            <div className="mt-1 text-xs md:text-sm text-muted">
               {info?.password_updated_at
                 ? `上次更新於 ${new Date(info.password_updated_at).toLocaleDateString("zh-TW", { year: "numeric", month: "long", day: "numeric" })}`
                 : "尚無更新紀錄"}
@@ -233,7 +233,7 @@ export default function AdminSecurity({ onLogout }) {
           </div>
           <button
             onClick={() => setPwOpen(true)}
-            className="w-full md:w-auto rounded-xl bg-[#1A1A18] px-6 py-2.5 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#C8522A]/30"
+            className="w-full md:w-auto rounded-xl bg-brand px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-dark focus:outline-none focus-visible:ring-4 focus-visible:ring-brand/30"
           >
             變更密碼
           </button>
@@ -243,16 +243,16 @@ export default function AdminSecurity({ onLogout }) {
       {/* 登入紀錄 */}
       <section className="mb-10">
         <h3 className="mb-1 text-base md:text-lg font-bold">最近登入紀錄</h3>
-        <p className="mb-4 text-xs md:text-sm text-[#8C8880]">
+        <p className="mb-4 text-xs md:text-sm text-muted">
           顯示最近 5 次登入。若有不是您本人的紀錄，請立即變更密碼並通知其他管理員。
         </p>
-        <div className="rounded-2xl border border-[#E2DDD4] bg-white overflow-hidden">
+        <div className="rounded-2xl border border-edge bg-white overflow-hidden">
           {loadingSessions ? (
-            <div className="p-6 text-center text-sm font-bold text-[#8C8880]">載入中...</div>
+            <div className="p-6 text-center text-sm font-bold text-muted">載入中...</div>
           ) : sessionsError ? (
-            <div className="p-6 text-center text-sm font-bold text-[#C8522A]">{sessionsError}</div>
+            <div className="p-6 text-center text-sm font-bold text-brand">{sessionsError}</div>
           ) : sessions.length === 0 ? (
-            <div className="p-6 text-center text-sm font-bold text-[#8C8880]">
+            <div className="p-6 text-center text-sm font-bold text-muted">
               還沒有登入紀錄，下次登入後就會出現在這裡。
             </div>
           ) : (
@@ -260,7 +260,7 @@ export default function AdminSecurity({ onLogout }) {
               <div
                 key={s.id}
                 className={`flex items-center justify-between gap-4 p-5 ${
-                  index !== sessions.length - 1 ? "border-b border-[#EFEBE4]" : ""
+                  index !== sessions.length - 1 ? "border-b border-edge" : ""
                 }`}
               >
                 <div className="min-w-0">
@@ -272,9 +272,9 @@ export default function AdminSecurity({ onLogout }) {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs md:text-sm text-[#8C8880]">{s.date}</div>
+                  <div className="text-xs md:text-sm text-muted">{s.date}</div>
                 </div>
-                {s.ip && <div className="shrink-0 text-xs md:text-sm text-[#8C8880] tabular-nums">{s.ip}</div>}
+                {s.ip && <div className="shrink-0 text-xs md:text-sm text-muted tabular-nums">{s.ip}</div>}
               </div>
             ))
           )}
@@ -283,14 +283,14 @@ export default function AdminSecurity({ onLogout }) {
 
       {/* 登出 */}
       <section>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-[#C8522A]/20 bg-[#FDF0ED] p-5 md:p-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-brand/20 bg-brand-soft p-5 md:p-6">
           <div>
-            <div className="text-sm md:text-base font-bold text-[#A8401E]">登出管理後台</div>
-            <div className="mt-1 text-xs md:text-sm text-[#A8401E]/70">登出後需要重新輸入信箱與密碼才能進入。</div>
+            <div className="text-sm md:text-base font-bold text-brand-dark">登出管理後台</div>
+            <div className="mt-1 text-xs md:text-sm text-brand-dark/70">登出後需要重新輸入信箱與密碼才能進入。</div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full md:w-auto flex items-center justify-center gap-2 rounded-xl bg-white border border-[#C8522A]/30 px-6 py-2.5 text-sm font-bold text-[#A8401E] transition-colors hover:bg-[#C8522A] hover:text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-[#C8522A]/30"
+            className="w-full md:w-auto flex items-center justify-center gap-2 rounded-xl bg-white border border-brand/30 px-6 py-2.5 text-sm font-bold text-brand-dark transition-colors hover:bg-brand hover:text-white focus:outline-none focus-visible:ring-4 focus-visible:ring-brand/30"
           >
             <LogOut size={16} /> 登出
           </button>
@@ -322,7 +322,7 @@ export default function AdminSecurity({ onLogout }) {
           />
 
           {pwError && (
-            <div className="text-sm font-bold text-[#C8522A] bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl px-4 py-3">
+            <div className="text-sm font-bold text-brand bg-brand-soft border border-brand/20 rounded-xl px-4 py-3">
               {pwError}
             </div>
           )}
@@ -330,14 +330,14 @@ export default function AdminSecurity({ onLogout }) {
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <button
               onClick={closePwModal}
-              className="w-full sm:flex-1 rounded-xl border border-[#E2DDD4] bg-white px-4 py-3 text-sm font-bold text-[#5C5850] transition-colors hover:border-[#1A1A18] hover:text-[#1A1A18] order-2 sm:order-1"
+              className="w-full sm:flex-1 rounded-xl border border-edge bg-white px-4 py-3 text-sm font-bold text-muted transition-colors hover:border-brand hover:text-brand order-2 sm:order-1"
             >
               取消
             </button>
             <button
               onClick={handleSavePassword}
               disabled={savingPassword}
-              className="w-full sm:flex-1 rounded-xl bg-[#1A1A18] px-4 py-3 text-sm font-bold text-[#F5F0E8] transition-colors hover:bg-[#C8522A] disabled:opacity-50 order-1 sm:order-2"
+              className="w-full sm:flex-1 rounded-xl bg-brand px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-dark disabled:opacity-50 order-1 sm:order-2"
             >
               {savingPassword ? "變更中..." : "變更密碼"}
             </button>
@@ -347,7 +347,7 @@ export default function AdminSecurity({ onLogout }) {
 
       <div
         role="status"
-        className={`fixed bottom-8 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-[#1A1A18] px-6 py-3 text-sm font-bold text-[#F5F0E8] shadow-xl transition-all duration-300 ${
+        className={`fixed bottom-8 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-cream shadow-xl transition-all duration-300 ${
           toast.show ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0 pointer-events-none"
         }`}
       >

@@ -27,7 +27,7 @@ export default function AnalysisPage({ onBack, onViewData }) {
   }, []);
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20 text-[#8C8880] font-bold">
+    <div className="flex items-center justify-center py-20 text-muted font-bold">
       載入中...
     </div>
   );
@@ -37,16 +37,16 @@ export default function AnalysisPage({ onBack, onViewData }) {
       
       <button 
         onClick={onBack} 
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回接案管理
       </button>
 
-      <h2 className="text-[28px] font-serif font-bold mb-10 text-[#1A1A18]">合作收益總覽</h2>
+      <h2 className="text-[28px] font-display font-bold mb-10 text-ink">合作收益總覽</h2>
 
       {analytics.length === 0 ? (
-        <div className="py-20 text-center text-[#8C8880] font-bold">
+        <div className="py-20 text-center text-muted font-bold">
           目前沒有成效資料
         </div>
       ) : (
@@ -54,10 +54,10 @@ export default function AnalysisPage({ onBack, onViewData }) {
           {analytics.map((item, i) => (
             <div 
               key={i} 
-              className="group bg-white rounded-[2rem] overflow-hidden shadow-sm border border-[#E2DDD4] flex flex-col transition-all hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] hover:border-[#B89B6A]"
+              className="group bg-white rounded-[2rem] overflow-hidden shadow-sm border border-edge flex flex-col transition-all hover:shadow-[0_16px_40px_rgba(26,26,24,0.06)] hover:border-gold"
             >
               {/* 圖片區 */}
-              <div className="bg-gradient-to-br from-[#F5F0E8] to-[#E2DDD4] h-64 flex items-center justify-center border-b border-[#E2DDD4] overflow-hidden">
+              <div className="bg-gradient-to-br from-cream to-edge h-64 flex items-center justify-center border-b border-edge overflow-hidden">
                 {item.campaign_image ? (
                   <img
                     src={item.campaign_image}
@@ -71,11 +71,11 @@ export default function AnalysisPage({ onBack, onViewData }) {
               
               {/* 資訊與按鈕 */}
               <div className="p-8 flex flex-col gap-4">
-                <span className="text-2xl font-bold text-[#1A1A18] group-hover:text-[#C8522A] transition-colors">
+                <span className="text-2xl font-bold text-ink group-hover:text-brand transition-colors">
                   {item.campaign_name}
                 </span>
-                <span className="text-[#8C8880] font-medium text-sm">
-                  優惠碼使用次數：<span className="font-bold text-[#1A1A18]">{item.usage_count}</span>
+                <span className="text-muted font-medium text-sm">
+                  優惠碼使用次數：<span className="font-bold text-ink">{item.usage_count}</span>
                 </span>
                 
                 <button 
@@ -85,7 +85,7 @@ export default function AnalysisPage({ onBack, onViewData }) {
                     campaign_image: item.campaign_image,
                     usage_count: item.usage_count,
                   })}
-                  className="mt-4 bg-[#1A1A18] text-[#F5F0E8] py-3.5 px-8 rounded-full font-bold text-sm w-fit hover:bg-[#C8522A] transition-all active:scale-95 shadow-sm"
+                  className="mt-4 bg-brand text-white py-3.5 px-8 rounded-full font-bold text-sm w-fit hover:bg-brand-dark transition-all active:scale-95 shadow-sm"
                 >
                   查看數據
                 </button>

@@ -33,11 +33,11 @@ function computeTaxes(amount, residency) {
 
 function Field({ label, value, className = '', labelClass = '', valueClass = '' }) {
   return (
-    <div className={`flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4] ${className}`}>
-      <div className={`w-full md:w-32 print:w-32 shrink-0 bg-[#FDF0ED] px-4 py-2 md:py-3 print:py-3 text-xs md:text-sm print:text-sm font-bold text-[#1A1A18] ${labelClass}`}>
+    <div className={`flex flex-col md:flex-row print:flex-row border-b border-edge ${className}`}>
+      <div className={`w-full md:w-32 print:w-32 shrink-0 bg-brand-soft px-4 py-2 md:py-3 print:py-3 text-xs md:text-sm print:text-sm font-bold text-ink ${labelClass}`}>
         {label}
       </div>
-      <div className={`flex-1 px-4 py-2 md:py-3 print:py-3 text-sm text-[#1A1A18] min-h-[36px] md:min-h-0 print:min-h-0 ${valueClass}`}>
+      <div className={`flex-1 px-4 py-2 md:py-3 print:py-3 text-sm text-ink min-h-[36px] md:min-h-0 print:min-h-0 ${valueClass}`}>
         {value || ''}
       </div>
     </div>
@@ -47,8 +47,8 @@ function Field({ label, value, className = '', labelClass = '', valueClass = '' 
 function SectionLabel({ children }) {
   return (
     <div className="flex items-center gap-2 mb-2 md:mb-3 print:mb-3 mt-6 md:mt-8 print:mt-8 first:mt-0">
-      <span className="w-1.5 h-4 md:h-5 print:h-5 bg-[#C8522A] rounded-full inline-block" />
-      <h3 className="text-sm md:text-base print:text-base font-bold text-[#1A1A18]">{children}</h3>
+      <span className="w-1.5 h-4 md:h-5 print:h-5 bg-brand rounded-full inline-block" />
+      <h3 className="text-sm md:text-base print:text-base font-bold text-ink">{children}</h3>
     </div>
   );
 }
@@ -101,19 +101,19 @@ export default function TaxFormPrintView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
-        <Loader2 size={24} className="animate-spin text-[#C8522A]" />
+      <div className="min-h-screen flex items-center justify-center bg-mist">
+        <Loader2 size={24} className="animate-spin text-brand" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8F9FA] gap-4 p-4 text-center">
-        <p className="text-sm font-bold text-[#C8522A]">{error || '找不到資料'}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-mist gap-4 p-4 text-center">
+        <p className="text-sm font-bold text-brand">{error || '找不到資料'}</p>
         <button
           onClick={handleBack}
-          className="px-6 py-3 bg-[#1A1A18] text-white rounded-xl text-sm font-bold"
+          className="px-6 py-3 bg-ink text-white rounded-xl text-sm font-bold"
         >
           返回
         </button>
@@ -125,19 +125,19 @@ export default function TaxFormPrintView() {
   const { withholdingTax, nhiSupplement, netAmount } = computeTaxes(amount, residency);
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-4 md:py-10 md:px-4">
+    <div className="min-h-screen bg-mist p-4 md:py-10 md:px-4">
       {/* 工具列：畫面上看得到，列印時會被 @media print 隱藏 */}
       <div className="no-print max-w-[210mm] mx-auto mb-4 md:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
         <button
           onClick={handleBack}
-          className="flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm bg-white sm:bg-transparent px-3 py-1.5 sm:p-0 rounded-full border border-[#E2DDD4] sm:border-transparent shadow-sm sm:shadow-none"
+          className="flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm bg-white sm:bg-transparent px-3 py-1.5 sm:p-0 rounded-full border border-edge sm:border-transparent shadow-sm sm:shadow-none"
         >
           <ArrowLeft size={16} className="w-4 h-4" />
           返回
         </button>
         <button
           onClick={() => window.print()}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#1A1A18] text-white px-6 py-3 md:py-3 rounded-xl text-sm font-bold hover:bg-[#C8522A] transition-all shadow-md"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-brand text-white px-6 py-3 md:py-3 rounded-xl text-sm font-bold hover:bg-brand-dark transition-all shadow-md"
         >
           <Printer size={16} />
           列印 / 儲存為 PDF
@@ -145,44 +145,44 @@ export default function TaxFormPrintView() {
       </div>
 
       {/* 表單本體 */}
-      <div className="tax-form-sheet max-w-[210mm] mx-auto bg-white shadow-sm border border-[#E2DDD4] p-4 md:p-10 rounded-2xl md:rounded-none">
+      <div className="tax-form-sheet max-w-[210mm] mx-auto bg-white shadow-sm border border-edge p-4 md:p-10 rounded-2xl md:rounded-none">
         
-        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between border-b-2 border-[#C8522A] pb-3 md:pb-4 mb-4 md:mb-6 gap-2 sm:gap-0">
-          <h1 className="text-xl md:text-2xl print:text-2xl font-serif font-black text-[#1A1A18] tracking-[0.3em] md:tracking-[0.5em] print:tracking-[0.5em]">
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between border-b-2 border-brand pb-3 md:pb-4 mb-4 md:mb-6 gap-2 sm:gap-0">
+          <h1 className="text-xl md:text-2xl print:text-2xl font-display font-black text-ink tracking-[0.3em] md:tracking-[0.5em] print:tracking-[0.5em]">
             勞務報酬單
           </h1>
-          <span className="text-[10px] md:text-xs print:text-xs font-bold text-[#8C8880] whitespace-nowrap">
+          <span className="text-[10px] md:text-xs print:text-xs font-bold text-muted whitespace-nowrap">
             製表日期：{toRocDate()}
           </span>
         </div>
 
         {/* 給付單位 */}
         <SectionLabel>給付單位</SectionLabel>
-        <div className="border border-[#E2DDD4] rounded-xl overflow-hidden">
-          <div className="flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4]">
+        <div className="border border-edge rounded-xl overflow-hidden">
+          <div className="flex flex-col md:flex-row print:flex-row border-b border-edge">
             <Field label="公司名稱" value="" className="flex-1 border-b-0" />
-            <Field label="統一編號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
+            <Field label="統一編號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
           </div>
           <Field label="公司地址" value="" className="border-b-0" />
         </div>
 
         {/* 所得人資料 */}
         <SectionLabel>所得人資料</SectionLabel>
-        <div className="border border-[#E2DDD4] rounded-xl overflow-hidden">
-          <div className="flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4]">
+        <div className="border border-edge rounded-xl overflow-hidden">
+          <div className="flex flex-col md:flex-row print:flex-row border-b border-edge">
             <Field label="姓名" value="" className="flex-1 border-b-0" />
-            <Field label="身分證字號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
-            <Field label="國籍" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
+            <Field label="身分證字號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
+            <Field label="國籍" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
           </div>
-          <div className="flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4]">
+          <div className="flex flex-col md:flex-row print:flex-row border-b border-edge">
             <Field label="聯絡電話" value={data.koc_phone} className="flex-1 border-b-0" />
-            <Field label="電子郵件" value={data.koc_email} className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
+            <Field label="電子郵件" value={data.koc_email} className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
           </div>
           <Field label="戶籍地址" value={data.koc_address} />
-          <div className="flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4]">
+          <div className="flex flex-col md:flex-row print:flex-row border-b border-edge">
             <Field label="申報類別" value="9A 執行業務所得" className="flex-1 border-b-0" />
-            <Field label="執行業務類別" value="第90項 其他" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
-            <Field label="費用率" value="0%" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
+            <Field label="執行業務類別" value="第90項 其他" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
+            <Field label="費用率" value="0%" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
           </div>
           <Field label="勞務內容" value={data.service_content} />
           <Field label="申報日期" value={data.submitted_at} className="border-b-0" />
@@ -191,16 +191,16 @@ export default function TaxFormPrintView() {
         {/* 試算與簽章區 */}
         <div className="flex flex-col sm:flex-row print:flex-row gap-4 md:gap-6 print:gap-6 mt-6 md:mt-8 print:mt-8">
           
-          <div className="flex-1 border-2 border-[#C8522A]/30 rounded-2xl p-4 md:p-5 print:p-5">
+          <div className="flex-1 border-2 border-brand/30 rounded-2xl p-4 md:p-5 print:p-5">
             <div className="flex flex-col sm:flex-row print:flex-row items-start sm:items-center print:items-center justify-between mb-3 md:mb-4 print:mb-4 gap-2 sm:gap-0">
-              <h4 className="text-sm font-bold text-[#1A1A18]">給付金額試算</h4>
-              <div className="no-print flex flex-wrap items-center gap-3 text-xs font-bold text-[#8C8880]">
+              <h4 className="text-sm font-bold text-ink">給付金額試算</h4>
+              <div className="no-print flex flex-wrap items-center gap-3 text-xs font-bold text-muted">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
                     type="radio"
                     checked={residency === 'resident'}
                     onChange={() => setResidency('resident')}
-                    className="accent-[#C8522A]"
+                    className="accent-brand"
                   />
                   居住者
                 </label>
@@ -209,68 +209,68 @@ export default function TaxFormPrintView() {
                     type="radio"
                     checked={residency === 'non_resident'}
                     onChange={() => setResidency('non_resident')}
-                    className="accent-[#C8522A]"
+                    className="accent-brand"
                   />
                   非居住者
                 </label>
               </div>
             </div>
-            <p className="hidden print:block text-xs font-bold text-[#8C8880] mb-3">
+            <p className="hidden print:block text-xs font-bold text-muted mb-3">
               身分別：{residency === 'resident' ? '居住者' : '非居住者'}
             </p>
             <div className="space-y-2 md:space-y-2.5 print:space-y-2.5 text-xs md:text-sm print:text-sm">
               <div className="flex justify-between">
-                <span className="text-[#8C8880] font-bold">給付總金額</span>
-                <span className="font-bold text-[#1A1A18]">
+                <span className="text-muted font-bold">給付總金額</span>
+                <span className="font-bold text-ink">
                   {amount.toLocaleString()} 元
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#8C8880] font-bold">
+                <span className="text-muted font-bold">
                   代扣所得稅（{residency === 'resident' ? '10%' : '20%'}）
                 </span>
-                <span className="font-bold text-[#1A1A18]">
+                <span className="font-bold text-ink">
                   {withholdingTax.toLocaleString()} 元
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#8C8880] font-bold">二代健保費（2.11%）</span>
-                <span className="font-bold text-[#1A1A18]">
+                <span className="text-muted font-bold">二代健保費（2.11%）</span>
+                <span className="font-bold text-ink">
                   {nhiSupplement.toLocaleString()} 元
                 </span>
               </div>
-              <div className="border-t border-dashed border-[#E2DDD4] pt-2.5 flex justify-between">
-                <span className="text-[#1A1A18] font-bold">實際支付金額</span>
-                <span className="font-black text-[#C8522A] text-sm md:text-base print:text-base">
+              <div className="border-t border-dashed border-edge pt-2.5 flex justify-between">
+                <span className="text-ink font-bold">實際支付金額</span>
+                <span className="font-black text-brand text-sm md:text-base print:text-base">
                   {netAmount.toLocaleString()} 元
                 </span>
               </div>
             </div>
             {amount < WITHHOLDING_THRESHOLD && (
-              <p className="mt-3 text-[9px] md:text-[10px] print:text-[10px] text-[#8C8880] leading-tight">
+              <p className="mt-3 text-[9px] md:text-[10px] print:text-[10px] text-muted leading-tight">
                 ※ 給付金額未達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元門檻，暫不扣繳所得稅及二代健保費。
               </p>
             )}
           </div>
 
-          <div className="flex-1 border border-[#E2DDD4] rounded-2xl p-4 md:p-5 print:p-5">
-            <h4 className="text-sm font-bold text-[#1A1A18] mb-1">所得人簽章</h4>
-            <p className="text-[10px] md:text-xs print:text-xs text-[#8C8880] mb-4">上述資料經本人確認無誤（簽名或蓋章）</p>
+          <div className="flex-1 border border-edge rounded-2xl p-4 md:p-5 print:p-5">
+            <h4 className="text-sm font-bold text-ink mb-1">所得人簽章</h4>
+            <p className="text-[10px] md:text-xs print:text-xs text-muted mb-4">上述資料經本人確認無誤（簽名或蓋章）</p>
             <div className="h-16 md:h-24 print:h-24" />
           </div>
         </div>
 
         {/* 領款資訊 */}
         <SectionLabel>領款資訊</SectionLabel>
-        <div className="border border-[#E2DDD4] rounded-xl overflow-hidden">
-          <div className="flex flex-col md:flex-row print:flex-row border-b border-[#E2DDD4]">
-            <div className="w-full md:w-32 print:w-32 shrink-0 bg-[#FDF0ED] px-4 py-2 md:py-3 print:py-3 text-xs md:text-sm print:text-sm font-bold text-[#1A1A18]">
+        <div className="border border-edge rounded-xl overflow-hidden">
+          <div className="flex flex-col md:flex-row print:flex-row border-b border-edge">
+            <div className="w-full md:w-32 print:w-32 shrink-0 bg-brand-soft px-4 py-2 md:py-3 print:py-3 text-xs md:text-sm print:text-sm font-bold text-ink">
               付款方式
             </div>
-            <div className="flex-1 px-4 py-2 md:py-3 print:py-3 text-sm text-[#1A1A18] flex flex-wrap gap-4 md:gap-6 print:gap-6">
+            <div className="flex-1 px-4 py-2 md:py-3 print:py-3 text-sm text-ink flex flex-wrap gap-4 md:gap-6 print:gap-6">
               {['現金', '支票', '匯款', '其他'].map((option) => (
                 <span key={option} className="flex items-center gap-1.5 shrink-0">
-                  <span className="w-3 h-3 md:w-4 md:h-4 print:w-4 print:h-4 border border-[#8C8880] inline-block" />
+                  <span className="w-3 h-3 md:w-4 md:h-4 print:w-4 print:h-4 border border-muted inline-block" />
                   {option}
                 </span>
               ))}
@@ -278,8 +278,8 @@ export default function TaxFormPrintView() {
           </div>
           <div className="flex flex-col md:flex-row print:flex-row">
             <Field label="銀行 / 分行" value="" className="flex-1 border-b-0" />
-            <Field label="戶名" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
-            <Field label="帳號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-[#E2DDD4] md:border-t-0 print:border-t-0" />
+            <Field label="戶名" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
+            <Field label="帳號" value="" className="flex-1 md:border-b-0 md:border-l print:border-b-0 print:border-l border-t border-edge md:border-t-0 print:border-t-0" />
           </div>
         </div>
 
@@ -287,16 +287,16 @@ export default function TaxFormPrintView() {
         <SectionLabel>附件</SectionLabel>
         {/* [RWD 優化] 附件框手機版上下疊加 */}
         <div className="flex flex-col sm:flex-row print:flex-row gap-4 md:gap-6 print:gap-6">
-          <div className="flex-1 h-24 md:h-32 print:h-32 border-2 border-dashed border-[#E2DDD4] rounded-xl flex items-center justify-center text-xs md:text-sm print:text-sm text-[#8C8880] font-bold">
+          <div className="flex-1 h-24 md:h-32 print:h-32 border-2 border-dashed border-edge rounded-xl flex items-center justify-center text-xs md:text-sm print:text-sm text-muted font-bold">
             身分證影本正面
           </div>
-          <div className="flex-1 h-24 md:h-32 print:h-32 border-2 border-dashed border-[#E2DDD4] rounded-xl flex items-center justify-center text-xs md:text-sm print:text-sm text-[#8C8880] font-bold">
+          <div className="flex-1 h-24 md:h-32 print:h-32 border-2 border-dashed border-edge rounded-xl flex items-center justify-center text-xs md:text-sm print:text-sm text-muted font-bold">
             身分證影本反面
           </div>
         </div>
 
         {/* 頁尾備註 */}
-        <p className="mt-6 md:mt-8 print:mt-8 text-[9px] md:text-[10px] print:text-[10px] text-[#8C8880] leading-relaxed">
+        <p className="mt-6 md:mt-8 print:mt-8 text-[9px] md:text-[10px] print:text-[10px] text-muted leading-relaxed">
           ※ 本表試算金額達 {WITHHOLDING_THRESHOLD.toLocaleString()} 元：居住者代扣所得稅 10%、
           非居住者代扣所得稅 20%，並加扣二代健保補充保費 2.11%；未達門檻不扣繳。
           實際扣繳金額仍請依給付當年度公告之稅法規定為準，如有疑義請洽會計／財務人員確認，

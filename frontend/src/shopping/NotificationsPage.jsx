@@ -23,25 +23,25 @@ const CATEGORY_LABEL = {
 
 function NotificationList({ items, onOpenNotification, emptyText }) {
   return (
-    <div className="rounded-[1.5rem] border border-[#E2DDD4] bg-white overflow-hidden shadow-sm">
+    <div className="rounded-[1.5rem] border border-edge bg-white overflow-hidden shadow-sm">
       {items.length === 0 ? (
-        <div className="py-12 text-center text-[#8C8880] font-bold">{emptyText}</div>
+        <div className="py-12 text-center text-muted font-bold">{emptyText}</div>
       ) : (
-        <div className="divide-y divide-[#E2DDD4]">
+        <div className="divide-y divide-edge">
           {items.map((notification) => (
             <button
               key={notification.notification_id}
               onClick={() => onOpenNotification?.(notification)}
-              className={`w-full flex items-start gap-3 px-4 md:px-6 py-4 md:py-5 text-left transition-colors hover:bg-[#F5F0E8] ${
-                notification.is_read ? '' : 'bg-[#FDF0ED]/40'
+              className={`w-full flex items-start gap-3 px-4 md:px-6 py-4 md:py-5 text-left transition-colors hover:bg-cream ${
+                notification.is_read ? '' : 'bg-brand-soft/40'
               }`}
             >
-              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.is_read ? 'bg-transparent' : 'bg-[#C8522A]'}`} />
+              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${notification.is_read ? 'bg-transparent' : 'bg-brand'}`} />
               <span className="min-w-0 flex-1">
-                <span className="block text-[10px] text-[#8C8880] mb-1">{formatNotificationTime(notification.created_at)}</span>
-                <span className="block text-sm font-bold text-[#1A1A18]">{notification.title}</span>
+                <span className="block text-[10px] text-muted mb-1">{formatNotificationTime(notification.created_at)}</span>
+                <span className="block text-sm font-bold text-ink">{notification.title}</span>
                 {notification.body && (
-                  <span className="block text-xs text-[#8C8880] mt-1 leading-relaxed">{notification.body}</span>
+                  <span className="block text-xs text-muted mt-1 leading-relaxed">{notification.body}</span>
                 )}
               </span>
             </button>
@@ -81,13 +81,13 @@ export default function NotificationsPage({
     <div className="max-w-3xl px-4 md:px-0 animate-in fade-in duration-500">
       <button
         onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group w-fit"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group w-fit"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回
       </button>
 
-      <h2 className="text-2xl md:text-[28px] font-serif font-bold mb-6 md:mb-8 text-[#1A1A18]">
+      <h2 className="text-2xl md:text-[28px] font-display font-bold mb-6 md:mb-8 text-ink">
         {CATEGORY_LABEL[category] || '通知'}
       </h2>
 
@@ -96,8 +96,8 @@ export default function NotificationsPage({
           onClick={() => setTab('unread')}
           className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             tab === 'unread'
-              ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18]'
+              ? 'bg-ink text-cream shadow-md'
+              : 'bg-white border border-edge text-muted hover:text-ink'
           }`}
         >
           未讀（{unreadList.length}）
@@ -106,8 +106,8 @@ export default function NotificationsPage({
           onClick={() => setTab('read')}
           className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             tab === 'read'
-              ? 'bg-[#1A1A18] text-[#F5F0E8] shadow-md'
-              : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18]'
+              ? 'bg-ink text-cream shadow-md'
+              : 'bg-white border border-edge text-muted hover:text-ink'
           }`}
         >
           已讀（{readList.length}）

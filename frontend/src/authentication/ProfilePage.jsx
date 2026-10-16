@@ -6,7 +6,7 @@ import { formatApiError } from '../errorMessage';
 function Field({ label, value, onChange, disabled, type = "text", placeholder }) {
   return (
     <div>
-      <label className="mb-1.5 md:mb-2 block text-[11px] md:text-xs font-bold tracking-wider text-[#8C8880] uppercase">
+      <label className="mb-1.5 md:mb-2 block text-[11px] md:text-xs font-bold tracking-wider text-muted uppercase">
         {label}
       </label>
       <input
@@ -17,8 +17,8 @@ function Field({ label, value, onChange, disabled, type = "text", placeholder })
         placeholder={placeholder}
         className={`w-full rounded-xl md:rounded-2xl border px-4 md:px-5 py-3 md:py-3.5 text-xs md:text-sm outline-none transition-all ${
           disabled 
-            ? "bg-[#F5F0E8] border-[#E2DDD4] text-[#8C8880] cursor-not-allowed opacity-80" 
-            : "bg-white border-[#E2DDD4] text-[#1A1A18] focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 shadow-sm"
+            ? "bg-cream border-edge text-muted cursor-not-allowed opacity-80" 
+            : "bg-white border-edge text-ink focus:border-brand focus:ring-4 focus:ring-brand/10 shadow-sm"
         }`}
       />
     </div>
@@ -120,7 +120,7 @@ export default function ProfileInfo({ isKOC = false }) {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20 text-[#8C8880] font-bold text-sm md:text-base">
+    <div className="flex items-center justify-center py-20 text-muted font-bold text-sm md:text-base">
       載入中...
     </div>
   );
@@ -131,13 +131,13 @@ export default function ProfileInfo({ isKOC = false }) {
       
       {/* [RWD 優化] 手機版標題與按鈕改為上下疊加 (flex-col)，按鈕滿版寬度 */}
       <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-        <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">個人資訊</h2>
+        <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink">個人資訊</h2>
         <button
           onClick={() => setEditing(!editing)}
           className={`w-full sm:w-auto rounded-xl md:rounded-full px-8 py-3 text-xs md:text-sm font-bold transition-all shadow-sm ${
             editing
-              ? "bg-[#C8522A] text-white"
-              : "bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8]"
+              ? "bg-brand text-white"
+              : "bg-white border border-edge text-muted hover:text-ink hover:bg-cream"
           }`}
         >
           {editing ? "取消編輯" : "編輯資料"}
@@ -146,13 +146,13 @@ export default function ProfileInfo({ isKOC = false }) {
 
       {/* 白色底層卡片 */}
       {/* [RWD 優化] 手機版縮小內距 p-6，圓角縮小 */}
-      <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-6 md:p-10 border border-[#E2DDD4] shadow-sm">
+      <div className="bg-white rounded-2xl md:rounded-[2.5rem] p-6 md:p-10 border border-edge shadow-sm">
         
         {/* =========================================
             帳戶資料區塊 (所有人皆可見)
         ========================================== */}
-        <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-          <span className="w-1.5 h-5 md:h-6 bg-[#C8522A] rounded-full inline-block"></span>
+        <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block"></span>
           帳戶資料
         </h3>
         
@@ -204,10 +204,10 @@ export default function ProfileInfo({ isKOC = false }) {
 
         {isKOC && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="my-8 md:my-10 h-px w-full bg-[#E2DDD4]" />
+            <div className="my-8 md:my-10 h-px w-full bg-edge" />
 
-            <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-              <span className="w-1.5 h-5 md:h-6 bg-[#1A1A18] rounded-full inline-block"></span>
+            <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+              <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block"></span>
               社群帳號
             </h3>
             
@@ -236,16 +236,16 @@ export default function ProfileInfo({ isKOC = false }) {
               />
             </div>
 
-            <div className="my-8 md:my-10 h-px w-full bg-[#E2DDD4]" />
+            <div className="my-8 md:my-10 h-px w-full bg-edge" />
 
-            <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-[#1A1A18] flex items-center gap-2 md:gap-3">
-              <span className="w-1.5 h-5 md:h-6 bg-[#1A1A18] rounded-full inline-block"></span>
+            <h3 className="mb-6 md:mb-8 text-base md:text-lg font-bold text-ink flex items-center gap-2 md:gap-3">
+              <span className="w-1.5 h-5 md:h-6 bg-brand rounded-full inline-block"></span>
               銀行帳戶
             </h3>
             
             <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2 mb-6 md:mb-8">
               <div>
-                <label className="mb-1.5 md:mb-2 block text-[11px] md:text-xs font-bold tracking-wider text-[#8C8880] uppercase">
+                <label className="mb-1.5 md:mb-2 block text-[11px] md:text-xs font-bold tracking-wider text-muted uppercase">
                   銀行帳戶
                 </label>
                 <select
@@ -254,8 +254,8 @@ export default function ProfileInfo({ isKOC = false }) {
                   disabled={!editing}
                   className={`w-full rounded-xl md:rounded-2xl border px-4 md:px-5 py-3 md:py-3.5 text-xs md:text-sm outline-none transition-all appearance-none ${
                     !editing 
-                      ? "bg-[#F5F0E8] border-[#E2DDD4] text-[#8C8880] cursor-not-allowed opacity-80" 
-                      : "bg-white border-[#E2DDD4] text-[#1A1A18] focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 shadow-sm"
+                      ? "bg-cream border-edge text-muted cursor-not-allowed opacity-80" 
+                      : "bg-white border-edge text-ink focus:border-brand focus:ring-4 focus:ring-brand/10 shadow-sm"
                   }`}
                 >
                   <option value="" disabled>選擇銀行帳戶</option>
@@ -278,17 +278,17 @@ export default function ProfileInfo({ isKOC = false }) {
 
         {/* [RWD 優化] 按鈕區：手機版垂直堆疊，並調整順序讓「確認」在上方 */}
         {editing && (
-          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-6 mt-6 md:mt-8 border-t border-[#E2DDD4]/50 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-6 mt-6 md:mt-8 border-t border-edge/50 animate-in slide-in-from-bottom-2 duration-300">
             <button
               onClick={handleUpdate}
-              className="w-full sm:w-auto rounded-xl md:rounded-full bg-[#1A1A18] px-10 py-3 md:py-3.5 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] active:scale-95 shadow-md order-1 sm:order-2"
+              className="w-full sm:w-auto rounded-xl md:rounded-full bg-brand px-10 py-3 md:py-3.5 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark active:scale-95 shadow-md order-1 sm:order-2"
             >
               確認更新
             </button>
             
             <button
               onClick={clearAll}
-              className="inline-flex items-center gap-2 text-[11px] md:text-sm font-bold text-[#8C8880] transition-colors hover:text-[#C8522A] py-2 sm:py-0 order-2 sm:order-1"
+              className="inline-flex items-center gap-2 text-[11px] md:text-sm font-bold text-muted transition-colors hover:text-brand py-2 sm:py-0 order-2 sm:order-1"
             >
               <X size={14} className="md:w-4 md:h-4" strokeWidth={3} />
               全部清空
@@ -299,7 +299,7 @@ export default function ProfileInfo({ isKOC = false }) {
 
       {/* 彈出提示 (Toast) */}
       <div
-        className={`fixed bottom-10 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-[#1A1A18] px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold text-white transition-all duration-300 shadow-xl border border-[#E2DDD4]/20 ${
+        className={`fixed bottom-10 left-1/2 z-[999] -translate-x-1/2 rounded-full bg-ink px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold text-white transition-all duration-300 shadow-xl border border-edge/20 ${
           toast.show ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0 pointer-events-none"
         }`}
       >

@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config';
 import { captureKocRef } from './kocRef';
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { User, Lock, Ticket, Coins, FileText, Briefcase, TrendingUp, Sparkles, ChevronDown, Heart, MessageCircle } from 'lucide-react';
 
 // === KOC 相關頁面 ===
@@ -21,6 +21,7 @@ import TaxFormPrintView from './koc/TaxFormPrintView';
 // === Shopping 相關頁面 ===
 import WelcomePage from './shopping/WelcomePage';
 import ShopPage from './shopping/ShopPage';
+import SiteFooter from './shopping/SiteFooter';
 import VendorStorePage from './shopping/VendorStorePage';
 import CartPage from './shopping/CartPage';
 import CheckoutPage from './shopping/CheckoutPage';
@@ -71,6 +72,13 @@ const VIEW_TO_PATH = {
   review: '/review',
 };
 
+// 會顯示 SiteFooter 的頁面（/store/:id 另外判斷）
+const FOOTER_VIEWS = new Set([
+  'shop', 'product_detail', 'kocIntro', 'favorites', 'cart', 'orders', 'order_detail',
+  'home', 'task_detail', 'earnings', 'earnings_detail', 'tax_form_records', 'payout_records',
+  'profile', 'security', 'applyKoc', 'notifications_order', 'notifications_koc',
+]);
+
 // 根據目前網址反查對應的 view 名稱，給 Sidebar/Header 判斷 active 狀態用
 function getViewKeyFromPath(pathname) {
   if (pathname.startsWith('/product/')) return 'product_detail';
@@ -106,7 +114,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
   });      
 
   return (
-    <aside className="hidden lg:block w-64 bg-white rounded-3xl border border-[#E2DDD4] shadow-sm p-6 h-fit shrink-0">
+    <aside className="hidden lg:block w-60 xl:w-64 bg-white rounded-[1.75rem] p-4 h-fit shrink-0 sticky top-28 self-start">
       <nav className="space-y-2">
         {menuItems.map((item, index) => {
           const isActive = currentView === item.view || (item.subItems && item.subItems.some(sub => sub.view === currentView));
@@ -124,11 +132,11 @@ function Sidebar({ currentView, onNavigate, userRole }) {
                     onNavigate(item.view);
                   }
                 }}
-                className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all font-bold ${isActive ? 'text-[#1A1A18] bg-[#F5F0E8]' : 'text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8]/50'
+                className={`flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all font-bold ${isActive ? 'text-brand bg-brand-soft' : 'text-muted hover:text-ink hover:bg-cream'
                   }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className={isActive ? 'text-[#C8522A]' : 'text-[#8C8880]'}>{item.icon}</div>
+                  <div className={isActive ? 'text-brand' : 'text-muted'}>{item.icon}</div>
                   <span className="text-sm tracking-wide">{item.label}</span>
                 </div>
                 {item.subItems && <ChevronDown size={16} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />}
@@ -140,7 +148,7 @@ function Sidebar({ currentView, onNavigate, userRole }) {
                     <div
                       key={subIdx}
                       onClick={() => onNavigate(sub.view)}
-                      className={`p-2.5 rounded-xl cursor-pointer text-sm font-bold transition-colors ${currentView === sub.view ? 'text-[#C8522A] bg-[#FDF0ED]' : 'text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8]/50'
+                      className={`p-2.5 rounded-xl cursor-pointer text-sm font-bold transition-colors ${currentView === sub.view ? 'text-brand bg-brand-soft' : 'text-muted hover:text-ink hover:bg-cream/50'
                         }`}
                     >
                       {sub.label}
@@ -204,8 +212,8 @@ function ProductDetailRoute({ userRole, onAddToCart, onBuyNow, favorites, onTogg
 
   if (!product) {
     return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">商品載入中...</p>
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <p className="text-muted">商品載入中...</p>
       </div>
     );
   }
@@ -396,6 +404,12 @@ function MainSystem() {
   const [shopKey, setShopKey] = useState(0);
   const [roleSyncing, setRoleSyncing] = useState(true);
 
+  // 換頁時回到頁首：單頁應用預設會停在上一頁的捲動位置。網址帶 #錨點 時交給瀏覽器處理。
+  useEffect(() => {
+    if (location.hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   // GA4 頁面瀏覽追蹤：React Router 換頁不會觸發瀏覽器原生的 page_view，
   // 所以每次路由變化時手動送出一次 page_view 事件給 GA4。
   useEffect(() => {
@@ -568,16 +582,18 @@ function MainSystem() {
 
   if (roleSyncing) {
     return (
-      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
-        <p className="text-[#8C8880]">載入中...</p>
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <p className="text-muted">載入中...</p>
       </div>
     );
   }
 
   const showHeader = !['welcome', 'login'].includes(view) && !location.pathname.startsWith('/tax-form-print');
+  // 聊天類（滿版高度）和結帳頁不放頁尾，其他有 Header 的頁面都放
+  const showFooter = showHeader && (FOOTER_VIEWS.has(view) || location.pathname.startsWith('/store/'));
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans text-slate-800 relative">
+    <div className="min-h-screen bg-cream font-sans text-slate-800 relative">
       {showHeader && <Header activeTab={view} onNavigate={handleNavigate} userRole={userRole} cartCount={cartCount} supportUnreadCount={supportUnreadCount} onLogout={handleLogout} notifications={notifications} onRefreshNotifications={syncNotifications} onOpenNotification={handleOpenNotification} />}
 
       <Routes>
@@ -822,12 +838,15 @@ function MainSystem() {
 
         <Route path="/koc-intro" element={
           <KocIntroPage
-            onApply={() => handleNavigate('applyKoc')}
+            isKoc={userRole === 'koc'}
+            onApply={() => handleNavigate(userRole === 'koc' ? 'home' : 'applyKoc')}
             onBack={() => handleNavigate('shop')}
           />
         } />
 
         <Route path="/apply-koc" element={
+          // 已經是 KOC 就不用再申請，直接導到接案中心
+          userRole === 'koc' ? <Navigate to="/home" replace /> :
           <ShellLayout userRole={userRole} activeView={getSidebarActiveView()} onNavigate={handleNavigate}>
             <ApplyKOCPage
               onSubmit={() => {
@@ -841,9 +860,11 @@ function MainSystem() {
         <Route path="*" element={null} />
       </Routes>
 
-      <div className={`fixed bottom-10 left-1/2 z-[9999] flex -translate-x-1/2 items-center gap-4 rounded-full bg-[#1A1A18] pl-6 pr-2 py-2 text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 ${appToast ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-10 opacity-0"}`}>
+      {showFooter && <SiteFooter onNavigate={handleNavigate} userRole={userRole} />}
+
+      <div className={`fixed bottom-10 left-1/2 z-[9999] flex -translate-x-1/2 items-center gap-4 rounded-full bg-ink pl-6 pr-2 py-2 text-sm font-bold tracking-wide text-white shadow-xl transition-all duration-300 ${appToast ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-10 opacity-0"}`}>
         <span>{appToast}</span>
-        {appToast && <button onClick={() => { setAppToast(""); navigate('/login'); }} className="rounded-full bg-[#C8522A] px-5 py-2.5 text-xs transition-colors hover:bg-[#A64220]">前往登入</button>}
+        {appToast && <button onClick={() => { setAppToast(""); navigate('/login'); }} className="rounded-full bg-brand px-5 py-2.5 text-xs transition-colors hover:bg-brand-dark">前往登入</button>}
       </div>
     </div>
   );

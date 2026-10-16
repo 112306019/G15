@@ -33,7 +33,7 @@ import KocHistoryPanel from './KocHistoryPanel'
 function Card({ children, className = '', ...props }) {
   return (
     <div
-      className={`bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm overflow-hidden ${className}`}
+      className={`bg-white rounded-[1.5rem] border border-edge shadow-sm overflow-hidden ${className}`}
       {...props}
     >
       {children}
@@ -51,25 +51,25 @@ function StatCard({ label, value, icon: Icon, onClick, active }) {
         'p-4 sm:p-5 flex flex-col justify-between transition-colors',
         clickable ? 'cursor-pointer' : '',
         active
-          ? 'border-[#C8522A] ring-2 ring-[#C8522A]/15'
-          : 'hover:border-[#B89B6A]'
+          ? 'border-brand ring-2 ring-brand/15'
+          : 'hover:border-gold'
       )}
     >
       <div className="flex items-center justify-between mb-2 sm:mb-4">
         <span
           className={cn(
             'text-xs sm:text-sm font-bold tracking-wide',
-            active ? 'text-[#C8522A]' : 'text-[#8C8880]'
+            active ? 'text-brand' : 'text-muted'
           )}
         >
           {label}
         </span>
-        <div className={active ? 'text-[#C8522A]' : 'text-[#8C8880]'}>
+        <div className={active ? 'text-brand' : 'text-muted'}>
           <Icon size={18} className="sm:w-5 sm:h-5" strokeWidth={2.5} />
         </div>
       </div>
 
-      <div className="text-xl sm:text-2xl font-black text-[#1A1A18] font-sans">
+      <div className="text-xl sm:text-2xl font-black text-ink font-sans">
         {value}
       </div>
     </Card>
@@ -78,11 +78,11 @@ function StatCard({ label, value, icon: Icon, onClick, active }) {
 
 function Button({ variant = 'default', className, children, ...props }) {
   const variants = {
-    brand: 'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] shadow-sm',
-    outline: 'border border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18]',
+    brand: 'bg-brand text-white hover:bg-brand-dark shadow-sm',
+    outline: 'border border-edge bg-white text-muted hover:text-brand hover:border-brand',
     danger: 'border border-[#FFF0F0] bg-[#FFF0F0] text-[#D93025] hover:bg-[#D93025] hover:text-white',
-    warning: 'border border-[#FDF0ED] bg-[#FDF0ED] text-[#C8522A] hover:bg-[#C8522A] hover:text-white',
-    default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
+    warning: 'border border-brand-soft bg-brand-soft text-brand hover:bg-brand hover:text-white',
+    default: 'bg-cream text-ink hover:bg-edge'
   }
 
   return (
@@ -108,15 +108,15 @@ function Button({ variant = 'default', className, children, ...props }) {
 // ─── 狀態標籤 ────────────────────────────────────────────────
 
 const qualificationBadge = {
-  pending: { label: '待審核', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
-  approved: { label: '已通過', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
+  pending: { label: '待審核', cls: 'bg-brand-soft text-brand', dot: 'bg-brand' },
+  approved: { label: '已通過', cls: 'bg-cream text-ink', dot: 'bg-brand' },
   rejected: { label: '已拒絕', cls: 'bg-[#FFF0F0] text-[#D93025]', dot: 'bg-[#D93025]' }
 }
 
 function Pill({ cfg }) {
   if (!cfg) {
     return (
-      <span className="text-[11px] sm:text-xs font-bold text-[#8C8880]">
+      <span className="text-[11px] sm:text-xs font-bold text-muted">
         未知狀態
       </span>
     )
@@ -371,7 +371,7 @@ export default function ContentReview() {
             <div className="overflow-x-auto w-full">
               <table className="w-full min-w-[800px]">
                 <thead>
-                  <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                  <tr className="bg-mist border-b border-edge">
                     {[
                       'KOC 資訊',
                       '申請活動',
@@ -382,7 +382,7 @@ export default function ContentReview() {
                     ].map(header => (
                       <th
                         key={header}
-                        className="p-4 sm:p-5 text-left text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest whitespace-nowrap"
+                        className="p-4 sm:p-5 text-left text-[11px] sm:text-xs font-bold text-muted uppercase tracking-widest whitespace-nowrap"
                       >
                         {header}
                       </th>
@@ -390,10 +390,10 @@ export default function ContentReview() {
                   </tr>
                 </thead>
 
-                <tbody className="divide-y divide-[#E2DDD4]">
+                <tbody className="divide-y divide-edge">
                   {applicationLoading ? (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+                      <td colSpan={6} className="py-16 text-center text-xs sm:text-sm font-bold text-muted">
                         接案申請載入中...
                       </td>
                     </tr>
@@ -405,7 +405,7 @@ export default function ContentReview() {
                     </tr>
                   ) : filteredApplications.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+                      <td colSpan={6} className="py-16 text-center text-xs sm:text-sm font-bold text-muted">
                         {qualificationFilter === 'all'
                           ? '目前沒有 KOC 接案申請'
                           : '這個分類目前沒有資料'}
@@ -424,29 +424,29 @@ export default function ContentReview() {
                           }}
                           className={cn(
                             'transition-colors',
-                            canReview ? 'hover:bg-[#F8F9FA] cursor-pointer' : ''
+                            canReview ? 'hover:bg-mist cursor-pointer' : ''
                           )}
                         >
                           <td className="p-4 sm:p-5">
                             <div className="flex items-center gap-2 sm:gap-3">
                               <Avatar name={application.kocName || '?'} size="sm" />
                               <div>
-                                <div className="text-[13px] sm:text-sm font-bold text-[#1A1A18]">
+                                <div className="text-[13px] sm:text-sm font-bold text-ink">
                                   {application.kocName}
                                 </div>
-                                <div className="text-[9px] sm:text-[10px] font-bold text-[#8C8880] font-mono mt-0.5">
+                                <div className="text-[9px] sm:text-[10px] font-bold text-muted font-mono mt-0.5">
                                   {application.kocId}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] max-w-[150px] sm:max-w-none truncate">
+                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-muted max-w-[150px] sm:max-w-none truncate">
                             {application.campaignName}
                           </td>
-                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-[#8C8880] max-w-[150px] sm:max-w-none truncate">
+                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-muted max-w-[150px] sm:max-w-none truncate">
                             {application.productName}
                           </td>
-                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-[#8C8880] whitespace-nowrap">
+                          <td className="p-4 sm:p-5 text-[11px] sm:text-xs font-medium text-muted whitespace-nowrap">
                             {application.appliedAt
                               ? new Date(application.appliedAt).toLocaleString('zh-TW')
                               : '—'}
@@ -457,15 +457,15 @@ export default function ContentReview() {
                           <td className="p-4 sm:p-5">
                             {application.couponCode ? (
                               <div>
-                                <div className="text-[11px] sm:text-xs font-mono font-bold text-[#C8522A]">
+                                <div className="text-[11px] sm:text-xs font-mono font-bold text-brand">
                                   {application.couponCode}
                                 </div>
-                                <div className="text-[9px] sm:text-[10px] font-bold text-[#8C8880] mt-1">
+                                <div className="text-[9px] sm:text-[10px] font-bold text-muted mt-1">
                                   {application.couponStatus === 'active' ? '已啟用' : '尚未啟用'}
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-xs text-[#E2DDD4] font-bold">—</span>
+                              <span className="text-xs text-edge font-bold">—</span>
                             )}
                           </td>
                         </tr>
@@ -479,10 +479,10 @@ export default function ContentReview() {
 
           {/* 接案審核 Modal */}
           {selectedApplication && selectedApplication.status === 'pending' && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-2 sm:p-4">
-              <div className="relative w-full max-w-3xl bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl border border-[#E2DDD4] max-h-[95vh] overflow-y-auto">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-2 sm:p-4">
+              <div className="relative w-full max-w-3xl bg-white rounded-[1.5rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl border border-edge max-h-[95vh] overflow-y-auto">
                 <div className="flex justify-between items-start mb-6 sm:mb-8">
-                  <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#1A1A18]">
+                  <h3 className="text-xl sm:text-2xl font-display font-bold text-ink">
                     審核接案申請
                   </h3>
                   <button
@@ -491,20 +491,20 @@ export default function ContentReview() {
                       setSelectedApplicationId(null)
                       setQualificationNote('')
                     }}
-                    className="p-1.5 sm:p-2 text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F5F0E8] rounded-full transition-colors -mr-2 sm:mr-0"
+                    className="p-1.5 sm:p-2 text-muted hover:text-ink hover:bg-cream rounded-full transition-colors -mr-2 sm:mr-0"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
                 <div className="space-y-4 sm:space-y-6">
-                  <div className="flex items-center gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-[#E2DDD4]">
+                  <div className="flex items-center gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-edge">
                     <Avatar name={selectedApplication.kocName || '?'} size="md" />
                     <div className="flex-1">
-                      <div className="font-bold text-base sm:text-lg text-[#1A1A18]">
+                      <div className="font-bold text-base sm:text-lg text-ink">
                         {selectedApplication.kocName}
                       </div>
-                      <div className="text-xs sm:text-sm font-bold text-[#8C8880] mt-0.5 sm:mt-1">
+                      <div className="text-xs sm:text-sm font-bold text-muted mt-0.5 sm:mt-1">
                         {selectedApplication.kocId}
                       </div>
                     </div>
@@ -512,31 +512,31 @@ export default function ContentReview() {
                     <span
                       className={`relative group px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap cursor-help ${
                         selectedApplication.violationCount > 0
-                          ? 'bg-[#FDF0ED] text-[#C8522A]'
-                          : 'bg-[#F5F0E8] text-[#8C8880]'
+                          ? 'bg-brand-soft text-brand'
+                          : 'bg-cream text-muted'
                       }`}
                     >
                       過往違規次數：{selectedApplication.violationCount}
-                      <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 bg-[#1A1A18] text-white text-[11px] font-medium normal-case whitespace-normal tracking-normal leading-relaxed rounded-xl px-3 py-2 shadow-lg z-20">
+                      <div className="hidden group-hover:block absolute right-0 top-full mt-2 w-64 bg-ink text-white text-[11px] font-medium normal-case whitespace-normal tracking-normal leading-relaxed rounded-xl px-3 py-2 shadow-lg z-20">
                         任務逾期未完成（沒交文案或作品連結）的累計次數
                       </div>
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="bg-[#F8F9FA] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[#E2DDD4]">
-                      <div className="text-[10px] sm:text-[11px] font-bold text-[#8C8880] uppercase mb-1">
+                    <div className="bg-mist rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-edge">
+                      <div className="text-[10px] sm:text-[11px] font-bold text-muted uppercase mb-1">
                         申請活動
                       </div>
-                      <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
+                      <div className="text-xs sm:text-sm font-bold text-ink">
                         {selectedApplication.campaignName}
                       </div>
                     </div>
-                    <div className="bg-[#F8F9FA] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[#E2DDD4]">
-                      <div className="text-[10px] sm:text-[11px] font-bold text-[#8C8880] uppercase mb-1">
+                    <div className="bg-mist rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-edge">
+                      <div className="text-[10px] sm:text-[11px] font-bold text-muted uppercase mb-1">
                         申請商品
                       </div>
-                      <div className="text-xs sm:text-sm font-bold text-[#1A1A18]">
+                      <div className="text-xs sm:text-sm font-bold text-ink">
                         {selectedApplication.productName}
                       </div>
                     </div>
@@ -547,13 +547,13 @@ export default function ContentReview() {
                     koc={{ kocId: selectedApplication.kocId, name: selectedApplication.kocName }}
                   />
 
-                  <div className="bg-[#FDF0ED] rounded-xl px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-bold text-[#C8522A] flex items-start gap-2 sm:gap-3">
+                  <div className="bg-brand-soft rounded-xl px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-bold text-brand flex items-start gap-2 sm:gap-3">
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
                     審核通過後，系統會建立 KOC 任務並產生已啟用的優惠碼，KOC 不需要等上傳作品連結就能先讓粉絲使用。
                   </div>
 
                   <div className="flex flex-col gap-1.5 sm:gap-2">
-                    <label className="text-[10px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-widest">
+                    <label className="text-[10px] sm:text-xs font-bold text-muted uppercase tracking-widest">
                       審核備註
                     </label>
                     <textarea
@@ -561,12 +561,12 @@ export default function ContentReview() {
                       value={qualificationNote}
                       onChange={e => setQualificationNote(e.target.value)}
                       placeholder="拒絕申請時請填寫原因..."
-                      className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4 text-[13px] sm:text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 resize-none"
+                      className="w-full bg-mist border border-edge rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-4 text-[13px] sm:text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 resize-none"
                     />
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 mt-4 border-t border-[#E2DDD4]">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-6 sm:pt-8 mt-4 border-t border-edge">
                   <Button
                     variant="outline"
                     onClick={() => {

@@ -80,7 +80,7 @@ function Card({ children, className = '' }) {
   return (
     <div
       className={cn(
-        'bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm',
+        'bg-white rounded-[1.5rem] border border-edge shadow-sm',
         className
       )}
     >
@@ -91,10 +91,10 @@ function Card({ children, className = '' }) {
 
 function Button({ variant = 'default', className, children, ...props }) {
   const variants = {
-    brand: 'bg-[#1A1A18] text-white hover:bg-[#C8522A]',
-    outline: 'border border-[#E2DDD4] bg-white text-[#1A1A18] hover:bg-[#F8F9FA]',
+    brand: 'bg-brand text-white hover:bg-brand-dark',
+    outline: 'border border-edge bg-white text-ink hover:bg-mist',
     danger: 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white',
-    default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
+    default: 'bg-cream text-ink hover:bg-edge'
   }
 
   return (
@@ -114,17 +114,17 @@ function Button({ variant = 'default', className, children, ...props }) {
 
 function ShippingBadge({ status }) {
   const config = {
-    unshipped: { label: '待出貨', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' },
+    unshipped: { label: '待出貨', cls: 'bg-brand-soft text-brand', dot: 'bg-brand' },
     preparing: { label: '備貨中', cls: 'bg-[#FFF8E7] text-[#9A6700]', dot: 'bg-[#9A6700]' },
-    shipped: { label: '已出貨', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' },
+    shipped: { label: '已出貨', cls: 'bg-cream text-ink', dot: 'bg-brand' },
     delivered: { label: '已送達', cls: 'bg-green-50 text-green-700', dot: 'bg-green-600' },
     cancelled: { label: '已取消', cls: 'bg-red-50 text-red-600', dot: 'bg-red-500' }
   }
 
   const current = config[status] || {
     label: status || '未知',
-    cls: 'bg-gray-100 text-gray-500',
-    dot: 'bg-gray-400'
+    cls: 'bg-mist text-muted',
+    dot: 'bg-muted/50'
   }
 
   return (
@@ -152,7 +152,7 @@ function PaymentBadge({ status }) {
           ? 'bg-green-50 text-green-700'
           : isRefundPending
           ? 'bg-amber-50 text-amber-700'
-          : 'bg-[#F8F9FA] text-[#8C8880]'
+          : 'bg-mist text-muted'
       )}
     >
       {paymentLabels[status] || status || '未知'}
@@ -190,17 +190,17 @@ function OrderDetailModal({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
       <div
-        className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-4xl max-h-[95vh] sm:max-h-[92vh] overflow-y-auto bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl border border-[#E2DDD4]">
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 bg-[#F8F9FA] border-b border-[#E2DDD4]">
+      <div className="relative w-full max-w-4xl max-h-[95vh] sm:max-h-[92vh] overflow-y-auto bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl border border-edge">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-6 bg-mist border-b border-edge">
           <div>
-            <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1A1A18]">
+            <h2 className="text-xl sm:text-2xl font-display font-bold text-ink">
               訂單詳細資料
             </h2>
-            <div className="text-[11px] sm:text-xs font-mono font-bold text-[#8C8880] mt-1">
+            <div className="text-[11px] sm:text-xs font-mono font-bold text-muted mt-1">
               {order?.orderId || '讀取中'}
             </div>
           </div>
@@ -208,7 +208,7 @@ function OrderDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] -mr-2 sm:mr-0"
+            className="p-2 rounded-full text-muted hover:bg-edge hover:text-ink -mr-2 sm:mr-0"
           >
             <X size={20} />
           </button>
@@ -216,7 +216,7 @@ function OrderDetailModal({
 
         {loading ? (
           <div className="py-24 text-center">
-            <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
+            <div className="inline-flex items-center gap-2 text-sm font-bold text-muted">
               <Loader2 size={18} className="animate-spin" />
               訂單詳細資料載入中...
             </div>
@@ -225,11 +225,11 @@ function OrderDetailModal({
           <div className="px-4 sm:px-8 py-5 sm:py-7 space-y-5 sm:space-y-7">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <Card className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-muted mb-2 sm:mb-3">
                   <User size={15} />
                   顧客
                 </div>
-                <div className="text-sm font-bold text-[#1A1A18]">
+                <div className="text-sm font-bold text-ink">
                   {order.userId
                     ? `會員 ${order.userId}`
                     : order.guestId
@@ -239,7 +239,7 @@ function OrderDetailModal({
               </Card>
 
               <Card className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-muted mb-2 sm:mb-3">
                   <CreditCard size={15} />
                   付款狀態
                 </div>
@@ -247,7 +247,7 @@ function OrderDetailModal({
               </Card>
 
               <Card className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] mb-2 sm:mb-3">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-muted mb-2 sm:mb-3">
                   <Truck size={15} />
                   出貨狀態
                 </div>
@@ -260,7 +260,7 @@ function OrderDetailModal({
                 <div className="text-[11px] sm:text-xs font-bold text-amber-700 mb-1.5">
                   買家申請取消訂單
                 </div>
-                <div className="text-xs sm:text-sm text-[#1A1A18]">
+                <div className="text-xs sm:text-sm text-ink">
                   {order.cancelReason
                     ? `取消原因：${order.cancelReason}`
                     : '買家未填寫取消原因'}
@@ -269,41 +269,41 @@ function OrderDetailModal({
             )}
 
             <Card className="overflow-hidden">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#F8F9FA] border-b border-[#E2DDD4]">
-                <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18]">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-mist border-b border-edge">
+                <div className="flex items-center gap-2 text-sm font-bold text-ink">
                   <Package size={17} />
                   商品明細
                 </div>
               </div>
 
-              <div className="divide-y divide-[#E2DDD4]">
+              <div className="divide-y divide-edge">
                 {(order.items || []).map(item => (
                   <div
                     key={item.orderItemId}
                     className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 sm:gap-4 px-4 sm:px-6 py-4 sm:py-5 items-start sm:items-center"
                   >
                     <div>
-                      <div className="text-sm font-bold text-[#1A1A18] flex items-center gap-1.5 flex-wrap">
+                      <div className="text-sm font-bold text-ink flex items-center gap-1.5 flex-wrap">
                         {item.isBundle && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F5F0E8] text-[#1A1A18]">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cream text-ink">
                             組合
                           </span>
                         )}
                         {item.productName}
                       </div>
-                      <div className="text-[10px] sm:text-xs text-[#8C8880] mt-1">
+                      <div className="text-[10px] sm:text-xs text-muted mt-1">
                         商品編號：{item.productId}
                       </div>
                       {item.isBundle && item.bundleItems?.length > 0 && (
-                        <div className="mt-2 rounded-lg border border-dashed border-[#E2DDD4] bg-[#F8F9FA] px-3 py-2">
-                          <div className="text-[10px] font-bold text-[#8C8880] mb-1">
+                        <div className="mt-2 rounded-lg border border-dashed border-edge bg-mist px-3 py-2">
+                          <div className="text-[10px] font-bold text-muted mb-1">
                             出貨內容（{item.quantity} 組合計）
                           </div>
                           <ul className="space-y-0.5">
                             {item.bundleItems.map(component => (
                               <li
                                 key={component.productId}
-                                className="text-xs text-[#1A1A18] flex justify-between gap-3"
+                                className="text-xs text-ink flex justify-between gap-3"
                               >
                                 <span>{component.productName}</span>
                                 <span className="font-bold">x{component.quantity}</span>
@@ -314,18 +314,18 @@ function OrderDetailModal({
                       )}
                     </div>
 
-                    <div className="text-xs sm:text-sm text-[#8C8880] flex justify-between sm:block mt-1 sm:mt-0">
+                    <div className="text-xs sm:text-sm text-muted flex justify-between sm:block mt-1 sm:mt-0">
                       <span className="sm:hidden font-bold">單價</span>
                       {formatCurrency(item.unitPrice)}
                     </div>
 
-                    <div className="text-xs sm:text-sm font-bold text-[#1A1A18] flex justify-between sm:block">
+                    <div className="text-xs sm:text-sm font-bold text-ink flex justify-between sm:block">
                       <span className="sm:hidden">數量</span>
                       × {item.quantity}
                     </div>
 
-                    <div className="text-sm sm:text-base font-black text-[#C8522A] flex justify-between sm:block border-t sm:border-0 border-[#E2DDD4] pt-2 sm:pt-0 mt-1 sm:mt-0">
-                      <span className="sm:hidden text-xs font-bold text-[#8C8880]">小計</span>
+                    <div className="text-sm sm:text-base font-black text-brand flex justify-between sm:block border-t sm:border-0 border-edge pt-2 sm:pt-0 mt-1 sm:mt-0">
+                      <span className="sm:hidden text-xs font-bold text-muted">小計</span>
                       {formatCurrency(item.subtotal)}
                     </div>
                   </div>
@@ -335,37 +335,37 @@ function OrderDetailModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
               <Card className="p-5 sm:p-6">
-                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
+                <div className="flex items-center gap-2 text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-4">
                   <Ticket size={15} />
                   優惠碼
                 </div>
 
                 {order.promotionCode ? (
                   <div>
-                    <div className="inline-flex px-3 py-2 rounded-xl bg-[#FDF0ED] text-[#C8522A] font-mono font-bold text-xs sm:text-sm">
+                    <div className="inline-flex px-3 py-2 rounded-xl bg-brand-soft text-brand font-mono font-bold text-xs sm:text-sm">
                       {order.promotionCode}
                     </div>
-                    <div className="text-[10px] sm:text-xs text-[#8C8880] mt-3">
+                    <div className="text-[10px] sm:text-xs text-muted mt-3">
                       此訂單透過 KOC 或活動優惠碼完成
                     </div>
                   </div>
                 ) : (
-                  <div className="text-xs sm:text-sm font-bold text-[#8C8880]">
+                  <div className="text-xs sm:text-sm font-bold text-muted">
                     未使用優惠碼
                   </div>
                 )}
               </Card>
 
               <Card className="p-5 sm:p-6">
-                <div className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-4">
+                <div className="text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider mb-4">
                   金額摘要
                 </div>
 
                 <div className="flex items-end justify-between">
-                  <span className="text-xs sm:text-sm font-bold text-[#8C8880]">
+                  <span className="text-xs sm:text-sm font-bold text-muted">
                     訂單總金額
                   </span>
-                  <span className="text-xl sm:text-2xl font-black text-[#C8522A]">
+                  <span className="text-xl sm:text-2xl font-black text-brand">
                     {formatCurrency(order.totalAmount)}
                   </span>
                 </div>
@@ -374,34 +374,34 @@ function OrderDetailModal({
 
             {order.payment && (
               <Card className="p-5 sm:p-6">
-                <div className="text-sm font-bold text-[#1A1A18] mb-4">
+                <div className="text-sm font-bold text-ink mb-4">
                   付款資訊
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs sm:text-sm">
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       付款方式
                     </div>
-                    <div className="font-bold text-[#1A1A18]">
+                    <div className="font-bold text-ink">
                       {order.payment.paymentMethod || '—'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       付款狀態
                     </div>
-                    <div className="font-bold text-[#1A1A18]">
+                    <div className="font-bold text-ink">
                       {paymentLabels[order.payment.paymentStatus] ||
                         order.payment.paymentStatus ||
                         '—'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       交易編號
                     </div>
-                    <div className="font-mono font-bold text-[#1A1A18] break-all">
+                    <div className="font-mono font-bold text-ink break-all">
                       {order.payment.transactionId || '—'}
                     </div>
                   </div>
@@ -410,26 +410,26 @@ function OrderDetailModal({
             )}
 
             <Card className="p-5 sm:p-6">
-              <div className="flex items-center gap-2 text-sm font-bold text-[#1A1A18] mb-4 sm:mb-5">
+              <div className="flex items-center gap-2 text-sm font-bold text-ink mb-4 sm:mb-5">
                 <Truck size={17} />
                 配送與收件資訊
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 text-xs sm:text-sm">
                 <div>
-                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                     收件人
                   </div>
-                  <div className="font-bold text-[#1A1A18]">
+                  <div className="font-bold text-ink">
                     {order.shippingInfo?.recipientName || '—'}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                     聯絡電話
                   </div>
-                  <div className="font-bold text-[#1A1A18]">
+                  <div className="font-bold text-ink">
                     {order.shippingInfo?.recipientPhone || '—'}
                   </div>
                 </div>
@@ -437,11 +437,11 @@ function OrderDetailModal({
                 {order.shipment?.logisticsType === 'CVS' ? (
                   <>
                     <div>
-                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                         配送方式
                       </div>
-                      <div className="font-bold text-[#1A1A18] flex items-center gap-2">
-                        <Store size={15} className="text-[#C8522A]" />
+                      <div className="font-bold text-ink flex items-center gap-2">
+                        <Store size={15} className="text-brand" />
                         {order.shipment.logisticsSubType === 'UNIMARTC2C'
                           ? '7-ELEVEN 超商取貨'
                           : '超商取貨'}
@@ -449,13 +449,13 @@ function OrderDetailModal({
                     </div>
 
                     <div>
-                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                         取貨門市
                       </div>
-                      <div className="font-bold text-[#1A1A18]">
+                      <div className="font-bold text-ink">
                         {order.shipment.storeName || '—'}
                         {order.shipment.storeId && (
-                          <span className="ml-2 text-[10px] sm:text-xs font-mono text-[#8C8880]">
+                          <span className="ml-2 text-[10px] sm:text-xs font-mono text-muted">
                             ({order.shipment.storeId})
                           </span>
                         )}
@@ -463,26 +463,26 @@ function OrderDetailModal({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                         門市地址
                       </div>
-                      <div className="font-bold text-[#1A1A18] flex items-start gap-2">
-                        <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
+                      <div className="font-bold text-ink flex items-start gap-2">
+                        <MapPin size={15} className="mt-0.5 shrink-0 text-brand" />
                         {order.shipment.storeAddress || '—'}
                       </div>
                     </div>
                   </>
                 ) : (
                   <div className="sm:col-span-2">
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       宅配地址
                     </div>
                     {order.shippingInfo?.address ? (
-                      <div className="font-bold text-[#1A1A18] flex items-start gap-2">
-                        <MapPin size={15} className="mt-0.5 shrink-0 text-[#C8522A]" />
+                      <div className="font-bold text-ink flex items-start gap-2">
+                        <MapPin size={15} className="mt-0.5 shrink-0 text-brand" />
                         <span>
                           {order.shippingInfo.address.postalCode && (
-                            <span className="font-mono text-[#8C8880] mr-1">
+                            <span className="font-mono text-muted mr-1">
                               {order.shippingInfo.address.postalCode}
                             </span>
                           )}
@@ -492,7 +492,7 @@ function OrderDetailModal({
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 bg-[#FDF0ED] text-[#C8522A] rounded-xl px-4 py-3 font-bold text-xs sm:text-sm">
+                      <div className="flex items-center gap-2 bg-brand-soft text-brand rounded-xl px-4 py-3 font-bold text-xs sm:text-sm">
                         此宅配訂單尚未留有配送地址
                       </div>
                     )}
@@ -501,10 +501,10 @@ function OrderDetailModal({
 
                 {order.shipment?.merchantTradeNo && (
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       平台物流交易編號
                     </div>
-                    <div className="font-mono font-bold text-[#1A1A18] break-all">
+                    <div className="font-mono font-bold text-ink break-all">
                       {order.shipment.merchantTradeNo}
                     </div>
                   </div>
@@ -512,10 +512,10 @@ function OrderDetailModal({
 
                 {order.shipment?.ecpayLogisticsId && (
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       綠界物流編號
                     </div>
-                    <div className="font-mono font-bold text-[#1A1A18] break-all">
+                    <div className="font-mono font-bold text-ink break-all">
                       {order.shipment.ecpayLogisticsId}
                     </div>
                   </div>
@@ -523,10 +523,10 @@ function OrderDetailModal({
 
                 {order.shipment?.cvsPaymentNo && (
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       7-ELEVEN 寄貨編號
                     </div>
-                    <div className="font-mono font-bold text-[#1A1A18]">
+                    <div className="font-mono font-bold text-ink">
                       {order.shipment.cvsPaymentNo}
                     </div>
                   </div>
@@ -534,10 +534,10 @@ function OrderDetailModal({
 
                 {order.shipment?.cvsValidationNo && (
                   <div>
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       7-ELEVEN 驗證碼
                     </div>
-                    <div className="font-mono font-bold text-[#1A1A18]">
+                    <div className="font-mono font-bold text-ink">
                       {order.shipment.cvsValidationNo}
                     </div>
                   </div>
@@ -546,10 +546,10 @@ function OrderDetailModal({
                 {order.shipment?.cvsPaymentNo &&
                   order.shipment?.cvsValidationNo && (
                     <div className="sm:col-span-2">
-                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                         7-ELEVEN 交貨便代碼
                       </div>
-                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider break-all">
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-cream font-mono font-black text-brand tracking-wider break-all">
                         {order.shipment.cvsPaymentNo}
                         {order.shipment.cvsValidationNo}
                       </div>
@@ -559,10 +559,10 @@ function OrderDetailModal({
                 {order.shipment?.logisticsType === 'HOME' &&
                   order.shipment?.bookingNote && (
                     <div className="sm:col-span-2">
-                      <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                      <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                         黑貓宅配託運單號
                       </div>
-                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-[#F5F0E8] font-mono font-black text-[#C8522A] tracking-wider break-all">
+                      <div className="inline-flex items-center px-4 py-3 rounded-xl bg-cream font-mono font-black text-brand tracking-wider break-all">
                         {order.shipment.bookingNote}
                       </div>
                     </div>
@@ -570,10 +570,10 @@ function OrderDetailModal({
 
                 {order.shipment && (
                   <div className="sm:col-span-2">
-                    <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                    <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                       物流單狀態
                     </div>
-                    <div className="font-bold text-[#1A1A18]">
+                    <div className="font-bold text-ink">
                       {order.shipment.shippingStatus === 'pending'
                         ? '待建立物流單'
                         : order.shipment.shippingStatus === 'created'
@@ -626,7 +626,7 @@ function OrderDetailModal({
                       </Button>
 
                       {order.paymentStatus !== 'paid' && (
-                        <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-2">
+                        <div className="text-[10px] sm:text-xs font-bold text-brand mt-2">
                           訂單需完成付款後才能建立物流單
                         </div>
                       )}
@@ -664,16 +664,16 @@ function OrderDetailModal({
             </Card>
 
             <Card className="p-5 sm:p-6">
-              <div className="text-sm font-bold text-[#1A1A18] mb-4">
+              <div className="text-sm font-bold text-ink mb-4">
                 發票管理
               </div>
 
               {order.invoiceNumber ? (
                 <div className="text-xs sm:text-sm">
-                  <div className="text-[10px] sm:text-xs font-bold text-[#8C8880] mb-1">
+                  <div className="text-[10px] sm:text-xs font-bold text-muted mb-1">
                     發票號碼
                   </div>
-                  <div className="font-bold text-[#1A1A18]">
+                  <div className="font-bold text-ink">
                     {order.invoiceNumber}
                   </div>
                 </div>
@@ -686,7 +686,7 @@ function OrderDetailModal({
                       setInvoiceNumberInput(event.target.value)
                     }
                     placeholder="請輸入發票號碼（例如 AB12345678）"
-                    className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+                    className="flex-1 bg-mist border border-edge rounded-xl px-4 py-3 text-sm font-bold text-ink outline-none focus:border-brand"
                   />
                   <Button
                     variant="brand"
@@ -715,14 +715,14 @@ function OrderDetailModal({
               )}
 
               {invoiceUploadMsg && (
-                <div className="text-[10px] sm:text-xs font-bold text-[#C8522A] mt-2">
+                <div className="text-[10px] sm:text-xs font-bold text-brand mt-2">
                   {invoiceUploadMsg}
                 </div>
               )}
             </Card>
 
             <Card className="p-5 sm:p-6">
-              <div className="text-sm font-bold text-[#1A1A18] mb-4">
+              <div className="text-sm font-bold text-ink mb-4">
                 更新出貨狀態
               </div>
 
@@ -730,7 +730,7 @@ function OrderDetailModal({
                 <select
                   value={nextShippingStatus}
                   onChange={event => setNextShippingStatus(event.target.value)}
-                  className="flex-1 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+                  className="flex-1 bg-mist border border-edge rounded-xl px-4 py-3 text-sm font-bold text-ink outline-none focus:border-brand"
                 >
                   <option value="unshipped">待出貨</option>
                   <option value="preparing">備貨中</option>
@@ -755,7 +755,7 @@ function OrderDetailModal({
               </div>
             </Card>
 
-            <div className="text-[10px] sm:text-xs text-[#8C8880] text-right">
+            <div className="text-[10px] sm:text-xs text-muted text-right">
               建立時間：
               {order.createdAt
                 ? new Date(order.createdAt).toLocaleString('zh-TW')
@@ -763,7 +763,7 @@ function OrderDetailModal({
             </div>
           </div>
         ) : (
-          <div className="py-24 text-center text-sm font-bold text-[#8C8880]">
+          <div className="py-24 text-center text-sm font-bold text-muted">
             找不到訂單資料
           </div>
         )}
@@ -1095,46 +1095,46 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
   }, [returns, onPendingCountChange])
 
   return (
-    <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
-      <div className="px-4 sm:px-7 py-4 sm:py-5 bg-[#F8F9FA] border-b border-[#E2DDD4] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+    <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-sm overflow-hidden w-full">
+      <div className="px-4 sm:px-7 py-4 sm:py-5 bg-mist border-b border-edge flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
         <div>
-          <h2 className="text-base sm:text-lg font-serif font-black text-[#1A1A18]">
+          <h2 className="text-base sm:text-lg font-display font-black text-ink">
             退貨退款管理
           </h2>
-          <p className="text-[11px] sm:text-xs text-[#8C8880] font-medium mt-1">
+          <p className="text-[11px] sm:text-xs text-muted font-medium mt-1">
             第一版僅支援單一廠商訂單的整張訂單全額退貨退款
           </p>
         </div>
-        <span className="text-[10px] sm:text-xs font-bold bg-white border border-[#E2DDD4] rounded-full px-3 py-1.5 text-[#8C8880]">
+        <span className="text-[10px] sm:text-xs font-bold bg-white border border-edge rounded-full px-3 py-1.5 text-muted">
           {activeReturns.length} 筆
         </span>
       </div>
 
       {loadingReturns ? (
-        <div className="py-12 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+        <div className="py-12 text-center text-xs sm:text-sm font-bold text-muted">
           <Loader2 size={16} className="inline mr-2 animate-spin" />
           退貨申請載入中...
         </div>
       ) : activeReturns.length === 0 ? (
-        <div className="py-12 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+        <div className="py-12 text-center text-xs sm:text-sm font-bold text-muted">
           目前沒有退貨退款申請
         </div>
       ) : (
-        <div className="divide-y divide-[#E2DDD4]">
+        <div className="divide-y divide-edge">
           {activeReturns.map(item => (
             <div key={item.return_id} className="px-4 sm:px-7 py-4 sm:py-5">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs sm:text-sm font-mono font-bold text-[#1A1A18]">
+                    <span className="text-xs sm:text-sm font-mono font-bold text-ink">
                       訂單 {item.order_id}
                     </span>
-                    <span className="text-[10px] sm:text-[11px] font-bold rounded-full bg-[#FDF0ED] text-[#C8522A] px-2.5 sm:px-3 py-1">
+                    <span className="text-[10px] sm:text-[11px] font-bold rounded-full bg-brand-soft text-brand px-2.5 sm:px-3 py-1">
                       {RETURN_STATUS_LABELS[item.status] || item.status}
                     </span>
                   </div>
 
-                  <div className="mt-2 text-[11px] sm:text-xs text-[#8C8880] space-y-1">
+                  <div className="mt-2 text-[11px] sm:text-xs text-muted space-y-1">
                     <div>
                       原因：
                       {RETURN_REASON_LABELS[item.reason] || item.reason}
@@ -1152,7 +1152,7 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
                     <div>消費者：{item.user_id || '—'}</div>
 
                     {item.vendor_note && (
-                      <div className="mt-2 rounded-xl bg-[#F8F9FA] border border-[#E2DDD4] px-3 sm:px-4 py-2.5 sm:py-3 text-[#1A1A18] whitespace-pre-line text-[11px] sm:text-xs">
+                      <div className="mt-2 rounded-xl bg-mist border border-edge px-3 sm:px-4 py-2.5 sm:py-3 text-ink whitespace-pre-line text-[11px] sm:text-xs">
                         <span className="font-bold">廠商處理說明：</span>{' '}
                         {item.vendor_note}
                       </div>
@@ -1210,7 +1210,7 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
                         執行全額退款
                       </Button>
                       {item.vendor_dispute_deadline && (
-                        <div className="w-full text-[11px] font-bold text-[#8C8880] mt-1">
+                        <div className="w-full text-[11px] font-bold text-muted mt-1">
                           可提出爭議期限：{new Date(item.vendor_dispute_deadline).toLocaleString('zh-TW')}
                         </div>
                       )}
@@ -1218,7 +1218,7 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
                   )}
 
                   {item.status === 'disputed' && (
-                    <span className="text-[11px] sm:text-xs font-bold text-[#C8522A] bg-[#FDF0ED] rounded-xl px-4 py-2 sm:py-3 w-full sm:w-auto text-center">
+                    <span className="text-[11px] sm:text-xs font-bold text-brand bg-brand-soft rounded-xl px-4 py-2 sm:py-3 w-full sm:w-auto text-center">
                       等待平台判定
                     </span>
                   )}
@@ -1238,17 +1238,17 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
       {rejectModalOpen && rejectTarget && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-2 sm:p-4">
           <div
-            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={closeRejectModal}
           />
 
-          <div className="relative w-full max-w-lg rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] bg-white p-5 sm:p-7 shadow-2xl">
+          <div className="relative w-full max-w-lg rounded-[1.5rem] sm:rounded-[2rem] border border-edge bg-white p-5 sm:p-7 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg sm:text-xl font-serif font-black text-[#1A1A18]">
+                <h3 className="text-lg sm:text-xl font-display font-black text-ink">
                   提出退貨拒絕
                 </h3>
-                <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-sm leading-relaxed text-[#8C8880]">
+                <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-sm leading-relaxed text-muted">
                   請提供具體拒絕依據。拒絕後，消費者仍可提出爭議並交由平台審核。
                 </p>
               </div>
@@ -1257,25 +1257,25 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
                 type="button"
                 onClick={closeRejectModal}
                 disabled={Boolean(actingId)}
-                className="shrink-0 rounded-full p-2 text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] -mr-2 sm:mr-0"
+                className="shrink-0 rounded-full p-2 text-muted hover:bg-cream hover:text-ink -mr-2 sm:mr-0"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="mt-4 sm:mt-5 rounded-xl bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs font-mono font-bold text-[#8C8880] break-all">
+            <div className="mt-4 sm:mt-5 rounded-xl bg-mist px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs font-mono font-bold text-muted break-all">
               訂單 {rejectTarget.order_id}
             </div>
 
-            <label className="mt-4 sm:mt-6 block text-xs sm:text-sm font-bold text-[#1A1A18]">
+            <label className="mt-4 sm:mt-6 block text-xs sm:text-sm font-bold text-ink">
               拒絕原因
-              <span className="ml-1 text-[#C8522A]">*</span>
+              <span className="ml-1 text-brand">*</span>
             </label>
 
             <select
               value={rejectReason}
               onChange={event => setRejectReason(event.target.value)}
-              className="mt-1.5 sm:mt-2 w-full rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A]"
+              className="mt-1.5 sm:mt-2 w-full rounded-xl border border-edge bg-mist px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-ink outline-none focus:border-brand"
             >
               <option value="">請選擇拒絕原因</option>
               {VENDOR_REJECT_REASON_OPTIONS.map(item => (
@@ -1285,10 +1285,10 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
               ))}
             </select>
 
-            <label className="mt-4 sm:mt-5 block text-xs sm:text-sm font-bold text-[#1A1A18]">
+            <label className="mt-4 sm:mt-5 block text-xs sm:text-sm font-bold text-ink">
               補充說明
               {rejectReason === 'other' && (
-                <span className="ml-1 text-[#C8522A]">*</span>
+                <span className="ml-1 text-brand">*</span>
               )}
             </label>
 
@@ -1297,7 +1297,7 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
               onChange={event => setRejectDescription(event.target.value)}
               rows={4}
               placeholder="請說明拒絕退貨的具體原因或商品狀況..."
-              className="mt-1.5 sm:mt-2 w-full resize-none rounded-xl border border-[#E2DDD4] bg-[#F8F9FA] px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm outline-none focus:border-[#C8522A]"
+              className="mt-1.5 sm:mt-2 w-full resize-none rounded-xl border border-edge bg-mist px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm outline-none focus:border-brand"
             />
 
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#FFF8E7] px-3 sm:px-4 py-2.5 sm:py-3 text-[10px] sm:text-xs leading-relaxed text-[#9A6700]">
@@ -1338,49 +1338,49 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
       {disputeModalOpen && disputeTarget && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 overflow-y-auto py-8">
           <div
-            className="absolute inset-0 bg-[#1A1A18]/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={closeDisputeModal}
           />
 
-          <div className="relative w-full max-w-lg rounded-[2rem] border border-[#E2DDD4] bg-white p-7 shadow-2xl">
-            <h3 className="text-lg font-bold text-[#1A1A18] mb-1">提出退貨爭議</h3>
-            <p className="text-xs font-bold text-[#8C8880] mb-4">
+          <div className="relative w-full max-w-lg rounded-[2rem] border border-edge bg-white p-7 shadow-2xl">
+            <h3 className="text-lg font-bold text-ink mb-1">提出退貨爭議</h3>
+            <p className="text-xs font-bold text-muted mb-4">
               請說明收到的退回商品有什麼問題，並附上照片佐證，交由平台判定。
             </p>
 
             {disputeTarget.packing_proof_urls?.length > 0 && (
               <div className="mb-5">
-                <div className="text-xs font-bold text-[#8C8880] mb-2">消費者提供的打包證明</div>
+                <div className="text-xs font-bold text-muted mb-2">消費者提供的打包證明</div>
                 <div className="flex flex-wrap gap-2">
                   {disputeTarget.packing_proof_urls.map((url) => (
                     <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                      <img src={url} alt="消費者打包證明" className="h-16 w-16 rounded-xl border border-[#E2DDD4] object-cover" />
+                      <img src={url} alt="消費者打包證明" className="h-16 w-16 rounded-xl border border-edge object-cover" />
                     </a>
                   ))}
                 </div>
               </div>
             )}
 
-            <label className="block text-sm font-bold text-[#1A1A18] mb-2">商品問題說明</label>
+            <label className="block text-sm font-bold text-ink mb-2">商品問題說明</label>
             <textarea
               rows={4}
               value={disputeDescription}
               onChange={(e) => setDisputeDescription(e.target.value)}
               placeholder="請描述收到的商品有什麼問題（例如：外觀損壞、缺配件、非原商品等）"
-              className="w-full resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-4"
+              className="w-full resize-none bg-mist border border-edge rounded-xl px-4 py-3 text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all mb-4"
             />
 
-            <label className="block text-sm font-bold text-[#1A1A18] mb-2">
+            <label className="block text-sm font-bold text-ink mb-2">
               佐證照片（1~5 張，必填）
             </label>
             <div className="flex flex-wrap gap-3 mb-6">
               {disputePhotoUrls.map((url) => (
-                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E2DDD4]">
+                <div key={url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-edge">
                   <img src={url} alt="爭議佐證" className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => removeDisputePhotoUrl(url)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#1A1A18]/70 text-xs text-white"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-xs text-white"
                   >
                     ×
                   </button>
@@ -1388,7 +1388,7 @@ function ReturnManagementPanel({ vendorId, onPendingCountChange }) {
               ))}
 
               {disputePhotoUrls.length < 5 && (
-                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:border-[#C8522A] hover:text-[#C8522A]">
+                <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-edge text-xs font-bold text-muted hover:border-brand hover:text-brand">
                   {disputePhotoUploading ? "上傳中..." : "＋ 新增"}
                   <input
                     type="file"
@@ -2044,7 +2044,7 @@ export default function Orders() {
   if (loading) {
     return (
       <div className="py-24 text-center">
-        <div className="inline-flex items-center gap-2 text-sm font-bold text-[#8C8880]">
+        <div className="inline-flex items-center gap-2 text-sm font-bold text-muted">
           <Loader2 size={18} className="animate-spin" />
           訂單載入中...
         </div>
@@ -2054,7 +2054,7 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300 p-4 sm:p-0">
-      <div className="flex items-center gap-1 border-b border-[#E2DDD4]">
+      <div className="flex items-center gap-1 border-b border-edge">
         {[
           { key: 'orders', label: '訂單' },
           { key: 'returns', label: '退貨退款' },
@@ -2066,13 +2066,13 @@ export default function Orders() {
             className={cn(
               'relative inline-flex items-center gap-2 px-4 sm:px-5 py-3 text-sm sm:text-base font-bold transition-colors -mb-px border-b-2',
               pageTab === tab.key
-                ? 'border-[#1A1A18] text-[#1A1A18]'
-                : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-muted hover:text-ink'
             )}
           >
             {tab.label}
             {tab.key === 'returns' && pendingReturnCount > 0 && (
-              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#C8522A] text-white text-[11px] font-bold inline-flex items-center justify-center">
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-brand text-white text-[11px] font-bold inline-flex items-center justify-center">
                 {pendingReturnCount}
               </span>
             )}
@@ -2092,7 +2092,7 @@ export default function Orders() {
         <button
           type="button"
           onClick={() => setPageTab('returns')}
-          className="w-full flex items-center justify-between gap-3 rounded-xl border border-[#C8522A]/30 bg-[#FDF0ED] px-4 py-2.5 text-xs sm:text-sm font-bold text-[#C8522A] hover:bg-[#FBE4DD] transition-colors"
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-brand/30 bg-brand-soft px-4 py-2.5 text-xs sm:text-sm font-bold text-brand hover:bg-brand-pale transition-colors"
         >
           <span>有 {pendingReturnCount} 筆退貨退款等待處理</span>
           <span className="inline-flex items-center gap-1">前往處理<ChevronRight size={14} /></span>
@@ -2103,7 +2103,7 @@ export default function Orders() {
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
         {/* 手機版橫向滾動頁籤 */}
-        <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
+        <div className="flex gap-2 p-1 bg-edge/30 rounded-full w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
           {shippingFilters.map(status => (
             <button
               key={status}
@@ -2112,8 +2112,8 @@ export default function Orders() {
               className={cn(
                 'px-4 sm:px-5 py-2 rounded-full text-[13px] sm:text-sm font-bold whitespace-nowrap transition-all',
                 filter === status
-                  ? 'bg-[#1A1A18] text-white shadow-sm'
-                  : 'text-[#8C8880] hover:text-[#1A1A18]'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-muted hover:text-ink'
               )}
             >
               {shippingLabels[status]}
@@ -2121,26 +2121,26 @@ export default function Orders() {
           ))}
         </div>
 
-        <div className="bg-white border border-[#E2DDD4] px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-sm text-xs sm:text-sm font-bold text-[#8C8880] flex items-center justify-center gap-2 w-full sm:w-auto">
-          共 <span className="text-[#1A1A18]">{filteredOrders.length}</span> 筆訂單
-          <span className="w-1 h-1 bg-[#E2DDD4] rounded-full mx-1 sm:mx-2" />
+        <div className="bg-white border border-edge px-4 sm:px-6 py-2 sm:py-2.5 rounded-full shadow-sm text-xs sm:text-sm font-bold text-muted flex items-center justify-center gap-2 w-full sm:w-auto">
+          共 <span className="text-ink">{filteredOrders.length}</span> 筆訂單
+          <span className="w-1 h-1 bg-edge rounded-full mx-1 sm:mx-2" />
           總計{' '}
-          <span className="text-[#C8522A] text-base sm:text-lg tracking-tight ml-1">
+          <span className="text-brand text-base sm:text-lg tracking-tight ml-1">
             {formatCurrency(totalAmount)}
           </span>
         </div>
       </div>
 
       {selectedOrderIds.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap bg-[#FDF0ED] border border-[#C8522A]/20 rounded-2xl px-4 sm:px-6 py-3 sm:py-4 w-full">
-          <span className="text-sm font-bold text-[#C8522A] shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap bg-brand-soft border border-brand/20 rounded-2xl px-4 sm:px-6 py-3 sm:py-4 w-full">
+          <span className="text-sm font-bold text-brand shrink-0">
             已選取 {selectedOrderIds.length} 筆訂單
           </span>
 
           <select
             value={bulkStatus}
             onChange={e => setBulkStatus(e.target.value)}
-            className="bg-white border border-[#E2DDD4] rounded-xl px-4 py-2 text-sm font-bold text-[#1A1A18] outline-none focus:border-[#C8522A] w-full sm:w-auto"
+            className="bg-white border border-edge rounded-xl px-4 py-2 text-sm font-bold text-ink outline-none focus:border-brand w-full sm:w-auto"
           >
             {shippingFilters
               .filter(status => status !== 'all')
@@ -2164,7 +2164,7 @@ export default function Orders() {
           <button
             type="button"
             onClick={() => setSelectedOrderIds([])}
-            className="text-xs font-bold text-[#8C8880] hover:text-[#1A1A18] sm:ml-auto w-full sm:w-auto text-center mt-2 sm:mt-0"
+            className="text-xs font-bold text-muted hover:text-ink sm:ml-auto w-full sm:w-auto text-center mt-2 sm:mt-0"
           >
             取消選取
           </button>
@@ -2177,12 +2177,12 @@ export default function Orders() {
         </div>
       )}
 
-      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-sm overflow-hidden w-full">
         {/* 手機版橫向滾動 Table */}
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
-              <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+              <tr className="bg-mist border-b border-edge">
                 <th className="p-4 sm:p-5 pl-5 sm:pl-6 w-10">
                   <input
                     type="checkbox"
@@ -2191,7 +2191,7 @@ export default function Orders() {
                       filteredOrders.length > 0 &&
                       selectedOrderIds.length === filteredOrders.length
                     }
-                    className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
+                    className="w-4 h-4 rounded border-edge text-brand focus:ring-brand cursor-pointer accent-brand"
                   />
                 </th>
                 {[
@@ -2207,7 +2207,7 @@ export default function Orders() {
                 ].map((header, index) => (
                   <th
                     key={`${header}-${index}`}
-                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap"
+                    className="p-4 sm:p-5 text-[11px] sm:text-xs font-bold text-muted tracking-widest whitespace-nowrap"
                   >
                     {header}
                   </th>
@@ -2215,7 +2215,7 @@ export default function Orders() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#E2DDD4]">
+            <tbody className="divide-y divide-edge">
               {filteredOrders.length > 0 ? (
                 filteredOrders.map(order => {
                   const productSummary = order.items
@@ -2226,7 +2226,7 @@ export default function Orders() {
                     <tr
                       key={order.orderId}
                       onClick={() => handleOpenOrder(order)}
-                      className="hover:bg-[#F8F9FA] transition-colors cursor-pointer group"
+                      className="hover:bg-mist transition-colors cursor-pointer group"
                     >
                       <td
                         className="p-4 sm:p-5 pl-5 sm:pl-6"
@@ -2236,31 +2236,31 @@ export default function Orders() {
                           type="checkbox"
                           checked={selectedOrderIds.includes(order.orderId)}
                           onChange={() => toggleSelectOrder(order.orderId)}
-                          className="w-4 h-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer accent-[#C8522A]"
+                          className="w-4 h-4 rounded border-edge text-brand focus:ring-brand cursor-pointer accent-brand"
                         />
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-mono font-medium text-[#8C8880]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-mono font-medium text-muted">
                         {order.orderId}
                       </td>
 
                       <td className="p-4 sm:p-5 text-xs sm:text-sm">
                         {order.userId ? (
                           <div>
-                            <div className="font-bold text-[#1A1A18]">會員</div>
-                            <div className="text-[10px] text-[#8C8880] font-mono mt-1">
+                            <div className="font-bold text-ink">會員</div>
+                            <div className="text-[10px] text-muted font-mono mt-1">
                               {order.userId}
                             </div>
                           </div>
                         ) : order.guestId ? (
                           <div>
-                            <div className="font-bold text-[#1A1A18]">訪客</div>
-                            <div className="text-[10px] text-[#8C8880] font-mono mt-1">
+                            <div className="font-bold text-ink">訪客</div>
+                            <div className="text-[10px] text-muted font-mono mt-1">
                               {order.guestId}
                             </div>
                           </div>
                         ) : (
-                          <span className="font-medium text-[#8C8880] bg-[#F5F0E8] px-2 py-1 rounded-md text-[11px] sm:text-xs whitespace-nowrap">
+                          <span className="font-medium text-muted bg-cream px-2 py-1 rounded-md text-[11px] sm:text-xs whitespace-nowrap">
                             一般顧客
                           </span>
                         )}
@@ -2268,28 +2268,28 @@ export default function Orders() {
 
                       <td className="p-4 sm:p-5">
                         {order.promotionCode ? (
-                          <span className="text-[11px] sm:text-xs font-mono font-bold text-[#C8522A] bg-[#FDF0ED] px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg whitespace-nowrap">
+                          <span className="text-[11px] sm:text-xs font-mono font-bold text-brand bg-brand-soft px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg whitespace-nowrap">
                             {order.promotionCode}
                           </span>
                         ) : (
-                          <span className="text-[11px] sm:text-xs font-medium text-[#8C8880]">
+                          <span className="text-[11px] sm:text-xs font-medium text-muted">
                             無
                           </span>
                         )}
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-medium text-[#8C8880] max-w-[200px] sm:max-w-[220px]">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-medium text-muted max-w-[200px] sm:max-w-[220px]">
                         <div className="line-clamp-2">
                           {productSummary || '—'}
                         </div>
                         {order.items.length > 1 && (
-                          <div className="text-[10px] font-bold text-[#C8522A] mt-1">
+                          <div className="text-[10px] font-bold text-brand mt-1">
                             共{order.items.length}項商品
                           </div>
                         )}
                       </td>
 
-                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-[#1A1A18] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-xs sm:text-sm font-black text-ink whitespace-nowrap">
                         {formatCurrency(order.totalAmount)}
                       </td>
 
@@ -2305,7 +2305,7 @@ export default function Orders() {
                               <span title="尚無配送資訊">
                                 <AlertTriangle
                                   size={14}
-                                  className="text-[#C8522A] shrink-0"
+                                  className="text-brand shrink-0"
                                 />
                               </span>
                             )}
@@ -2320,7 +2320,7 @@ export default function Orders() {
                               買家申請取消訂單
                             </span>
                             {order.cancelReason && (
-                              <span className="text-[10px] sm:text-[11px] text-[#8C8880] max-w-[150px] sm:max-w-[200px] leading-snug truncate">
+                              <span className="text-[10px] sm:text-[11px] text-muted max-w-[150px] sm:max-w-[200px] leading-snug truncate">
                                 取消原因：{order.cancelReason}
                               </span>
                             )}
@@ -2354,7 +2354,7 @@ export default function Orders() {
                         )}
                       </td>
 
-                      <td className="p-4 sm:p-5 text-[11px] sm:text-sm font-medium text-[#8C8880] whitespace-nowrap">
+                      <td className="p-4 sm:p-5 text-[11px] sm:text-sm font-medium text-muted whitespace-nowrap">
                         {order.createdAt
                           ? new Date(order.createdAt).toLocaleDateString('zh-TW')
                           : '—'}
@@ -2370,19 +2370,19 @@ export default function Orders() {
                               setChatOrder(order)
                             }}
                             className={cn(
-                              'relative p-2 rounded-full transition-colors hover:bg-[#FDF0ED] hover:text-[#C8522A]',
-                              chatUnreadByOrder[String(order.orderId)] ? 'text-[#C8522A]' : 'text-[#8C8880]'
+                              'relative p-2 rounded-full transition-colors hover:bg-brand-soft hover:text-brand',
+                              chatUnreadByOrder[String(order.orderId)] ? 'text-brand' : 'text-muted'
                             )}
                           >
                             <MessageCircle size={16} />
                             {chatUnreadByOrder[String(order.orderId)] > 0 && (
-                              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-[#C8522A] ring-2 ring-white" />
+                              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-brand ring-2 ring-white" />
                             )}
                           </button>
 
                           <ChevronRight
                             size={17}
-                            className="text-[#8C8880] group-hover:text-[#C8522A]"
+                            className="text-muted group-hover:text-brand"
                           />
                         </div>
                       </td>
@@ -2393,7 +2393,7 @@ export default function Orders() {
                 <tr>
                   <td
                     colSpan={10}
-                    className="py-20 text-center text-xs sm:text-sm font-bold text-[#8C8880]"
+                    className="py-20 text-center text-xs sm:text-sm font-bold text-muted"
                   >
                     目前沒有符合狀態的訂單記錄
                   </td>

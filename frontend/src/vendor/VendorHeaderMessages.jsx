@@ -14,7 +14,7 @@ const sumUnread = (rows) => (rows || []).reduce((total, row) => total + Number(r
 function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
-    <span className={`bg-[#C8522A] text-white font-bold flex items-center justify-center rounded-full ${className}`}>
+    <span className={`bg-brand text-white font-bold flex items-center justify-center rounded-full ${className}`}>
       {count > max ? `${max}+` : count}
     </span>
   );
@@ -63,7 +63,7 @@ export default function VendorHeaderMessages({ onNavigate }) {
     >
       <button
         onClick={() => go('/vendor/chat')}
-        className="relative p-2 md:p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
+        className="relative p-2 md:p-2.5 rounded-full text-muted hover:text-brand hover:bg-brand-soft transition-colors"
         title="聊天室"
       >
         <MessageCircle size={20} className="md:w-[22px] md:h-[22px]" />
@@ -73,12 +73,12 @@ export default function VendorHeaderMessages({ onNavigate }) {
 
       {open && (
         <div className="absolute right-0 top-full pt-2 w-56 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
+          <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
             {items.map(({ key, label, icon: Icon, count, path }) => (
               <button
                 key={key}
                 onClick={() => go(path)}
-                className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
               >
                 <span className="flex items-center gap-3">
                   <Icon size={16} strokeWidth={2.5} />

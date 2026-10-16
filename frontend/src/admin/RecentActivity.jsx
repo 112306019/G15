@@ -61,47 +61,47 @@ export default function RecentActivity({ currentRole }) {
   }, []);
 
   return (
-    <div className="bg-white p-5 sm:p-8 rounded-[1.5rem] shadow-sm border border-[#E2DDD4] flex flex-col">
+    <div className="bg-white p-5 sm:p-8 rounded-[1.5rem] shadow-sm border border-edge flex flex-col">
       <div className="flex justify-between items-center mb-4 sm:mb-6">
-        <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18]">最新系統動態</h2>
-        <span className="text-[10px] sm:text-xs font-bold text-[#8C8880] bg-[#F8F9FA] px-2 sm:px-3 py-1 rounded-full border border-[#E2DDD4]">
+        <h2 className="text-lg sm:text-xl font-display font-bold text-ink">最新系統動態</h2>
+        <span className="text-[10px] sm:text-xs font-bold text-muted bg-mist px-2 sm:px-3 py-1 rounded-full border border-edge">
           最近 {RECENT_LIMIT} 筆
         </span>
       </div>
 
       <div className="space-y-3 sm:space-y-4 flex-1">
         {loading ? (
-          <div className="py-10 flex items-center justify-center gap-2 text-[#8C8880]">
+          <div className="py-10 flex items-center justify-center gap-2 text-muted">
             <Loader2 size={16} className="animate-spin" />
             <span className="text-xs sm:text-sm font-bold">讀取中...</span>
           </div>
         ) : error ? (
-          <div className="py-10 flex items-center justify-center gap-2 text-[#C8522A]">
+          <div className="py-10 flex items-center justify-center gap-2 text-brand">
             <AlertCircle size={16} />
             <span className="text-xs sm:text-sm font-bold">{error}</span>
           </div>
         ) : logs.length === 0 ? (
-          <div className="py-10 text-center text-xs sm:text-sm font-bold text-[#8C8880]">
+          <div className="py-10 text-center text-xs sm:text-sm font-bold text-muted">
             目前還沒有管理員操作紀錄
           </div>
         ) : (
           logs.map(log => {
             const target = describeTarget(log);
             return (
-              <div key={log.Log_id} className="flex justify-between items-center gap-3 p-3 sm:p-4 hover:bg-[#F5F0E8] rounded-xl sm:rounded-2xl border border-[#E2DDD4] transition-colors">
+              <div key={log.Log_id} className="flex justify-between items-center gap-3 p-3 sm:p-4 hover:bg-cream rounded-xl sm:rounded-2xl border border-edge transition-colors">
                 <div className="flex items-start gap-2.5 sm:gap-4 min-w-0">
-                  <div className="mt-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#B89B6A] rounded-full shrink-0"></div>
+                  <div className="mt-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gold rounded-full shrink-0"></div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-bold text-[#1A1A18] truncate">
+                    <p className="text-xs sm:text-sm font-bold text-ink truncate">
                       {getAuditActionLabel(log)}
                     </p>
-                    <p className="text-[10px] sm:text-xs font-medium text-[#8C8880] mt-0.5 sm:mt-1 truncate">
+                    <p className="text-[10px] sm:text-xs font-medium text-muted mt-0.5 sm:mt-1 truncate">
                       {log.Admin_name || `管理員 ${log.Admin_id}`}
                       {target && ` ・ ${target}`}
                     </p>
                   </div>
                 </div>
-                <span className="text-[9px] sm:text-[10px] text-[#8C8880] font-bold shrink-0">
+                <span className="text-[9px] sm:text-[10px] text-muted font-bold shrink-0">
                   {fmtRelativeTime(log.created_at)}
                 </span>
               </div>
@@ -112,7 +112,7 @@ export default function RecentActivity({ currentRole }) {
 
       {/* 只有特定權限可以進入完整 Log 頁面 */}
       {(currentRole === 'super_admin' || currentRole === 'reviewer') && (
-        <button onClick={() => navigate('/admin/logs')} className="w-full mt-4 sm:mt-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-[#1A1A18] border border-[#E2DDD4] rounded-xl hover:bg-[#F8F9FA] transition-colors flex items-center justify-center gap-2">
+        <button onClick={() => navigate('/admin/logs')} className="w-full mt-4 sm:mt-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-ink border border-edge rounded-xl hover:bg-mist transition-colors flex items-center justify-center gap-2">
           <History size={14} className="sm:w-4 sm:h-4" /> 查看完整操作紀錄
         </button>
       )}

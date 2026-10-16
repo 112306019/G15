@@ -9,18 +9,18 @@ function InputField({ label, hint, icon: Icon, ...props }) {
   return (
     <div className="mb-4 md:mb-5">
       <div className="flex justify-between items-end mb-1.5 md:mb-2">
-        <label className="block text-[10px] md:text-[11px] font-black text-[#1A1A18] tracking-widest uppercase">{label}</label>
-        {hint && <span className="text-[9px] md:text-[10px] font-bold text-[#8C8880]">{hint}</span>}
+        <label className="block text-[10px] md:text-[11px] font-black text-ink tracking-widest uppercase">{label}</label>
+        {hint && <span className="text-[9px] md:text-[10px] font-bold text-muted">{hint}</span>}
       </div>
       <div className="relative group">
         {Icon && (
-          <div className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-[#8C8880] transition-colors duration-300 group-focus-within:text-[#C8522A]">
+          <div className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-muted transition-colors duration-300 group-focus-within:text-brand">
             <Icon size={16} className="md:w-[18px] md:h-[18px]" strokeWidth={2.5} />
           </div>
         )}
         <input
           {...props}
-          className={`w-full rounded-xl md:rounded-2xl border border-[#E2DDD4] bg-white/60 backdrop-blur-sm py-3 md:py-4 ${Icon ? 'pl-10 md:pl-12' : 'px-4 md:px-5'} pr-4 md:pr-5 text-sm font-medium text-[#1A1A18] outline-none transition-all duration-300 placeholder:text-[#8C8880]/50 focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 hover:border-[#1A1A18]/30`}
+          className={`w-full rounded-xl md:rounded-2xl border border-edge bg-white/60 backdrop-blur-sm py-3 md:py-4 ${Icon ? 'pl-10 md:pl-12' : 'px-4 md:px-5'} pr-4 md:pr-5 text-sm font-medium text-ink outline-none transition-all duration-300 placeholder:text-muted/50 focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10 hover:border-ink/30`}
         />
       </div>
     </div>
@@ -308,18 +308,16 @@ export default function LoginPage({
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#F5F0E8] font-sans text-[#1A1A18] duration-500 animate-in fade-in p-4 pt-16 md:p-6 relative overflow-hidden">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-cream font-sans text-ink duration-500 animate-in fade-in p-4 pt-16 md:p-6 relative overflow-hidden">
 
       {/* 背景環境光暈 (Ambient Glow) */}
-      <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] bg-[#C8522A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.15] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] bg-[#B89B6A] rounded-full mix-blend-multiply filter blur-[150px] opacity-[0.2] pointer-events-none"></div>
 
       {/* 左上角返回按鈕 */}
       {onBack && (
         <button
           type="button"
           onClick={onBack}
-          className="absolute left-4 top-4 md:left-10 md:top-10 flex items-center gap-1.5 md:gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-xs md:text-sm group z-10 bg-white/50 backdrop-blur-md px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-white/60 shadow-sm"
+          className="absolute left-4 top-4 md:left-10 md:top-10 flex items-center gap-1.5 md:gap-2 text-muted hover:text-brand transition-colors font-bold text-xs md:text-sm group z-10 bg-white/50 backdrop-blur-md px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-white/60 shadow-sm"
         >
           <ArrowLeft size={14} className="md:w-4 md:h-4 transition-transform group-hover:-translate-x-1" strokeWidth={2.5} />
           <span>返回身份選擇</span>
@@ -344,18 +342,18 @@ export default function LoginPage({
 
         <div className="rounded-[2rem] md:rounded-[2.5rem] bg-white/80 backdrop-blur-xl p-6 md:p-10 shadow-[0_20px_60px_rgba(26,26,24,0.08)] border border-white">
           
-          <div className="flex w-full rounded-full bg-[#E2DDD4]/40 p-1.5 mb-6 md:mb-8 shadow-inner">
+          <div className="flex w-full rounded-full bg-edge/40 p-1.5 mb-6 md:mb-8 shadow-inner">
             <button
               type="button"
               onClick={() => { setIsLogin(true); setRegError(""); }}
-              className={`flex-1 rounded-full py-2 md:py-2.5 text-xs md:text-sm font-bold transition-all duration-300 ${isLogin ? 'bg-white text-[#1A1A18] shadow-md transform scale-[1.02]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}
+              className={`flex-1 rounded-full py-2 md:py-2.5 text-xs md:text-sm font-bold transition-all duration-300 ${isLogin ? 'bg-white text-ink shadow-md transform scale-[1.02]' : 'text-muted hover:text-ink'}`}
             >
               登入
             </button>
             <button
               type="button"
               onClick={() => { setIsLogin(false); setLoginError(""); setJustRegisteredMsg(""); }}
-              className={`flex-1 rounded-full py-2 md:py-2.5 text-xs md:text-sm font-bold transition-all duration-300 ${!isLogin ? 'bg-white text-[#1A1A18] shadow-md transform scale-[1.02]' : 'text-[#8C8880] hover:text-[#1A1A18]'}`}
+              className={`flex-1 rounded-full py-2 md:py-2.5 text-xs md:text-sm font-bold transition-all duration-300 ${!isLogin ? 'bg-white text-ink shadow-md transform scale-[1.02]' : 'text-muted hover:text-ink'}`}
             >
               註冊
             </button>
@@ -391,17 +389,17 @@ export default function LoginPage({
                   <button 
                     type="button" 
                     onClick={openForgotModal} 
-                    className="absolute right-0 top-0 mt-0 text-[10px] md:text-[11px] font-bold text-[#8C8880] hover:text-[#C8522A] transition-colors uppercase tracking-wider"
+                    className="absolute right-0 top-0 mt-0 text-[10px] md:text-[11px] font-bold text-muted hover:text-brand transition-colors uppercase tracking-wider"
                   >
                     忘記密碼？
                   </button>
                 </div>
 
                 {loginError && (
-                  <div className="mb-5 md:mb-6 rounded-xl md:rounded-2xl bg-[#FEF5F3]/80 backdrop-blur-sm px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm font-bold text-[#C8522A] border border-[#C8522A]/20">
+                  <div className="mb-5 md:mb-6 rounded-xl md:rounded-2xl bg-brand-softer/80 backdrop-blur-sm px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm font-bold text-brand border border-brand/20">
                     {loginError}
                     {loginNeedsVerification && (
-                      <button type="button" onClick={openVerifyFromLogin} className="ml-2 underline underline-offset-2 hover:text-[#A64220]">
+                      <button type="button" onClick={openVerifyFromLogin} className="ml-2 underline underline-offset-2 hover:text-brand-dark">
                         重新寄送
                       </button>
                     )}
@@ -411,7 +409,7 @@ export default function LoginPage({
                 <button
                   type="submit"
                   disabled={loginSubmitting}
-                  className="mt-5 md:mt-6 w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3.5 md:py-4 text-xs md:text-sm font-bold tracking-[0.1em] text-[#F5F0E8] shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(200,82,42,0.25)] hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-5 md:mt-6 w-full rounded-xl md:rounded-2xl bg-brand py-3.5 md:py-4 text-xs md:text-sm font-bold tracking-[0.1em] text-white shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(110,100,175,0.25)] hover:bg-brand-dark active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loginSubmitting ? "驗證中..." : "登入系統"}
                 </button>
@@ -438,18 +436,18 @@ export default function LoginPage({
                     type="checkbox"
                     checked={regTerms}
                     onChange={(e) => setRegTerms(e.target.checked)}
-                    className="mt-0.5 h-3.5 w-3.5 md:h-4 md:w-4 rounded border-[#E2DDD4] text-[#C8522A] focus:ring-[#C8522A] cursor-pointer"
+                    className="mt-0.5 h-3.5 w-3.5 md:h-4 md:w-4 rounded border-edge text-brand focus:ring-brand cursor-pointer"
                   />
-                  <span className="text-[11px] md:text-xs font-bold leading-relaxed text-[#8C8880]">
+                  <span className="text-[11px] md:text-xs font-bold leading-relaxed text-muted">
                     我同意平台的
-                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline decoration-[#E2DDD4] underline-offset-2 md:underline-offset-4 text-[#1A1A18] mx-1 hover:text-[#C8522A] hover:decoration-[#C8522A]">服務條款</button>
+                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline decoration-edge underline-offset-2 md:underline-offset-4 text-ink mx-1 hover:text-brand hover:decoration-brand">服務條款</button>
                     與
-                    <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline decoration-[#E2DDD4] underline-offset-2 md:underline-offset-4 text-[#1A1A18] mx-1 hover:text-[#C8522A] hover:decoration-[#C8522A]">隱私權政策</button>
+                    <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline decoration-edge underline-offset-2 md:underline-offset-4 text-ink mx-1 hover:text-brand hover:decoration-brand">隱私權政策</button>
                   </span>
                 </div>
 
                 {regError && (
-                  <div className="mb-5 md:mb-6 rounded-xl md:rounded-2xl bg-[#FEF5F3]/80 backdrop-blur-sm px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm font-bold text-[#C8522A] border border-[#C8522A]/20">
+                  <div className="mb-5 md:mb-6 rounded-xl md:rounded-2xl bg-brand-softer/80 backdrop-blur-sm px-4 md:px-5 py-3 md:py-4 text-xs md:text-sm font-bold text-brand border border-brand/20">
                     {regError}
                   </div>
                 )}
@@ -457,7 +455,7 @@ export default function LoginPage({
                 <button
                   type="submit" 
                   disabled={regSubmitting || regSuccess}
-                  className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3.5 md:py-4 text-xs md:text-sm font-bold tracking-[0.1em] text-[#F5F0E8] shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(200,82,42,0.25)] hover:bg-[#C8522A] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full rounded-xl md:rounded-2xl bg-brand py-3.5 md:py-4 text-xs md:text-sm font-bold tracking-[0.1em] text-white shadow-[0_8px_20px_rgba(26,26,24,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(110,100,175,0.25)] hover:bg-brand-dark active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {regSuccess ? "✓ 註冊成功！" : regSubmitting ? "處理中..." : "建立帳號"}
                 </button>
@@ -471,10 +469,10 @@ export default function LoginPage({
           <button
             type="button"
             onClick={onSkipToShop}
-            className="group flex items-center justify-center gap-1.5 md:gap-2 mx-auto text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:text-[#1A1A18]"
+            className="group flex items-center justify-center gap-1.5 md:gap-2 mx-auto text-xs md:text-sm font-bold text-muted transition-colors hover:text-ink"
           >
             <span>不想註冊？</span>
-            <span className="underline decoration-[#E2DDD4] group-hover:decoration-[#1A1A18] underline-offset-4 text-[#1A1A18]">直接逛逛商城</span>
+            <span className="underline decoration-edge group-hover:decoration-ink underline-offset-4 text-ink">直接逛逛商城</span>
             <ArrowLeft size={14} className="md:w-4 md:h-4 rotate-180 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
@@ -482,17 +480,17 @@ export default function LoginPage({
 
       {/* 忘記密碼 */}
       {forgotOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#1A1A18]/40 p-4 backdrop-blur-md" onClick={closeForgotModal}>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-md" onClick={closeForgotModal}>
           <div className="w-full max-w-md rounded-[2rem] md:rounded-[2.5rem] bg-white/95 backdrop-blur-xl p-6 md:p-10 shadow-2xl border border-white animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
             {forgotStep === "email" && (
               <form onSubmit={handleSendResetCode}> {/* 💡 加入 onSubmit */}
-                <h3 className="mb-2 text-xl md:text-2xl font-serif font-bold text-[#1A1A18]">忘記密碼</h3>
-                <p className="mb-6 md:mb-8 text-xs md:text-sm text-[#8C8880] font-medium">請輸入您的電子郵件，我們會寄送驗證碼給您。</p>
+                <h3 className="mb-2 text-xl md:text-2xl font-display font-bold text-ink">忘記密碼</h3>
+                <p className="mb-6 md:mb-8 text-xs md:text-sm text-muted font-medium">請輸入您的電子郵件，我們會寄送驗證碼給您。</p>
                 <InputField label="電子郵件" icon={Mail} placeholder="請輸入信箱" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} />
-                {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-xs md:text-sm text-[#C8522A] font-bold">{forgotError}</div>}
+                {forgotError && <div className="mb-4 rounded-xl bg-brand-softer px-4 py-3 text-xs md:text-sm text-brand font-bold">{forgotError}</div>}
                 <div className="flex gap-2 md:gap-3 mt-2 md:mt-4">
-                  <button type="button" onClick={closeForgotModal} className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8]">取消</button>
-                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 md:py-4 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">
+                  <button type="button" onClick={closeForgotModal} className="flex-1 rounded-xl md:rounded-2xl border border-edge py-3 md:py-4 text-xs md:text-sm font-bold text-muted transition-colors hover:bg-cream">取消</button>
+                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-brand py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark disabled:opacity-50">
                     {forgotSubmitting ? "寄送中..." : "寄送驗證碼"}
                   </button>
                 </div>
@@ -501,16 +499,16 @@ export default function LoginPage({
 
             {forgotStep === "reset" && (
               <form onSubmit={handleResetPassword}> {/* 💡 加入 onSubmit */}
-                <h3 className="mb-2 text-xl md:text-2xl font-serif font-bold text-[#1A1A18]">輸入驗證碼</h3>
-                <p className="mb-1 text-xs md:text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18] break-all">{forgotEmail}</span>，10 分鐘內有效。</p>
-                <p className="mb-6 md:mb-8 text-[10px] md:text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
+                <h3 className="mb-2 text-xl md:text-2xl font-display font-bold text-ink">輸入驗證碼</h3>
+                <p className="mb-1 text-xs md:text-sm text-muted font-medium">驗證碼已寄至 <span className="font-bold text-ink break-all">{forgotEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-6 md:mb-8 text-[10px] md:text-xs text-muted">若未收到，請檢查垃圾郵件匣。</p>
                 <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={forgotCode} onChange={(e) => setForgotCode(e.target.value)} />
                 <InputField label="新密碼" icon={Lock} hint="至少8位" type="password" placeholder="請輸入新密碼" value={forgotNewPw} onChange={(e) => setForgotNewPw(e.target.value)} />
                 <InputField label="確認新密碼" icon={ShieldCheck} type="password" placeholder="再次輸入新密碼" value={forgotConfirmPw} onChange={(e) => setForgotConfirmPw(e.target.value)} />
-                {forgotError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-xs md:text-sm text-[#C8522A] font-bold">{forgotError}</div>}
+                {forgotError && <div className="mb-4 rounded-xl bg-brand-softer px-4 py-3 text-xs md:text-sm text-brand font-bold">{forgotError}</div>}
                 <div className="flex gap-2 md:gap-3 mt-2 md:mt-4">
-                  <button type="button" onClick={() => setForgotStep("email")} className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8]">上一步</button>
-                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 md:py-4 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">重設密碼</button>
+                  <button type="button" onClick={() => setForgotStep("email")} className="flex-1 rounded-xl md:rounded-2xl border border-edge py-3 md:py-4 text-xs md:text-sm font-bold text-muted transition-colors hover:bg-cream">上一步</button>
+                  <button type="submit" disabled={forgotSubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-brand py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark disabled:opacity-50">重設密碼</button>
                 </div>
               </form>
             )}
@@ -520,9 +518,9 @@ export default function LoginPage({
                 <div className="w-12 h-12 md:w-16 md:h-16 bg-[#EAF6EC] text-[#2F8F4E] rounded-full flex items-center justify-center mb-4 md:mb-6 mx-auto">
                   <ShieldCheck size={24} className="md:w-8 md:h-8" />
                 </div>
-                <h3 className="mb-2 text-xl md:text-2xl font-serif font-bold text-[#1A1A18] text-center">密碼已重設！</h3>
-                <p className="mb-6 md:mb-8 text-xs md:text-sm text-[#8C8880] font-medium text-center">請使用新密碼重新登入。</p>
-                <button type="button" onClick={() => { setIsLogin(true); setLoginEmail(forgotEmail); setLoginPw(""); closeForgotModal(); }} className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 md:py-4 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]">返回登入</button>
+                <h3 className="mb-2 text-xl md:text-2xl font-display font-bold text-ink text-center">密碼已重設！</h3>
+                <p className="mb-6 md:mb-8 text-xs md:text-sm text-muted font-medium text-center">請使用新密碼重新登入。</p>
+                <button type="button" onClick={() => { setIsLogin(true); setLoginEmail(forgotEmail); setLoginPw(""); closeForgotModal(); }} className="w-full rounded-xl md:rounded-2xl bg-brand py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark">返回登入</button>
               </div>
             )}
           </div>
@@ -531,19 +529,19 @@ export default function LoginPage({
 
       {/* 註冊信箱驗證 */}
       {verifyOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#1A1A18]/40 p-4 backdrop-blur-md" onClick={closeVerifyModal}>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-md" onClick={closeVerifyModal}>
           <div className="w-full max-w-md rounded-[2rem] md:rounded-[2.5rem] bg-white/95 backdrop-blur-xl p-6 md:p-10 shadow-2xl border border-white animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
             {!verifyDone ? (
               <form onSubmit={handleVerifyCode}> {/* 💡 加入 onSubmit */}
-                <h3 className="mb-2 text-xl md:text-2xl font-serif font-bold text-[#1A1A18]">驗證您的 Email</h3>
-                <p className="mb-1 text-xs md:text-sm text-[#8C8880] font-medium">驗證碼已寄至 <span className="font-bold text-[#1A1A18] break-all">{verifyEmail}</span>，10 分鐘內有效。</p>
-                <p className="mb-6 md:mb-8 text-[10px] md:text-xs text-[#8C8880]">若未收到，請檢查垃圾郵件匣。</p>
+                <h3 className="mb-2 text-xl md:text-2xl font-display font-bold text-ink">驗證您的 Email</h3>
+                <p className="mb-1 text-xs md:text-sm text-muted font-medium">驗證碼已寄至 <span className="font-bold text-ink break-all">{verifyEmail}</span>，10 分鐘內有效。</p>
+                <p className="mb-6 md:mb-8 text-[10px] md:text-xs text-muted">若未收到，請檢查垃圾郵件匣。</p>
                 <InputField label="驗證碼" icon={ShieldCheck} placeholder="請輸入 6 位數" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value)} />
-                {verifyResendMsg && <div className="mb-4 rounded-xl bg-[#F5F0E8] px-4 py-3 text-xs md:text-sm font-bold text-[#1A1A18]">{verifyResendMsg}</div>}
-                {verifyError && <div className="mb-4 rounded-xl bg-[#FEF5F3] px-4 py-3 text-xs md:text-sm font-bold text-[#C8522A]">{verifyError}</div>}
+                {verifyResendMsg && <div className="mb-4 rounded-xl bg-cream px-4 py-3 text-xs md:text-sm font-bold text-ink">{verifyResendMsg}</div>}
+                {verifyError && <div className="mb-4 rounded-xl bg-brand-softer px-4 py-3 text-xs md:text-sm font-bold text-brand">{verifyError}</div>}
                 <div className="flex gap-2 md:gap-3 mt-2 md:mt-4">
-                  <button type="button" onClick={handleResendVerification} disabled={verifySubmitting} className="flex-1 rounded-xl md:rounded-2xl border border-[#E2DDD4] py-3 md:py-4 text-xs md:text-sm font-bold text-[#8C8880] transition-colors hover:bg-[#F5F0E8] disabled:opacity-50">重新寄送</button>
-                  <button type="submit" disabled={verifySubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 md:py-4 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A] disabled:opacity-50">確認驗證</button>
+                  <button type="button" onClick={handleResendVerification} disabled={verifySubmitting} className="flex-1 rounded-xl md:rounded-2xl border border-edge py-3 md:py-4 text-xs md:text-sm font-bold text-muted transition-colors hover:bg-cream disabled:opacity-50">重新寄送</button>
+                  <button type="submit" disabled={verifySubmitting} className="flex-1 rounded-xl md:rounded-2xl bg-brand py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark disabled:opacity-50">確認驗證</button>
                 </div>
               </form>
             ) : (
@@ -551,9 +549,9 @@ export default function LoginPage({
                 <div className="w-12 h-12 md:w-16 md:h-16 bg-[#EAF6EC] text-[#2F8F4E] rounded-full flex items-center justify-center mb-4 md:mb-6 mx-auto">
                   <ShieldCheck size={24} className="md:w-8 md:h-8" />
                 </div>
-                <h3 className="mb-2 text-xl md:text-2xl font-serif font-bold text-[#1A1A18] text-center">驗證成功！</h3>
-                <p className="mb-6 md:mb-8 text-xs md:text-sm text-[#8C8880] font-medium text-center">您的帳號已完成信箱驗證，請重新登入。</p>
-                <button type="button" onClick={() => { setLoginError(""); setLoginNeedsVerification(false); closeVerifyModal(); switchToLoginAfterRegister(verifyEmail); }} className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3 md:py-4 text-xs md:text-sm font-bold text-[#F5F0E8] transition-all hover:bg-[#C8522A]">返回登入</button>
+                <h3 className="mb-2 text-xl md:text-2xl font-display font-bold text-ink text-center">驗證成功！</h3>
+                <p className="mb-6 md:mb-8 text-xs md:text-sm text-muted font-medium text-center">您的帳號已完成信箱驗證，請重新登入。</p>
+                <button type="button" onClick={() => { setLoginError(""); setLoginNeedsVerification(false); closeVerifyModal(); switchToLoginAfterRegister(verifyEmail); }} className="w-full rounded-xl md:rounded-2xl bg-brand py-3 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark">返回登入</button>
               </div>
             )}
           </div>
@@ -562,59 +560,59 @@ export default function LoginPage({
 
       {/* 條款和條件彈窗 (完整文字) */}
       {showTermsModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4 pt-12 md:p-6">
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4 pt-12 md:p-6">
           <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 max-w-lg w-full shadow-2xl max-h-[85vh] md:max-h-[80vh] flex flex-col">
-            <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6 shrink-0">服務條款</h3>
-            <div className="space-y-4 md:space-y-5 text-xs md:text-sm text-[#8C8880] leading-relaxed font-medium overflow-y-auto pr-2 custom-scrollbar">
-              <p><strong className="text-[#1A1A18]">第一條、總則</strong><br />
+            <h3 className="text-xl md:text-2xl font-display font-bold text-ink mb-4 md:mb-6 shrink-0">服務條款</h3>
+            <div className="space-y-4 md:space-y-5 text-xs md:text-sm text-muted leading-relaxed font-medium overflow-y-auto pr-2 custom-scrollbar">
+              <p><strong className="text-ink">第一條、總則</strong><br />
               歡迎使用本平台（以下稱「本服務」）。本服務條款（以下稱「本條款」）係規範使用者與本平台間之權利義務關係。使用者於完成註冊程序或開始使用本服務時，即視為已閱讀、瞭解並同意接受本條款之全部內容。若使用者不同意本條款之任一部分，應立即停止使用本服務。</p>
               
-              <p><strong className="text-[#1A1A18]">第二條、名詞定義</strong><br />
+              <p><strong className="text-ink">第二條、名詞定義</strong><br />
               一、「本平台」：指提供消費者、關鍵意見消費者（KOC）與廠商間商品交易、內容合作及行銷推廣服務之網站及應用程式。<br />
               二、「使用者」：指以任何方式註冊、瀏覽或使用本服務之自然人或法人，包含消費者、KOC 及廠商。<br />
               三、「內容」：指使用者於本平台發布、上傳或提交之任何文字、圖片、影音或其他形式之資料。</p>
 
-              <p><strong className="text-[#1A1A18]">第三條、服務內容</strong><br />
+              <p><strong className="text-ink">第三條、服務內容</strong><br />
               本平台提供商品瀏覽、購買、金流處理、KOC 合作媒合、優惠碼核銷及成效分析等相關服務。本平台得依營運需求，隨時新增、修改或終止部分服務內容，並以系統公告方式通知使用者。</p>
 
-              <p><strong className="text-[#1A1A18]">第四條、帳號註冊與管理</strong><br />
+              <p><strong className="text-ink">第四條、帳號註冊與管理</strong><br />
               一、使用者申請註冊時，應提供真實、正確、最新及完整之個人資料。<br />
               二、使用者應妥善保管帳號及密碼，不得轉讓、出借予第三人使用。<br />
               三、使用者對其帳號登入後所為之一切行為，應負完全之法律責任。<br />
               四、如發現帳號遭他人非法使用，應立即通知本平台採取應變措施。</p>
 
-              <p><strong className="text-[#1A1A18]">第五條、使用者義務與禁止行為</strong><br />
+              <p><strong className="text-ink">第五條、使用者義務與禁止行為</strong><br />
               使用者不得利用本服務從事下列行為：<br />
               一、上傳、發布虛偽不實、誇大不實或誤導性之商品資訊或行銷內容。<br />
               二、侵害他人之智慧財產權、隱私權或其他合法權益。<br />
               三、以不正當方式干擾本平台系統之正常運作，包含但不限於植入惡意程式、進行未經授權之存取等。<br />
               四、從事詐欺、洗錢或其他違反法令之行為。</p>
 
-              <p><strong className="text-[#1A1A18]">第六條、交易與付款</strong><br />
+              <p><strong className="text-ink">第六條、交易與付款</strong><br />
               一、平台上商品之價格、規格及庫存等資訊，以廠商刊登之內容為準，本平台不保證其正確性，惟將盡合理注意義務。<br />
               二、使用者於本平台完成訂購並付款後，本平台將依廠商出貨流程處理訂單。<br />
               三、退換貨、爭議處理事宜依平台公告之消費者保護相關規範辦理。</p>
 
-              <p><strong className="text-[#1A1A18]">第七條、KOC 合作機制</strong><br />
+              <p><strong className="text-ink">第七條、KOC 合作機制</strong><br />
               經核准之 KOC 得於本平台申請參與廠商發起之行銷活動，並使用平台核發之專屬優惠碼。因優惠碼使用所生之分潤，依各活動公告之比例計算並發放。KOC 資格得因違反本條款、提供不實資訊或社群帳號無法公開查證等情事而遭暫停或終止。</p>
 
-              <p><strong className="text-[#1A1A18]">第八條、智慧財產權</strong><br />
+              <p><strong className="text-ink">第八條、智慧財產權</strong><br />
               本平台之網站架構、系統程式及介面設計等相關權利，均屬本平台或其權利人所有。使用者於本平台發布之內容，仍保有其智慧財產權，惟同意授權本平台於服務範圍內合理使用、展示該內容。</p>
 
-              <p><strong className="text-[#1A1A18]">第九條、免責聲明</strong><br />
+              <p><strong className="text-ink">第九條、免責聲明</strong><br />
               本平台已盡合理之注意義務維護系統穩定運作，惟因不可抗力、系統維護或其他非可歸責於本平台之事由，致服務中斷或資料遺失時，本平台不負損害賠償責任。</p>
 
-              <p><strong className="text-[#1A1A18]">第十條、條款修訂</strong><br />
+              <p><strong className="text-ink">第十條、條款修訂</strong><br />
               本平台得因法令變更或營運需要修訂本條款，修訂後之條款將於系統公告，使用者於公告後繼續使用本服務，視為同意修訂後之條款內容。</p>
 
-              <p><strong className="text-[#1A1A18]">第十一條、準據法與管轄法院</strong><br />
+              <p><strong className="text-ink">第十一條、準據法與管轄法院</strong><br />
               本條款之解釋與適用，以中華民國法律為準據法。因本條款所生之爭議，雙方同意以台灣台北地方法院為第一審管轄法院。</p>
             </div>
             <div className="pt-4 md:pt-6 shrink-0 border-t border-gray-100 mt-2">
               <button
                 type="button"
                 onClick={() => setShowTermsModal(false)}
-                className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3.5 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+                className="w-full rounded-xl md:rounded-2xl bg-brand py-3.5 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark"
               >
                 我已閱讀
               </button>
@@ -625,48 +623,48 @@ export default function LoginPage({
 
       {/* 隱私權政策彈窗 (完整文字) */}
       {showPrivacyModal && (
-        <div className="fixed inset-0 bg-[#1A1A18]/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4 pt-12 md:p-6">
+        <div className="fixed inset-0 bg-ink/40 backdrop-blur-md flex items-center justify-center z-[1000] p-4 pt-12 md:p-6">
           <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-10 max-w-lg w-full shadow-2xl max-h-[85vh] md:max-h-[80vh] flex flex-col">
-            <h3 className="text-xl md:text-2xl font-serif font-bold text-[#1A1A18] mb-4 md:mb-6 shrink-0">隱私權政策</h3>
-            <div className="space-y-4 md:space-y-5 text-xs md:text-sm text-[#8C8880] leading-relaxed font-medium overflow-y-auto pr-2 custom-scrollbar">
+            <h3 className="text-xl md:text-2xl font-display font-bold text-ink mb-4 md:mb-6 shrink-0">隱私權政策</h3>
+            <div className="space-y-4 md:space-y-5 text-xs md:text-sm text-muted leading-relaxed font-medium overflow-y-auto pr-2 custom-scrollbar">
               <p>本平台（以下稱「本平台」）非常重視使用者之個人資料保護，依據中華民國個人資料保護法及相關法令規定，制定本隱私權政策，說明本平台蒐集、處理及利用使用者個人資料之方式，請使用者詳閱下列內容。</p>
               
-              <p><strong className="text-[#1A1A18]">一、適用範圍</strong><br />
+              <p><strong className="text-ink">一、適用範圍</strong><br />
               本政策適用於使用者於本平台網站及應用程式中所提供之個人資料，不適用於本平台以外之第三方網站或服務。</p>
 
-              <p><strong className="text-[#1A1A18]">二、蒐集之個人資料類別</strong><br />
+              <p><strong className="text-ink">二、蒐集之個人資料類別</strong><br />
               本平台於使用者註冊、購物、申請成為 KOC 或廠商、聯繫客服等過程中，將蒐集下列類別之個人資料：<br />
               （一）識別類：姓名、帳號、電子郵件信箱、聯絡電話。<br />
               （二）交易類：收件地址、付款資訊、訂單紀錄。<br />
               （三）社群類：KOC 申請者提供之社群帳號名稱與連結。<br />
               （四）系統紀錄類：登入時間、IP 位址、使用裝置資訊。</p>
 
-              <p><strong className="text-[#1A1A18]">三、個人資料蒐集之目的</strong><br />
+              <p><strong className="text-ink">三、個人資料蒐集之目的</strong><br />
               本平台蒐集個人資料之目的包括：會員註冊與身分驗證、訂單處理與物流配送、KOC 資格審核與分潤計算、客服聯繫與爭議處理、行銷活動通知及提升服務品質之統計分析。</p>
 
-              <p><strong className="text-[#1A1A18]">四、個人資料利用之期間、地區、對象及方式</strong><br />
+              <p><strong className="text-ink">四、個人資料利用之期間、地區、對象及方式</strong><br />
               （一）期間：自使用者提供資料起，至帳號終止或依法令規定之保存期限屆滿為止。<br />
               （二）地區：本平台及其委託處理之合作廠商所在地。<br />
               （三）對象：本平台及依業務需要委託之金流、物流等合作廠商。<br />
               （四）方式：以自動化及非自動化方式蒐集、處理及利用。</p>
 
-              <p><strong className="text-[#1A1A18]">五、使用者權利</strong><br />
+              <p><strong className="text-ink">五、使用者權利</strong><br />
               使用者得依個人資料保護法規定，向本平台行使下列權利：查詢或請求閱覽、請求製給複製本、請求補充或更正、請求停止蒐集處理利用、請求刪除。使用者得透過客服管道提出請求，本平台將於合理期間內處理，惟涉及交易紀錄等依法應保存之資料不在此限。</p>
 
-              <p><strong className="text-[#1A1A18]">六、Cookie 與追蹤技術之使用</strong><br />
+              <p><strong className="text-ink">六、Cookie 與追蹤技術之使用</strong><br />
               本平台為提供更佳之使用體驗，將使用 Cookie 及類似技術記錄使用者之瀏覽行為與偏好設定。使用者得透過瀏覽器設定拒絕 Cookie，惟可能影響部分服務功能之使用。</p>
 
-              <p><strong className="text-[#1A1A18]">七、資料安全維護措施</strong><br />
+              <p><strong className="text-ink">七、資料安全維護措施</strong><br />
               本平台採取合理之技術與管理措施保護個人資料，包括但不限於密碼加密儲存、存取權限控管及定期資安檢視，以避免個人資料遭未經授權之存取、洩漏、竄改或毀損。</p>
 
-              <p><strong className="text-[#1A1A18]">八、政策修訂</strong><br />
+              <p><strong className="text-ink">八、政策修訂</strong><br />
               本政策將因應法令變更或業務需要適時修訂，修訂後之內容將公告於本平台，請使用者隨時留意最新版本。</p>
             </div>
             <div className="pt-4 md:pt-6 shrink-0 border-t border-gray-100 mt-2">
               <button
                 type="button"
                 onClick={() => setShowPrivacyModal(false)}
-                className="w-full rounded-xl md:rounded-2xl bg-[#1A1A18] py-3.5 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-[#C8522A]"
+                className="w-full rounded-xl md:rounded-2xl bg-brand py-3.5 md:py-4 text-xs md:text-sm font-bold text-white transition-all hover:bg-brand-dark"
               >
                 我已閱讀
               </button>

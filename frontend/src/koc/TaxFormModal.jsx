@@ -59,28 +59,28 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAm
 
   return (
     <div
-      className="fixed inset-0 bg-[#1A1A18]/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4 pt-12"
+      className="fixed inset-0 bg-ink/50 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-200 p-4 pt-12"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-[#E2DDD4] max-h-[85vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col"
+        className="bg-white rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-edge max-h-[85vh] md:max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-1 shrink-0">
-          <h3 className="text-base md:text-lg font-bold text-[#1A1A18] pr-4">
+          <h3 className="text-base md:text-lg font-bold text-ink pr-4">
             {isResubmit ? '重新上傳勞報單連結' : '申報勞務報酬單'}
           </h3>
-          <button onClick={onClose} className="text-[#8C8880] hover:text-[#1A1A18] transition-colors -mt-1 -mr-1 p-1">
+          <button onClick={onClose} className="text-muted hover:text-ink transition-colors -mt-1 -mr-1 p-1">
             <X size={20} className="w-5 h-5 md:w-[22px] md:h-[22px]" />
           </button>
         </div>
-        <p className="text-[10px] md:text-xs font-bold text-[#8C8880] mb-5 md:mb-6 shrink-0">
+        <p className="text-[10px] md:text-xs font-bold text-muted mb-5 md:mb-6 shrink-0">
           {isResubmit ? '修正連結後重新送審，會一併併入這段期間新累積的未申報分潤' : '本次申報將涵蓋目前所有還沒申報過的分潤'}
         </p>
 
         <div className="overflow-y-auto pr-1 shrink">
           {isResubmit && rejectReason && (
-            <div className="bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl md:rounded-2xl p-3.5 md:p-4 mb-4 md:mb-5 text-[11px] md:text-xs text-[#C8522A] leading-relaxed">
+            <div className="bg-brand-soft border border-brand/20 rounded-xl md:rounded-2xl p-3.5 md:p-4 mb-4 md:mb-5 text-[11px] md:text-xs text-brand leading-relaxed">
               <span className="font-bold">上次退回原因：</span>
               {rejectReason}
             </div>
@@ -94,14 +94,14 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAm
           )}
 
           {/* 金額資訊 */}
-          <div className="bg-[#F8F9FA] rounded-xl md:rounded-2xl p-4 md:p-5 mb-4 md:mb-5 space-y-2 md:space-y-2.5 text-xs md:text-sm">
+          <div className="bg-mist rounded-xl md:rounded-2xl p-4 md:p-5 mb-4 md:mb-5 space-y-2 md:space-y-2.5 text-xs md:text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-[#8C8880] font-bold">勞務內容</span>
-              <span className="text-[#1A1A18] font-bold">社群行銷推廣服務酬勞</span>
+              <span className="text-muted font-bold">勞務內容</span>
+              <span className="text-ink font-bold">社群行銷推廣服務酬勞</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-[#8C8880] font-bold">申報金額</span>
-              <span className="text-[#C8522A] font-black text-sm md:text-base">
+              <span className="text-muted font-bold">申報金額</span>
+              <span className="text-brand font-black text-sm md:text-base">
                 NT$ {(amount || 0).toLocaleString()}
               </span>
             </div>
@@ -115,14 +115,14 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAm
             href="/tax-form-print"
             target="_blank"
             rel="noreferrer"
-            className="w-full mb-4 md:mb-5 flex items-center justify-center gap-1.5 md:gap-2 bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md"
+            className="w-full mb-4 md:mb-5 flex items-center justify-center gap-1.5 md:gap-2 bg-brand text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-brand-dark transition-all active:scale-95 shadow-md"
           >
             <Download size={14} className="md:w-4 md:h-4" />
             開啟勞務報酬單（可列印/存 PDF）
           </a>
 
           {/* 連結輸入 */}
-          <label className="block text-[11px] md:text-xs font-bold text-[#1A1A18] mb-1.5 md:mb-2">
+          <label className="block text-[11px] md:text-xs font-bold text-ink mb-1.5 md:mb-2">
             請貼上您的雲端分享連結（Google Drive / Dropbox）
           </label>
           <input
@@ -130,10 +130,10 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAm
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://drive.google.com/..."
-            className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all mb-2"
+            className="w-full bg-mist border border-edge rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs md:text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all mb-2"
           />
           {error && (
-            <p className="text-[10px] md:text-xs font-bold text-[#C8522A] mb-3">{error}</p>
+            <p className="text-[10px] md:text-xs font-bold text-brand mb-3">{error}</p>
           )}
 
           {/* 警示提示 */}
@@ -156,14 +156,14 @@ export default function TaxFormModal({ amount, isResubmit, rejectReason, mergeAm
           <button
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#F8F9FA] hover:text-[#1A1A18] transition-all disabled:opacity-50 order-2 sm:order-1"
+            className="flex-1 bg-white border border-edge text-muted py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-mist hover:text-ink transition-all disabled:opacity-50 order-2 sm:order-1"
           >
             取消
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 bg-[#1A1A18] text-[#F5F0E8] py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-[#C8522A] transition-all active:scale-95 shadow-md disabled:opacity-50 flex items-center justify-center gap-2 order-1 sm:order-2"
+            className="flex-1 bg-brand text-white py-3 md:py-3.5 rounded-xl md:rounded-2xl font-bold text-xs md:text-sm hover:bg-brand-dark transition-all active:scale-95 shadow-md disabled:opacity-50 flex items-center justify-center gap-2 order-1 sm:order-2"
           >
             {submitting && <Loader2 size={16} className="animate-spin md:w-[18px] md:h-[18px]" />}
             送出審核

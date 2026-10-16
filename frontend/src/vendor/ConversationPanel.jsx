@@ -22,14 +22,14 @@ function MessageProduct({ product, mine }) {
     <div
       className={cn(
         'mb-2 flex items-center gap-2.5 rounded-xl p-2 pr-3 border',
-        mine ? 'bg-white/10 border-white/15' : 'bg-[#F8F9FA] border-[#E2DDD4]'
+        mine ? 'bg-white/10 border-white/15' : 'bg-mist border-edge'
       )}
     >
-      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F0E8]">
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-cream">
         {product.image_url && <img src={product.image_url} alt={product.product_name} className="h-full w-full object-cover" />}
       </div>
       <div className="min-w-0">
-        <div className={cn('text-[10px] font-bold', mine ? 'text-white/60' : 'text-[#8C8880]')}>詢問商品</div>
+        <div className={cn('text-[10px] font-bold', mine ? 'text-white/60' : 'text-muted')}>詢問商品</div>
         <div className="text-xs font-bold line-clamp-1">{product.product_name}</div>
       </div>
     </div>
@@ -178,35 +178,35 @@ export default function ConversationPanel({
       {/* 左側：對話列表 */}
       <div
         className={cn(
-          'w-full sm:w-80 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0 absolute sm:relative inset-0 z-10 sm:z-0 transition-transform duration-300',
+          'w-full sm:w-80 border-r border-edge flex flex-col bg-white shrink-0 absolute sm:relative inset-0 z-10 sm:z-0 transition-transform duration-300',
           activeKey ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'
         )}
       >
-        <div className="px-4 py-4 border-b border-[#E2DDD4]">
+        <div className="px-4 py-4 border-b border-edge">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-[#1A1A18] text-sm">對話</h2>
+            <h2 className="font-bold text-ink text-sm">對話</h2>
             <div className="flex items-center gap-2">
               {totalUnread > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{totalUnread}</span>
+                <span className="bg-brand text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{totalUnread}</span>
               )}
               <button
                 type="button"
                 onClick={() => loadList()}
                 disabled={listLoading}
-                className="p-1.5 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                className="p-1.5 rounded-full text-muted hover:bg-cream hover:text-brand disabled:opacity-50"
                 title="重新整理"
               >
                 <RefreshCw size={14} className={cn(listLoading ? 'animate-spin' : '')} />
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2">
-            <Search size={13} className="text-[#8C8880]" />
+          <div className="flex items-center gap-2 bg-mist border border-edge rounded-xl px-3 py-2">
+            <Search size={13} className="text-muted" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={searchPlaceholder}
-              className="bg-transparent text-xs text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
+              className="bg-transparent text-xs text-ink placeholder:text-muted/60 outline-none w-full"
             />
           </div>
           {headerExtra}
@@ -214,16 +214,16 @@ export default function ConversationPanel({
 
         <div className="flex-1 overflow-y-auto">
           {listLoading && conversations.length === 0 ? (
-            <div className="py-12 flex items-center justify-center gap-2 text-xs font-bold text-[#8C8880]">
+            <div className="py-12 flex items-center justify-center gap-2 text-xs font-bold text-muted">
               <Loader2 size={14} className="animate-spin" /> 載入中...
             </div>
           ) : listError ? (
-            <div className="py-12 px-4 text-center text-xs font-bold text-[#C8522A]">{listError}</div>
+            <div className="py-12 px-4 text-center text-xs font-bold text-brand">{listError}</div>
           ) : filtered.length === 0 ? (
             <div className="py-12 px-6 text-center">
-              <MessageCircle size={28} className="mx-auto mb-2 text-[#E2DDD4]" />
-              <p className="text-xs font-bold text-[#8C8880]">{search.trim() ? '找不到符合的對話' : emptyListText}</p>
-              {!search.trim() && emptyListHint && <p className="text-[11px] text-[#8C8880] mt-1">{emptyListHint}</p>}
+              <MessageCircle size={28} className="mx-auto mb-2 text-edge" />
+              <p className="text-xs font-bold text-muted">{search.trim() ? '找不到符合的對話' : emptyListText}</p>
+              {!search.trim() && emptyListHint && <p className="text-[11px] text-muted mt-1">{emptyListHint}</p>}
             </div>
           ) : (
             filtered.map(c => (
@@ -232,19 +232,19 @@ export default function ConversationPanel({
                 type="button"
                 onClick={() => setActiveKey(c.key)}
                 className={cn(
-                  'w-full text-left px-4 py-3 border-b border-[#F5F0E8] transition-colors',
-                  c.key === activeKey ? 'bg-[#FDF0ED]' : 'hover:bg-[#F8F9FA]'
+                  'w-full text-left px-4 py-3 border-b border-cream transition-colors',
+                  c.key === activeKey ? 'bg-brand-soft' : 'hover:bg-mist'
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-bold text-[#1A1A18] truncate">{c.title}</span>
-                  <span className="text-[10px] text-[#8C8880] shrink-0">{formatTime(c.lastMessageAt)}</span>
+                  <span className="text-sm font-bold text-ink truncate">{c.title}</span>
+                  <span className="text-[10px] text-muted shrink-0">{formatTime(c.lastMessageAt)}</span>
                 </div>
-                {c.subtitle && <div className="text-[11px] text-[#8C8880] truncate mt-0.5">{c.subtitle}</div>}
+                {c.subtitle && <div className="text-[11px] text-muted truncate mt-0.5">{c.subtitle}</div>}
                 <div className="flex items-center justify-between gap-2 mt-1">
-                  <span className="text-xs text-[#8C8880] truncate">{c.lastMessage}</span>
+                  <span className="text-xs text-muted truncate">{c.lastMessage}</span>
                   {c.unreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">{c.unreadCount}</span>
+                    <span className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">{c.unreadCount}</span>
                   )}
                 </div>
               </button>
@@ -256,33 +256,33 @@ export default function ConversationPanel({
       {/* 右側：訊息 */}
       <div className="flex-1 flex flex-col min-w-0">
         {!active ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880] gap-2">
-            <MessageCircle size={36} className="text-[#E2DDD4]" />
+          <div className="flex-1 flex flex-col items-center justify-center text-muted gap-2">
+            <MessageCircle size={36} className="text-edge" />
             <p className="text-sm font-bold">選擇左側的對話開始回覆</p>
           </div>
         ) : (
           <>
-            <div className="px-4 py-3 border-b border-[#E2DDD4] flex items-center gap-3">
+            <div className="px-4 py-3 border-b border-edge flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setActiveKey(null)}
-                className="sm:hidden p-1.5 rounded-full text-[#8C8880] hover:bg-[#F5F0E8]"
+                className="sm:hidden p-1.5 rounded-full text-muted hover:bg-cream"
               >
                 <ArrowLeft size={16} />
               </button>
               <div className="min-w-0">
-                <div className="text-sm font-bold text-[#1A1A18] truncate">{active.title}</div>
-                {active.subtitle && <div className="text-[11px] text-[#8C8880] truncate">{active.subtitle}</div>}
+                <div className="text-sm font-bold text-ink truncate">{active.title}</div>
+                {active.subtitle && <div className="text-[11px] text-muted truncate">{active.subtitle}</div>}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[#FAF8F4]">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-mist">
               {messageLoading && messages.length === 0 ? (
-                <div className="py-12 flex items-center justify-center gap-2 text-xs font-bold text-[#8C8880]">
+                <div className="py-12 flex items-center justify-center gap-2 text-xs font-bold text-muted">
                   <Loader2 size={14} className="animate-spin" /> 載入中...
                 </div>
               ) : messages.length === 0 ? (
-                <div className="py-12 text-center text-xs font-bold text-[#8C8880]">還沒有訊息</div>
+                <div className="py-12 text-center text-xs font-bold text-muted">還沒有訊息</div>
               ) : (
                 messages.map((m, index) => {
                   const mine = m.sender_role === mineRole
@@ -292,14 +292,14 @@ export default function ConversationPanel({
                         <div
                           className={cn(
                             'px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words',
-                            mine ? 'bg-[#1A1A18] text-white rounded-br-md' : 'bg-white border border-[#E2DDD4] text-[#1A1A18] rounded-bl-md'
+                            mine ? 'bg-brand text-white rounded-br-md' : 'bg-white border border-edge text-ink rounded-bl-md'
                           )}
                         >
                           {showsOrderTag(messages, index) && <OrderTag order={m.order} inverted={mine} />}
                           <MessageProduct product={m.product} mine={mine} />
                           {m.content}
                         </div>
-                        <div className={cn('text-[10px] text-[#8C8880] mt-1', mine ? 'text-right' : 'text-left')}>
+                        <div className={cn('text-[10px] text-muted mt-1', mine ? 'text-right' : 'text-left')}>
                           {formatTime(m.created_at)}
                         </div>
                       </div>
@@ -311,10 +311,10 @@ export default function ConversationPanel({
             </div>
 
             {messageError && (
-              <div className="px-4 py-2 text-xs font-bold text-[#C8522A] bg-[#FDF0ED]">{messageError}</div>
+              <div className="px-4 py-2 text-xs font-bold text-brand bg-brand-soft">{messageError}</div>
             )}
 
-            <div className="p-3 border-t border-[#E2DDD4] flex items-end gap-2">
+            <div className="p-3 border-t border-edge flex items-end gap-2">
               <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -326,13 +326,13 @@ export default function ConversationPanel({
                 }}
                 rows={1}
                 placeholder="輸入訊息，Enter 送出、Shift+Enter 換行"
-                className="flex-1 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C8522A] max-h-32"
+                className="flex-1 resize-none bg-mist border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-brand max-h-32"
               />
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || sending}
-                className="p-3 rounded-xl bg-[#1A1A18] text-white hover:bg-[#C8522A] transition-colors disabled:opacity-40"
+                className="p-3 rounded-xl bg-brand text-white hover:bg-brand-dark transition-colors disabled:opacity-40"
               >
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>

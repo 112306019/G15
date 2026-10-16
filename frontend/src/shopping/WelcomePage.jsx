@@ -1,148 +1,93 @@
 import React from 'react';
-import { Store, Sparkles, ArrowRight, Compass } from 'lucide-react';
+import { Store, Sparkles, ChevronRight, Heart, Ticket, Coins } from 'lucide-react';
 import LogoIcon from '../assets/logo.jpg';
-import LogoText from '../assets/ShareBuy.png';
+
+// 左側插圖周圍的小標籤
+function FeatureTag({ icon: Icon, children, className = '', gold = false }) {
+  const tone = gold ? 'bg-gold-soft text-gold-ink' : 'bg-brand text-white';
+  return (
+    <div className={`absolute flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold shadow-[0_8px_20px_rgba(63,56,112,0.18)] ${tone} ${className}`}>
+      <Icon size={16} strokeWidth={2.4} />
+      {children}
+    </div>
+  );
+}
+
+function RoleOption({ icon: Icon, title, desc, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group w-full flex items-center gap-4 rounded-[1.4rem] border-2 border-edge bg-white px-5 py-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-[250ms] ease-out hover:-translate-y-1 hover:-rotate-1 hover:border-brand hover:bg-brand-softer hover:shadow-[4px_6px_0_var(--color-brand-pale)] focus:outline-none focus-visible:border-brand motion-reduce:transform-none"
+    >
+      <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand transition-[transform,background-color,color] duration-[250ms] ease-out group-hover:-rotate-[8deg] group-hover:scale-110 group-hover:bg-brand group-hover:text-white motion-reduce:transform-none">
+        <Icon size={24} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display text-lg font-bold text-ink">{title}</span>
+        <span className="mt-0.5 block text-[13px] text-muted">{desc}</span>
+      </span>
+      <ChevronRight size={20} strokeWidth={2.4} className="shrink-0 text-edge transition-[transform,color] duration-[250ms] ease-out group-hover:translate-x-1 group-hover:text-brand" />
+    </button>
+  );
+}
 
 export default function WelcomePage({ onSelectSeller, onSelectKoc, onSkipToShop }) {
   return (
-    <div className="flex min-h-screen font-sans animate-in fade-in duration-700">
-      
-      {/* =========================================
-          品牌形象區
-      ========================================== */}
-      <div className="hidden md:flex md:w-1/3 bg-[#1A1A18] relative overflow-hidden flex-col justify-between p-8 lg:p-12">
-        {/* 背景氛圍光暈 */}
-        <div className="absolute top-[-10%] left-[-10%] w-[25rem] h-[25rem] bg-[#C8522A] rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[25rem] h-[25rem] bg-[#B89B6A] rounded-full mix-blend-screen filter blur-[100px] opacity-20"></div>
+    <div className="min-h-screen bg-cream font-sans flex items-center justify-center p-0 sm:p-6 md:p-10 animate-in fade-in duration-700">
+      <div className="w-full max-w-[1100px] min-h-screen sm:min-h-0 bg-white sm:rounded-[2rem] shadow-[0_30px_80px_rgba(80,71,133,0.18)] flex flex-col md:flex-row overflow-hidden">
 
-        {/* 電腦版 Logo */}
-        <div className="relative z-10 flex items-center gap-3">
-          <img 
-            src={LogoIcon} 
-            alt="ShareBuy Logo" 
-            className="w-8 h-8 rounded-full object-cover shadow-[0_0_15px_rgba(200,82,42,0.5)]" 
-          />
-          <img 
-            src={LogoText} 
-            alt="ShareBuy Text" 
-            className="h-7 w-auto object-contain translate-y-1 contrast-125 brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" 
-          />
-          <span className="bg-white/10 backdrop-blur-md text-[#F5F0E8] border border-white/20 text-[9px] px-2 py-0.5 rounded-full tracking-widest font-bold mt-1">
-            SOCIAL COMMERCE
-          </span>
+        {/* 左側：品牌區（淡薰衣草底） */}
+        <div className="md:w-[46%] shrink-0 bg-brand-pale text-brand-dark rounded-b-[2.5rem] md:rounded-b-none md:rounded-r-[6rem] px-7 py-8 md:px-12 md:py-11 flex flex-col gap-7">
+          <div className="flex items-center gap-3">
+            <img src={LogoIcon} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-brand/25" />
+            <span className="font-wordmark text-[26px] leading-none">ShareBuy</span>
+          </div>
+
+          {/* 插圖：logo + 三個功能標籤（手機版省略） */}
+          <div className="relative hidden md:block h-[210px]" aria-hidden="true">
+            <div className="absolute left-[70px] top-[10px] h-[190px] w-[190px] rounded-full bg-white flex items-center justify-center">
+              <img src={LogoIcon} alt="" className="h-[120px] w-[120px] rounded-full object-cover shadow-[0_12px_30px_rgba(63,56,112,0.2)]" />
+            </div>
+            <FeatureTag icon={Heart} className="left-0 top-[30px]">分享好物</FeatureTag>
+            <FeatureTag icon={Ticket} className="left-[230px] top-0">專屬優惠碼</FeatureTag>
+            <FeatureTag icon={Coins} gold className="left-[210px] top-[150px]">分潤回饋</FeatureTag>
+          </div>
+
+          <div>
+            <h1 className="font-wordmark text-[44px] md:text-[54px] leading-[1.04]">
+              Discover. Share.<br />
+              <em className="text-gold">Earn.</em>
+            </h1>
+            <p className="mt-4 max-w-sm text-sm md:text-[15px] leading-relaxed text-brand-dark/80">
+              無論您是尋求曝光的品牌商家、具備影響力的 KOC，還是熱愛探索好物的消費者，ShareBuy 都能為您創造全新價值。
+            </p>
+          </div>
+
+          <p className="hidden md:block mt-auto font-mono text-xs text-brand-dark/60">© {new Date().getFullYear()} ShareBuy</p>
         </div>
 
-        <div className="relative z-10 my-auto">
-          <h2 className="text-4xl lg:text-5xl font-serif text-[#F5F0E8] leading-[1.15] mb-6">
-            Discover. <br/>
-            Share. <br/>
-            <span className="text-[#C8522A] italic">Earn.</span>
-          </h2>
-          <p className="text-[#8C8880] text-base leading-relaxed font-medium">
-            無論您是尋求曝光的品牌商家、具備影響力的 KOC，還是熱愛探索好物的消費者，ShareBuy 都能為您創造全新價值。
+        {/* 右側：選擇身份 */}
+        <div className="flex-1 min-w-0 px-7 py-10 md:px-16 md:py-14 flex flex-col justify-center">
+          <h2 className="font-display text-2xl md:text-[30px] font-bold text-ink">選擇您的身份</h2>
+          <p className="mt-2 mb-7 text-sm text-muted">加入平台，解鎖完整功能</p>
+
+          <div className="flex flex-col gap-3.5">
+            <RoleOption icon={Store} title="我是廠商" desc="發布任務 / 管理商品金流" onClick={onSelectSeller} />
+            <RoleOption icon={Sparkles} title="我是 KOC" desc="接案推廣 / 賺取專屬收益" onClick={onSelectKoc} />
+          </div>
+
+          <div className="my-7 flex items-center gap-3.5 text-xs text-muted">
+            <span className="h-px flex-1 bg-edge" />或<span className="h-px flex-1 bg-edge" />
+          </div>
+
+          <p className="text-center text-sm text-muted">
+            沒有要發案或接案？{' '}
+            <button onClick={onSkipToShop} className="font-bold text-brand hover:text-brand-dark transition-colors">
+              以一般消費者身份逛逛商城 →
+            </button>
           </p>
         </div>
-
-        <div className="relative z-10 flex items-start gap-3 text-[#8C8880] text-xs font-bold border-t border-white/10 pt-6">
-          <Compass size={16} className="text-[#B89B6A] shrink-0 mt-0.5"/>
-          <span>Empowering brands, creators, and shoppers to thrive together.</span>
-        </div>
       </div>
-
-      {/* =========================================
-          🟢 右側：身份選擇區 (手機版滿版 w-full)
-      ========================================== */}
-      <div className="w-full md:w-2/3 bg-[#F5F0E8] flex flex-col items-center justify-start md:justify-center p-6 pt-12 sm:p-12 lg:p-20 relative min-h-screen">
-        
-        {/* 手機版頂部 Logo 與文案區塊 */}
-        <div className="w-full max-w-lg flex md:hidden flex-col items-center text-center mb-10">
-          <div className="flex items-center gap-3 mb-6">
-            <img 
-              src={LogoIcon} 
-              alt="ShareBuy Logo" 
-              className="w-10 h-10 rounded-full object-cover shadow-sm" 
-            />
-            <img 
-              src={LogoText} 
-              alt="ShareBuy Text" 
-              className="h-8 w-auto object-contain translate-y-1 mix-blend-multiply contrast-125" 
-            />
-          </div>
-          <h2 className="text-3xl font-serif font-black text-[#1A1A18] leading-tight">
-            Discover. Share. <br/>
-            <span className="text-[#C8522A] italic">Earn.</span>
-          </h2>
-        </div>
-
-        {/* 主要內容容器 */}
-        <div className="w-full max-w-lg flex flex-col items-center justify-center flex-grow">
-          {/* 標題區 */}
-          <div className="mb-8 text-center sm:text-left">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-black text-[#1A1A18] mb-2">選擇您的身份</h2>
-            <p className="text-[#8C8880] font-bold text-sm tracking-wide">加入平台生態圈，解鎖完整功能</p>
-          </div>
-
-          {/* 核心註冊區：並排大型卡片 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6 mb-10">
-            
-            {/* 廠商大卡片 */}
-            <button 
-              onClick={onSelectSeller}
-              className="group relative flex flex-row sm:flex-col items-center justify-center sm:justify-center rounded-2xl sm:rounded-3xl border border-[#E2DDD4] bg-white p-5 sm:p-8 lg:p-10 text-center sm:text-center shadow-sm transition-all duration-300 hover:-translate-y-1 sm:hover:-translate-y-2 hover:border-[#C8522A] hover:shadow-[0_16px_40px_rgba(200,82,42,0.12)] focus:outline-none"
-            >
-              <div className="mr-4 sm:mr-0 sm:mb-5 flex h-14 w-14 lg:h-20 lg:w-20 shrink-0 items-center justify-center rounded-full bg-[#F5F0E8] text-[#1A1A18] transition-colors duration-300 group-hover:bg-[#1A1A18] group-hover:text-[#F5F0E8] group-hover:scale-110">
-                <Store size={24} className="sm:w-8 sm:h-8" />
-              </div>
-              <div>
-                <h3 className="font-serif text-lg sm:text-xl lg:text-2xl font-bold tracking-wide text-[#1A1A18]">我是廠商</h3>
-                <p className="mt-1 sm:mt-2 text-xs lg:text-sm font-bold text-[#8C8880] leading-relaxed transition-colors group-hover:text-[#C8522A]">
-                  發布任務 / 管理商品金流
-                </p>
-              </div>
-            </button>
-
-            {/* KOC 大卡片 */}
-            <button 
-              onClick={onSelectKoc}
-              className="group relative flex flex-row sm:flex-col items-center justify-center sm:justify-center rounded-2xl sm:rounded-3xl border border-[#E2DDD4] bg-white p-5 sm:p-8 lg:p-10 text-center sm:text-center shadow-sm transition-all duration-300 hover:-translate-y-1 sm:hover:-translate-y-2 hover:border-[#C8522A] hover:shadow-[0_16px_40px_rgba(200,82,42,0.12)] focus:outline-none"
-            >
-              <div className="mr-4 sm:mr-0 sm:mb-5 flex h-14 w-14 lg:h-20 lg:w-20 shrink-0 items-center justify-center rounded-full bg-[#F5F0E8] text-[#1A1A18] transition-colors duration-300 group-hover:bg-[#1A1A18] group-hover:text-[#F5F0E8] group-hover:scale-110">
-                <Sparkles size={24} className="sm:w-8 sm:h-8" />
-              </div>
-              <div>
-                <h3 className="font-serif text-lg sm:text-xl lg:text-2xl font-bold tracking-wide text-[#1A1A18]">我是 KOC</h3>
-                <p className="mt-1 sm:mt-2 text-xs lg:text-sm font-bold text-[#8C8880] leading-relaxed transition-colors group-hover:text-[#C8522A]">
-                  接案推廣 / 賺取專屬收益
-                </p>
-              </div>
-            </button>
-            
-          </div>
-
-          {/* 視覺分隔線 */}
-          <div className="flex items-center gap-4 w-full sm:w-2/3 mx-auto mb-8 opacity-60">
-            <div className="h-px flex-1 bg-[#E2DDD4]"></div>
-          </div>
-
-          {/* 一般消費者區 */}
-          <div className="flex flex-col items-center justify-center text-center pb-8 w-full">
-            <span className="text-xs font-bold text-[#8C8880] mb-3">
-              沒有要發案或接案？
-            </span>
-            <button 
-              onClick={onSkipToShop}
-              className="group flex items-center justify-center gap-2 text-sm font-bold text-[#1A1A18] transition-all hover:text-[#C8522A] focus:outline-none w-full"
-            >
-              <span className="underline decoration-[#E2DDD4] underline-offset-4 group-hover:decoration-[#C8522A]">
-                以一般消費者身份逛逛商城
-              </span>
-              <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-            </button>
-          </div>
-
-        </div>
-      </div>
-
     </div>
   );
 }

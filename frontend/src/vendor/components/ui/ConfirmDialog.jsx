@@ -89,7 +89,7 @@ export function ConfirmProvider({ children }) {
         <div
           className="
             fixed inset-0 z-[200] flex items-center justify-center
-            bg-[#1A1A18]/40 backdrop-blur-sm p-4
+            bg-ink/40 backdrop-blur-sm p-4
             animate-in fade-in duration-200
           "
           onClick={() => handleClose(false)}
@@ -101,14 +101,14 @@ export function ConfirmProvider({ children }) {
             onClick={(e) => e.stopPropagation()}
             className="
               relative w-full max-w-sm bg-white rounded-[2rem]
-              p-7 shadow-2xl border border-[#E2DDD4]
+              p-7 shadow-2xl border border-edge
               animate-in zoom-in-95 duration-200
             "
           >
             <div
               className={`
                 w-11 h-11 rounded-full flex items-center justify-center mb-4
-                ${state.danger ? 'bg-[#FFF0F0] text-[#D93025]' : 'bg-[#F5F0E8] text-[#C8522A]'}
+                ${state.danger ? 'bg-[#FFF0F0] text-[#D93025]' : 'bg-cream text-brand'}
               `}
             >
               <AlertTriangle size={20} />
@@ -116,13 +116,13 @@ export function ConfirmProvider({ children }) {
 
             <h3
               id="confirm-dialog-title"
-              className="text-lg font-serif font-bold text-[#1A1A18] mb-2"
+              className="text-lg font-display font-bold text-ink mb-2"
             >
               {state.title}
             </h3>
 
             {state.description && (
-              <p className="text-sm text-[#8C8880] font-medium leading-relaxed mb-6">
+              <p className="text-sm text-muted font-medium leading-relaxed mb-6">
                 {state.description}
               </p>
             )}
@@ -131,7 +131,7 @@ export function ConfirmProvider({ children }) {
 
             {state.requireReason && (
               <div className="mb-6">
-                <label className="block text-xs font-bold text-[#8C8880] uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-bold text-muted uppercase tracking-wider mb-1.5">
                   {state.reasonLabel}
                 </label>
                 <textarea
@@ -141,10 +141,10 @@ export function ConfirmProvider({ children }) {
                   onChange={(e) => setReason(e.target.value)}
                   placeholder={state.reasonPlaceholder}
                   className="
-                    w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl
-                    px-4 py-3 text-sm text-[#1A1A18] placeholder:text-[#8C8880]/50
-                    outline-none focus:bg-white focus:border-[#C8522A]
-                    focus:ring-4 focus:ring-[#C8522A]/10 transition-all resize-none
+                    w-full bg-mist border border-edge rounded-xl
+                    px-4 py-3 text-sm text-ink placeholder:text-muted/50
+                    outline-none focus:bg-white focus:border-brand
+                    focus:ring-4 focus:ring-brand/10 transition-all resize-none
                   "
                 />
               </div>
@@ -156,8 +156,8 @@ export function ConfirmProvider({ children }) {
                 onClick={() => handleClose(false)}
                 className="
                   px-5 py-2.5 rounded-full text-sm font-bold
-                  border border-[#E2DDD4] text-[#8C8880]
-                  hover:border-[#1A1A18] hover:text-[#1A1A18]
+                  border border-edge text-muted
+                  hover:border-brand hover:text-brand
                   transition-colors
                 "
               >
@@ -175,7 +175,7 @@ export function ConfirmProvider({ children }) {
                   disabled:opacity-40 disabled:cursor-not-allowed
                   ${state.danger
                     ? 'bg-[#D93025] hover:bg-[#B0241C]'
-                    : 'bg-[#1A1A18] hover:bg-[#C8522A]'}
+                    : 'bg-brand hover:bg-brand-dark'}
                 `}
               >
                 {state.confirmText}

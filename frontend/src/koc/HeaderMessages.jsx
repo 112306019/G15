@@ -50,7 +50,7 @@ export function useMessageUnread(userRole) {
 function CountBadge({ count, max = 99, className = '' }) {
   if (!count) return null;
   return (
-    <span className={`bg-[#C8522A] text-white font-bold flex items-center justify-center rounded-full ${className}`}>
+    <span className={`bg-brand text-white font-bold flex items-center justify-center rounded-full ${className}`}>
       {count > max ? `${max}+` : count}
     </span>
   );
@@ -80,26 +80,26 @@ export default function HeaderMessages({ userRole, active = false, unread }) {
       onMouseLeave={() => setOpen(false)}
     >
       <div
-        className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+        className="relative cursor-pointer hover:bg-cream p-2.5 rounded-full transition-colors"
         onClick={() => {
           setOpen(false);
           navigate('/messages');
         }}
         title="我的訊息"
       >
-        <MessageCircle size={22} strokeWidth={2.5} className={active || open ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+        <MessageCircle size={22} strokeWidth={2.5} className={active || open ? 'text-ink' : 'text-muted'} />
         {/* 跟旁邊通知鈴鐺、購物車共用同一個數字圈樣式 */}
         <CountBadge count={unread.total} className={`${ICON_BADGE} top-0 right-0`} />
       </div>
 
       {open && (
         <div className="absolute right-0 top-full pt-2 w-56 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
+          <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
             {items.map(({ key, label, icon: Icon, count }) => (
               <button
                 key={key}
                 onClick={() => openTab(key)}
-                className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
               >
                 <span className="flex items-center gap-3">
                   <Icon size={16} strokeWidth={2.5} />

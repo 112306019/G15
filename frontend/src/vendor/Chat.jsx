@@ -450,19 +450,19 @@ function KocChatPanel({ initialRoomId = null }) {
       {/* 左側：KOC 聊天室清單 */}
       <div
         className={cn(
-          "w-full sm:w-80 border-r border-[#E2DDD4] flex flex-col bg-white shrink-0 absolute sm:relative inset-0 z-10 sm:z-0 transition-transform duration-300",
+          "w-full sm:w-80 border-r border-edge flex flex-col bg-white shrink-0 absolute sm:relative inset-0 z-10 sm:z-0 transition-transform duration-300",
           activeRoomId ? "-translate-x-full sm:translate-x-0" : "translate-x-0"
         )}
       >
-        <div className="px-4 py-4 border-b border-[#E2DDD4]">
+        <div className="px-4 py-4 border-b border-edge">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-[#1A1A18] text-sm">
+            <h2 className="font-bold text-ink text-sm">
               聊天室
             </h2>
 
             <div className="flex items-center gap-2">
               {totalUnread > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="bg-brand text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                   {totalUnread}
                 </span>
               )}
@@ -471,7 +471,7 @@ function KocChatPanel({ initialRoomId = null }) {
                 type="button"
                 onClick={loadChatrooms}
                 disabled={roomLoading}
-                className="p-1.5 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                className="p-1.5 rounded-full text-muted hover:bg-cream hover:text-brand disabled:opacity-50"
                 title="重新整理聊天室"
               >
                 <RefreshCw
@@ -486,10 +486,10 @@ function KocChatPanel({ initialRoomId = null }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-3 py-2">
+          <div className="flex items-center gap-2 bg-mist border border-edge rounded-xl px-3 py-2">
             <Search
               size={13}
-              className="text-[#8C8880]"
+              className="text-muted"
             />
 
             <input
@@ -500,7 +500,7 @@ function KocChatPanel({ initialRoomId = null }) {
                 )
               }
               placeholder="搜尋 KOC 或活動…"
-              className="bg-transparent text-xs text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full"
+              className="bg-transparent text-xs text-ink placeholder:text-muted/60 outline-none w-full"
             />
           </div>
         </div>
@@ -511,10 +511,10 @@ function KocChatPanel({ initialRoomId = null }) {
             <div className="py-16 text-center">
               <Loader2
                 size={18}
-                className="animate-spin mx-auto text-[#C8522A]"
+                className="animate-spin mx-auto text-brand"
               />
 
-              <div className="text-xs font-bold text-[#8C8880] mt-3">
+              <div className="text-xs font-bold text-muted mt-3">
                 聊天室載入中...
               </div>
             </div>
@@ -533,10 +533,10 @@ function KocChatPanel({ initialRoomId = null }) {
             <div className="px-5 py-16 text-center">
               <MessageCircle
                 size={26}
-                className="mx-auto text-[#E2DDD4] mb-3"
+                className="mx-auto text-edge mb-3"
               />
 
-              <div className="text-xs font-bold text-[#8C8880]">
+              <div className="text-xs font-bold text-muted">
                 尚無聊天室
               </div>
             </div>
@@ -574,8 +574,8 @@ function KocChatPanel({ initialRoomId = null }) {
                       transition-colors
                     `,
                     isActive
-                      ? 'bg-[#FDF0ED] border-[#C8522A]'
-                      : 'hover:bg-[#F8F9FA] border-transparent'
+                      ? 'bg-brand-soft border-brand'
+                      : 'hover:bg-mist border-transparent'
                   )}
                 >
                   <Avatar
@@ -585,11 +585,11 @@ function KocChatPanel({ initialRoomId = null }) {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-[#1A1A18] truncate">
+                      <span className="text-xs font-bold text-ink truncate">
                         {group.kocName}
                       </span>
 
-                      <span className="text-[10px] text-[#8C8880] shrink-0">
+                      <span className="text-[10px] text-muted shrink-0">
                         {formatMessageDate(
                           latestRoom
                             ?.lastMessageTime
@@ -597,19 +597,19 @@ function KocChatPanel({ initialRoomId = null }) {
                       </span>
                     </div>
 
-                    <div className="text-[10px] text-[#8C8880] mt-1 truncate">
+                    <div className="text-[10px] text-muted mt-1 truncate">
                       {latestRoom
                         ?.lastMessage ||
                         `${group.rooms.length} 個任務聊天室`}
                     </div>
 
-                    <div className="text-[9px] font-mono text-[#8C8880] mt-1">
+                    <div className="text-[9px] font-mono text-muted mt-1">
                       {group.kocId}
                     </div>
                   </div>
 
                   {unreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center shrink-0">
+                    <span className="bg-brand text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center shrink-0">
                       {unreadCount}
                     </span>
                   )}
@@ -622,13 +622,13 @@ function KocChatPanel({ initialRoomId = null }) {
 
 
       {/* 右側：對話內容 */}
-      <div className="flex-1 flex flex-col bg-[#F8F9FA] min-w-0 w-full h-full">
+      <div className="flex-1 flex flex-col bg-mist min-w-0 w-full h-full">
 
         {!activeRoom ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-[#8C8880] hidden sm:flex">
+          <div className="flex-1 flex flex-col items-center justify-center text-muted hidden sm:flex">
             <MessageCircle
               size={42}
-              className="mb-4 text-[#E2DDD4]"
+              className="mb-4 text-edge"
             />
 
             <div className="text-sm font-bold">
@@ -642,14 +642,14 @@ function KocChatPanel({ initialRoomId = null }) {
         ) : (
           <>
             {/* KOC 資訊 */}
-            <div className="bg-white border-b border-[#E2DDD4] px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 shrink-0">
+            <div className="bg-white border-b border-edge px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4 shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setActiveRoomId(null)
                   setActiveKocId(null)
                 }}
-                className="sm:hidden p-1.5 -ml-1.5 text-[#8C8880] hover:bg-[#F5F0E8] rounded-full"
+                className="sm:hidden p-1.5 -ml-1.5 text-muted hover:bg-cream rounded-full"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -664,11 +664,11 @@ function KocChatPanel({ initialRoomId = null }) {
               />
 
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm sm:text-base text-[#1A1A18] truncate">
+                <div className="font-bold text-sm sm:text-base text-ink truncate">
                   {activeRoom.kocName}
                 </div>
 
-                <div className="text-[10px] sm:text-xs text-[#8C8880] mt-0.5 sm:mt-1 truncate">
+                <div className="text-[10px] sm:text-xs text-muted mt-0.5 sm:mt-1 truncate">
                   {activeRoom.kocId}
                   {' · '}
                   {activeRoom.campaignName}
@@ -683,7 +683,7 @@ function KocChatPanel({ initialRoomId = null }) {
                   )
                 }
                 disabled={messageLoading}
-                className="p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#C8522A] disabled:opacity-50"
+                className="p-2 rounded-full text-muted hover:bg-cream hover:text-brand disabled:opacity-50"
                 title="重新整理訊息"
               >
                 <RefreshCw
@@ -699,7 +699,7 @@ function KocChatPanel({ initialRoomId = null }) {
 
 
             {/* 任務聊天室 Tabs */}
-            <div className="bg-white border-b border-[#E2DDD4] px-4 sm:px-6 flex gap-1 shrink-0 overflow-x-auto scrollbar-hide">
+            <div className="bg-white border-b border-edge px-4 sm:px-6 flex gap-1 shrink-0 overflow-x-auto scrollbar-hide">
               {(activeGroup?.rooms || []).map(
                 room => (
                   <button
@@ -718,8 +718,8 @@ function KocChatPanel({ initialRoomId = null }) {
                       `,
                       activeRoomId ===
                         room.roomId
-                        ? 'border-[#C8522A] text-[#C8522A]'
-                        : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+                        ? 'border-brand text-brand'
+                        : 'border-transparent text-muted hover:text-ink'
                     )}
                   >
                     <Tag size={11} className="hidden sm:block" />
@@ -733,7 +733,7 @@ function KocChatPanel({ initialRoomId = null }) {
                     </span>
 
                     {room.unreadCount > 0 && (
-                      <span className="bg-[#C8522A] text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
+                      <span className="bg-brand text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
                         {room.unreadCount}
                       </span>
                     )}
@@ -744,7 +744,7 @@ function KocChatPanel({ initialRoomId = null }) {
 
 
             {/* 任務資訊 */}
-            <div className="bg-[#FDF0ED] border-b border-[#C8522A]/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-[#C8522A] shrink-0">
+            <div className="bg-brand-soft border-b border-brand/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-brand shrink-0">
               <span className="font-bold">
                 {activeRoom.campaignName}
               </span>
@@ -783,10 +783,10 @@ function KocChatPanel({ initialRoomId = null }) {
                 <div className="h-full flex flex-col items-center justify-center">
                   <Loader2
                     size={20}
-                    className="animate-spin text-[#C8522A]"
+                    className="animate-spin text-brand"
                   />
 
-                  <div className="text-xs font-bold text-[#8C8880] mt-3">
+                  <div className="text-xs font-bold text-muted mt-3">
                     訊息載入中...
                   </div>
                 </div>
@@ -820,8 +820,8 @@ function KocChatPanel({ initialRoomId = null }) {
                             break-words
                           `,
                           isVendor
-                            ? 'bg-[#1A1A18] text-white rounded-br-sm'
-                            : 'bg-white border border-[#E2DDD4] text-[#1A1A18] shadow-sm rounded-bl-sm'
+                            ? 'bg-brand text-white rounded-br-sm'
+                            : 'bg-white border border-edge text-ink shadow-sm rounded-bl-sm'
                         )}
                       >
                         {message.content}
@@ -831,7 +831,7 @@ function KocChatPanel({ initialRoomId = null }) {
                             'text-[9px] sm:text-[10px] mt-1',
                             isVendor
                               ? 'text-white/50 text-right'
-                              : 'text-[#8C8880]'
+                              : 'text-muted'
                           )}
                         >
                           {formatTime(
@@ -843,10 +843,10 @@ function KocChatPanel({ initialRoomId = null }) {
                   )
                 })
               ) : (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-[#8C8880]">
+                <div className="flex flex-col items-center justify-center h-full py-20 text-muted">
                   <Tag
                     size={28}
-                    className="mb-3 text-[#E2DDD4]"
+                    className="mb-3 text-edge"
                   />
 
                   <p className="text-sm font-bold">
@@ -864,7 +864,7 @@ function KocChatPanel({ initialRoomId = null }) {
 
 
             {/* 輸入區 */}
-            <div className="bg-white border-t border-[#E2DDD4] px-4 sm:px-6 py-3 sm:py-4 shrink-0">
+            <div className="bg-white border-t border-edge px-4 sm:px-6 py-3 sm:py-4 shrink-0">
               <div className="flex items-end sm:items-center gap-2 sm:gap-3">
                 <textarea
                   rows={1}
@@ -879,7 +879,7 @@ function KocChatPanel({ initialRoomId = null }) {
                   }
                   disabled={sending}
                   placeholder="輸入訊息…（Enter 送出，Shift + Enter 換行）"
-                  className="flex-1 max-h-24 sm:max-h-32 resize-none bg-[#F8F9FA] border border-[#E2DDD4] rounded-[1.2rem] sm:rounded-xl px-4 py-3 text-[13px] sm:text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none focus:ring-4 focus:ring-[#C8522A]/10 focus:border-[#C8522A] transition-all disabled:opacity-60"
+                  className="flex-1 max-h-24 sm:max-h-32 resize-none bg-mist border border-edge rounded-[1.2rem] sm:rounded-xl px-4 py-3 text-[13px] sm:text-sm text-ink placeholder:text-muted/60 outline-none focus:ring-4 focus:ring-brand/10 focus:border-brand transition-all disabled:opacity-60"
                 />
 
                 <button
@@ -889,7 +889,7 @@ function KocChatPanel({ initialRoomId = null }) {
                     !input.trim() ||
                     sending
                   }
-                  className="bg-[#1A1A18] text-white p-3 rounded-[1.2rem] sm:rounded-xl hover:bg-[#C8522A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 h-[46px] w-[46px] flex items-center justify-center"
+                  className="bg-brand text-white p-3 rounded-[1.2rem] sm:rounded-xl hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 h-[46px] w-[46px] flex items-center justify-center"
                 >
                   {sending ? (
                     <Loader2
@@ -902,7 +902,7 @@ function KocChatPanel({ initialRoomId = null }) {
                 </button>
               </div>
 
-              <div className="hidden sm:block text-[10px] text-[#8C8880] mt-2 font-bold text-right pr-14">
+              <div className="hidden sm:block text-[10px] text-muted mt-2 font-bold text-right pr-14">
                 Enter 送出，Shift + Enter 換行
               </div>
             </div>
@@ -956,7 +956,7 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-65px)] bg-white">
-      <div className="flex gap-1 px-3 sm:px-4 pt-2 border-b border-[#E2DDD4] bg-white shrink-0 overflow-x-auto">
+      <div className="flex gap-1 px-3 sm:px-4 pt-2 border-b border-edge bg-white shrink-0 overflow-x-auto">
         {CHAT_TABS.map(t => (
           <button
             key={t.key}
@@ -964,12 +964,12 @@ export default function Chat() {
             onClick={() => switchTab(t.key)}
             className={cn(
               'flex items-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 transition-colors whitespace-nowrap',
-              tab === t.key ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+              tab === t.key ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink'
             )}
           >
             {t.label}
             {unread[t.key] > 0 && (
-              <span className="bg-[#C8522A] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{unread[t.key]}</span>
+              <span className="bg-brand text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{unread[t.key]}</span>
             )}
           </button>
         ))}

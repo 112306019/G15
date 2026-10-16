@@ -32,12 +32,12 @@ function parseUserAgent(ua) {
 }
 
 const INPUT_CLASS =
-  'w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white transition-colors'
+  'w-full bg-mist border border-edge rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-ink outline-none focus:border-brand focus:bg-white transition-colors'
 
 function PasswordField({ label, ...props }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">{label}</label>
+      <label className="text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider">{label}</label>
       <input type="password" className={INPUT_CLASS} {...props} />
     </div>
   )
@@ -121,12 +121,12 @@ export default function SecuritySettings() {
   return (
     <>
       {/* 密碼 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl sm:rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl sm:rounded-2xl bg-mist border border-edge p-4 sm:p-5">
         <div className="flex items-start gap-3">
-          <KeyRound size={18} className="text-[#8C8880] mt-0.5 shrink-0" />
+          <KeyRound size={18} className="text-muted mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-[#1A1A18]">密碼</p>
-            <p className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+            <p className="text-sm font-bold text-ink">密碼</p>
+            <p className="text-[11px] sm:text-xs text-muted mt-1">
               {passwordUpdatedAt ? `上次更新於 ${formatDate(passwordUpdatedAt)}` : '尚未更新過密碼'}
             </p>
             {savedMessage && <p className="text-[11px] sm:text-xs font-bold text-[#2F8F4E] mt-1">✓ {savedMessage}</p>}
@@ -135,7 +135,7 @@ export default function SecuritySettings() {
         <button
           type="button"
           onClick={openPasswordModal}
-          className="w-full sm:w-auto rounded-full border border-[#E2DDD4] bg-white px-5 py-2.5 text-xs sm:text-sm font-bold text-[#1A1A18] hover:border-[#1A1A18] transition-colors"
+          className="w-full sm:w-auto rounded-full border border-edge bg-white px-5 py-2.5 text-xs sm:text-sm font-bold text-ink hover:border-brand transition-colors"
         >
           更新密碼
         </button>
@@ -143,28 +143,28 @@ export default function SecuritySettings() {
 
       {/* 登入記錄 */}
       <div>
-        <p className="text-sm font-bold text-[#1A1A18] mb-3 flex items-center gap-2">
-          <MonitorSmartphone size={16} className="text-[#8C8880]" />
+        <p className="text-sm font-bold text-ink mb-3 flex items-center gap-2">
+          <MonitorSmartphone size={16} className="text-muted" />
           登入記錄
         </p>
-        <div className="rounded-xl sm:rounded-2xl border border-[#E2DDD4] overflow-hidden">
+        <div className="rounded-xl sm:rounded-2xl border border-edge overflow-hidden">
           {loadingLogs ? (
             <div className="p-6 flex justify-center">
-              <Loader2 size={18} className="animate-spin text-[#C8522A]" />
+              <Loader2 size={18} className="animate-spin text-brand" />
             </div>
           ) : logsError ? (
-            <div className="p-5 text-center text-xs font-bold text-[#C8522A]">{logsError}</div>
+            <div className="p-5 text-center text-xs font-bold text-brand">{logsError}</div>
           ) : logs.length === 0 ? (
-            <div className="p-5 text-center text-xs font-bold text-[#8C8880]">
+            <div className="p-5 text-center text-xs font-bold text-muted">
               目前沒有可顯示的登入記錄，下次登入後會開始記錄。
             </div>
           ) : (
             logs.map((log, index) => (
               <div
                 key={log.log_id}
-                className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-[#E2DDD4] last:border-0"
+                className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-edge last:border-0"
               >
-                <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-[#1A1A18]">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
                   {parseUserAgent(log.user_agent)}
                   {index === 0 && (
                     <span className="rounded-md bg-[#EAF6EC] px-2 py-0.5 text-[10px] font-bold text-[#2F8F4E]">
@@ -172,7 +172,7 @@ export default function SecuritySettings() {
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] sm:text-xs font-medium text-[#8C8880]">{formatDateTime(log.login_at)}</div>
+                <div className="text-[11px] sm:text-xs font-medium text-muted">{formatDateTime(log.login_at)}</div>
               </div>
             ))
           )}
@@ -182,21 +182,21 @@ export default function SecuritySettings() {
       {/* 更新密碼彈窗 */}
       {pwOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1A18]/40 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/40 backdrop-blur-sm p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setPwOpen(false)
           }}
         >
           <form
             onSubmit={handleSavePassword}
-            className="w-full max-w-md rounded-[1.5rem] sm:rounded-[2rem] bg-white border border-[#E2DDD4] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200"
+            className="w-full max-w-md rounded-[1.5rem] sm:rounded-[2rem] bg-white border border-edge p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200"
           >
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-serif font-bold text-xl text-[#1A1A18]">更新密碼</h3>
+              <h3 className="font-display font-bold text-xl text-ink">更新密碼</h3>
               <button
                 type="button"
                 onClick={() => setPwOpen(false)}
-                className="p-2 rounded-full text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA] transition-colors"
+                className="p-2 rounded-full text-muted hover:text-ink hover:bg-mist transition-colors"
               >
                 <X size={18} />
               </button>
@@ -236,14 +236,14 @@ export default function SecuritySettings() {
               <button
                 type="button"
                 onClick={() => setPwOpen(false)}
-                className="w-full sm:flex-1 rounded-full border border-[#E2DDD4] bg-white py-3 text-xs sm:text-sm font-bold text-[#8C8880] hover:border-[#1A1A18] hover:text-[#1A1A18] transition-colors"
+                className="w-full sm:flex-1 rounded-full border border-edge bg-white py-3 text-xs sm:text-sm font-bold text-muted hover:border-brand hover:text-brand transition-colors"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full sm:flex-1 rounded-full bg-[#1A1A18] py-3 text-xs sm:text-sm font-bold text-[#F5F0E8] hover:bg-[#C8522A] transition-colors disabled:opacity-50"
+                className="w-full sm:flex-1 rounded-full bg-brand py-3 text-xs sm:text-sm font-bold text-white hover:bg-brand-dark transition-colors disabled:opacity-50"
               >
                 {saving ? '儲存中...' : '確認儲存'}
               </button>

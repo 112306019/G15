@@ -8,10 +8,10 @@ import { useConfirm } from './components/ui/ConfirmDialog'
 import { formatApiError, getErrorMessage } from '../errorMessage';
 
 const statusCfg = {
-  active:   { label: '推廣中', cls: 'bg-[#FDF0ED] text-[#C8522A]', dot: 'bg-[#C8522A]' }, // 掛在一個進行中的活動
-  idle:     { label: '庫存中', cls: 'bg-[#F5F0E8] text-[#1A1A18]', dot: 'bg-[#1A1A18]' }, // 上架中，但沒有進行中的活動
-  empty:    { label: '已售完', cls: 'bg-white border border-[#E2DDD4] text-[#8C8880]', dot: 'bg-[#E2DDD4]' },
-  delisted: { label: '已下架', cls: 'bg-[#F5F0E8] text-[#8C8880]', dot: 'bg-[#8C8880]' },
+  active:   { label: '推廣中', cls: 'bg-brand-soft text-brand', dot: 'bg-brand' }, // 掛在一個進行中的活動
+  idle:     { label: '庫存中', cls: 'bg-cream text-ink', dot: 'bg-brand' }, // 上架中，但沒有進行中的活動
+  empty:    { label: '已售完', cls: 'bg-white border border-edge text-muted', dot: 'bg-edge' },
+  delisted: { label: '已下架', cls: 'bg-cream text-muted', dot: 'bg-muted' },
 }
 
 
@@ -69,29 +69,29 @@ function mapProductFromApi(product) {
 }
 
 function Card({ children, className = "", hoverable }) {
-  return <div className={cn(`bg-white rounded-[1.5rem] border border-[#E2DDD4] shadow-sm ${hoverable ? 'hover:border-[#B89B6A] hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)] transition-all' : ''}`, className)}>{children}</div>
+  return <div className={cn(`bg-white rounded-[1.5rem] border border-edge shadow-sm ${hoverable ? 'hover:border-gold hover:shadow-[0_8px_28px_rgba(26,26,24,0.06)] transition-all' : ''}`, className)}>{children}</div>
 }
 
 function StatCard({ label, value, icon: Icon }) {
   return (
     <Card className="p-4 sm:p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-2 sm:mb-4">
-        <span className="text-xs sm:text-sm font-bold text-[#8C8880] tracking-wide">{label}</span>
-        <div className="text-[#8C8880]">
+        <span className="text-xs sm:text-sm font-bold text-muted tracking-wide">{label}</span>
+        <div className="text-muted">
           <Icon size={18} className="sm:w-5 sm:h-5" strokeWidth={2.5} />
         </div>
       </div>
-      <div className="text-lg sm:text-2xl font-black text-[#1A1A18] font-sans truncate">{value}</div>
+      <div className="text-lg sm:text-2xl font-black text-ink font-sans truncate">{value}</div>
     </Card>
   )
 }
 
 function Button({ variant = 'default', className, disabled, children, ...props }) {
   const variants = {
-    brand: 'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] shadow-sm',
-    outline: 'border border-[#E2DDD4] bg-white text-[#8C8880] hover:text-[#1A1A18] hover:border-[#1A1A18]',
-    ghost: 'text-[#8C8880] hover:text-[#1A1A18] hover:bg-[#F8F9FA]',
-    default: 'bg-[#F5F0E8] text-[#1A1A18] hover:bg-[#E2DDD4]'
+    brand: 'bg-brand text-white hover:bg-brand-dark shadow-sm',
+    outline: 'border border-edge bg-white text-muted hover:text-brand hover:border-brand',
+    ghost: 'text-muted hover:text-ink hover:bg-mist',
+    default: 'bg-cream text-ink hover:bg-edge'
   }
   return (
     <button disabled={disabled} className={cn('inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap', variants[variant], className)} {...props}>
@@ -103,8 +103,8 @@ function Button({ variant = 'default', className, disabled, children, ...props }
 function Input({ label, ...props }) {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">{label}</label>
-      <input className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm text-[#1A1A18] outline-none focus:border-[#C8522A] focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50" {...props} />
+      <label className="text-xs font-bold text-muted uppercase tracking-wider">{label}</label>
+      <input className="w-full bg-mist border border-edge rounded-xl px-4 py-3 text-sm text-ink outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all placeholder:text-muted/50" {...props} />
     </div>
   )
 }
@@ -124,13 +124,13 @@ function Thumb({ emoji, size = 'md' }) {
 
   if (isImageUrl) {
     return (
-      <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] overflow-hidden shrink-0', s)}>
+      <div className={cn('bg-cream border border-edge overflow-hidden shrink-0', s)}>
         <img src={emoji} alt="" className="w-full h-full object-cover" />
       </div>
     )
   }
 
-  return <div className={cn('bg-[#F5F0E8] border border-[#E2DDD4] flex items-center justify-center shrink-0', s)}>{emoji}</div>
+  return <div className={cn('bg-cream border border-edge flex items-center justify-center shrink-0', s)}>{emoji}</div>
 }
 
 // ─── 簡化版的新增商品 Modal (存入資料庫) ──────────────────────────────────────────
@@ -217,28 +217,28 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-[#1A1A18]/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden border border-[#E2DDD4] animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] sm:max-h-[90vh]">
+      <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden border border-edge animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] sm:max-h-[90vh]">
         
-        <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5 border-b border-[#E2DDD4] bg-[#F8F9FA] flex justify-between items-start sm:items-center shrink-0">
+        <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5 border-b border-edge bg-mist flex justify-between items-start sm:items-center shrink-0">
           <div>
-            <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#1A1A18]">{editingProduct ? '修改商品資料' : '新增至商品庫'}</h2>
-            <p className="text-[11px] sm:text-xs font-bold text-[#8C8880] mt-1">
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink">{editingProduct ? '修改商品資料' : '新增至商品庫'}</h2>
+            <p className="text-[11px] sm:text-xs font-bold text-muted mt-1">
               {editingProduct ? '更新商品價格、庫存與基本資訊' : '建立基礎商品資料'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full text-[#8C8880] hover:bg-[#E2DDD4] hover:text-[#1A1A18] transition-colors -mr-2 sm:mr-0"><X size={18}/></button>
+          <button onClick={onClose} className="p-2 rounded-full text-muted hover:bg-edge hover:text-ink transition-colors -mr-2 sm:mr-0"><X size={18}/></button>
         </div>
 
         <div className="px-4 sm:px-8 py-4 sm:py-6 overflow-y-auto flex-1 space-y-4 sm:space-y-5">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 p-4 sm:p-5 bg-[#F8F9FA] border border-dashed border-[#E2DDD4] rounded-2xl text-center sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 p-4 sm:p-5 bg-mist border border-dashed border-edge rounded-2xl text-center sm:text-left">
             <Thumb emoji={form.thumbnail} size="lg" />
             <div className="flex-1 w-full">
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="inline-flex items-center justify-center w-full sm:w-auto gap-2 text-xs font-bold text-[#1A1A18] bg-white border border-[#E2DDD4] hover:border-[#1A1A18] px-4 py-2 rounded-full transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center w-full sm:w-auto gap-2 text-xs font-bold text-ink bg-white border border-edge hover:border-brand px-4 py-2 rounded-full transition-all disabled:opacity-50"
               >
                 <Upload size={14} />{uploading ? "上傳中..." : "上傳圖片"}
               </button>
@@ -247,7 +247,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
 
           <div>
             <Input label="商品名稱 *" value={form.name} onChange={set('name')} placeholder="例：深層保濕精華液" />
-            <p className={`mt-2 text-[10px] sm:text-[11px] font-bold ${form.name && productNameError ? 'text-red-600' : 'text-[#8C8880]'}`}>
+            <p className={`mt-2 text-[10px] sm:text-[11px] font-bold ${form.name && productNameError ? 'text-red-600' : 'text-muted'}`}>
               {form.name && productNameError ? productNameError : `為符合物流規範，請勿使用：${ECPAY_FORBIDDEN_CHARS_TEXT}`}
             </p>
           </div>
@@ -262,33 +262,33 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="庫存數量 *" type="number" value={form.stock} onChange={set('stock')} />
             <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">類別</label>
-              <select value={form.category} onChange={set('category')} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm outline-none">
+              <label className="text-xs font-bold text-muted uppercase tracking-wider">類別</label>
+              <select value={form.category} onChange={set('category')} className="w-full bg-mist border border-edge rounded-xl px-4 py-3 text-sm outline-none">
                 <option value="">選擇類別</option>
                 {categoryOptions.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5 w-full sm:col-span-2">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">廣告審核類別</label>
-              <select value={form.adCategory || 'other'} onChange={set('adCategory')} className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm outline-none">
+              <label className="text-xs font-bold text-muted uppercase tracking-wider">廣告審核類別</label>
+              <select value={form.adCategory || 'other'} onChange={set('adCategory')} className="w-full bg-mist border border-edge rounded-xl px-4 py-3 text-sm outline-none">
                 <option value="food">食品</option>
                 <option value="cosmetic">化粧品</option>
                 <option value="medical_device">醫療器材</option>
                 <option value="drug">藥品</option>
                 <option value="other">其他</option>
               </select>
-              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">用於自動判讀 KOC 提交文案的合規審核規則</p>
+              <p className="text-[10px] sm:text-[11px] text-muted">用於自動判讀 KOC 提交文案的合規審核規則</p>
             </div>
             <div className="flex flex-col gap-1.5 w-full sm:col-span-2">
-              <label className="text-xs font-bold text-[#8C8880] uppercase tracking-wider">七天鑑賞期退貨</label>
+              <label className="text-xs font-bold text-muted uppercase tracking-wider">七天鑑賞期退貨</label>
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() => setForm(prev => ({ ...prev, isReturnable: true, nonReturnableReason: '' }))}
                   className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
                     form.isReturnable
-                      ? 'border-[#1A1A18] bg-[#1A1A18] text-white'
-                      : 'border-[#E2DDD4] bg-[#F8F9FA] text-[#8C8880]'
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-edge bg-mist text-muted'
                   }`}
                 >
                   可退貨
@@ -298,8 +298,8 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
                   onClick={() => setForm(prev => ({ ...prev, isReturnable: false }))}
                   className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold transition-colors ${
                     !form.isReturnable
-                      ? 'border-[#C8522A] bg-[#C8522A] text-white'
-                      : 'border-[#E2DDD4] bg-[#F8F9FA] text-[#8C8880]'
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-edge bg-mist text-muted'
                   }`}
                 >
                   不可退貨
@@ -310,7 +310,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
                 <select
                   value={form.nonReturnableReason}
                   onChange={set('nonReturnableReason')}
-                  className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl px-4 py-3 text-sm outline-none mt-2"
+                  className="w-full bg-mist border border-edge rounded-xl px-4 py-3 text-sm outline-none mt-2"
                 >
                   <option value="">請選擇不可退貨原因</option>
                   <option value="perishable">易腐敗、保存期限較短，或退貨時將逾期</option>
@@ -322,7 +322,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
                   <option value="air_transport">國際航空客運服務</option>
                 </select>
               )}
-              <p className="text-[10px] sm:text-[11px] text-[#8C8880]">依消保法規定，不可退貨須為法定例外情況之一</p>
+              <p className="text-[10px] sm:text-[11px] text-muted">依消保法規定，不可退貨須為法定例外情況之一</p>
             </div>
           </div>
 
@@ -331,7 +331,7 @@ function ProductModal({ open, onClose, onComplete, editingProduct, categoryOptio
           {error && <p className="text-sm font-bold text-red-600">{error}</p>}
         </div>
         
-        <div className="px-4 sm:px-8 py-4 sm:py-5 border-t border-[#E2DDD4] flex flex-col sm:flex-row gap-3 sm:gap-4 bg-[#F8F9FA] justify-end shrink-0">
+        <div className="px-4 sm:px-8 py-4 sm:py-5 border-t border-edge flex flex-col sm:flex-row gap-3 sm:gap-4 bg-mist justify-end shrink-0">
           <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto order-2 sm:order-1">取消</Button>
           <Button
             variant="brand"
@@ -496,7 +496,7 @@ export default function Products() {
   }
 
   if (loading) {
-    return <div className="py-20 text-center text-sm font-bold text-[#8C8880]">商品資料載入中...</div>
+    return <div className="py-20 text-center text-sm font-bold text-muted">商品資料載入中...</div>
   }
 
   return (
@@ -504,8 +504,8 @@ export default function Products() {
       
       {/* 頂部標題 */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg sm:text-xl font-serif font-bold text-[#1A1A18] flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[#C8522A] rounded-full inline-block"></span>
+        <h2 className="text-lg sm:text-xl font-display font-bold text-ink flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-brand rounded-full inline-block"></span>
           商品庫管理
         </h2>
       </div>
@@ -528,26 +528,26 @@ export default function Products() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 flex-wrap">
         
         {/* 過濾標籤 */}
-        <div className="flex gap-2 p-1 bg-[#E2DDD4]/30 rounded-full overflow-x-auto w-full sm:w-auto scrollbar-hide">
+        <div className="flex gap-2 p-1 bg-edge/30 rounded-full overflow-x-auto w-full sm:w-auto scrollbar-hide">
           {[['all','全部商品'],['active','推廣中'],['idle','庫存中'],['empty','已售完']].map(([v,l]) => (
             <button key={v} onClick={() => setFilter(v)} className={cn('px-4 sm:px-5 py-2 rounded-full text-[13px] sm:text-sm font-bold transition-all whitespace-nowrap',
-              filter===v ? 'bg-[#1A1A18] text-white shadow-sm' : 'text-[#8C8880] hover:text-[#1A1A18]')}>{l}</button>
+              filter===v ? 'bg-brand text-white shadow-sm' : 'text-muted hover:text-ink')}>{l}</button>
           ))}
         </div>
         
         {/* 搜尋框與按鈕列 */}
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto sm:ml-auto">
           {/* 搜尋框 */}
-          <div className="flex-1 sm:flex-none flex items-center gap-2 sm:gap-3 bg-white border border-[#E2DDD4] rounded-full px-4 sm:px-5 py-2 sm:py-2.5 w-full sm:w-64 focus-within:border-[#C8522A] transition-colors shadow-sm">
-            <Search size={16} className="text-[#8C8880] shrink-0"/>
+          <div className="flex-1 sm:flex-none flex items-center gap-2 sm:gap-3 bg-white border border-edge rounded-full px-4 sm:px-5 py-2 sm:py-2.5 w-full sm:w-64 focus-within:border-brand transition-colors shadow-sm">
+            <Search size={16} className="text-muted shrink-0"/>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋商品…"
-              className="bg-transparent text-sm text-[#1A1A18] placeholder:text-[#8C8880]/60 outline-none w-full font-bold"/>
+              className="bg-transparent text-sm text-ink placeholder:text-muted/60 outline-none w-full font-bold"/>
           </div>
 
           {/* 視圖切換 */}
-          <div className="hidden sm:flex bg-white border border-[#E2DDD4] rounded-full overflow-hidden shadow-sm p-1 shrink-0">
-            <button onClick={() => setView('grid')} className={cn('p-2 rounded-full transition-colors', view==='grid' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]')}><LayoutGrid size={16}/></button>
-            <button onClick={() => setView('list')} className={cn('p-2 rounded-full transition-colors', view==='list' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:text-[#1A1A18]')}><List size={16}/></button>
+          <div className="hidden sm:flex bg-white border border-edge rounded-full overflow-hidden shadow-sm p-1 shrink-0">
+            <button onClick={() => setView('grid')} className={cn('p-2 rounded-full transition-colors', view==='grid' ? 'bg-cream text-ink' : 'text-muted hover:text-ink')}><LayoutGrid size={16}/></button>
+            <button onClick={() => setView('list')} className={cn('p-2 rounded-full transition-colors', view==='list' ? 'bg-cream text-ink' : 'text-muted hover:text-ink')}><List size={16}/></button>
           </div>
 
           <Button variant="brand" onClick={handleOpenCreate} className="gap-2 px-4 sm:px-6 py-2 sm:py-2.5 shrink-0">
@@ -569,95 +569,95 @@ export default function Products() {
                   <button
                     onClick={() => handleToggleStatus(p)}
                     disabled={p.stock === 0}
-                    className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white/95 rounded-full shadow-sm border border-[#E2DDD4] text-[11px] sm:text-xs font-bold text-[#8C8880] hover:text-[#C8522A] disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white/95 rounded-full shadow-sm border border-edge text-[11px] sm:text-xs font-bold text-muted hover:text-brand disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {p.apiStatus === 'active' ? '下架' : '上架'}
                   </button>
-                  <button onClick={() => handleOpenEdit(p)} className="p-1.5 sm:p-2 bg-white/95 rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] hover:text-[#C8522A]"><Edit3 size={14} /></button>
-                  <button onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(p); }} className="p-1.5 sm:p-2 bg-white/95 rounded-full shadow-sm border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025]"><Trash2 size={14} /></button>
+                  <button onClick={() => handleOpenEdit(p)} className="p-1.5 sm:p-2 bg-white/95 rounded-full shadow-sm border border-edge text-muted hover:text-brand"><Edit3 size={14} /></button>
+                  <button onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(p); }} className="p-1.5 sm:p-2 bg-white/95 rounded-full shadow-sm border border-edge text-muted hover:text-[#D93025]"><Trash2 size={14} /></button>
                 </div>
                 
                 <div className="flex items-start gap-3 sm:gap-4 mt-8 sm:mt-0">
                   <Thumb emoji={p.thumbnail}/>
                   <div className="flex-1 min-w-0 pt-1">
-                    <div className="text-sm font-bold text-[#1A1A18] line-clamp-2 leading-snug mb-1">{p.name}</div>
-                    <div className="text-[10px] text-[#8C8880] font-mono tracking-wider">{p.sku || '無 SKU'}</div>
+                    <div className="text-sm font-bold text-ink line-clamp-2 leading-snug mb-1">{p.name}</div>
+                    <div className="text-[10px] text-muted font-mono tracking-wider">{p.sku || '無 SKU'}</div>
                   </div>
                 </div>
 
                 <div className="flex items-end justify-between mt-2">
                   <div>
                     <div className="flex items-baseline gap-2">
-                      <div className={cn('text-lg font-black', p.discountedPrice !== null && p.discountedPrice < p.price ? 'text-[#8C8880] line-through text-sm' : 'text-[#1A1A18]')}>
+                      <div className={cn('text-lg font-black', p.discountedPrice !== null && p.discountedPrice < p.price ? 'text-muted line-through text-sm' : 'text-ink')}>
                         {formatCurrency(p.price)}
                       </div>
                       {p.discountedPrice !== null && p.discountedPrice < p.price && (
-                        <div className="text-lg font-black text-[#C8522A]">{formatCurrency(p.discountedPrice)}</div>
+                        <div className="text-lg font-black text-brand">{formatCurrency(p.discountedPrice)}</div>
                       )}
                     </div>
-                    <div className="text-[11px] font-bold text-[#8C8880] mt-0.5">{displayCategory(p.category)}</div>
+                    <div className="text-[11px] font-bold text-muted mt-0.5">{displayCategory(p.category)}</div>
                   </div>
                   <ProductBadge status={p.status}/>
                 </div>
 
                 <div className="mt-auto pt-2">
-                  <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-[#8C8880] mb-2">
-                    <span>剩餘庫存 {p.stock}</span><span className="text-[#C8522A]">歷史售出 {p.sold}</span>
+                  <div className="flex justify-between text-[10px] sm:text-[11px] font-bold text-muted mb-2">
+                    <span>剩餘庫存 {p.stock}</span><span className="text-brand">歷史售出 {p.sold}</span>
                   </div>
-                  <div className="h-1.5 bg-[#F5F0E8] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#C8522A] rounded-full transition-all duration-1000" style={{ width:`${soldPct}%` }}/>
+                  <div className="h-1.5 bg-cream rounded-full overflow-hidden">
+                    <div className="h-full bg-brand rounded-full transition-all duration-1000" style={{ width:`${soldPct}%` }}/>
                   </div>
                 </div>
               </Card>
             )
           })}
-          {filtered.length === 0 && <div className="col-span-full py-20 text-center text-sm font-bold text-[#8C8880]">商品庫中沒有資料</div>}
+          {filtered.length === 0 && <div className="col-span-full py-20 text-center text-sm font-bold text-muted">商品庫中沒有資料</div>}
         </div>
       )}
 
       {/* 列表視圖 (List View) */}
       {view === 'list' && (
-        <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm overflow-hidden w-full">
+        <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-sm overflow-hidden w-full">
           <div className="overflow-x-auto w-full">
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-[#F8F9FA] border-b border-[#E2DDD4]">
+                <tr className="bg-mist border-b border-edge">
                   {['商品資訊','類別','官方定價','剩餘庫存','歷史售出','目前狀態','操作'].map(h => (
-                    <th key={h} className="p-4 sm:p-5 text-xs font-bold text-[#8C8880] tracking-widest whitespace-nowrap">{h}</th>
+                    <th key={h} className="p-4 sm:p-5 text-xs font-bold text-muted tracking-widest whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2DDD4]">
+              <tbody className="divide-y divide-edge">
                 {filtered.length > 0 ? filtered.map(p => (
-                  <tr key={p.id} className="hover:bg-[#F8F9FA] transition-colors group">
+                  <tr key={p.id} className="hover:bg-mist transition-colors group">
                     <td className="p-4 sm:p-5">
                       <div className="flex items-center gap-3 sm:gap-4"><Thumb emoji={p.thumbnail} size="sm"/>
-                        <div className="max-w-[200px]"><div className="text-sm font-bold text-[#1A1A18] mb-1 truncate">{p.name}</div><div className="text-[10px] font-bold text-[#8C8880] font-mono tracking-wider">{p.sku}</div></div>
+                        <div className="max-w-[200px]"><div className="text-sm font-bold text-ink mb-1 truncate">{p.name}</div><div className="text-[10px] font-bold text-muted font-mono tracking-wider">{p.sku}</div></div>
                       </div>
                     </td>
-                    <td className="p-4 sm:p-5 text-xs font-bold text-[#8C8880]">{displayCategory(p.category)}</td>
+                    <td className="p-4 sm:p-5 text-xs font-bold text-muted">{displayCategory(p.category)}</td>
                     <td className="p-4 sm:p-5">
-                      <div className={cn('text-sm font-black', p.discountedPrice !== null && p.discountedPrice < p.price ? 'text-[#8C8880] line-through' : 'text-[#1A1A18]')}>
+                      <div className={cn('text-sm font-black', p.discountedPrice !== null && p.discountedPrice < p.price ? 'text-muted line-through' : 'text-ink')}>
                         {formatCurrency(p.price)}
                       </div>
                       {p.discountedPrice !== null && p.discountedPrice < p.price && (
-                        <div className="text-sm font-black text-[#C8522A]">{formatCurrency(p.discountedPrice)}</div>
+                        <div className="text-sm font-black text-brand">{formatCurrency(p.discountedPrice)}</div>
                       )}
                     </td>
-                    <td className="p-4 sm:p-5 text-sm font-bold text-[#8C8880]">{p.stock}</td>
-                    <td className="p-4 sm:p-5 text-sm font-black text-[#C8522A]">{p.sold}</td>
+                    <td className="p-4 sm:p-5 text-sm font-bold text-muted">{p.stock}</td>
+                    <td className="p-4 sm:p-5 text-sm font-black text-brand">{p.sold}</td>
                     <td className="p-4 sm:p-5"><ProductBadge status={p.status}/></td>
                     <td className="p-4 sm:p-5">
                       <div className="flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleOpenEdit(p)} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#C8522A] hover:border-[#C8522A] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Edit3 size={14}/></button>
-                        <button onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(p); }} className="p-2 rounded-full bg-white border border-[#E2DDD4] text-[#8C8880] hover:text-[#D93025] hover:border-[#D93025] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Trash2 size={14} /></button>
-                        <button onClick={() => handleToggleStatus(p)} disabled={p.stock === 0} className="px-3 py-2 rounded-full bg-white border border-[#E2DDD4] text-xs font-bold text-[#8C8880] hover:text-[#C8522A] disabled:opacity-40 whitespace-nowrap">
+                        <button onClick={() => handleOpenEdit(p)} className="p-2 rounded-full bg-white border border-edge text-muted hover:text-brand hover:border-brand hover:bg-[#FFF0F0] transition-colors shadow-sm"><Edit3 size={14}/></button>
+                        <button onClick={e => { e.preventDefault(); e.stopPropagation(); handleDelete(p); }} className="p-2 rounded-full bg-white border border-edge text-muted hover:text-[#D93025] hover:border-[#D93025] hover:bg-[#FFF0F0] transition-colors shadow-sm"><Trash2 size={14} /></button>
+                        <button onClick={() => handleToggleStatus(p)} disabled={p.stock === 0} className="px-3 py-2 rounded-full bg-white border border-edge text-xs font-bold text-muted hover:text-brand disabled:opacity-40 whitespace-nowrap">
                           {p.apiStatus === 'active' ? '下架' : '上架'}
                         </button>
                       </div>
                     </td>
                   </tr>
-                )) : <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-[#8C8880]">商品庫中沒有資料</td></tr>}
+                )) : <tr><td colSpan={7} className="py-20 text-center text-sm font-bold text-muted">商品庫中沒有資料</td></tr>}
               </tbody>
             </table>
           </div>

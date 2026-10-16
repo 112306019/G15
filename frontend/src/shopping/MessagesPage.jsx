@@ -41,26 +41,26 @@ export default function MessagesPage() {
   return (
     <div className="animate-in fade-in duration-500 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-5 md:mb-6">
-        <div className="w-10 h-10 rounded-full bg-[#FDF0ED] flex items-center justify-center shrink-0">
-          <MessageCircle size={20} className="text-[#C8522A]" />
+        <div className="w-10 h-10 rounded-full bg-brand-soft flex items-center justify-center shrink-0">
+          <MessageCircle size={20} className="text-brand" />
         </div>
         <div>
-          <h2 className="text-2xl md:text-[28px] font-serif font-bold text-[#1A1A18]">我的訊息</h2>
-          <p className="text-xs text-[#8C8880]">
+          <h2 className="text-2xl md:text-[28px] font-display font-bold text-ink">我的訊息</h2>
+          <p className="text-xs text-muted">
             {isKoc ? '接案聊天、跟廠商的商品詢問與訂單對話都在這裡' : '跟每家廠商的對話都在這裡，商品詢問和訂單訊息不再分開'}
           </p>
         </div>
       </div>
 
       {/* 只有一種對話（非 KOC）時不用顯示分頁列 */}
-      <div className={`flex gap-1 mb-3 border-b border-[#E2DDD4] ${tabs.length < 2 ? 'hidden' : ''}`}>
+      <div className={`flex gap-1 mb-3 border-b border-edge ${tabs.length < 2 ? 'hidden' : ''}`}>
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setSearchParams(t.key === defaultTab ? {} : { tab: t.key })}
             className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-colors ${
-              tab === t.key ? 'border-[#C8522A] text-[#C8522A]' : 'border-transparent text-[#8C8880] hover:text-[#1A1A18]'
+              tab === t.key ? 'border-brand text-brand' : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             {t.label}
@@ -68,7 +68,7 @@ export default function MessagesPage() {
         ))}
       </div>
 
-      <div className="h-[70vh] rounded-2xl md:rounded-[2rem] border border-[#E2DDD4] overflow-hidden shadow-sm bg-white">
+      <div className="h-[70vh] rounded-2xl md:rounded-[2rem] border border-edge overflow-hidden shadow-sm bg-white">
         {tab === 'task' && isKoc && (
           <ConversationPanel
             key="task"

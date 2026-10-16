@@ -8,9 +8,9 @@ import { getErrorMessage } from '../errorMessage';
 const ANALYZE_TIMEOUT_MS = 4 * 60 * 1000;
 
 const RISK_STYLES = {
-  none: { label: '低風險', className: 'text-[#1A1A18]' },
-  low: { label: '輕微風險', className: 'text-[#B89B6A]' },
-  medium: { label: '中度風險', className: 'text-[#C8522A]' },
+  none: { label: '低風險', className: 'text-ink' },
+  low: { label: '輕微風險', className: 'text-gold' },
+  medium: { label: '中度風險', className: 'text-brand' },
   high: { label: '高風險', className: 'text-[#D93025]' },
 };
 
@@ -18,40 +18,40 @@ const RISK_STYLES = {
 function TermsModal({ terms, onAgree, onClose, agreeing, error }) {
   const [checked, setChecked] = useState(false);
   return (
-    <div className="fixed inset-0 bg-[#1A1A18]/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
-      <div className="relative bg-white rounded-[1.5rem] p-6 xl:p-8 max-w-lg w-full shadow-2xl border border-[#E2DDD4] max-h-[90vh] overflow-y-auto">
-        <button type="button" onClick={onClose} className="absolute top-4 right-4 p-1.5 text-[#8C8880] hover:text-[#1A1A18]">
+    <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4">
+      <div className="relative bg-white rounded-[1.5rem] p-6 xl:p-8 max-w-lg w-full shadow-2xl border border-edge max-h-[90vh] overflow-y-auto">
+        <button type="button" onClick={onClose} className="absolute top-4 right-4 p-1.5 text-muted hover:text-ink">
           <X size={18} />
         </button>
         <div className="flex items-center gap-2.5 mb-4">
-          <div className="w-9 h-9 rounded-full bg-[#FDF0ED] text-[#C8522A] flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-full bg-brand-soft text-brand flex items-center justify-center shrink-0">
             <ShieldCheck size={18} />
           </div>
-          <h3 className="text-lg xl:text-xl font-bold text-[#1A1A18]">{terms.title}</h3>
+          <h3 className="text-lg xl:text-xl font-bold text-ink">{terms.title}</h3>
         </div>
-        <p className="text-xs text-[#8C8880] mb-3">使用 AI 文案檢測前，請詳閱並同意以下條款：</p>
-        <ol className="list-decimal pl-5 space-y-2.5 text-[13px] xl:text-sm text-[#1A1A18] leading-relaxed mb-5">
+        <p className="text-xs text-muted mb-3">使用 AI 文案檢測前，請詳閱並同意以下條款：</p>
+        <ol className="list-decimal pl-5 space-y-2.5 text-[13px] xl:text-sm text-ink leading-relaxed mb-5">
           {terms.terms.map((item, index) => <li key={index}>{item}</li>)}
         </ol>
-        <label className="flex items-start gap-2.5 bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-3 mb-4 cursor-pointer">
+        <label className="flex items-start gap-2.5 bg-mist border border-edge rounded-xl p-3 mb-4 cursor-pointer">
           <input
             type="checkbox"
             checked={checked}
             onChange={e => setChecked(e.target.checked)}
-            className="mt-0.5 w-4 h-4 accent-[#C8522A] shrink-0"
+            className="mt-0.5 w-4 h-4 accent-brand shrink-0"
           />
-          <span className="text-xs xl:text-sm font-bold text-[#1A1A18]">
+          <span className="text-xs xl:text-sm font-bold text-ink">
             我已閱讀並同意以上條款，了解檢測結果僅供參考，文案內容由我自行負責。
           </span>
         </label>
         {error && (
-          <div className="mb-4 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs font-bold text-[#C8522A]">{error}</div>
+          <div className="mb-4 bg-brand-soft border border-brand/20 rounded-xl p-3 text-xs font-bold text-brand">{error}</div>
         )}
         <div className="flex gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 bg-white border border-[#E2DDD4] text-[#8C8880] py-3 rounded-xl font-bold text-xs xl:text-sm hover:bg-[#F8F9FA]"
+            className="flex-1 bg-white border border-edge text-muted py-3 rounded-xl font-bold text-xs xl:text-sm hover:bg-mist"
           >
             不同意
           </button>
@@ -59,24 +59,24 @@ function TermsModal({ terms, onAgree, onClose, agreeing, error }) {
             type="button"
             onClick={onAgree}
             disabled={!checked || agreeing}
-            className="flex-[2] bg-[#1A1A18] text-[#F5F0E8] py-3 rounded-xl font-bold text-xs xl:text-sm hover:bg-[#C8522A] transition-all disabled:opacity-50"
+            className="flex-[2] bg-brand text-white py-3 rounded-xl font-bold text-xs xl:text-sm hover:bg-brand-dark transition-all disabled:opacity-50"
           >
             {agreeing ? '處理中...' : '同意並開始檢測'}
           </button>
         </div>
-        <p className="text-[10px] text-[#8C8880] mt-3 text-center">條款版本 {terms.terms_version}・同意一次即可，條款更新時會再請您確認</p>
+        <p className="text-[10px] text-muted mt-3 text-center">條款版本 {terms.terms_version}・同意一次即可，條款更新時會再請您確認</p>
       </div>
     </div>
   );
 }
 
 function AiCheckResult({ result }) {
-  const risk = RISK_STYLES[result.risk_level] || { label: result.risk_level, className: 'text-[#1A1A18]' };
+  const risk = RISK_STYLES[result.risk_level] || { label: result.risk_level, className: 'text-ink' };
   const analysis = result.ai_analysis;
   return (
-    <div className="bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl p-4 space-y-3 text-[13px] xl:text-sm">
+    <div className="bg-mist border border-edge rounded-xl p-4 space-y-3 text-[13px] xl:text-sm">
       <div className="flex items-center justify-between">
-        <span className="font-bold text-[#1A1A18]">合規分數</span>
+        <span className="font-bold text-ink">合規分數</span>
         <span className={`font-black text-base ${risk.className}`}>{result.score} 分・{risk.label}</span>
       </div>
 
@@ -107,27 +107,27 @@ function AiCheckResult({ result }) {
 
       {/* AI 服務額度用完或忙碌時，後端只會回規則比對的結果，沒有 AI 分析 */}
       {!analysis && (
-        <div className="rounded-lg border border-[#E2DDD4] bg-white px-3 py-2 text-xs font-bold text-[#8C8880]">
+        <div className="rounded-lg border border-edge bg-white px-3 py-2 text-xs font-bold text-muted">
           AI 語意分析目前無法使用（服務忙碌或額度已用完），以上是依法規關鍵字比對的結果，可稍後再試一次。
         </div>
       )}
 
       {analysis && (
         <div>
-          <div className="font-bold text-[#1A1A18] mb-1">AI 整體評估</div>
-          <p className="text-[#8C8880] text-xs leading-relaxed">{analysis.overall_assessment}</p>
+          <div className="font-bold text-ink mb-1">AI 整體評估</div>
+          <p className="text-muted text-xs leading-relaxed">{analysis.overall_assessment}</p>
           {analysis.suggestions?.length > 0 && (
             <>
-              <div className="font-bold text-[#1A1A18] mt-2 mb-1">修改建議</div>
-              <ul className="list-disc list-inside text-xs text-[#8C8880] space-y-1">
+              <div className="font-bold text-ink mt-2 mb-1">修改建議</div>
+              <ul className="list-disc list-inside text-xs text-muted space-y-1">
                 {analysis.suggestions.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
             </>
           )}
           {analysis.compliant_alternatives?.length > 0 && (
             <>
-              <div className="font-bold text-[#1A1A18] mt-2 mb-1">可以改用的說法</div>
-              <ul className="list-disc list-inside text-xs text-[#8C8880] space-y-1">
+              <div className="font-bold text-ink mt-2 mb-1">可以改用的說法</div>
+              <ul className="list-disc list-inside text-xs text-muted space-y-1">
                 {analysis.compliant_alternatives.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
             </>
@@ -136,9 +136,9 @@ function AiCheckResult({ result }) {
       )}
 
       {!result.violations?.length && !result.gray_areas?.length && (
-        <p className="text-xs text-[#8C8880]">沒有偵測到明顯的違規用詞。</p>
+        <p className="text-xs text-muted">沒有偵測到明顯的違規用詞。</p>
       )}
-      <p className="text-[10px] text-[#8C8880] border-t border-[#E2DDD4] pt-2">
+      <p className="text-[10px] text-muted border-t border-edge pt-2">
         檢測結果僅供參考，不代表文案沒有法律風險；文案內容由您自行負責。結果不會保存，也不會提供給廠商。
       </p>
     </div>
@@ -257,20 +257,20 @@ export default function AiCheckPanel({ missionId, text }) {
         type="button"
         onClick={openCheck}
         disabled={checking}
-        className="w-full bg-white border-2 border-[#C8522A] text-[#C8522A] py-3 rounded-xl font-bold hover:bg-[#FDF0ED] transition-all text-xs xl:text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+        className="w-full bg-white border-2 border-brand text-brand py-3 rounded-xl font-bold hover:bg-brand-soft transition-all text-xs xl:text-sm flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {checking ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
         {checking ? 'AI 檢測中，約需 1–2 分鐘，請不要關閉頁面...' : 'AI 文案檢測（自行檢查法規風險）'}
       </button>
 
       {checking && (
-        <p className="text-[11px] text-[#8C8880] text-center">
+        <p className="text-[11px] text-muted text-center">
           分析約需 1 分鐘，服務剛啟動時可能需要 2–3 分鐘，請勿關閉視窗。
         </p>
       )}
 
       {error && (
-        <div className="flex items-start gap-2 bg-[#FDF0ED] border border-[#C8522A]/20 rounded-xl p-3 text-xs font-bold text-[#C8522A]">
+        <div className="flex items-start gap-2 bg-brand-soft border border-brand/20 rounded-xl p-3 text-xs font-bold text-brand">
           <AlertCircle size={14} className="shrink-0 mt-0.5" /> {error}
         </div>
       )}

@@ -69,12 +69,14 @@ export default function Header({
   };
 
   return (
-    <header className="bg-white border-b border-[#E2DDD4]/60 px-4 md:px-8 py-3 md:py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
-      <div className="flex items-center gap-4 md:gap-8">
+    // 高度固定：手機 72px、電腦 80px（ShopPage 的篩選列 sticky top 依賴這個數字）
+    <header className="sticky top-0 z-50 bg-cream/95 backdrop-blur-md px-3 md:px-6 pt-2 pb-2 md:pt-3">
+      <div className="relative mx-auto max-w-6xl h-14 md:h-[60px] bg-white rounded-full pl-2 pr-2 md:pl-2.5 md:pr-3 flex justify-between items-center shadow-[0_2px_14px_rgba(26,26,24,0.06)]">
+      <div className="flex items-center gap-3 md:gap-6">
 
         <div className="flex items-center gap-2 md:gap-3">
           <div
-            className="bg-[#F5F0E8] px-3 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-2.5 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
+            className="bg-cream px-3 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-2.5 cursor-pointer hover:bg-edge transition-colors"
             onClick={() => handleNavigate('shop')}
           >
             {/* 左側：圓形 Icon */}
@@ -95,33 +97,29 @@ export default function Header({
           {/* 新增的身份標籤 */}
           <span className={`px-2 py-0.5 md:py-1 rounded-md text-[10px] md:text-xs font-bold tracking-wider ${
             userRole === 'koc' 
-              ? 'bg-[#FDF0ED] text-[#C8522A] border border-[#C8522A]/30' 
-              : 'bg-[#F5F0E8] text-[#8C8880] border border-[#E2DDD4]'
+              ? 'bg-brand-soft text-brand border border-brand/30' 
+              : 'bg-cream text-muted border border-edge'
           }`}>
             {userRole === 'koc' ? 'KOC' : '消費者'}
           </span>
         </div>
 
-        <div className="hidden md:block h-6 w-px bg-[#E2DDD4]"></div>
+        <div className="hidden md:block h-6 w-px bg-edge"></div>
 
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => {
             const isActive = currentActiveKey === item.key;
             return (
               <button
                 key={item.key}
                 onClick={() => handleNavigate(item.key)}
-                className={`relative text-sm transition-colors py-1 ${
+                className={`text-sm transition-colors px-4 py-2 rounded-full ${
                   isActive
-                    ? 'text-[#1A1A18] font-black'
-                    : 'text-[#8C8880] font-bold hover:text-[#1A1A18]'
+                    ? 'bg-brand-soft text-brand font-black'
+                    : 'text-muted font-bold hover:text-ink hover:bg-cream'
                 }`}
               >
                 {item.label}
-
-                {isActive && (
-                  <span className="absolute -bottom-1.5 left-1/2 h-[3px] w-3/4 -translate-x-1/2 rounded-full bg-[#C8522A]" />
-                )}
               </button>
             );
           })}
@@ -134,10 +132,10 @@ export default function Header({
           {/* 滑鼠移上去會顯示收藏預覽，點圖示一樣進收藏頁 */}
           <HeaderPreview kind="favorites" isGuest={userRole === 'guest'} onViewAll={() => handleNavigate('favorites')}>
             <div
-              className="cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+              className="cursor-pointer hover:bg-cream p-2.5 rounded-full transition-colors"
               onClick={() => handleNavigate('favorites')}
             >
-              <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+              <Heart size={22} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-brand' : 'text-muted'} />
             </div>
           </HeaderPreview>
 
@@ -148,10 +146,10 @@ export default function Header({
         {/* 購物車：手機版與電腦版都保留；電腦版滑鼠移上去會顯示購物車預覽 */}
         <HeaderPreview kind="cart" isGuest={userRole === 'guest'} onViewAll={() => handleNavigate('cart')} refreshKey={cartCount}>
           <div
-            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2 md:p-2.5 rounded-full transition-colors"
+            className="relative cursor-pointer hover:bg-cream p-2 md:p-2.5 rounded-full transition-colors"
             onClick={() => handleNavigate('cart')}
           >
-            <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            <ShoppingCart size={22} strokeWidth={2.5} className={activeTab === 'cart' ? 'text-brand' : 'text-muted'} />
             {cartCount > 0 && (
               <span className={`${ICON_BADGE} top-0 right-0`}>
                 {cartCount > 99 ? '99+' : cartCount}
@@ -167,13 +165,13 @@ export default function Header({
           onMouseLeave={() => setNotifOpen(false)}
         >
           <div 
-            className="relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-colors"
+            className="relative cursor-pointer hover:bg-cream p-2.5 rounded-full transition-colors"
             onClick={() => {
               setNotifOpen(!notifOpen);
               if (!notifOpen) onRefreshNotifications?.();
             }}
           >
-            <Bell size={22} strokeWidth={2.5} className={notifOpen ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            <Bell size={22} strokeWidth={2.5} className={notifOpen ? 'text-brand' : 'text-muted'} />
 
             {/* 鈴鐺在手機版的 padding 比購物車大 2px，所以手機版多內縮 2px，紅點位置才會對齊 */}
             {notifications.unreadCount > 0 && (
@@ -187,13 +185,13 @@ export default function Header({
           {/* 手機版鈴鐺不在最右邊，固定寬度往左展開會超出螢幕，改成貼齊螢幕左右兩側 */}
           {notifOpen && (
             <div className="fixed left-3 right-3 top-14 pt-2 md:absolute md:left-auto md:right-0 md:top-full md:w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#E2DDD4] text-sm font-bold text-[#1A1A18]">
+              <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
+                <div className="px-5 py-3 border-b border-edge text-sm font-bold text-ink">
                   通知
                 </div>
                 <div className="max-h-96 overflow-y-auto">
                   {allNotifications.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-xs font-bold text-[#8C8880]">
+                    <div className="px-5 py-8 text-center text-xs font-bold text-muted">
                       目前沒有通知
                     </div>
                   ) : (
@@ -201,17 +199,17 @@ export default function Header({
                       <button
                         key={n.notification_id}
                         onClick={() => { setNotifOpen(false); onOpenNotification?.(n); }}
-                        className={`w-full text-left px-5 py-3 border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors flex items-start gap-2 ${
-                          !n.is_read ? 'bg-[#FDF0ED]/40' : ''
+                        className={`w-full text-left px-5 py-3 border-b border-cream last:border-0 hover:bg-mist transition-colors flex items-start gap-2 ${
+                          !n.is_read ? 'bg-brand-soft/40' : ''
                         }`}
                       >
                         {!n.is_read && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#C8522A] mt-1.5 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand mt-1.5 shrink-0" />
                         )}
                         <div className={`min-w-0 ${n.is_read ? 'ml-3.5' : ''}`}>
-                          <div className="text-xs font-bold text-[#1A1A18]">{n.title}</div>
+                          <div className="text-xs font-bold text-ink">{n.title}</div>
                           {n.body && (
-                            <div className="text-[11px] text-[#8C8880] mt-0.5 line-clamp-2">{n.body}</div>
+                            <div className="text-[11px] text-muted mt-0.5 line-clamp-2">{n.body}</div>
                           )}
                           <div className="text-[10px] text-[#B8B4AC] mt-1">{formatNotifTime(n.created_at)}</div>
                         </div>
@@ -220,15 +218,15 @@ export default function Header({
                   )}
                 </div>
                 {/* 完整的通知頁：訂單通知、接案通知（只有 KOC）分開兩頁 */}
-                <div className="flex border-t border-[#E2DDD4] text-xs font-bold text-[#8C8880]">
+                <div className="flex border-t border-edge text-xs font-bold text-muted">
                   <button
                     onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'order'); }}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-3 hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-3 hover:bg-cream hover:text-ink transition-colors"
                   >
                     <Package size={14} strokeWidth={2.5} />
                     全部訂單通知
                     {notifications.orderUnreadCount > 0 && (
-                      <span className="bg-[#C8522A] text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
+                      <span className="bg-brand text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
                         {notifications.orderUnreadCount}
                       </span>
                     )}
@@ -236,12 +234,12 @@ export default function Header({
                   {userRole === 'koc' && (
                     <button
                       onClick={() => { setNotifOpen(false); handleNavigate('notifications', 'koc'); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-3 border-l border-[#E2DDD4] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 border-l border-edge hover:bg-cream hover:text-ink transition-colors"
                     >
                       <Briefcase size={14} strokeWidth={2.5} />
                       全部接案通知
                       {notifications.kocUnreadCount > 0 && (
-                        <span className="bg-[#C8522A] text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
+                        <span className="bg-brand text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full">
                           {notifications.kocUnreadCount}
                         </span>
                       )}
@@ -261,12 +259,12 @@ export default function Header({
         >
           {/* --- KOC 角色會加上外框特效 --- */}
           <div
-            className={`relative cursor-pointer hover:bg-[#F5F0E8] p-2.5 rounded-full transition-all ${
-              userRole === 'koc' ? 'ring-2 ring-[#C8522A] ring-offset-2 ring-offset-white' : ''
+            className={`relative cursor-pointer bg-brand hover:bg-brand-dark p-2.5 rounded-full transition-all ${
+              userRole === 'koc' ? 'ring-2 ring-brand-light ring-offset-2 ring-offset-white' : ''
             }`}
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
           >
-            <User size={22} strokeWidth={2.5} className={['profile', 'security', 'points', 'orders', 'applyKoc'].includes(activeTab) ? 'text-[#1A1A18]' : 'text-[#8C8880]'} />
+            <User size={20} strokeWidth={2.5} className="text-white" />
 
             {supportUnreadCount > 0 && (
               <span className={`${ICON_BADGE} top-0 right-0`}>
@@ -278,38 +276,38 @@ export default function Header({
           {/* 右上角個人選單 */}
           {profileMenuOpen && (
             <div className="absolute right-0 top-full pt-2 w-48 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
+              <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleNavigate('profile'); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
                 >
                   <Settings size={16} strokeWidth={2.5} />
                   個人設定
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleNavigate('support'); }}
-                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                  className="w-full flex items-center justify-between gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
                 >
                   <span className="flex items-center gap-3">
                     <Headset size={16} strokeWidth={2.5} />
                     客服諮詢
                   </span>
                   {supportUnreadCount > 0 && (
-                    <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                    <span className="bg-brand text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
                       {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
                     </span>
                   )}
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleNavigate('security'); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
                 >
                   <Lock size={16} strokeWidth={2.5} />
                   登入與安全
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); onLogout?.(); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#C8522A] hover:bg-[#FEF5F3] transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-brand hover:bg-brand-softer transition-colors text-left"
                 >
                   <LogOut size={16} strokeWidth={2.5} />
                   登出系統
@@ -321,7 +319,7 @@ export default function Header({
 
         {/* 手機版漢堡選單按鈕 */}
         <div
-          className="md:hidden cursor-pointer hover:bg-[#F5F0E8] p-2 rounded-full transition-colors text-[#8C8880]"
+          className="md:hidden cursor-pointer hover:bg-cream p-2 rounded-full transition-colors text-muted"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X size={24} strokeWidth={2.5} /> : <Menu size={24} strokeWidth={2.5} />}
@@ -329,10 +327,10 @@ export default function Header({
       </div>
 
       {mobileMenuOpen && (
-        <div className="absolute top-full left-0 w-full bg-white border-b border-[#E2DDD4]/60 shadow-[0_10px_20px_rgba(0,0,0,0.05)] md:hidden flex flex-col z-50 animate-in slide-in-from-top-2 fade-in duration-200 max-h-[80vh] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-3xl shadow-[0_10px_30px_rgba(26,26,24,0.10)] md:hidden flex flex-col z-50 animate-in slide-in-from-top-2 fade-in duration-200 max-h-[75vh] overflow-y-auto">
 
           {/* 第一區：頂部主要導航 (購物頁面 / 接案中心) */}
-          <div className="p-4 flex flex-col gap-2 border-b border-[#E2DDD4]/30">
+          <div className="p-4 flex flex-col gap-2 border-b border-edge/30">
             {navItems.map((item) => {
               const isActive = currentActiveKey === item.key;
               return (
@@ -340,7 +338,7 @@ export default function Header({
                   key={item.key}
                   onClick={() => handleNavigate(item.key)}
                   className={`flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? 'bg-[#F5F0E8] text-[#1A1A18] font-black' : 'text-[#8C8880] font-bold hover:bg-[#F5F0E8]'
+                    isActive ? 'bg-cream text-ink font-black' : 'text-muted font-bold hover:bg-cream'
                   }`}
                 >
                   {item.label}
@@ -349,27 +347,27 @@ export default function Header({
             })}
           </div>
 
-          <div className="p-4 flex flex-col gap-2 border-b border-[#E2DDD4]/30">
+          <div className="p-4 flex flex-col gap-2 border-b border-edge/30">
 
             {userRole === 'koc' && (
               <>
                 <button
                   onClick={() => handleNavigate('home')}
                   className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                    ['home', 'task_detail', 'review'].includes(activeTab) ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                    ['home', 'task_detail', 'review'].includes(activeTab) ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
                   }`}
                 >
-                  <Briefcase size={20} strokeWidth={2.5} className={['home', 'task_detail', 'review'].includes(activeTab) ? 'text-[#C8522A]' : ''} />
+                  <Briefcase size={20} strokeWidth={2.5} className={['home', 'task_detail', 'review'].includes(activeTab) ? 'text-brand' : ''} />
                   我的接案
                 </button>
 
                 <button
                   onClick={() => handleNavigate('earnings')}
                   className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                    ['earnings', 'earnings_detail'].includes(activeTab) ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                    ['earnings', 'earnings_detail'].includes(activeTab) ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
                   }`}
                 >
-                  <TrendingUp size={20} strokeWidth={2.5} className={['earnings', 'earnings_detail'].includes(activeTab) ? 'text-[#C8522A]' : ''} />
+                  <TrendingUp size={20} strokeWidth={2.5} className={['earnings', 'earnings_detail'].includes(activeTab) ? 'text-brand' : ''} />
                   我的收益
                 </button>
               </>
@@ -379,10 +377,10 @@ export default function Header({
               <button
                 onClick={() => handleNavigate('applyKoc')}
                 className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                  activeTab === 'applyKoc' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                  activeTab === 'applyKoc' ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
                 }`}
               >
-                <Sparkles size={20} strokeWidth={2.5} className={activeTab === 'applyKoc' ? 'text-[#C8522A]' : ''} />
+                <Sparkles size={20} strokeWidth={2.5} className={activeTab === 'applyKoc' ? 'text-brand' : ''} />
                 申請成為 KOC
               </button>
             )}
@@ -390,32 +388,32 @@ export default function Header({
             <button
               onClick={() => handleNavigate('orders')}
               className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                ['orders', 'order_detail'].includes(activeTab) ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                ['orders', 'order_detail'].includes(activeTab) ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
               }`}
             >
-              <FileText size={20} strokeWidth={2.5} className={['orders', 'order_detail'].includes(activeTab) ? 'text-[#C8522A]' : ''} />
+              <FileText size={20} strokeWidth={2.5} className={['orders', 'order_detail'].includes(activeTab) ? 'text-brand' : ''} />
               我的訂單
             </button>
           </div>
 
           {/* 第三區：輔助功能 (收藏、訊息、客服) */}
-          <div className="p-4 flex flex-col gap-2 border-b border-[#E2DDD4]/30">
+          <div className="p-4 flex flex-col gap-2 border-b border-edge/30">
             <button
               onClick={() => handleNavigate('favorites')}
-              className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+              className="flex items-center gap-3 p-3 rounded-xl font-bold text-muted hover:bg-cream transition-colors"
             >
-              <Heart size={20} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-[#C8522A]' : ''} />
+              <Heart size={20} strokeWidth={2.5} className={activeTab === 'favorites' ? 'text-brand' : ''} />
               我的收藏
             </button>
 
             <button
               onClick={() => handleNavigate('messages')}
-              className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+              className="flex items-center gap-3 p-3 rounded-xl font-bold text-muted hover:bg-cream transition-colors"
             >
-              <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-[#C8522A]' : ''} />
+              <MessageCircle size={20} strokeWidth={2.5} className={activeTab === 'messages' ? 'text-brand' : ''} />
               我的訊息
               {messageUnread.total > 0 && (
-                <span className="ml-auto bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                <span className="ml-auto bg-brand text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
                   {messageUnread.total > 99 ? '99+' : messageUnread.total}
                 </span>
               )}
@@ -423,14 +421,14 @@ export default function Header({
 
             <button
               onClick={() => handleNavigate('support')}
-              className="flex items-center justify-between p-3 rounded-xl font-bold text-[#8C8880] hover:bg-[#F5F0E8] transition-colors"
+              className="flex items-center justify-between p-3 rounded-xl font-bold text-muted hover:bg-cream transition-colors"
             >
               <div className="flex items-center gap-3">
-                <Headset size={20} strokeWidth={2.5} className={activeTab === 'support' ? 'text-[#C8522A]' : ''} />
+                <Headset size={20} strokeWidth={2.5} className={activeTab === 'support' ? 'text-brand' : ''} />
                 聯絡客服
               </div>
               {supportUnreadCount > 0 && (
-                <span className="bg-[#C8522A] text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
+                <span className="bg-brand text-white text-[10px] min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full font-bold">
                   {supportUnreadCount > 99 ? '99+' : supportUnreadCount}
                 </span>
               )}
@@ -442,26 +440,26 @@ export default function Header({
             <button
               onClick={() => handleNavigate('profile')}
               className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                activeTab === 'profile' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                activeTab === 'profile' ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
               }`}
             >
-              <User size={20} strokeWidth={2.5} className={activeTab === 'profile' ? 'text-[#C8522A]' : ''} />
+              <User size={20} strokeWidth={2.5} className={activeTab === 'profile' ? 'text-brand' : ''} />
               個人資訊
             </button>
 
             <button
               onClick={() => handleNavigate('security')}
               className={`flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${
-                activeTab === 'security' ? 'bg-[#F5F0E8] text-[#1A1A18]' : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                activeTab === 'security' ? 'bg-cream text-ink' : 'text-muted hover:bg-cream'
               }`}
             >
-              <Lock size={20} strokeWidth={2.5} className={activeTab === 'security' ? 'text-[#C8522A]' : ''} />
+              <Lock size={20} strokeWidth={2.5} className={activeTab === 'security' ? 'text-brand' : ''} />
               登入與安全
             </button>
 
             <button
               onClick={() => { setMobileMenuOpen(false); onLogout?.(); }}
-              className="flex items-center gap-3 p-3 rounded-xl font-bold text-[#C8522A] hover:bg-[#FEF5F3] transition-colors"
+              className="flex items-center gap-3 p-3 rounded-xl font-bold text-brand hover:bg-brand-softer transition-colors"
             >
               <LogOut size={20} strokeWidth={2.5} />
               登出系統
@@ -470,6 +468,7 @@ export default function Header({
 
         </div>
       )}
+      </div>
     </header>
   );
 }

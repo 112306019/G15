@@ -24,7 +24,7 @@ function Card({ children, className = '' }) {
   return (
     <div
       className={cn(
-        'bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-[#E2DDD4] shadow-sm p-5 sm:p-8 md:p-10',
+        'bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-edge shadow-sm p-5 sm:p-8 md:p-10',
         className
       )}
     >
@@ -37,12 +37,12 @@ function Card({ children, className = '' }) {
 function Input({ label, ...props }) {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+      <label className="text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider">
         {label}
       </label>
 
       <input
-        className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all placeholder:text-[#8C8880]/50 hover:border-[#1A1A18]/30"
+        className="w-full bg-mist border border-edge rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-ink outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10 transition-all placeholder:text-muted/50 hover:border-brand/30"
         {...props}
       />
     </div>
@@ -53,12 +53,12 @@ function Input({ label, ...props }) {
 function Select({ label, children, ...props }) {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-[11px] sm:text-xs font-bold text-[#8C8880] uppercase tracking-wider">
+      <label className="text-[11px] sm:text-xs font-bold text-muted uppercase tracking-wider">
         {label}
       </label>
 
       <select
-        className="w-full bg-[#F8F9FA] border border-[#E2DDD4] rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-[#1A1A18] outline-none focus:border-[#C8522A] focus:bg-white focus:ring-4 focus:ring-[#C8522A]/10 transition-all hover:border-[#1A1A18]/30"
+        className="w-full bg-mist border border-edge rounded-xl sm:rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-[13px] sm:text-sm font-medium text-ink outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10 transition-all hover:border-brand/30"
         {...props}
       >
         {children}
@@ -76,7 +76,7 @@ function Button({
 }) {
   const variants = {
     brand:
-      'bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] hover:-translate-y-1 hover:shadow-md active:translate-y-0',
+      'bg-brand text-white hover:bg-brand-dark hover:-translate-y-1 hover:shadow-md active:translate-y-0',
     danger:
       'border border-[#FFF0F0] bg-[#FFF0F0] text-[#D93025] hover:bg-[#D93025] hover:text-white hover:-translate-y-1 shadow-sm active:translate-y-0',
   }
@@ -373,23 +373,23 @@ export default function Settings() {
         ====================================================== */}
 
         <Card className="space-y-6 sm:space-y-8">
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
-            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+          <div className="flex flex-col gap-1 border-b border-edge/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-ink flex items-center gap-2">
               <Building
                 size={18}
-                className="sm:w-5 sm:h-5 text-[#C8522A]"
+                className="sm:w-5 sm:h-5 text-brand"
               />
               基本公司資訊
             </h2>
 
-            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+            <p className="text-[10px] sm:text-xs font-bold text-muted ml-6 sm:ml-7">
               維護平台顯示與聯絡所需的廠商資料
             </p>
           </div>
 
           {loading ? (
             <div className="py-8 flex justify-center">
-              <div className="w-6 h-6 border-2 border-[#C8522A] border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <>
@@ -462,23 +462,23 @@ export default function Settings() {
 
         <Card className="space-y-6 sm:space-y-8">
 
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
-            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+          <div className="flex flex-col gap-1 border-b border-edge/60 pb-3 sm:pb-4">
+            <h2 className="text-base sm:text-lg font-bold text-ink flex items-center gap-2">
               <MapPin
                 size={18}
-                className="sm:w-5 sm:h-5 text-[#B89B6A]"
+                className="sm:w-5 sm:h-5 text-gold"
               />
               物流寄件資訊
             </h2>
 
-            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+            <p className="text-[10px] sm:text-xs font-bold text-muted ml-6 sm:ml-7">
               建立物流單時使用的寄件人與寄件地址
             </p>
           </div>
 
           {loading ? (
             <div className="py-8 flex justify-center">
-              <div className="w-6 h-6 border-2 border-[#B89B6A] border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <>
@@ -569,17 +569,17 @@ export default function Settings() {
 
               </div>
 
-              <div className="rounded-xl sm:rounded-2xl bg-[#F5F0E8] px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-medium text-[#8C8880] flex items-start sm:items-center gap-2">
+              <div className="rounded-xl sm:rounded-2xl bg-cream px-4 sm:px-5 py-3 sm:py-4 text-[11px] sm:text-xs font-medium text-muted flex items-start sm:items-center gap-2">
 
                 <MapPin
                   size={16}
-                  className="text-[#B89B6A] shrink-0 mt-0.5 sm:mt-0"
+                  className="text-gold shrink-0 mt-0.5 sm:mt-0"
                 />
 
                 <span>
                   完整寄件地址：
 
-                  <span className="font-bold text-[#1A1A18] ml-1">
+                  <span className="font-bold text-ink ml-1">
                     {[
                       profile.sender_city,
                       profile.sender_district,
@@ -618,9 +618,9 @@ export default function Settings() {
 
         <Card className="space-y-6 sm:space-y-8">
 
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+          <div className="flex flex-col gap-1 border-b border-edge/60 pb-3 sm:pb-4">
 
-            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-ink flex items-center gap-2">
 
               <Landmark
                 size={18}
@@ -631,20 +631,20 @@ export default function Settings() {
 
             </h2>
 
-            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+            <p className="text-[10px] sm:text-xs font-bold text-muted ml-6 sm:ml-7">
               消費者付款由 ShareBuy 代收，符合撥款條件後，商品款將由平台匯入此帳戶
             </p>
 
           </div>
 
 
-          <div className="rounded-2xl border border-[#E2DDD4] bg-[#F8F9FA] p-4 sm:p-5">
+          <div className="rounded-2xl border border-edge bg-mist p-4 sm:p-5">
 
-            <p className="text-xs sm:text-sm font-bold text-[#1A1A18]">
+            <p className="text-xs sm:text-sm font-bold text-ink">
               商品款撥付方式
             </p>
 
-            <p className="mt-2 text-[11px] sm:text-xs leading-relaxed text-[#8C8880]">
+            <p className="mt-2 text-[11px] sm:text-xs leading-relaxed text-muted">
               平台會先代收消費者支付的商品款。訂單符合撥款條件後，
               ShareBuy 會將折扣後商品成交額全額撥付至您設定的銀行帳戶。
               平台 15% 服務費會另外產生結算單，不會直接從這筆商品款中扣除。
@@ -654,7 +654,7 @@ export default function Settings() {
 
 
           {loading ? (
-            <div className="py-8 flex justify-center text-[#8C8880] animate-pulse">
+            <div className="py-8 flex justify-center text-muted animate-pulse">
               <div className="w-6 h-6 border-2 border-[#2F8F4E] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
@@ -740,20 +740,20 @@ export default function Settings() {
 
         <Card className="space-y-6 sm:space-y-8">
 
-          <div className="flex flex-col gap-1 border-b border-[#E2DDD4]/60 pb-3 sm:pb-4">
+          <div className="flex flex-col gap-1 border-b border-edge/60 pb-3 sm:pb-4">
 
-            <h2 className="text-base sm:text-lg font-bold text-[#1A1A18] flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-ink flex items-center gap-2">
 
               <Shield
                 size={18}
-                className="sm:w-5 sm:h-5 text-[#8C8880]"
+                className="sm:w-5 sm:h-5 text-muted"
               />
 
               登入與安全性
 
             </h2>
 
-            <p className="text-[10px] sm:text-xs font-bold text-[#8C8880] ml-6 sm:ml-7">
+            <p className="text-[10px] sm:text-xs font-bold text-muted ml-6 sm:ml-7">
               更新密碼、查看登入記錄與登出帳號
             </p>
 
@@ -762,14 +762,14 @@ export default function Settings() {
           {/* 更新密碼、登入記錄 */}
           <SecuritySettings />
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl sm:rounded-2xl bg-[#F8F9FA] border border-[#E2DDD4] p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl sm:rounded-2xl bg-mist border border-edge p-4 sm:p-5">
 
             <div>
-              <p className="text-sm font-bold text-[#1A1A18]">
+              <p className="text-sm font-bold text-ink">
                 登出帳號
               </p>
 
-              <p className="text-[11px] sm:text-xs text-[#8C8880] mt-1">
+              <p className="text-[11px] sm:text-xs text-muted mt-1">
                 登出目前登入中的廠商帳號
               </p>
             </div>

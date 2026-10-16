@@ -80,13 +80,13 @@ export default function ECPayStoreResult() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center">
+    <div className="min-h-screen bg-cream flex items-center justify-center">
       <div className="text-center">
         <h2 className="text-xl font-bold mb-2">
           門市選擇完成
         </h2>
 
-        <p className="text-sm text-[#8C8880]">
+        <p className="text-sm text-muted">
           正在返回結帳頁...
         </p>
       </div>

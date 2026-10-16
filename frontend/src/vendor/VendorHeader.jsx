@@ -124,11 +124,11 @@ export default function VendorHeader() {
   ];
 
   return (
-    <header className="bg-white border-b border-[#E2DDD4] px-4 md:px-8 lg:px-12 py-3 md:py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+    <header className="bg-white border-b border-edge px-4 md:px-8 lg:px-12 py-3 md:py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
       <div className="flex items-center gap-4 lg:gap-8 xl:gap-12">
         
         <div
-          className="bg-[#F5F0E8] px-3 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-2.5 cursor-pointer hover:bg-[#E2DDD4] transition-colors"
+          className="bg-cream px-3 md:px-4 py-1.5 rounded-full flex items-center gap-2 md:gap-2.5 cursor-pointer hover:bg-edge transition-colors"
           onClick={() => handleNavigate('/vendor')}
         >
           <img 
@@ -143,7 +143,7 @@ export default function VendorHeader() {
           />
         </div>
         
-        <nav className="hidden lg:flex items-center gap-4 xl:gap-8">
+        <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
                              (item.path !== '/vendor' && location.pathname.startsWith(item.path));
@@ -151,10 +151,10 @@ export default function VendorHeader() {
               <button
                 key={item.path}
                 onClick={() => handleNavigate(item.path)}
-                className={`text-[13px] xl:text-sm transition-all pb-1 -mb-[5px] whitespace-nowrap ${
+                className={`text-[13px] xl:text-sm transition-colors px-3 xl:px-3.5 py-2 rounded-full whitespace-nowrap ${
                   isActive 
-                    ? 'text-[#C8522A] font-bold border-b-2 border-[#C8522A]' 
-                    : 'text-[#8C8880] font-bold hover:text-[#1A1A18]'
+                    ? 'text-brand font-bold bg-brand-soft' 
+                    : 'text-muted font-bold hover:text-ink hover:bg-cream'
                 }`}
               >
                 {item.label}
@@ -174,7 +174,7 @@ export default function VendorHeader() {
           onMouseLeave={() => setNotifOpen(false)}
         >
           <button
-            className="relative p-2 md:p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
+            className="relative p-2 md:p-2.5 rounded-full text-muted hover:text-brand hover:bg-brand-soft transition-colors"
             title="通知"
           >
             <Bell size={20} className="md:w-[22px] md:h-[22px]" />
@@ -188,13 +188,13 @@ export default function VendorHeader() {
           {/* 手機版：鈴鐺不在最右邊，用固定寬度往左展開會超出螢幕，改成貼齊螢幕左右兩側；電腦版維持原樣 */}
           {notifOpen && (
             <div className="fixed left-3 right-3 top-14 pt-2 md:absolute md:left-auto md:right-0 md:top-full md:w-80 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#E2DDD4] text-sm font-bold text-[#1A1A18]">
+              <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden">
+                <div className="px-5 py-3 border-b border-edge text-sm font-bold text-ink">
                   通知
                 </div>
                 <div className="max-h-96 overflow-y-auto">
                   {allNotifications.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-xs font-bold text-[#8C8880]">
+                    <div className="px-5 py-8 text-center text-xs font-bold text-muted">
                       目前沒有通知
                     </div>
                   ) : (
@@ -202,19 +202,19 @@ export default function VendorHeader() {
                       <button
                         key={n.notification_id}
                         onClick={() => handleNotificationClick(n)}
-                        className={`w-full text-left px-5 py-3 border-b border-[#F5F0E8] last:border-0 hover:bg-[#F8F9FA] transition-colors flex items-start gap-2 ${
-                          !n.is_read ? 'bg-[#FDF0ED]/40' : ''
+                        className={`w-full text-left px-5 py-3 border-b border-cream last:border-0 hover:bg-mist transition-colors flex items-start gap-2 ${
+                          !n.is_read ? 'bg-brand-soft/40' : ''
                         }`}
                       >
                         {!n.is_read && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#C8522A] mt-1.5 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand mt-1.5 shrink-0" />
                         )}
                         <div className={n.is_read ? 'ml-3.5' : ''}>
-                          <div className="text-xs font-bold text-[#1A1A18]">{n.title}</div>
+                          <div className="text-xs font-bold text-ink">{n.title}</div>
                           {n.body && (
-                            <div className="text-[11px] text-[#8C8880] mt-0.5 line-clamp-2">{n.body}</div>
+                            <div className="text-[11px] text-muted mt-0.5 line-clamp-2">{n.body}</div>
                           )}
-                          <div className="text-[10px] text-[#B8B4AC] mt-1">{formatNotifTime(n.created_at)}</div>
+                          <div className="text-[10px] text-muted/70 mt-1">{formatNotifTime(n.created_at)}</div>
                         </div>
                       </button>
                     ))
@@ -231,7 +231,7 @@ export default function VendorHeader() {
         {/* 客服按鈕 */}
         <button
           onClick={() => handleNavigate('/vendor/support')}
-          className="relative p-2 md:p-2.5 rounded-full text-[#8C8880] hover:text-[#C8522A] hover:bg-[#FDF0ED] transition-colors"
+          className="relative p-2 md:p-2.5 rounded-full text-muted hover:text-brand hover:bg-brand-soft transition-colors"
           title="客服諮詢"
         >
           <Headset size={20} className="md:w-[22px] md:h-[22px]" />
@@ -249,7 +249,7 @@ export default function VendorHeader() {
         >
           <button
             onClick={() => handleNavigate('/vendor/settings')}
-            className="cursor-pointer bg-[#F5F0E8] hover:bg-[#E2DDD4] p-2.5 rounded-full transition-colors text-[#1A1A18]"
+            className="cursor-pointer bg-cream hover:bg-edge p-2.5 rounded-full transition-colors text-ink"
             title="廠商資訊"
           >
             <User size={20} />
@@ -257,17 +257,17 @@ export default function VendorHeader() {
 
           {profileMenuOpen && (
             <div className="absolute right-0 top-full pt-2 w-44 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="bg-white border border-[#E2DDD4] rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
+              <div className="bg-white border border-edge rounded-2xl shadow-[0_8px_30px_rgba(26,26,24,0.08)] overflow-hidden py-2">
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleNavigate('/vendor/settings'); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#8C8880] hover:bg-[#F5F0E8] hover:text-[#1A1A18] transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-muted hover:bg-cream hover:text-ink transition-colors text-left"
                 >
                   <Settings size={16} strokeWidth={2.5} />
                   廠商設定
                 </button>
                 <button
                   onClick={() => { setProfileMenuOpen(false); handleLogout(); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-[#C8522A] hover:bg-[#FEF5F3] transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-5 py-3 text-sm font-bold text-brand hover:bg-brand-softer transition-colors text-left"
                 >
                   <LogOut size={16} strokeWidth={2.5} />
                   登出
@@ -278,7 +278,7 @@ export default function VendorHeader() {
         </div>
 
         <button
-          className="lg:hidden cursor-pointer p-2 rounded-full text-[#8C8880] hover:bg-[#F5F0E8] transition-colors ml-1"
+          className="lg:hidden cursor-pointer p-2 rounded-full text-muted hover:bg-cream transition-colors ml-1"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X size={24} strokeWidth={2.5} /> : <Menu size={24} strokeWidth={2.5} />}
@@ -286,10 +286,10 @@ export default function VendorHeader() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="absolute top-full left-0 w-full bg-white border-b border-[#E2DDD4]/60 shadow-[0_10px_20px_rgba(0,0,0,0.05)] lg:hidden flex flex-col z-50 animate-in slide-in-from-top-2 fade-in duration-200 max-h-[80vh] overflow-y-auto">
+        <div className="absolute top-full left-0 w-full bg-white border-b border-edge/60 shadow-[0_10px_20px_rgba(0,0,0,0.05)] lg:hidden flex flex-col z-50 animate-in slide-in-from-top-2 fade-in duration-200 max-h-[80vh] overflow-y-auto">
           
           {/* 導航連結區 */}
-          <div className="p-4 flex flex-col gap-1 border-b border-[#E2DDD4]/30">
+          <div className="p-4 flex flex-col gap-1 border-b border-edge/30">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path || 
                                (item.path !== '/vendor' && location.pathname.startsWith(item.path));
@@ -299,8 +299,8 @@ export default function VendorHeader() {
                   onClick={() => handleNavigate(item.path)}
                   className={`flex items-center p-3.5 rounded-xl transition-colors ${
                     isActive 
-                      ? 'bg-[#FDF0ED] text-[#C8522A] font-black' 
-                      : 'text-[#8C8880] font-bold hover:bg-[#F5F0E8] hover:text-[#1A1A18]'
+                      ? 'bg-brand-soft text-brand font-black' 
+                      : 'text-muted font-bold hover:bg-cream hover:text-ink'
                   }`}
                 >
                   {item.label}
@@ -315,8 +315,8 @@ export default function VendorHeader() {
               onClick={() => handleNavigate('/vendor/settings')}
               className={`flex items-center gap-3 p-3.5 rounded-xl font-bold transition-colors ${
                 location.pathname.startsWith('/vendor/settings') 
-                  ? 'bg-[#FDF0ED] text-[#C8522A]' 
-                  : 'text-[#8C8880] hover:bg-[#F5F0E8]'
+                  ? 'bg-brand-soft text-brand' 
+                  : 'text-muted hover:bg-cream'
               }`}
             >
               <Settings size={20} strokeWidth={2.5} />

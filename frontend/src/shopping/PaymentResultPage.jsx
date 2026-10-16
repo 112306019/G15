@@ -17,8 +17,8 @@ const MAX_POLL_ATTEMPTS = 8; // 最長輪詢 ~16 秒
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-[#F5F0E8] text-[#1A1A18] font-serif flex items-center justify-center p-4 md:px-6">
-      <div className="w-full max-w-[480px] rounded-2xl md:rounded-[16px] border border-[#E2DDD4] bg-white p-8 md:p-10 text-center shadow-sm">
+    <div className="min-h-screen bg-cream text-ink font-display flex items-center justify-center p-4 md:px-6">
+      <div className="w-full max-w-[480px] rounded-2xl md:rounded-[16px] border border-edge bg-white p-8 md:p-10 text-center shadow-sm">
         {children}
       </div>
     </div>
@@ -32,8 +32,8 @@ function ActionButton({ children, onClick, primary = true }) {
       onClick={onClick}
       className={`w-full sm:w-auto inline-flex items-center justify-center rounded-xl md:rounded-full px-6 md:px-7 py-3 md:py-[13px] text-[13px] md:text-[14px] font-bold tracking-[0.05em] transition-all hover:-translate-y-[1px] ${
         primary 
-          ? "bg-[#1A1A18] text-[#F5F0E8] hover:bg-[#C8522A] shadow-sm" 
-          : "border-[1.5px] border-[#E2DDD4] text-[#1A1A18] hover:border-[#1A1A18] hover:bg-[#F5F0E8]"
+          ? "bg-brand text-white hover:bg-brand-dark shadow-sm" 
+          : "border-[1.5px] border-edge text-ink hover:border-ink hover:bg-cream"
       }`}
     >
       {children}
@@ -156,9 +156,9 @@ export default function PaymentResultPage({ onCartCleared }) {
   if (state === "checking") {
     return (
       <Shell>
-        <Loader2 className="mx-auto mb-4 md:mb-5 h-10 w-10 md:h-12 md:w-12 animate-spin text-[#8C8880]" />
-        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-[#1A1A18]">確認付款結果中</h1>
-        <p className="text-xs md:text-[14px] text-[#8C8880] leading-relaxed">請稍候，正在跟綠界確認這筆訂單的付款狀態…</p>
+        <Loader2 className="mx-auto mb-4 md:mb-5 h-10 w-10 md:h-12 md:w-12 animate-spin text-muted" />
+        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-ink">確認付款結果中</h1>
+        <p className="text-xs md:text-[14px] text-muted leading-relaxed">請稍候，正在跟綠界確認這筆訂單的付款狀態…</p>
       </Shell>
     );
   }
@@ -167,8 +167,8 @@ export default function PaymentResultPage({ onCartCleared }) {
     return (
       <Shell>
         <CheckCircle2 className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-[#6BBF6B]" strokeWidth={2.5} />
-        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[28px] mb-2 font-bold text-[#1A1A18]">付款成功！</h1>
-        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-[#8C8880] leading-relaxed">感謝您的訂購，我們已經收到您的付款。</p>
+        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[28px] mb-2 font-bold text-ink">付款成功！</h1>
+        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-muted leading-relaxed">感謝您的訂購，我們已經收到您的付款。</p>
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <ActionButton onClick={() => navigate(`/orders/${orderId}`)}>查看訂單</ActionButton>
@@ -181,9 +181,9 @@ export default function PaymentResultPage({ onCartCleared }) {
   if (state === "failed") {
     return (
       <Shell>
-        <XCircle className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-[#C8522A]" strokeWidth={2.5} />
-        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[28px] mb-2 font-bold text-[#1A1A18]">付款失敗</h1>
-        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-[#8C8880] leading-relaxed">這筆交易未能完成，尚未扣款成功，您可以回到購物車重新結帳。</p>
+        <XCircle className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-brand" strokeWidth={2.5} />
+        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[28px] mb-2 font-bold text-ink">付款失敗</h1>
+        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-muted leading-relaxed">這筆交易未能完成，尚未扣款成功，您可以回到購物車重新結帳。</p>
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <ActionButton onClick={() => navigate("/cart")}>回到購物車</ActionButton>
@@ -196,9 +196,9 @@ export default function PaymentResultPage({ onCartCleared }) {
   if (state === "timeout") {
     return (
       <Shell>
-        <Clock className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-[#8C8880]" strokeWidth={2.5} />
-        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-[#1A1A18]">付款結果確認中</h1>
-        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-[#8C8880] leading-relaxed">
+        <Clock className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-muted" strokeWidth={2.5} />
+        <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-ink">付款結果確認中</h1>
+        <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-muted leading-relaxed">
           綠界的付款通知還在路上，這不代表付款失敗。請稍後到「我的訂單」查看最新狀態。
         </p>
         <div className="flex w-full justify-center">
@@ -211,9 +211,9 @@ export default function PaymentResultPage({ onCartCleared }) {
   // state === "error"
   return (
     <Shell>
-      <XCircle className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-[#C8522A]" strokeWidth={2.5} />
-      <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-[#1A1A18]">無法確認付款結果</h1>
-      <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-[#8C8880] leading-relaxed">{errorMsg || "發生未預期的錯誤"}</p>
+      <XCircle className="mx-auto mb-4 md:mb-5 h-12 w-12 md:h-14 md:w-14 text-brand" strokeWidth={2.5} />
+      <h1 className="font-['DM_Serif_Display'] text-2xl md:text-[26px] mb-2 font-bold text-ink">無法確認付款結果</h1>
+      <p className="mb-6 md:mb-8 text-xs md:text-[14px] text-muted leading-relaxed">{errorMsg || "發生未預期的錯誤"}</p>
       
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
         <ActionButton onClick={() => navigate("/orders")}>前往我的訂單</ActionButton>

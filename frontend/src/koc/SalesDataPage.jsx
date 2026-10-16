@@ -56,7 +56,7 @@ export default function SalesDataPage({ product, onBack }) {
       
       <button 
         onClick={onBack} 
-        className="mb-6 flex items-center gap-2 text-[#8C8880] hover:text-[#C8522A] transition-colors font-bold text-sm group"
+        className="mb-6 flex items-center gap-2 text-muted hover:text-brand transition-colors font-bold text-sm group"
       >
         <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
         返回成效分析
@@ -64,10 +64,10 @@ export default function SalesDataPage({ product, onBack }) {
 
       <div className="mb-12 flex items-end justify-between">
         <div>
-          <p className="text-[#8C8880] font-bold mb-2 uppercase text-sm tracking-widest">
+          <p className="text-muted font-bold mb-2 uppercase text-sm tracking-widest">
             {product?.campaign_name || ''}
           </p>
-          <h2 className="text-[28px] font-serif font-bold text-[#1A1A18]">銷售數據</h2>
+          <h2 className="text-[28px] font-display font-bold text-ink">銷售數據</h2>
         </div>
 
         {/* 週/月切換 */}
@@ -76,8 +76,8 @@ export default function SalesDataPage({ product, onBack }) {
             onClick={() => setPeriod('week')}
             className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
               period === 'week'
-                ? 'bg-[#1A1A18] text-white'
-                : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+                ? 'bg-ink text-white'
+                : 'bg-white border border-edge text-muted hover:bg-cream'
             }`}
           >
             週
@@ -86,8 +86,8 @@ export default function SalesDataPage({ product, onBack }) {
             onClick={() => setPeriod('month')}
             className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
               period === 'month'
-                ? 'bg-[#1A1A18] text-white'
-                : 'bg-white border border-[#E2DDD4] text-[#8C8880] hover:bg-[#F5F0E8]'
+                ? 'bg-ink text-white'
+                : 'bg-white border border-edge text-muted hover:bg-cream'
             }`}
           >
             月
@@ -96,20 +96,20 @@ export default function SalesDataPage({ product, onBack }) {
       </div>
 
       {/* 圖表區塊 */}
-      <div className="bg-white rounded-[2.5rem] p-12 border border-[#E2DDD4] shadow-sm mb-12">
+      <div className="bg-white rounded-[2.5rem] p-12 border border-edge shadow-sm mb-12">
         <div className="flex items-center gap-3 mb-10">
-          <div className="w-3.5 h-3.5 bg-[#C8522A] rounded-full shadow-[0_0_10px_rgba(200,82,42,0.4)]"></div>
-          <span className="text-sm font-black text-[#1A1A18] tracking-wider uppercase">銷量</span>
+          <div className="w-3.5 h-3.5 bg-brand rounded-full shadow-[0_0_10px_rgba(110,100,175,0.4)]"></div>
+          <span className="text-sm font-black text-ink tracking-wider uppercase">銷量</span>
         </div>
 
         {loading ? (
-          <div className="h-80 flex items-center justify-center text-[#8C8880] font-bold">
+          <div className="h-80 flex items-center justify-center text-muted font-bold">
             載入中...
           </div>
         ) : (
-          <div className="h-80 w-full flex items-end gap-3 border-l-2 border-b-2 border-[#E2DDD4] relative pt-10 overflow-x-auto">
+          <div className="h-80 w-full flex items-end gap-3 border-l-2 border-b-2 border-edge relative pt-10 overflow-x-auto">
             {/* 左側數值 */}
-            <div className="absolute -left-10 top-0 h-full flex flex-col justify-between py-1 text-[11px] text-[#8C8880] font-bold">
+            <div className="absolute -left-10 top-0 h-full flex flex-col justify-between py-1 text-[11px] text-muted font-bold">
               <span>{maxValue}</span>
               <span>{midAxisLabels[0]}</span>
               <span>{midAxisLabels[1]}</span>
@@ -120,10 +120,10 @@ export default function SalesDataPage({ product, onBack }) {
             {chartData.map((item, idx) => (
               <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[24px]">
                 <div
-                  className="w-3 bg-gradient-to-t from-[#D6714E] to-[#C8522A] rounded-t-full transition-all group-hover:from-[#A64220] group-hover:scale-x-125"
+                  className="w-3 bg-gradient-to-t from-brand-light to-brand rounded-t-full transition-all group-hover:from-brand-dark group-hover:scale-x-125"
                   style={{ height: `${maxValue > 0 ? (item.y_value / maxValue) * 100 : 0}%` }}
                 />
-                <span className="text-[10px] text-[#8C8880] mt-4 font-bold rotate-45 origin-left whitespace-nowrap">
+                <span className="text-[10px] text-muted mt-4 font-bold rotate-45 origin-left whitespace-nowrap">
                   {item.x_label}
                 </span>
               </div>
@@ -133,14 +133,14 @@ export default function SalesDataPage({ product, onBack }) {
       </div>
 
       {/* 數據統計 */}
-      <div className="bg-[#F5F0E8] rounded-3xl p-8 inline-flex flex-col gap-4 border border-[#E2DDD4] shadow-sm">
-        <p className="text-[#1A1A18] font-black text-xl flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
-          目前累積總銷售數量：<span className="text-[#C8522A]">{usageCount}</span>
+      <div className="bg-cream rounded-3xl p-8 inline-flex flex-col gap-4 border border-edge shadow-sm">
+        <p className="text-ink font-black text-xl flex items-center gap-4">
+          <span className="w-2 h-8 bg-ink rounded-full"></span>
+          目前累積總銷售數量：<span className="text-brand">{usageCount}</span>
         </p>
-        <p className="text-[#1A1A18] font-black text-xl flex items-center gap-4">
-          <span className="w-2 h-8 bg-[#1A1A18] rounded-full"></span>
-          累積分潤：<span className="text-[#C8522A]">NT$ {totalCommission.toLocaleString()}</span>
+        <p className="text-ink font-black text-xl flex items-center gap-4">
+          <span className="w-2 h-8 bg-ink rounded-full"></span>
+          累積分潤：<span className="text-brand">NT$ {totalCommission.toLocaleString()}</span>
         </p>
       </div>
     </div>
